@@ -11,9 +11,9 @@ import "../code/chips.js" as Chips
 
 // The capsule's panel (LiveChips board, the Popups board's frame): "In use", a row for each app or
 // login, with the action the source offers (Mute, Stop sharing, End), and Application permissions
-// when that settings page is installed (flatpak-kcm). Rows 48 px, radius 12; a 30 px badge in the
-// kind's tint with its glyph; the name in 800, the kind under it in 11.5 px; buttons 28 px high.
-ColumnLayout {
+// when that settings page is installed (flatpak-kcm). Rows at least 48 px, radius 12; a 30 px badge
+// in the kind's tint with its glyph; the name in 800, the kind under it in 11.5 px; buttons 28 px high.
+Item {
     id: panel
 
     // Debug output for tests: QT_LOGGING_RULES="org.plasmafusion.livechips.debug=true".
@@ -134,142 +134,155 @@ ColumnLayout {
         return ink;
     }
 
-    spacing: metrics.px(10)
-    Layout.preferredWidth: metrics.px(328)
-    Layout.minimumWidth: metrics.px(328)
+    // Plasma's tooltip sizes mainItem from its implicit size, not Layout attached hints.
+    // Keep hover and click at the same content width instead of squeezing the app names.
+    implicitWidth: metrics.px(328)
+    implicitHeight: content.implicitHeight
+    Layout.preferredWidth: implicitWidth
+    Layout.minimumWidth: implicitWidth
 
-    Text {
-        Layout.fillWidth: true
-        text: i18nc("@title the live chips' panel", "In use")
-        color: panel.ink
-        font.family: panel.metrics.family
-        font.weight: Font.ExtraBold
-        font.pixelSize: panel.metrics.font(16)
-        Accessible.role: Accessible.Heading
-    }
+    ColumnLayout {
+        id: content
+        anchors.fill: parent
+        spacing: panel.metrics.px(10)
 
-    Repeater {
-        id: rowRepeater
-        model: panel.rows
-        delegate: Rectangle {
-            id: rowItem
-            required property var modelData
-            readonly property Item button: actionButton
+        Text {
             Layout.fillWidth: true
-            Layout.preferredHeight: panel.metrics.px(48)
-            radius: 12
-            color: Qt.rgba(panel.ink.r, panel.ink.g, panel.ink.b, 0.06)
+            text: i18nc("@title the live chips' panel", "In use")
+            color: panel.ink
+            font.family: panel.metrics.family
+            font.weight: Font.ExtraBold
+            font.pixelSize: panel.metrics.font(16)
+            Accessible.role: Accessible.Heading
+        }
 
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: panel.metrics.px(10)
-                anchors.rightMargin: panel.metrics.px(10)
-                spacing: panel.metrics.px(12)
+        Repeater {
+            id: rowRepeater
+            model: panel.rows
+            delegate: Rectangle {
+                id: rowItem
+                required property var modelData
+                readonly property Item button: actionButton
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.max(panel.metrics.px(48),
+                                                details.implicitHeight + panel.metrics.px(12))
+                radius: 12
+                color: Qt.rgba(panel.ink.r, panel.ink.g, panel.ink.b, 0.06)
 
-                Rectangle {
-                    Layout.preferredWidth: panel.metrics.px(30)
-                    Layout.preferredHeight: panel.metrics.px(30)
-                    radius: width / 2
-                    color: {
-                        const t = Chips.tint(rowItem.modelData.kind, panel.dark);
-                        return t ? Qt.rgba(t.r, t.g, t.b, t.a) : "transparent";
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: panel.metrics.px(10)
+                    anchors.rightMargin: panel.metrics.px(10)
+                    spacing: panel.metrics.px(12)
+
+                    Rectangle {
+                        Layout.preferredWidth: panel.metrics.px(30)
+                        Layout.preferredHeight: panel.metrics.px(30)
+                        radius: width / 2
+                        color: {
+                            const t = Chips.tint(rowItem.modelData.kind, panel.dark);
+                            return t ? Qt.rgba(t.r, t.g, t.b, t.a) : "transparent";
+                        }
+                        LineIcon {
+                            anchors.centerIn: parent
+                            path: Chips.GLYPHS[rowItem.modelData.kind]
+                            color: panel.glyphColor(rowItem.modelData.kind)
+                            size: panel.metrics.px(16)
+                        }
                     }
-                    LineIcon {
-                        anchors.centerIn: parent
-                        path: Chips.GLYPHS[rowItem.modelData.kind]
-                        color: panel.glyphColor(rowItem.modelData.kind)
-                        size: panel.metrics.px(16)
-                    }
-                }
-                // Names come from other apps and from logins (an app's name, a user, a host): shown
-                // as they are, never read as markup.
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Text {
+                    // Names come from other apps and from logins (an app's name, a user, a host):
+                    // shown as they are, never read as markup.
+                    ColumnLayout {
+                        id: details
                         Layout.fillWidth: true
-                        text: rowItem.modelData.title
-                        textFormat: Text.PlainText
-                        elide: Text.ElideRight
-                        color: panel.ink
-                        font.family: panel.metrics.family
-                        font.weight: Font.ExtraBold
-                        font.pixelSize: panel.metrics.font(16)
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        text: rowItem.modelData.subtitle
-                        textFormat: Text.PlainText
-                        elide: Text.ElideRight
-                        color: panel.dim
-                        font.family: panel.metrics.family
-                        font.pixelSize: panel.metrics.font(11.5)
-                    }
-                }
-                Rectangle {
-                    id: actionButton
-                    visible: rowItem.modelData.action !== ""
-                    Layout.preferredHeight: panel.metrics.px(28)
-                    Layout.preferredWidth: actionLabel.implicitWidth + panel.metrics.px(24)
-                    radius: height / 2
-                    color: Qt.rgba(panel.ink.r, panel.ink.g, panel.ink.b, actionArea.containsPress ? 0.2 : actionArea.containsMouse ? 0.16 : 0.12)
-                    activeFocusOnTab: visible
-                    Accessible.role: Accessible.Button
-                    Accessible.name: i18nc("@action:button %1 the action, %2 the app", "%1 %2", rowItem.modelData.action, rowItem.modelData.title)
-                    Accessible.onPressAction: rowItem.modelData.run()
-                    Keys.onSpacePressed: rowItem.modelData.run()
-                    Keys.onReturnPressed: rowItem.modelData.run()
-                    Text {
-                        id: actionLabel
-                        anchors.centerIn: parent
-                        text: rowItem.modelData.action
-                        color: panel.ink
-                        font.family: panel.metrics.family
-                        font.weight: Font.Bold
-                        font.pixelSize: panel.metrics.font(12)
+                        spacing: 0
+                        Text {
+                            Layout.fillWidth: true
+                            text: rowItem.modelData.title
+                            textFormat: Text.PlainText
+                            wrapMode: Text.Wrap
+                            color: panel.ink
+                            font.family: panel.metrics.family
+                            font.weight: Font.ExtraBold
+                            font.pixelSize: panel.metrics.font(16)
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: rowItem.modelData.subtitle
+                            textFormat: Text.PlainText
+                            wrapMode: Text.Wrap
+                            color: panel.dim
+                            font.family: panel.metrics.family
+                            font.pixelSize: panel.metrics.font(11.5)
+                        }
                     }
                     Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: -2
+                        id: actionButton
+                        visible: rowItem.modelData.action !== ""
+                        Layout.preferredHeight: panel.metrics.px(28)
+                        Layout.preferredWidth: actionLabel.implicitWidth + panel.metrics.px(24)
                         radius: height / 2
-                        visible: actionButton.activeFocus
-                        color: "transparent"
-                        border.width: 2
-                        border.color: Kirigami.Theme.focusColor
-                    }
-                    MouseArea {
-                        id: actionArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: rowItem.modelData.run()
+                        color: Qt.rgba(panel.ink.r, panel.ink.g, panel.ink.b, actionArea.containsPress ? 0.2 : actionArea.containsMouse ? 0.16 : 0.12)
+                        activeFocusOnTab: visible
+                        Accessible.role: Accessible.Button
+                        Accessible.name: i18nc("@action:button %1 the action, %2 the app", "%1 %2", rowItem.modelData.action, rowItem.modelData.title)
+                        Accessible.onPressAction: rowItem.modelData.run()
+                        Keys.onSpacePressed: rowItem.modelData.run()
+                        Keys.onReturnPressed: rowItem.modelData.run()
+                        Text {
+                            id: actionLabel
+                            anchors.centerIn: parent
+                            text: rowItem.modelData.action
+                            color: panel.ink
+                            font.family: panel.metrics.family
+                            font.weight: Font.Bold
+                            font.pixelSize: panel.metrics.font(12)
+                        }
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: -2
+                            radius: height / 2
+                            visible: actionButton.activeFocus
+                            color: "transparent"
+                            border.width: 2
+                            border.color: Kirigami.Theme.focusColor
+                        }
+                        MouseArea {
+                            id: actionArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: rowItem.modelData.run()
+                        }
                     }
                 }
             }
         }
-    }
 
-    Text {
-        id: permissions
-        visible: panel.permissionsInstalled
-        Layout.leftMargin: panel.metrics.px(4)
-        text: i18nc("@action:button opens System Settings' Application Permissions", "Application permissions…")
-        color: Kirigami.Theme.linkColor
-        font.family: panel.metrics.family
-        font.weight: Font.Bold
-        font.pixelSize: panel.metrics.font(12)
-        font.underline: permissionsArea.containsMouse
-        activeFocusOnTab: visible
-        Accessible.role: Accessible.Link
-        Accessible.name: text
-        Accessible.onPressAction: panel.openPermissions()
-        Keys.onReturnPressed: panel.openPermissions()
-        MouseArea {
-            id: permissionsArea
-            anchors.fill: parent
-            anchors.margins: -2
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: panel.openPermissions()
+        Text {
+            id: permissions
+            visible: panel.permissionsInstalled
+            Layout.fillWidth: true
+            Layout.leftMargin: panel.metrics.px(4)
+            wrapMode: Text.Wrap
+            text: i18nc("@action:button opens System Settings' Application Permissions", "Application permissions…")
+            color: Kirigami.Theme.linkColor
+            font.family: panel.metrics.family
+            font.weight: Font.Bold
+            font.pixelSize: panel.metrics.font(12)
+            font.underline: permissionsArea.containsMouse
+            activeFocusOnTab: visible
+            Accessible.role: Accessible.Link
+            Accessible.name: text
+            Accessible.onPressAction: panel.openPermissions()
+            Keys.onReturnPressed: panel.openPermissions()
+            MouseArea {
+                id: permissionsArea
+                anchors.fill: parent
+                anchors.margins: -2
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: panel.openPermissions()
+            }
         }
     }
     function openPermissions(): void {

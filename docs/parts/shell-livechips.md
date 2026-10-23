@@ -83,6 +83,14 @@ keyboard, Tab reaches the Keep awake chip, the recording's stop button and the c
 Return runs each, as the panel's buttons. Application permissions (System Settings, `kcm_app-permissions`)
 shows only where flatpak-kcm installed it.
 
+Hover and click share the same 328 px content width (the board's 360 px including its frame,
+scaled with the text). The panel is an Item with an explicit implicit width and the layout's
+implicit height: Plasma's tooltip reads these sizes, not the Layout attached hints used by the
+clicked representation. Using a bare ColumnLayout let the tooltip shrink to its narrowest controls,
+hiding most of the application name and resource. Long names and resource descriptions wrap; rows
+keep their 48 px minimum but grow for the text. The two views still use the same live sources and
+actions, including changes while the tooltip is open.
+
 ## In the bar
 
 The layout script puts the widget right before the tray in every top bar it makes, and the tray
@@ -117,7 +125,7 @@ reaches no journal.
   the argument, a message of another shape), the portal's two kinds, logind's sessions (remote,
   not closing, oldest first; Tailscale SSH is SSH), the apps reading a camera from a `pw-dump`
   graph (a screen-cast source and an audio stream are not the camera), Keep awake's time left.
-- `tests/chips_qml_test.py` (offscreen Qt on a private bus, CI `build`, 24 checks):
+- `tests/chips_qml_test.py` (offscreen Qt on a private bus, CI `build`, 66 checks):
   - the camera source with a stand-in camera monitor and `Exec`: no `pw-dump` without a running
     camera; its reader; an app that starts or stops reading the running camera seen at the next
     look; none once it stops;
@@ -130,6 +138,14 @@ reaches no journal.
     - a recording's time runs on with nothing logged;
     - a recording with sound (Spectacle 6.8's title) shows its time too;
     - with the widget's debug output on, the lines the session test reads are there.
+- `tests/privacy_hover_test.py` (offscreen Qt with the real Plasma tooltip, CI `build`): hover and
+  click have equal content width; Sound Recorder and Microphone are readable without clicking;
+  long names wrap as plain text; mute state, newly active resources and stopped resources update
+  both views while shown. CI also runs with a 15.6 pt UI font (the supported 1.6 text scale).
+- `tests/vsession/scenario-privacy-hover.sh`: real hover and click screenshots in an isolated
+  Plasma session, with a private PipeWire/Pulse server and only a virtual microphone. The hover
+  card's Mute/Unmute must change that stream, and stopping it must remove the indicator. No
+  hardware microphone or camera is opened.
 - `tools/build.d/76-livechips.sh`: the widget logs only through its category (`console.debug(log,
   ...)` and `console.warn(log, ...)`).
 - `packages/look-and-feel/tests/layout.test.js` (node, run by the look-and-feel build): the chips
@@ -153,7 +169,7 @@ reaches no journal.
   - a timed Keep awake shows "25 min", and a click opens quick settings' Keep awake page;
   - Spectacle's recording (stand-in) shows its running time, and the chip's button finishes it;
     while the time runs on (3.5 s), the state is logged each second and the chips' places are
-    not logged again;
+     not logged again;
   - screen sharing and remote control (stand-ins) give the neutral capsule; hover shows the panel
     as a tooltip and a click opens it; Stop sharing and End end them (the item's menu End);
   - `parecord` as "Zoom" shows the microphone, the panel's Mute mutes its stream, and the chip goes
@@ -345,4 +361,3 @@ Not verified: a real camera or microphone in the session (stand-ins; the chips' 
 covers the microphone), the music (no MPRIS player in the session; `sources/Media.qml` is quick
 settings' source), a full-screen window in the session (`FullScreen.qml` reads libtaskmanager's
 role; the dots are in the QML test), Plasma 6.8, other text scales.
-
