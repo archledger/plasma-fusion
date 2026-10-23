@@ -60,6 +60,12 @@ def main():
     ap.add_argument("--height", type=int, default=560)
     ap.add_argument("--font-pt", type=float, default=9.75, help="UI font size (the text scale is pt / 9.75)")
     ap.add_argument("--report", action="store_true", help="print where the page's content column is")
+    ap.add_argument("--navigation", action="store_true", help="report section navigation and visible section titles")
+    ap.add_argument("--section", type=int, default=None, help="select a settings section before reporting")
+    ap.add_argument("--section-roundtrip", action="store_true", help="visit every section before reporting")
+    ap.add_argument("--scroll-roundtrip", action="store_true", help="leave and restore a scrolled section")
+    ap.add_argument("--rapid-switch", action="store_true", help="check saved scroll offsets during same-turn navigation")
+    ap.add_argument("--focus-switch", action="store_true", help="switch sections while a setting has keyboard focus")
     ap.add_argument("--open-dropdown", type=int, default=-1,
                     help="open the Nth drop-down's list (0: the first) and print where it is (REPORT_DROPDOWN)")
     ap.add_argument("--gestures", action="store_true",
@@ -95,6 +101,7 @@ def main():
             QFontDatabase.addApplicationFont(os.path.join(d, f))
 
     state = {"style": 1, "accentMode": 0, "accentColor": "#00000000", "buttonStyle": 0,
+             "systemMeters": False, "metersAvailable": True,
              "magnify": True, "globalMenu": True, "hotCorner": False, "shellLoading": False, "shellRunning": True,
              "dockAvailable": True, "topBarAvailable": True, "topBarHidingAvailable": True, "decorationInstalled": False,
              "fusionDecoration": False,
@@ -145,6 +152,8 @@ def main():
         magnify = Property(bool, _get("magnify"), _set("magnify"), notify=changed)
         globalMenu = Property(bool, _get("globalMenu"), _set("globalMenu"), notify=changed)
         hotCorner = Property(bool, _get("hotCorner"), _set("hotCorner"), notify=changed)
+        systemMeters = Property(bool, _get("systemMeters"), _set("systemMeters"), notify=changed)
+        metersAvailable = Property(bool, _get("metersAvailable"), notify=changed)
         shellLoading = Property(bool, _get("shellLoading"), notify=changed)
         shellRunning = Property(bool, _get("shellRunning"), notify=changed)
         dockAvailable = Property(bool, _get("dockAvailable"), notify=changed)
@@ -293,6 +302,134 @@ QQC2.ApplicationWindow {
     root = engine.rootObjects()[0]
     win = Shiboken.wrapInstance(Shiboken.getCppPointer(root)[0], QQuickWindow)
 
+    def settings_page():
+        return root.findChild(QObject, "settingsRoot")
+
+    def select_section(index):
+        from PySide6.QtQml import QQmlEngine, QQmlExpression
+        page = settings_page()
+        if page is not None:
+            expression = QQmlExpression(QQmlEngine.contextForObject(page), page, "selectSection(%d)" % index)
+            expression.evaluate()
+            if expression.hasError():
+                raise RuntimeError(expression.error().toString())
+
+    def page_evaluate(text):
+        from PySide6.QtQml import QQmlEngine, QQmlExpression
+        page = settings_page()
+        expression = QQmlExpression(QQmlEngine.contextForObject(page), page, text)
+        value, _ = expression.evaluate()
+        if expression.hasError():
+            raise RuntimeError(expression.error().toString())
+        return value
+
+    def prepare_section():
+        if args.section_roundtrip:
+            for index in range(5):
+                select_section(index)
+        if args.section is not None:
+            select_section(args.section)
+        elif args.gestures or args.key_dropdown or args.open_dropdown >= 0:
+            select_section(2)
+        elif args.rows or args.act:
+            select_section(1)
+        else:
+            select_section(0)
+
+    def navigation_report():
+        from PySide6.QtQuick import QQuickItem
+        page = settings_page()
+        if page is None:
+            print("REPORT_NAVIGATION " + json.dumps({"available": False}))
+            return
+        nav = root.findChild(QQuickItem, "sectionNavigation")
+        labels = nav.property("labels")
+        if hasattr(labels, "toVariant"):
+            labels = labels.toVariant()
+        titles = [item.property("text") for item in root.findChildren(QQuickItem)
+                  if item.metaObject().className().startswith("SectionTitle_QMLTYPE") and item.isVisible()]
+        error = root.findChild(QQuickItem, "settingsError")
+        info = root.findChild(QQuickItem, "settingsInfo")
+        pending = root.findChild(QQuickItem, "pendingSettingsNote")
+        print("REPORT_NAVIGATION " + json.dumps({
+            "available": True, "labels": labels, "selected": page.property("currentSection"),
+            "compact": nav.property("compact"), "titles": titles, "state": kcm.s,
+            "errorVisible": error.isVisible(), "infoVisible": info.isVisible(),
+            "pendingVisible": pending.isVisible(), "scroll": scroll_result,
+            "rapid": rapid_result, "focus": focus_result, "warnings": warnings}))
+
+    scroll_result = {}
+    rapid_result = {}
+    focus_result = {}
+
+    def scroll_roundtrip():
+        page_evaluate("flickable.contentY = 220")
+        scroll_result["before"] = page_evaluate("flickable.contentY")
+        select_section(4)
+        QTimer.singleShot(100, lambda: select_section(args.section if args.section is not None else 0))
+        QTimer.singleShot(300, lambda: scroll_result.update(after=page_evaluate("flickable.contentY")))
+
+    def rapid_switch():
+        page_evaluate("flickable.contentY = 100")
+        select_section(2)
+
+        def remember_second():
+            page_evaluate("flickable.contentY = 220")
+            rapid_result["before"] = page_evaluate("flickable.contentY")
+            select_section(1)
+
+        def switch_twice():
+            select_section(2)
+            select_section(4)
+
+        QTimer.singleShot(100, remember_second)
+        QTimer.singleShot(200, switch_twice)
+        QTimer.singleShot(300, lambda: select_section(2))
+        QTimer.singleShot(500, lambda: rapid_result.update(after=page_evaluate("flickable.contentY")))
+
+    def focus_switch():
+        from PySide6.QtCore import Qt
+        from PySide6.QtQuick import QQuickItem
+        from PySide6.QtTest import QTest
+        row = next(item for item in root.findChildren(QQuickItem)
+                   if item.metaObject().className().startswith("ToggleRow_QMLTYPE")
+                   and item.property("text") == "Reduce motion")
+        row.forceActiveFocus()
+        focus_result["before"] = kcm.s["reduceMotion"]
+        select_section(1)
+
+        def press_after_switch():
+            active = win.activeFocusItem()
+            focus_result["visible"] = bool(active and active.isVisible() and active.isEnabled())
+            QTest.keyClick(win, Qt.Key.Key_Space)
+            focus_result["after"] = kcm.s["reduceMotion"]
+            QTest.keyClick(win, Qt.Key.Key_Escape)
+
+        def traverse_section():
+            column = root.findChild(QQuickItem, "pageColumn")
+            navigation = root.findChild(QQuickItem, "sectionNavigation")
+
+            def within(item, ancestor):
+                while item is not None:
+                    if item is ancestor:
+                        return True
+                    item = item.parentItem()
+                return False
+
+            valid = True
+            for _ in range(8):
+                QTest.keyClick(win, Qt.Key.Key_Tab)
+                active = win.activeFocusItem()
+                valid = valid and bool(active and active.isVisible() and active.isEnabled())
+                if within(active, column):
+                    break
+            focus_result["tabIntoSection"] = valid and within(active, column)
+            QTest.keyClick(win, Qt.Key.Key_Backtab)
+            focus_result["backtabToNavigation"] = within(win.activeFocusItem(), navigation)
+
+        QTimer.singleShot(100, press_after_switch)
+        QTimer.singleShot(350, traverse_section)
+
     def grab():
         try:
             img = win.grabWindow()
@@ -394,6 +531,15 @@ QQC2.ApplicationWindow {
 
     if args.act:
         QTimer.singleShot(600, act)
+    QTimer.singleShot(200, prepare_section)
+    if args.scroll_roundtrip:
+        QTimer.singleShot(400, scroll_roundtrip)
+    if args.rapid_switch:
+        QTimer.singleShot(400, rapid_switch)
+    if args.focus_switch:
+        QTimer.singleShot(400, focus_switch)
+    if args.navigation:
+        QTimer.singleShot(1000, navigation_report)
     if args.rows:
         QTimer.singleShot(1000, rows_report)
     if args.key_dropdown:

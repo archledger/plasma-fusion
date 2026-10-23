@@ -17,6 +17,42 @@ import org.kde.kcmutils as KCM
 
 KCM.SimpleKCM {
     id: root
+    objectName: "settingsRoot"
+
+    property int currentSection: 0
+    property var sectionPositions: [null, null, null, null, null]
+    property int sectionEpoch: 0
+    property bool sectionRestorePending: false
+    readonly property var sectionLabels: [
+        i18nc("@title:tab", "Appearance"),
+        i18nc("@title:tab", "Desktop"),
+        i18nc("@title:tab", "Windows & Input"),
+        i18nc("@title:tab", "Power & Session"),
+        i18nc("@title:tab", "Backup & Reset")
+    ]
+
+    function selectSection(index: int): void {
+        if (index < 0 || index >= sectionLabels.length || index === currentSection) return;
+        const positions = sectionPositions.slice();
+        if (!sectionRestorePending) positions[currentSection] = flickable.contentY;
+        sectionPositions = positions;
+        sectionRestorePending = true;
+        currentSection = index;
+        sectionNavigation.focusCurrent();
+        const epoch = ++sectionEpoch;
+        // Layouts settle after visibility changes; discard an older rapid navigation request.
+        Qt.callLater(() => {
+            if (epoch !== root.sectionEpoch) return;
+            // Read the new group's height, not the preceding group's deferred layout.
+            page.ensurePolished();
+            const view = root.flickable;
+            const minimum = view.originY - view.topMargin;
+            const maximum = Math.max(minimum, view.originY + view.contentHeight - view.height + view.bottomMargin);
+            const saved = root.sectionPositions[index];
+            view.contentY = Math.max(minimum, Math.min(saved === null ? minimum : saved, maximum));
+            root.sectionRestorePending = false;
+        });
+    }
 
     // Board content area: padding 20 px 24 px, sections 18 px apart.
     topPadding: 20
@@ -30,8 +66,34 @@ KCM.SimpleKCM {
     header: ColumnLayout {
         spacing: 0
 
+        SectionNavigation {
+            id: sectionNavigation
+            objectName: "sectionNavigation"
+            Layout.fillWidth: true
+            Layout.leftMargin: root.leftPadding
+            Layout.rightMargin: root.rightPadding
+            Layout.topMargin: Kirigami.Units.smallSpacing
+            Layout.bottomMargin: Kirigami.Units.smallSpacing
+            labels: root.sectionLabels
+            accessibleName: i18nc("@info:accessible", "Settings section")
+            currentIndex: root.currentSection
+            onSelectionRequested: index => root.selectSection(index)
+        }
+
+        QQC2.Label {
+            objectName: "pendingSettingsNote"
+            Layout.fillWidth: true
+            Layout.leftMargin: root.leftPadding
+            Layout.rightMargin: root.rightPadding
+            Layout.bottomMargin: Kirigami.Units.smallSpacing
+            visible: kcm.needsSave
+            text: i18nc("@info", "Unapplied changes are kept when switching sections.")
+            wrapMode: Text.WordWrap
+        }
+
         Kirigami.InlineMessage {
             id: errorMessage
+            objectName: "settingsError"
             Layout.fillWidth: true
             position: Kirigami.InlineMessage.Position.Header
             type: Kirigami.MessageType.Error
@@ -42,6 +104,7 @@ KCM.SimpleKCM {
         }
         Kirigami.InlineMessage {
             id: infoMessage
+            objectName: "settingsInfo"
             Layout.fillWidth: true
             position: Kirigami.InlineMessage.Position.Header
             type: Kirigami.MessageType.Positive
@@ -120,6 +183,8 @@ KCM.SimpleKCM {
 
             // ---------- Style ----------
             ColumnLayout {
+                visible: root.currentSection === 0
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
@@ -162,6 +227,8 @@ KCM.SimpleKCM {
 
             // ---------- Accent color ----------
             ColumnLayout {
+                visible: root.currentSection === 0
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
@@ -216,6 +283,8 @@ KCM.SimpleKCM {
 
             // ---------- Window buttons ----------
             ColumnLayout {
+                visible: root.currentSection === 2
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
@@ -266,6 +335,8 @@ KCM.SimpleKCM {
 
             // ---------- Toggles ----------
             ColumnLayout {
+                visible: root.currentSection === 1
+                enabled: visible
                 spacing: 0
                 Layout.fillWidth: true
 
@@ -314,6 +385,8 @@ KCM.SimpleKCM {
 
             // ---------- Windows ----------
             ColumnLayout {
+                visible: root.currentSection === 2
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
@@ -341,6 +414,8 @@ KCM.SimpleKCM {
 
             // ---------- Glass and motion ----------
             ColumnLayout {
+                visible: root.currentSection === 0
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
@@ -414,6 +489,8 @@ KCM.SimpleKCM {
 
             // ---------- Dock and top bar ----------
             ColumnLayout {
+                visible: root.currentSection === 1
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
@@ -527,6 +604,8 @@ KCM.SimpleKCM {
             // What the launcher shows besides the pinned apps (every launcher widget's keys; the
             // same switches are in the launcher's own settings).
             ColumnLayout {
+                visible: root.currentSection === 1
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
@@ -572,6 +651,8 @@ KCM.SimpleKCM {
 
             // ---------- Desktop ----------
             ColumnLayout {
+                visible: root.currentSection === 1
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
@@ -626,6 +707,8 @@ KCM.SimpleKCM {
 
             // ---------- Icons ----------
             ColumnLayout {
+                visible: root.currentSection === 0
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
@@ -653,6 +736,8 @@ KCM.SimpleKCM {
 
             // ---------- Lock & Login ----------
             ColumnLayout {
+                visible: root.currentSection === 3
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
@@ -691,6 +776,8 @@ KCM.SimpleKCM {
 
             // ---------- Battery ----------
             ColumnLayout {
+                visible: root.currentSection === 3
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
@@ -719,6 +806,8 @@ KCM.SimpleKCM {
 
             // ---------- Tablet ----------
             ColumnLayout {
+                visible: root.currentSection === 2
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
@@ -811,6 +900,8 @@ KCM.SimpleKCM {
 
             // ---------- Touchpad gestures (board Gestures.dc.html) ----------
             ColumnLayout {
+                visible: root.currentSection === 2
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
@@ -909,6 +1000,8 @@ KCM.SimpleKCM {
 
             // ---------- Start over ----------
             ColumnLayout {
+                visible: root.currentSection === 4
+                enabled: visible
                 spacing: 10
                 Layout.fillWidth: true
 
