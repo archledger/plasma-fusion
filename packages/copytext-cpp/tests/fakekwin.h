@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
+#include <QDBusConnection>
 #include <QDBusContext>
 #include <QDBusMessage>
 #include <QDBusUnixFileDescriptor>
@@ -14,6 +15,7 @@
 
 #include <cerrno>
 #include <unistd.h>
+#include <utility>
 
 // A stand-in for KWin's ScreenShot2 on the private bus (dbus-run-session): CaptureScreen writes the
 // screen's picture into the pipe and answers with its description, as KWin 6.7.5 does. A screen
@@ -27,8 +29,22 @@ public:
     QHash<QString, QImage> pictures; // by screen name; the picture's device pixel ratio is its scale
     QStringList refused{QStringLiteral("refused")};
     bool refuseAll = false;
+    bool deferReplies = false;
     QStringList asked; // the screens asked for, in order
     QVariantMap lastOptions;
+
+    int deferredCount() const
+    {
+        return m_deferred.size();
+    }
+
+    void refuseDeferred()
+    {
+        for (const auto &[bus, request] : std::as_const(m_deferred)) {
+            bus.send(request.createErrorReply(QStringLiteral("org.kde.KWin.ScreenShot2.Error.NoAuthorized"), QStringLiteral("Deferred test refusal")));
+        }
+        m_deferred.clear();
+    }
 
     ~FakeKWin() override
     {
@@ -51,6 +67,11 @@ public Q_SLOTS:
     {
         asked.append(name);
         lastOptions = options;
+        if (deferReplies) {
+            setDelayedReply(true);
+            m_deferred.append({connection(), message()});
+            return {};
+        }
         if (refuseAll || refused.contains(name)) {
             sendErrorReply(QStringLiteral("org.kde.KWin.ScreenShot2.Error.NoAuthorized"), QStringLiteral("The process is not authorized to take a screenshot"));
             return {};
@@ -86,4 +107,5 @@ public Q_SLOTS:
 
 private:
     QList<QFuture<void>> m_writes;
+    QList<std::pair<QDBusConnection, QDBusMessage>> m_deferred;
 };

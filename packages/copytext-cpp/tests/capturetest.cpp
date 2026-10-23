@@ -5,8 +5,12 @@
 #include "fakekwin.h"
 
 #include <QDBusConnection>
+#include <QDir>
 #include <QSignalSpy>
 #include <QTest>
+
+#include <memory>
+#include <vector>
 
 using namespace Qt::StringLiterals;
 
@@ -18,7 +22,8 @@ class CaptureTest : public QObject
 private Q_SLOTS:
     void initTestCase()
     {
-        QDBusConnection bus = QDBusConnection::sessionBus();
+        // A separate connection exercises actual pending replies, not Qt's local-call shortcut.
+        QDBusConnection bus = QDBusConnection::connectToBus(QDBusConnection::SessionBus, u"capture-test-server"_s);
         QVERIFY2(bus.isConnected(), "no session bus (run under dbus-run-session)");
         QVERIFY(bus.registerService(u"org.kde.KWin.ScreenShot2"_s));
         QVERIFY(bus.registerObject(u"/org/kde/KWin/ScreenShot2"_s, &m_kwin, QDBusConnection::ExportAllSlots));
@@ -52,6 +57,43 @@ private Q_SLOTS:
         QCOMPARE(captured.size(), 0);
         QCOMPARE(failed.at(0).at(0).toString(), u"refused"_s);
         QVERIFY(failed.at(0).at(1).toString().contains(u"not authorized"_s));
+    }
+    void deferredLifetime_data()
+    {
+        QTest::addColumn<bool>("cancel");
+        QTest::newRow("complete replies") << false;
+        QTest::newRow("destroy before replies") << true;
+    }
+    void deferredLifetime()
+    {
+        QFETCH(bool, cancel);
+        const auto descriptors = [] {
+            return QDir(u"/proc/self/fd"_s).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size();
+        };
+        const auto before = descriptors();
+        m_kwin.deferReplies = true;
+        int failures = 0;
+        std::vector<std::unique_ptr<ScreenCapture>> captures;
+        for (int i = 0; i < 20; ++i) {
+            auto capture = std::make_unique<ScreenCapture>();
+            connect(capture.get(), &ScreenCapture::failed, this, [&failures] {
+                ++failures;
+            });
+            capture->capture(u"deferred"_s);
+            QTRY_COMPARE(m_kwin.deferredCount(), i + 1);
+            captures.push_back(std::move(capture));
+        }
+        if (cancel) {
+            captures.clear();
+        }
+        m_kwin.refuseDeferred();
+        m_kwin.deferReplies = false;
+        if (!cancel) {
+            QTRY_COMPARE(failures, 20);
+            captures.clear();
+        }
+        QTRY_COMPARE(descriptors(), before);
+        QCOMPARE(failures, cancel ? 0 : 20);
     }
 };
 

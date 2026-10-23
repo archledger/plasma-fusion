@@ -12,9 +12,35 @@
 #include <QtConcurrentRun>
 
 #include <fcntl.h>
+#include <memory>
 #include <unistd.h>
+#include <utility>
 
 using namespace Qt::StringLiterals;
+
+namespace
+{
+// The pending callback may be disconnected before it runs; it must still close its pipe.
+struct CaptureReadFd {
+    explicit CaptureReadFd(int descriptor)
+        : fd(descriptor)
+    {
+    }
+    ~CaptureReadFd()
+    {
+        if (fd >= 0) {
+            ::close(fd);
+        }
+    }
+    CaptureReadFd(const CaptureReadFd &) = delete;
+    CaptureReadFd &operator=(const CaptureReadFd &) = delete;
+    int release()
+    {
+        return std::exchange(fd, -1);
+    }
+    int fd;
+};
+}
 
 QImage readRawImage(int fd, const QVariantMap &meta)
 {
@@ -61,14 +87,13 @@ void ScreenCapture::capture(const QString &screenName)
     const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(message, 4000);
     // KWin holds its own copy of the write end; ours closed, the read end sees the end of the data.
     ::close(fds[1]);
-    const int readFd = fds[0];
+    const auto readFd = std::make_shared<CaptureReadFd>(fds[0]);
 
     auto *watcher = new QDBusPendingCallWatcher(call, this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, readFd, screenName] {
         watcher->deleteLater();
         const QDBusPendingReply<QVariantMap> reply = *watcher;
         if (reply.isError()) {
-            ::close(readFd);
             Q_EMIT failed(screenName, reply.error().message());
             return;
         }
@@ -82,6 +107,6 @@ void ScreenCapture::capture(const QString &screenName)
                 Q_EMIT captured(screenName, image);
             }
         });
-        reader->setFuture(QtConcurrent::run(readRawImage, readFd, reply.value()));
+        reader->setFuture(QtConcurrent::run(readRawImage, readFd->release(), reply.value()));
     });
 }
