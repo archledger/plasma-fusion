@@ -9,6 +9,10 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Privacy indicator hover:** the hover card now has the same content width as the clicked
+  panel, so application names and resource details are readable without clicking. Long names
+  and descriptions wrap, and their rows grow instead of truncating the text.
+
 - **Directional window keys:** Meta+arrows snap to the corresponding half and combine into
   quarter-screen corners. Opposite arrows move along one axis; repeats stay put. Meta+Shift+arrows
   move between spatially adjacent monitors, Meta+PageUp maximizes and Meta+Backspace restores.
