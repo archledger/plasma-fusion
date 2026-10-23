@@ -148,6 +148,13 @@ parts need the dependencies their part page lists (`dnf builddep`).
   changes to compiled parts also wait for `compiled` and, where it applies, `sanitizers`. The
   maintainer reviews and merges.
 
+## Deferred and blocked work
+
+Follow [docs/DEFERRED.md](docs/DEFERRED.md) when a required design, dependency or validation blocks
+progress, or approved work is intentionally deferred. Link the issue, evidence and concrete
+re-entry condition; continue only independent work. Deferral never permits skipped tests, weaker
+checks, changed compatibility contracts or treating an incomplete feature as shipped.
+
 ## Conventions
 
 - English, plain sentences, **why-first comments**, wrapped at 100 columns; the style of the
