@@ -49,6 +49,11 @@ once a window is up (the release tests take that line as the overlay seen). 0.6.
 way, and the overlay then stayed busy with no window: every later `Start()` did nothing until it was
 restarted.
 
+Pending capture pipes own their read descriptor until a successful reply transfers it to the
+background image reader. Destroying a capture before a delayed reply closes the descriptor;
+disconnecting the receiver alone is not sufficient. This also covers a new Start replacing an
+earlier capture after a partial refusal, without changing the capture or fallback interfaces.
+
 ## Starting it
 
 - **On demand:** the package installs `org.plasmafusion.CopyTextOverlay.service` in the session
@@ -120,7 +125,10 @@ there), Nix `plasma-fusion-copytext`. The main package recommends it (Arch: optd
 - `copytext-capture` (`tests/capturetest.cpp`, ctest under dbus-run-session): a stand-in for KWin's
   ScreenShot2 on the private bus answers CaptureScreen as KWin 6.7.5 does; the picture arrives with
   its size, scale and pixels, asked for by the screen's name, at native resolution, without the
-  pointer; KWin's refusal ends in `failed()`.
+   pointer; KWin's refusal ends in `failed()`. Twenty delayed replies completed normally and
+   twenty captures destroyed before their replies each leave the process's descriptor count
+   unchanged. The fake service uses a separate D-Bus connection so deferred replies exercise the
+   real asynchronous path rather than Qt's local-call shortcut.
 - `copytext-flow` (`tests/flowtest.cpp`, ctest under dbus-run-session): the overlay itself with the
   stand-in for KWin, offscreen on two screens (DP-1 at scale 2, HDMI-1 at scale 1, from a file for
   Qt's offscreen platform), and a stand-in for the helper beside the test program, where the overlay
