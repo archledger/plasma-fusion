@@ -23,7 +23,7 @@ Status: built and run on HEAD 282b1a5 (the staged HOME tree is byte-identical to
 282b1a5 stage and on HEAD 31affe9 and d4afee8. Not a deployable part: nothing here touches the
 real session. Work package TEST-1 (2026-09-30) added the session-slot lock, the teardown fix,
 more harness options, the matrix, the band test and new gate rows; see "TEST-1 (2026-09-30)".
-Last edited 2026-09-30.
+Last edited 2026-10-25 (teardown under strict-mode scenarios).
 Evidence: the tests build run of 2026-09-30, the maintainer's records (review:
 `tests/review-rts/`).
 
@@ -47,6 +47,7 @@ Evidence: the tests build run of 2026-09-30, the maintainer's records (review:
 | `tools/tests/matrix/{run.sh,body.sh,mx.py,check.py,configs.txt}` | adaptive matrix (TEST-1): driver, in-session walk, per-configuration steps, layout judge, the configurations |
 | `tools/tests/perf/{band.sh,scen-band.sh,band.py}` | rubber-band selection with 20/60/100 icons (S5): driver, scenario, table and verdict |
 | `tools/tests/lib/slot-test.sh` | self-test of the slot lock semantics on a private lock directory |
+| `tools/tests/lib/teardown-test.sh` | self-test of `vsession.sh`'s teardown under a strict-mode scenario, with processes ending during the sweep (no session) |
 | `tools/tests/depth/run.sh` | the depth features' check: the six features' session scenarios, their seeds, one summary |
 | `tools/tests/depth/run-unit.sh` | its unit test with a stand-in session runner (CI `build`) |
 
@@ -313,6 +314,66 @@ Before, the portal frontend re-activated `xdg-desktop-portal-kde` after KWin had
 new instance aborted with a core dump (4 of 27 dock runs). The sweep selects processes by their
 `XDG_RUNTIME_DIR` (the session's `$PFV/run`), so it can never reach the logged-in session.
 `out/teardown.log` lists what was stopped.
+
+Teardown and the scenario's shell settings (2026-10-25). `vsession.sh` sources the scenario, so
+what its preamble sets stays set in the session shell's EXIT trap. Most scenarios use
+`set -euo pipefail`, many add an ERR trap and xtrace, and one also sets errtrace.
+
+The sweep meets processes that end on their own. With errexit set, reading or signalling one that
+just left ended the trap:
+
+- before the first log line, if the failing read came before it: there was no `teardown.log`,
+  and the session reported `session rc=1` after `scenario rc=0`;
+- after the first SIGTERM round, if a failing `kill` came later: the log was partial, with no
+  "done" line.
+
+What was left then died in `vsession.sh`'s final SIGKILL sweep, not in an orderly teardown. Two
+more settings could break the teardown:
+
+- With errtrace set, the scenario's ERR trap would also report those failures. Without errtrace,
+  bash keeps an ERR trap out of functions.
+- The strict IFS idiom (`IFS=$'\n\t'`) would break the sweep's field splitting under `set -u`.
+
+The teardown therefore makes the settings its own:
+
+- `local -`, then `set +eEx +o pipefail`;
+- the ERR trap cleared, and a default `IFS`;
+- the ERR and TERM traps restored at the end.
+
+A scenario that calls `cleanup` keeps its own settings.
+
+`tools/tests/lib/teardown-test.sh [--rounds N]` checks this without a session. It runs the real
+teardown functions, cut from `vsession.sh`, under three rotating preambles:
+
+- plain `set -euo pipefail`;
+- errtrace with an ERR trap and xtrace;
+- that with the strict IFS idiom.
+
+The shell holds session processes and short-lived ones that end during the sweep. Every round must
+exit 0, end its log with "done; left: none", never run the ERR trap and leave no survivors. Two
+mid-scenario `cleanup` calls, with and without errtrace, must leave the scenario's options,
+pipefail, ERR and TERM traps and IFS as they were.
+
+Results on the ThinkPad (Fedora 44, bash 5.3.9), 30 rounds each:
+
+| Teardown | Plain errexit rounds | Errtrace and xtrace rounds | Strict-IFS rounds | Mid-scenario checks |
+|---|---|---|---|---|
+| Before the fix | 2 of 10 failed | passed | 10 of 10 failed | both failed |
+| Errexit-only fix | passed | passed | 10 of 10 failed | both failed |
+| Errexit, ERR trap and IFS fix | passed | passed | passed | both failed (TERM trap) |
+| This version | passed | passed | passed | passed |
+
+The errexit race depends on timing: an earlier errexit-only version of the test failed 19 of 30
+rounds. Under xtrace the sweep is slow enough that the race was not met, so the errtrace and xtrace
+rounds pass even before the fix. They still guard the ERR trap once the fix turns xtrace off. This
+version also passed 120 of 120 rounds.
+
+In real container sessions (KWin 6.7.5 and 6.7.91), a sourced strict-mode scenario had ended
+unclean in 3 of 4 sessions. With the fix, every session ended clean:
+
+- errexit-only fix: 6 of 6;
+- the ERR trap and IFS fix: 4 of 4;
+- this version: 4 of 4.
 
 New harness options (defaults unchanged):
 
