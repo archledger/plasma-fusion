@@ -163,6 +163,19 @@ pfv_pids() {  # PFV_PIDS := this session's processes except PFV_KEEP and their c
   done
 }
 pfv_teardown() {
+  # A scenario sourced by this shell may have left errexit, pipefail, an ERR trap with errtrace,
+  # xtrace or its own IFS set, and they stay set in this EXIT trap. Processes end on their own
+  # while the sweep runs (reading or signalling one that just left fails): such a failure must
+  # neither end the teardown before it stopped the rest and wrote its log nor be reported by the
+  # scenario's ERR trap. The settings are this function's own (`local -`; the ERR and TERM traps
+  # restored at the end), so a scenario that calls cleanup keeps its own.
+  local -
+  local err_trap term_trap
+  err_trap=$(trap -p ERR)
+  term_trap=$(trap -p TERM)
+  set +eEx +o pipefail
+  trap - ERR
+  local IFS=$' \t\n'
   trap '' TERM
   local p st pid round t left names c
   # this shell and its ancestors: KWin, dbus-run-session, timeout, vsession.sh, ...
@@ -195,6 +208,8 @@ pfv_teardown() {
   done
   pfv_pids
   echo "$EPOCHREALTIME done; left: ${PFV_PIDS[*]:-none}" >>"$OUT/teardown.log"
+  eval "${err_trap:-trap - ERR}"
+  eval "${term_trap:-trap - TERM}"
 }
 cleanup() { pfv_teardown; }
 trap pfv_teardown EXIT
