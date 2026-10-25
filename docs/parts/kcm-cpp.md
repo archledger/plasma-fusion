@@ -60,12 +60,17 @@ The second loads the actual page with the existing backend stand-in to check gro
 values, scroll and common messages. That stand-in does not prove Apply or dirty-state calculation;
 the existing native CTests and private System Settings tests cover those contracts.
 The scroll, rapid-switch and focus steps schedule their own later actions, so `offscreen_preview.py`
-prints its navigation report only after each requested step has finished. If one is still running
-after 15 s, the report lists it under `pending` and the test fails with that list. Before this,
-the report ran at a fixed 1 s. On a busy CI runner it could come before the Tab traversal had
-finished, and the test then failed with `KeyError: 'tabIntoSection'` (2026-10-25). On the ThinkPad,
-with three busy loops sharing the test's core, the old version failed 3 of 3 runs that way; the
-fixed one passed the suite there and 20 of 20 focus runs.
+prints its navigation report only after each requested step has finished. A step that raises is
+reported at once under `stepErrors`. One still running 15 s after the report's first attempt
+(about 1 s in) is listed under `pending`. The test fails on either, naming the step.
+
+Before this change (2026-10-25), the report ran at a fixed 1 s. A CI run failed with
+`KeyError: 'tabIntoSection'`, most likely because the report came before the Tab traversal had
+finished; that is inferred from the mechanism, as the runner's load was not measured. On the
+ThinkPad, three busy loops shared the test's core:
+
+- before: 10 of 10 focus runs reported early, and 3 of 3 suite runs failed with that error;
+- after: 20 of 20 focus runs completed, and the suite passed.
 CI also publishes `plasma-fusion-settings-previews`: offscreen dark, light and compact screenshots
 for visual review. They use the stand-in backend and are not evidence of a live settings change.
 

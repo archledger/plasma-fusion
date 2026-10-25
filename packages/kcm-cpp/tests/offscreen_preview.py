@@ -16,6 +16,10 @@ packages/common/FusionMetrics.qml are copied into one directory first, as the mo
 resources hold them. --report prints, once the page is laid out, where its content column is
 ("REPORT {json}": its x and width in the page's content item, that item's width, and its x and
 width in the window).
+--navigation prints "REPORT_NAVIGATION {json}" with the section navigation's state, after the
+steps asked for (--scroll-roundtrip, --rapid-switch, --focus-switch) have finished. "pending" lists
+steps still unfinished 15 s after the report's first attempt; "stepErrors" maps each step that
+raised to its error.
 Environment: PFKM_TMP (directory for the private configuration, default the system temp
 directory), PFKM_THEME (Qt platform theme, default kde).
 """
@@ -338,10 +342,25 @@ QQC2.ApplicationWindow {
 
     # The navigation steps schedule their own later actions, so on a busy host they can end after
     # any fixed report time. The report waits for every step that was asked for (up to a deadline,
-    # then names the unfinished ones), and the grab that quits waits for the report.
+    # then names the unfinished ones), and the grab that quits waits for the report. A step that
+    # raises ends at once: its error is reported and its later actions are skipped.
     pending_steps = set()
+    step_errors = {}
     report_done = []
     report_deadline = []
+
+    def step(name, action):
+        def run():
+            if name in step_errors:
+                return
+            try:
+                action()
+            except Exception as error:  # reported below; the test fails on it
+                import traceback
+                traceback.print_exc()
+                step_errors[name] = repr(error)
+                pending_steps.discard(name)
+        return run
 
     def navigation_report():
         import time
@@ -376,7 +395,7 @@ QQC2.ApplicationWindow {
             "errorVisible": error.isVisible(), "infoVisible": info.isVisible(),
             "pendingVisible": pending.isVisible(), "scroll": scroll_result,
             "rapid": rapid_result, "focus": focus_result, "pending": sorted(pending_steps),
-            "warnings": warnings}))
+            "stepErrors": step_errors, "warnings": warnings}))
 
     scroll_result = {}
     rapid_result = {}
@@ -386,13 +405,13 @@ QQC2.ApplicationWindow {
         page_evaluate("flickable.contentY = 220")
         scroll_result["before"] = page_evaluate("flickable.contentY")
         select_section(4)
-        QTimer.singleShot(100, lambda: select_section(args.section if args.section is not None else 0))
+        QTimer.singleShot(100, step("scroll", lambda: select_section(args.section if args.section is not None else 0)))
 
         def finish():
             scroll_result["after"] = page_evaluate("flickable.contentY")
             pending_steps.discard("scroll")
 
-        QTimer.singleShot(300, finish)
+        QTimer.singleShot(300, step("scroll", finish))
 
     def rapid_switch():
         page_evaluate("flickable.contentY = 100")
@@ -407,15 +426,15 @@ QQC2.ApplicationWindow {
             select_section(2)
             select_section(4)
 
-        QTimer.singleShot(100, remember_second)
-        QTimer.singleShot(200, switch_twice)
-        QTimer.singleShot(300, lambda: select_section(2))
+        QTimer.singleShot(100, step("rapid", remember_second))
+        QTimer.singleShot(200, step("rapid", switch_twice))
+        QTimer.singleShot(300, step("rapid", lambda: select_section(2)))
 
         def finish():
             rapid_result["after"] = page_evaluate("flickable.contentY")
             pending_steps.discard("rapid")
 
-        QTimer.singleShot(500, finish)
+        QTimer.singleShot(500, step("rapid", finish))
 
     def focus_switch():
         from PySide6.QtCore import Qt
@@ -458,8 +477,8 @@ QQC2.ApplicationWindow {
             focus_result["backtabToNavigation"] = within(win.activeFocusItem(), navigation)
             pending_steps.discard("focus")
 
-        QTimer.singleShot(100, press_after_switch)
-        QTimer.singleShot(350, traverse_section)
+        QTimer.singleShot(100, step("focus", press_after_switch))
+        QTimer.singleShot(350, step("focus", traverse_section))
 
     def grab():
         if args.navigation and not report_done:
@@ -568,13 +587,13 @@ QQC2.ApplicationWindow {
     QTimer.singleShot(200, prepare_section)
     if args.scroll_roundtrip:
         pending_steps.add("scroll")
-        QTimer.singleShot(400, scroll_roundtrip)
+        QTimer.singleShot(400, step("scroll", scroll_roundtrip))
     if args.rapid_switch:
         pending_steps.add("rapid")
-        QTimer.singleShot(400, rapid_switch)
+        QTimer.singleShot(400, step("rapid", rapid_switch))
     if args.focus_switch:
         pending_steps.add("focus")
-        QTimer.singleShot(400, focus_switch)
+        QTimer.singleShot(400, step("focus", focus_switch))
     if args.navigation:
         QTimer.singleShot(1000, navigation_report)
     if args.rows:
