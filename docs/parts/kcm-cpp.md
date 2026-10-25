@@ -59,6 +59,13 @@ The first covers the real navigation control, keyboard/RTL behavior and large-te
 The second loads the actual page with the existing backend stand-in to check grouping, retained
 values, scroll and common messages. That stand-in does not prove Apply or dirty-state calculation;
 the existing native CTests and private System Settings tests cover those contracts.
+The scroll, rapid-switch and focus steps schedule their own later actions, so `offscreen_preview.py`
+prints its navigation report only after each requested step has finished. If one is still running
+after 15 s, the report lists it under `pending` and the test fails with that list. Before this,
+the report ran at a fixed 1 s. On a busy CI runner it could come before the Tab traversal had
+finished, and the test then failed with `KeyError: 'tabIntoSection'` (2026-10-25). On the ThinkPad,
+with three busy loops sharing the test's core, the old version failed 3 of 3 runs that way; the
+fixed one passed the suite there and 20 of 20 focus runs.
 CI also publishes `plasma-fusion-settings-previews`: offscreen dark, light and compact screenshots
 for visual review. They use the stand-in backend and are not evidence of a live settings change.
 

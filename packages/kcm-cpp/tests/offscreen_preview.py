@@ -336,7 +336,26 @@ QQC2.ApplicationWindow {
         else:
             select_section(0)
 
+    # The navigation steps schedule their own later actions, so on a busy host they can end after
+    # any fixed report time. The report waits for every step that was asked for (up to a deadline,
+    # then names the unfinished ones), and the grab that quits waits for the report.
+    pending_steps = set()
+    report_done = []
+    report_deadline = []
+
     def navigation_report():
+        import time
+        if not report_deadline:
+            report_deadline.append(time.monotonic() + 15)
+        if pending_steps and time.monotonic() < report_deadline[0]:
+            QTimer.singleShot(50, navigation_report)
+            return
+        try:
+            write_navigation_report()
+        finally:
+            report_done.append(True)
+
+    def write_navigation_report():
         from PySide6.QtQuick import QQuickItem
         page = settings_page()
         if page is None:
@@ -356,7 +375,8 @@ QQC2.ApplicationWindow {
             "compact": nav.property("compact"), "titles": titles, "state": kcm.s,
             "errorVisible": error.isVisible(), "infoVisible": info.isVisible(),
             "pendingVisible": pending.isVisible(), "scroll": scroll_result,
-            "rapid": rapid_result, "focus": focus_result, "warnings": warnings}))
+            "rapid": rapid_result, "focus": focus_result, "pending": sorted(pending_steps),
+            "warnings": warnings}))
 
     scroll_result = {}
     rapid_result = {}
@@ -367,7 +387,12 @@ QQC2.ApplicationWindow {
         scroll_result["before"] = page_evaluate("flickable.contentY")
         select_section(4)
         QTimer.singleShot(100, lambda: select_section(args.section if args.section is not None else 0))
-        QTimer.singleShot(300, lambda: scroll_result.update(after=page_evaluate("flickable.contentY")))
+
+        def finish():
+            scroll_result["after"] = page_evaluate("flickable.contentY")
+            pending_steps.discard("scroll")
+
+        QTimer.singleShot(300, finish)
 
     def rapid_switch():
         page_evaluate("flickable.contentY = 100")
@@ -385,7 +410,12 @@ QQC2.ApplicationWindow {
         QTimer.singleShot(100, remember_second)
         QTimer.singleShot(200, switch_twice)
         QTimer.singleShot(300, lambda: select_section(2))
-        QTimer.singleShot(500, lambda: rapid_result.update(after=page_evaluate("flickable.contentY")))
+
+        def finish():
+            rapid_result["after"] = page_evaluate("flickable.contentY")
+            pending_steps.discard("rapid")
+
+        QTimer.singleShot(500, finish)
 
     def focus_switch():
         from PySide6.QtCore import Qt
@@ -426,11 +456,15 @@ QQC2.ApplicationWindow {
             focus_result["tabIntoSection"] = valid and within(active, column)
             QTest.keyClick(win, Qt.Key.Key_Backtab)
             focus_result["backtabToNavigation"] = within(win.activeFocusItem(), navigation)
+            pending_steps.discard("focus")
 
         QTimer.singleShot(100, press_after_switch)
         QTimer.singleShot(350, traverse_section)
 
     def grab():
+        if args.navigation and not report_done:
+            QTimer.singleShot(50, grab)
+            return
         try:
             img = win.grabWindow()
             img.save(args.out)
@@ -533,10 +567,13 @@ QQC2.ApplicationWindow {
         QTimer.singleShot(600, act)
     QTimer.singleShot(200, prepare_section)
     if args.scroll_roundtrip:
+        pending_steps.add("scroll")
         QTimer.singleShot(400, scroll_roundtrip)
     if args.rapid_switch:
+        pending_steps.add("rapid")
         QTimer.singleShot(400, rapid_switch)
     if args.focus_switch:
+        pending_steps.add("focus")
         QTimer.singleShot(400, focus_switch)
     if args.navigation:
         QTimer.singleShot(1000, navigation_report)
