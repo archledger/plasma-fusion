@@ -28,7 +28,7 @@ def preview(section, *args):
     for line in result.stdout.splitlines():
         if line.startswith("REPORT_NAVIGATION "):
             report = json.loads(line.removeprefix("REPORT_NAVIGATION "))
-            assert not report.get("stepErrors"), f"navigation steps failed: {report}"
+            assert not report.get("stepErrors"), f"navigation steps failed: {report}\n{result.stderr}"
             assert not report.get("pending"), f"navigation steps did not finish: {report}"
             return report
     raise AssertionError(result.stdout + result.stderr)

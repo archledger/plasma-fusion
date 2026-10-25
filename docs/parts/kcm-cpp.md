@@ -71,6 +71,7 @@ ThinkPad, three busy loops shared the test's core:
 
 - before: 10 of 10 focus runs reported early, and 3 of 3 suite runs failed with that error;
 - after: 20 of 20 focus runs completed, and the suite passed.
+
 CI also publishes `plasma-fusion-settings-previews`: offscreen dark, light and compact screenshots
 for visual review. They use the stand-in backend and are not evidence of a live settings change.
 
