@@ -22,7 +22,7 @@
 #   teardown-test.sh [--rounds N] [--work DIR]
 #   (default 30 rounds in <repo>/build/tests/teardown-test)
 # Exit status: 0 all checks passed, 1 a check failed, 2 setup error.
-set -u
+set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 ROUNDS=30
@@ -59,19 +59,24 @@ PREAMBLE+='trap '"'"'echo "ERR at $LINENO: $BASH_COMMAND" >>"$PFV/err.log"'"'"' 
 STRICT_IFS="$PREAMBLE; IFS=\$'\\n\\t'"
 
 rm -rf "$WORK"
-mkdir -p "$WORK" && touch "$WORK/.teardown-test" || exit 2
+mkdir -p "$WORK"
+touch "$WORK/.teardown-test"
 failed=0
-for round in $(seq 1 "$ROUNDS"); do
+rounds_run=0
+mid_run=0
+for ((round = 1; round <= ROUNDS; round++)); do
+  rounds_run=$((rounds_run + 1))
   PFV=$WORK/round-$round
   case $((round % 3)) in
     1) preamble=$STRICT kind=errexit ;;
     2) preamble=$PREAMBLE kind=errtrace+xtrace ;;
     0) preamble=$STRICT_IFS kind=strict-IFS ;;
   esac
-  mkdir -p "$PFV/run" "$PFV/out" || exit 2
+  mkdir -p "$PFV/run" "$PFV/out"
   # The session shell: the preamble as a sourced scenario leaves it, then the teardown trap. Only
   # its children carry the session's XDG_RUNTIME_DIR, so the sweep selects them and spares the
   # shell.
+  rc=0
   PFV=$PFV bash -c '
     eval "$2"
     OUT=$PFV/out
@@ -79,25 +84,41 @@ for round in $(seq 1 "$ROUNDS"); do
     for _ in 1 2 3; do XDG_RUNTIME_DIR=$PFV/run sleep 300 & done
     # Each lives about as long as the sweep takes to list the session processes, so some are
     # listed and then gone before they are read or stopped.
-    for _ in $(seq 1 12); do XDG_RUNTIME_DIR=$PFV/run bash -c "while :; do sleep 0.02; done" & done
+    for _ in {1..12}; do XDG_RUNTIME_DIR=$PFV/run bash -c "while :; do sleep 0.02; done" & done
     sleep 0.3
     jobs -p >"$PFV/jobs.pid"
-  ' teardown-session "$FUNCS" "$preamble" >"$PFV/session.log" 2>&1
-  rc=$?
-  last=$(tail -n 1 "$PFV/out/teardown.log" 2>/dev/null)
+  ' teardown-session "$FUNCS" "$preamble" >"$PFV/session.log" 2>&1 || rc=$?
+  last=
+  if [ -f "$PFV/out/teardown.log" ]; then
+    last=$(tail -n 1 "$PFV/out/teardown.log")
+  fi
   left=
-  while read -r pid; do
-    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && left+=" $pid"
-  done <"$PFV/jobs.pid"
+  if [ -f "$PFV/jobs.pid" ]; then
+    while read -r pid; do
+      if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        left+=" $pid"
+      fi
+    done <"$PFV/jobs.pid"
+  else
+    left=" <no jobs.pid: the session shell did not start its processes>"
+  fi
   if [ "$rc" = 0 ] && [[ $last == *" done; left: none" ]] && [ ! -s "$PFV/err.log" ] \
     && [ -z "$left" ]; then
     rm -rf "$PFV"
   else
     failed=$((failed + 1))
+    err_runs=0
+    if [ -f "$PFV/err.log" ]; then
+      err_runs=$(wc -l <"$PFV/err.log")
+    fi
     echo "round $round ($kind): shell exit $rc, last teardown line '${last:-<no teardown.log>}'," \
-      "ERR trap runs $(wc -l <"$PFV/err.log" 2>/dev/null || echo 0), still running:${left:- none}"
+      "ERR trap runs $err_runs, still running:${left:- none}"
     # A failed teardown leaves its processes: stop them here so nothing outlives the test.
-    for pid in $left; do kill -KILL "$pid" 2>/dev/null; done
+    for pid in $left; do
+      if [[ $pid =~ ^[0-9]+$ ]]; then
+        kill -KILL "$pid" 2>/dev/null || true
+      fi
+    done
   fi
 done
 
@@ -105,9 +126,11 @@ done
 # trap reaches functions (errtrace) and when bash hides it from them (no errtrace).
 MID_NO_E=${STRICT_IFS/set -Eeuxo/set -euxo}
 for mid in errtrace:"$STRICT_IFS" no-errtrace:"$MID_NO_E"; do
+  mid_run=$((mid_run + 1))
   name=${mid%%:*}
   PFV=$WORK/mid-$name
-  mkdir -p "$PFV/run" "$PFV/out" || exit 2
+  mkdir -p "$PFV/run" "$PFV/out"
+  # A failing session shell leaves state empty or partial; the checks below then fail.
   state=$(PFV=$PFV bash -c '
     eval "$2"
     OUT=$PFV/out
@@ -116,10 +139,12 @@ for mid in errtrace:"$STRICT_IFS" no-errtrace:"$MID_NO_E"; do
     cleanup
     pf=off; [[ -o pipefail ]] && pf=on
     printf "%s|%s|%s|%s|%s" "$-" "$pf" "$(trap -p TERM)" "$(trap -p ERR)" "$IFS"
-  ' teardown-mid "$FUNCS" "${mid#*:}" 2>"$PFV/stderr.log")
+  ' teardown-mid "$FUNCS" "${mid#*:}" 2>"$PFV/stderr.log") || true
   opts=${state%%|*}
   expect=eux
-  [ "$name" = errtrace ] && expect=Eeux
+  if [ "$name" = errtrace ]; then
+    expect=Eeux
+  fi
   ok=1
   for ((i = 0; i < ${#expect}; i++)); do [[ $opts == *"${expect:i:1}"* ]] || ok=0; done
   case "$state" in
@@ -133,6 +158,11 @@ for mid in errtrace:"$STRICT_IFS" no-errtrace:"$MID_NO_E"; do
   fi
 done
 
+# A loop that ran fewer times than asked must not read as a pass.
+if [ "$rounds_run" != "$ROUNDS" ] || [ "$mid_run" != 2 ]; then
+  echo "teardown-test: ran $rounds_run of $ROUNDS rounds and $mid_run of 2 mid-scenario checks"
+  exit 1
+fi
 if [ "$failed" -gt 0 ]; then
   echo "teardown-test: $failed check(s) failed (work files kept in $WORK)"
   exit 1
