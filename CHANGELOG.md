@@ -9,11 +9,12 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
-- **Window placement memory and tiling:** with KWin's upstream-proposed `requestedGeometry`
-  property, the memory no longer records a frame the app has not caught up with. A window that
-  was untiled and closed before its app answered keeps its floating place instead of the tile's
-  size (KDE bug 527821). Fedora 44 users can build KWin 6.7.5 with the property from
-  `packaging/patches/kwin`; it is optional, not published, and stock KWin behaves as before.
+- **Window placement memory and tiling:** with the `requestedGeometry` property of the optional
+  KWin backport, the memory no longer records a frame the app has not caught up with. A window
+  that was untiled and closed before its app answered keeps its floating place instead of the
+  tile's size (KDE bug 527821). Fedora 44 users can build KWin 6.7.5 with the property from
+  `packaging/patches/kwin`. It is a downstream patch (KDE declined the property upstream), optional
+  and not published, and stock KWin behaves as before.
 
 - **Privacy indicator hover:** the hover card now has the same content width as the clicked
   panel, so application names and resource details are readable without clicking. Long names

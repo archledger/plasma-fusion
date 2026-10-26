@@ -414,12 +414,12 @@ spot unless the app moved itself again), every later floating change updates it,
 close: KWin marks a closing window deleted before `windowRemoved`, and the script reads its frame
 geometry and state as they were (a deleted window's tile request is a no-op, so the tile stays). The
 quiet second keeps the restore itself and an app's late repositioning out of the record. On a KWin
-with `Window.requestedGeometry` (the optional backport, `packaging/patches/kwin`, or a KWin release
-that has it), a frame that does not yet match the geometry KWin requested is not recorded: a
-Wayland client answers a move or resize later, and a frame it commits after an untile can still
-have the tile's size (KDE [bug 527821](https://bugs.kde.org/show_bug.cgi?id=527821)). The record
-waits for the change that brings the two together, and a window that closes before that keeps its
-earlier record. Positions and sizes less than 1 px apart count as equal, as an X11 frame is the
+with `Window.requestedGeometry` (only the optional backport, `packaging/patches/kwin`, has it: KDE
+declined the property upstream), a frame that does not yet match the geometry KWin requested is not
+recorded: a Wayland client answers a move or resize later, and a frame it commits after an untile
+can still have the tile's size (KDE [bug 527821](https://bugs.kde.org/show_bug.cgi?id=527821)). The
+record waits for the change that brings the two together, and a window that closes before that keeps
+its earlier record. Positions and sizes less than 1 px apart count as equal, as an X11 frame is the
 request rounded to native pixels. On a KWin without the property every frame counts, as before.
 Windows already open when the script is enabled or reloaded (the Fusion setup enables it in a
 running session; a reconfigure can reload it) are watched - their moves and closes are remembered -

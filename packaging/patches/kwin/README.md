@@ -4,15 +4,16 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 -->
 # Optional KWin backport
 
-Fedora 44's KWin 6.7.5, rebuilt with an upstream-proposed scripting property. Stock KWin remains
-supported. These packages are separate from Plasma Fusion and are never installed by its installer.
-Plasma Fusion does not publish them: they exist only where someone builds them with the script
-below. The property is still under review upstream and may change, so consumers must detect it at
-runtime.
+Fedora 44's KWin 6.7.5, rebuilt with a scripting property that KDE declined upstream: the merge
+request was closed without merging on 2026-10-26. It is a downstream patch, maintained here for
+Fedora 44's KWin 6.7.5 only. Stock KWin remains supported. These packages are separate from Plasma
+Fusion and are never installed by its installer. Plasma Fusion does not publish them: they exist
+only where someone builds them with the script below. The property exists only where this patch is
+installed, so consumers must detect it at runtime.
 
 | Patch | What it provides | Upstream | When to drop |
 |---|---|---|---|
-| `0001-window-expose-requested-geometry.patch` | Read-only `Window.requestedGeometry` and `requestedGeometryChanged`, so scripts can distinguish the committed frame from geometry KWin has requested. | KDE [MR !10225](https://invent.kde.org/plasma/kwin/-/merge_requests/10225), proposed commit `3fd6cdb85cc2b7d562fbb403c035709462c0068a`; [bug 527821](https://bugs.kde.org/show_bug.cgi?id=527821). Not merged. | When Fedora's KWin supplies the property and its notification contract. If the upstream API changes during review, update the backport and its consumers together. |
+| `0001-window-expose-requested-geometry.patch` | Read-only `Window.requestedGeometry` and `requestedGeometryChanged`, so scripts can distinguish the committed frame from geometry KWin has requested. | KDE [MR !10225](https://invent.kde.org/plasma/kwin/-/merge_requests/10225), proposed commit `3fd6cdb85cc2b7d562fbb403c035709462c0068a`; [bug 527821](https://bugs.kde.org/show_bug.cgi?id=527821). Closed without merging on 2026-10-26: upstream KWin will not take this change. | When Fedora's KWin provides the same information through an API of its own (update the consumers with it), or when the patch no longer applies to Fedora 44's KWin. There is no upstream version to follow. |
 
 This adds an observable property; it does not change how KWin configures or tiles windows. It does
 not enable automatic tiling or solve its remaining lifecycle requirements. The placement-script
