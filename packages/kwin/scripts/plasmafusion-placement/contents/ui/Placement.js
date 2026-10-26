@@ -88,9 +88,9 @@ function floating(state) {
 // Whether the frame is the geometry KWin asked the window to take. A Wayland client answers a move
 // or resize later, so a frame it commits after the window was untiled can still have the tile's
 // size (KDE bug 527821), and recording it would remember the tile as the window's floating place.
-// requested: the window's requestedGeometry (a KWin with the property: the optional backport in
-// packaging/patches/kwin, or a release that has it), or null on a KWin without it - every frame
-// counts there, as before. Less than 1 px apart in position and size is settled: an X11 frame is
+// requested: the window's requestedGeometry (only the optional backport in packaging/patches/kwin
+// has the property; KDE declined it upstream), or null on a KWin without it - every frame counts
+// there, as before. Less than 1 px apart in position and size is settled: an X11 frame is
 // the request rounded to native pixels. An empty requested size (the client is asked to choose)
 // differs from any mapped frame, so it stays pending until the client commits. A request that is
 // not four finite numbers is ignored like a missing property.
