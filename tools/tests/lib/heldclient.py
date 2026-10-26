@@ -14,6 +14,8 @@ Commands on stdin, one per line:
     auto          answer every configure at once (the start mode), also the newest one held
     ack SERIAL    acknowledge a held configure; its size is the next buffer's
     commit        attach a buffer of the acknowledged size and commit it
+    maximize      ask to be maximized (xdg_toplevel.set_maximized): KWin answers with a configure
+    unmaximize    ask to be restored (xdg_toplevel.unset_maximized)
     quit          destroy the window and exit
 Events on stdout, one JSON object per line: ready, configure, ack, commit, command, close.
 Errors go to stderr with exit status 2. It runs only inside a tools/vsession private session
@@ -163,6 +165,10 @@ class Client:
             self.ack(int(words[1]))
         elif words == ["commit"]:
             self.commit()
+        elif words == ["maximize"]:
+            self.top.set_maximized()
+        elif words == ["unmaximize"]:
+            self.top.unset_maximized()
         elif words == ["quit"]:
             self.running = False
         else:

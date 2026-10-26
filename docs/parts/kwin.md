@@ -406,6 +406,24 @@ X11), so the assignment wins. The record is per app - its desktop file when it h
 name across Wayland and X11), else the window class; a window with neither is left alone. A window
 is only touched while it floats (not maximized in any way, not full screen or tiled, not a dialog,
 transient or modal, not minimized); a window opened maximized keeps its last floating record. A
+maximize KWin has asked for counts as maximized until the window has taken it: the commit with which
+a Wayland client answers the request updates the frame before the maximize mode (KWin 6.7.5,
+`xdgshellwindow.cpp`, `XdgSurfaceWindow::handleCommit`: the window geometry, then the acknowledged
+states), so the first frame change after the request already has the maximized frame while
+`maximizeMode` still reads 0, and a window maximized and then closed was remembered at its maximized
+size (issue #128). The script mirrors the mode KWin asked for from `maximizedAboutToChange` (emitted
+with the request, before any geometry change, on Wayland and X11; the same signal in 6.8 and
+`master`; its last emission is exactly what KWin keeps as the requested mode, so the mirror is not
+reset from the mode taken: with a restore and a maximize both in flight, a client that answers them
+one by one takes the restore first, and the maximized frame that follows must still count as
+maximized). At `maximizedChanged` a restore that has been taken records the floating frame the
+window went back to (on X11 KWin sets the mode before it moves the frame, so the frame change itself
+records it there) - also for a window that was mapped maximized and has no restore geometry, where
+KWin asks the app for its own size at the work area's corner and that frame becomes the record,
+as a close there would have made it. Known limit on a KWin without `requestedGeometry`: a maximize
+and a restore in flight together, answered one by one, show the maximized frame while both KWin's
+and the script's requested mode already say restored, so that frame is recorded until the restore's
+commit records the floating one again; a close in between keeps it. A
 window KWin holds in place - a window rule that forces its position (KWin's `moveable` is false
 then), or moving switched off - is left to KWin entirely: assigning `frameGeometry` goes straight to
 `Window::moveResize` and would bypass the rule. A forced or fixed size keeps the window's own size
@@ -556,8 +574,11 @@ Offline (laptop):
   records, the centre test (a between-screens gap, a screen left of the origin), the 8 px stack
   guard, size-only mode, the ignore list (app id and window class), windows held by a rule (forced
   position, forced or fixed size), the teardown write (a change made while a write was in flight),
-  the record's rounding, and the settled test against `requestedGeometry` (missing property, a
-  pending move or resize, an empty requested size, X11 rounding under 1 px, malformed values).
+  the record's rounding, the settled test against `requestedGeometry` (missing property, a
+  pending move or resize, an empty requested size, X11 rounding under 1 px, malformed values), and
+  the maximize asked for but not yet taken (`maximized`, `requestedMode`: a full or partial
+  maximize pending, a restore pending while the frame is still maximized, a signal without a usable
+  mode, no tracking at all).
 - `node packages/kwin/tests/workspaces.test.js` (the build runs it when node is installed): the
   dynamic workspaces' rules - which windows hold a workspace (every exclusion), the plan (GNOME's
   cases, an empty one in the middle, the shown one, each screen's shown one, `KeepFirst` and its
@@ -641,7 +662,17 @@ and pointer drags inside the private session only).
   record stays; `IgnoreApps` leaves that app's window alone; a
   window rule that forces the position wins (the window opens at the rule's spot, the record
   stays); a disable/enable cycle with a window open leaves no errors from the unloaded instance and
-  the new instance remembers the next move.
+  the new instance remembers the next move; a window maximized by a script (`setMaximize`) and
+  closed keeps its floating place, and the step records what `maximizedAboutToChange` delivers;
+  the same for a vertical-only maximize; the same through KWin's own operation
+  (`slotWindowMaximize`, the shortcut's and the title bar's path) with a restore in between: the
+  restored window floats where it was and that place is recorded again (a second window of the app
+  had taken the record meanwhile), a move after the restore is remembered, a close while maximized
+  keeps it; an X11 window maximized and closed keeps its place (in a session with Xwayland,
+  `PFV_XWAYLAND=1`, which the backport lane sets; a session asked for Xwayland that has none fails
+  the step, any other is skipped as INFO). The disable/enable step also maximizes and restores the
+  window that lived through the cycle, so a maximize handler the unloaded instance left behind
+  would show up as an error.
 - `scenario-placement-pending.sh` (strict mode, verdict and "scenario rc" as above): KDE bug
   527821's order with `tools/tests/lib/heldclient.py`, an xdg-shell window whose answers to
   configure events the scenario sends (it needs pywayland: `python3-pywayland` on Fedora, in the
@@ -650,15 +681,35 @@ and pointer drags inside the private session only).
   then commits the tile-sized frame and closes before answering the untile's configure. On a KWin
   with `requestedGeometry` the memory must keep A; on one without it the outcome is reported as
   INFO (the tile size is recorded). Then a tile and untile with prompt answers: the window floats
-  at A again, A is kept, a later move and the close are remembered. For the backport's lane,
+  at A again, A is kept, a later move and the close are remembered. Then a maximize and a restore
+  requested while the client holds its answers, and the restore answered alone (acknowledging a
+  configure supersedes the earlier ones, so KWin never reports a maximize mode change): the window
+  floats at A, A is kept and a later move is remembered (the requested mode the script mirrors is
+  not left pending). Then the client asks to be maximized itself (`maximize`:
+  `xdg_toplevel.set_maximized`), answers at once, asks to be restored (`unmaximize`: back where it
+  was, the record kept), asks to be maximized again and closes maximized: the floating place is
+  kept. Then, on a maximized window, a restore and a maximize requested before the client answers
+  either, answered one by one: the restore is taken first, the maximize's commit then shows the
+  maximized frame while the mode still reads restored, and the memory keeps A through it and
+  through the close. For the backport's lane,
   `tools/tests/kwin-backport/run.sh --rpms DIR` builds the image with the backport's packages,
   installed with the command in `packaging/patches/kwin/README.md` (the test image has
   `kwin-devel`, so it takes that subpackage too), and runs this scenario and
   `scenario-placement.sh` in both images; the `kwin-backport` workflow runs it nightly without a
-  GPU (docs/parts/ci.md). On 2026-10-26 (ThinkPad, `cvsession.sh`): 12 of 12 checks with the
-  backport and 11 of 11 in the stock test image (the tile size recorded, as INFO, as with the
-  previous script); the previous script with the backport failed the check that the memory keeps A;
-  and `scenario-placement.sh` passed 25 of 25 in both images.
+  GPU (docs/parts/ci.md). On 2026-10-26 (ThinkPad, `cvsession.sh`), the scripts as they were before
+  the maximize steps: 12 of 12 checks with the backport and 11 of 11 in the stock test image (the
+  tile size recorded, as INFO, as with the previous script); the previous script with the backport
+  failed the check that the memory keeps A; and `scenario-placement.sh` passed 25 of 25 in both
+  images. With the maximize steps (issue #128, 2026-10-26, ThinkPad, `cvsession.sh`, images
+  `f44-6.7.5-pw` and `-pw-pf1`): `scenario-placement.sh` 51 of 51 on stock and on the backport (with
+  Xwayland; 44 of 44 in an earlier form of the steps without the render node too),
+  `scenario-placement-pending.sh` 33 of 33 on stock and 34 of 34 on the backport; the same scenarios
+  with the previous script failed 9 (placement) and 6 (pending) checks, every one a maximize check
+  with the record `0 34 1440 866` (the vertical maximize's `217 34 590 866`); in the Plasma 6.8 beta
+  image (KWin 6.7.91, laptop) 51 of 51 and 33 of 33. `maximizedAboutToChange` delivered
+  `{"type":"number","mode":3}` to the script on both KWins. On the ThinkPad's logged-in session (4/3
+  scale) the fixed script kept the floating place of a KWrite maximized by script, by KWin's
+  operation and through Xwayland.
 - `scenario-workspaces.sh` (strict mode, verdict and "scenario rc" as above): the setup's four
   named workspaces and a window on Work, then the script on: nothing removed in the first seconds,
   then down to Work and Design; a window moved to the last workspace adds "Workspace 3" at once;

@@ -13,11 +13,25 @@
 #      without it the script cannot tell the frame from a floating one and records the tile size:
 #      reported as INFO, the limit the property removes;
 #   3. the same tile and untile with a client that answers at once: the window floats at A again,
-#      the memory keeps A, and a later move is remembered (settled frames are still recorded).
-# Run: tools/vsession/remote.sh place-pending packages/kwin/tests/vsession/scenario-placement-pending.sh SEED 1440x900 240
+#      the memory keeps A, and a later move is remembered (settled frames are still recorded);
+#   4. a maximize and then a restore requested before the client answers either, and the client
+#      answers the restore only (acknowledging a configure supersedes the earlier ones), so KWin
+#      never reports a maximize mode change: the window floats at A, the memory keeps A, and a
+#      later move is remembered - the requested mode the script mirrors is not left pending;
+#   5. the client asks to be maximized itself (xdg_toplevel.set_maximized), answers at once, asks to
+#      be restored (unset_maximized: back at A, A recorded again), asks to be maximized once more
+#      and closes maximized: the memory keeps A (issue #128 through the client's own requests);
+#   6. a restore and then a maximize requested on a maximized window before the client answers
+#      either, answered one by one: the restore's commit is taken first (KWin reports the restored
+#      mode), then the maximize's commit brings the maximized frame while the mode still reads
+#      restored - the mirrored request must still say maximized, so nothing is recorded; a close
+#      then keeps A.
+# Run: tools/vsession/remote.sh place-pending packages/kwin/tests/vsession/scenario-placement-pending.sh SEED 1440x900 360
 exec 2>&1
 export OUT
-set -euo pipefail
+# -E: the ERR trap below also fires for a command that fails inside a helper function (bash does
+# not inherit it there otherwise, and the run would stop without its FAIL line).
+set -Eeuo pipefail
 set -x
 CHK=$OUT/checks.txt
 KLOG=$OUT/kwin.log
@@ -39,7 +53,7 @@ geom() { # "x y w h" of the held window, or "none"
 # The window's state as one line for the checks: tile, frame and (where KWin has it) requested.
 state() {
   K run "$FIND if (!w) { report(null); } else { var g = w.frameGeometry, r = w.requestedGeometry;
-    report({ tiled: !!w.tile, frame: [g.x, g.y, g.width, g.height], requested: r ? [r.x, r.y, r.width, r.height] : null }); }"
+    report({ tiled: !!w.tile, max: w.maximizeMode, frame: [g.x, g.y, g.width, g.height], requested: r ? [r.x, r.y, r.width, r.height] : null }); }"
 }
 
 place() { # X Y W H
@@ -185,6 +199,128 @@ send quit
 held_stop
 sleep 3
 record_is 97 113 430 310 && pass "3. the close keeps the settled record" || fail "3. the close changed the record: $(memory)"
+
+# ---- 4. a maximize and a restore requested while the client holds its answers, then the restore
+# answered alone: the window never shows the maximize and KWin's maximize mode never changes
+held_start third
+sleep 3
+place 73 91 430 310
+wait_record 73 91 430 310 "4. the third window is remembered at A"
+send hold
+n=$(configures)
+K run "$FIND if (w) { w.setMaximize(true, true); } report(!!w);" >>"$OUT/place.log"
+read -r sm wm hm < <(wait_configure "$n")
+info "4. the maximize's configure: serial $sm, ${wm}x$hm"
+[ "$sm" != none ] && [ "$wm" != 430 ] && pass "4. the maximize sends a configure with the maximized size" ||
+  fail "4. no maximized configure (serial $sm, ${wm}x$hm)"
+n=$(configures)
+K run "$FIND if (w) { w.setMaximize(false, false); } report(!!w);" >>"$OUT/place.log"
+read -r sr wr hr < <(wait_configure "$n")
+info "4. the restore's configure: serial $sr, ${wr}x$hr"
+[ "$sr" != none ] && [ "$wr" = 430 ] && [ "$hr" = 310 ] && pass "4. the restore sends a configure for A's size" ||
+  fail "4. no configure for A's size after the restore (serial $sr, ${wr}x$hr)"
+send "ack $sr"
+send commit
+sleep 2
+st=$(state)
+info "4. after answering the restore only: $st"
+python3 -c 'import json, sys; s = json.loads(sys.argv[1])
+ok = s and not s["tiled"] and s["max"] == 0 and [round(v) for v in s["frame"]] == [73, 91, 430, 310]
+print(("PASS" if ok else "FAIL") + f" 4. the window floats at A and was never maximized: {s}")' "$st" >>"$CHK"
+wait_record 73 91 430 310 "4. the memory keeps A"
+place 97 113 430 310
+wait_record 97 113 430 310 "4. a later move is remembered (the requested mode is not left pending)"
+send quit
+held_stop
+sleep 3
+
+# ---- 5. the client's own request: maximized at once, closed maximized, the memory keeps A
+held_start fourth
+sleep 3
+place 73 91 430 310
+wait_record 73 91 430 310 "5. the fourth window is remembered at A"
+n=$(configures)
+send maximize
+read -r sx wx hx < <(wait_configure "$n")
+info "5. the configure answering the client's request: serial $sx, ${wx}x$hx"
+[ "$sx" != none ] && [ "$wx" != 430 ] && pass "5. the client's request brings a maximized configure" ||
+  fail "5. no maximized configure for the client's request (serial $sx, ${wx}x$hx)"
+sleep 3
+st=$(state)
+info "5. maximized at its own request: $st"
+python3 -c 'import json, sys; s = json.loads(sys.argv[1])
+ok = s and s["max"] == 3 and round(s["frame"][2]) != 430
+print(("PASS" if ok else "FAIL") + f" 5. the window took the maximize: {s}")' "$st" >>"$CHK"
+record_is 73 91 430 310 && pass "5. the maximized frame is not recorded" || fail "5. the maximized frame was recorded: $(memory)"
+# the client asks to be restored: back at A, and the restore taken records A again (the record is
+# moved away first so that the check means something)
+place 97 113 430 310
+wait_record 97 113 430 310 "5. a move between the maximizes is remembered"
+K run "$FIND if (w) { w.setMaximize(true, true); } report(!!w);" >>"$OUT/place.log"
+sleep 3
+send unmaximize
+sleep 3
+st=$(state)
+info "5. restored at its own request: $st"
+python3 -c 'import json, sys; s = json.loads(sys.argv[1])
+ok = s and s["max"] == 0 and [round(v) for v in s["frame"]] == [97, 113, 430, 310]
+print(("PASS" if ok else "FAIL") + f" 5. the window floats where it was: {s}")' "$st" >>"$CHK"
+wait_record 97 113 430 310 "5. the restore taken keeps the floating record"
+send maximize
+sleep 3
+send quit
+held_stop
+sleep 3
+record_is 97 113 430 310 && pass "5. closed maximized at its own request: the memory keeps the floating place" || fail "5. the close changed the record: $(memory)"
+
+# ---- 6. two requests in flight on a maximized window, answered one by one: a restore (configure
+# A, A's size, no maximized state), then a maximize (configure B, the maximized size). KWin's
+# requested mode is the last request's (maximized); the script's mirror must not fall back to the
+# mode taken when the restore's commit lands, or the maximize's commit (frame maximized, mode
+# still restored) would be recorded as a floating frame.
+held_start fifth
+sleep 3
+place 73 91 430 310
+wait_record 73 91 430 310 "6. the fifth window is remembered at A"
+K run "$FIND if (w) { w.setMaximize(true, true); } report(!!w);" >>"$OUT/place.log"
+sleep 3
+st=$(state)
+python3 -c 'import json, sys; s = json.loads(sys.argv[1])
+print(("PASS" if s and s["max"] == 3 else "FAIL") + f" 6. the window is maximized to begin with: {s}")' "$st" >>"$CHK"
+send hold
+n=$(configures)
+K run "$FIND if (w) { w.setMaximize(false, false); } report(!!w);" >>"$OUT/place.log"
+read -r sa wa ha < <(wait_configure "$n")
+info "6. the restore's configure: serial $sa, ${wa}x$ha"
+[ "$sa" != none ] && [ "$wa" = 430 ] && [ "$ha" = 310 ] && pass "6. the restore sends a configure for A's size" ||
+  fail "6. no configure for A's size (serial $sa, ${wa}x$ha)"
+n=$(configures)
+K run "$FIND if (w) { w.setMaximize(true, true); } report(!!w);" >>"$OUT/place.log"
+read -r sb wb hb < <(wait_configure "$n")
+info "6. the maximize's configure: serial $sb, ${wb}x$hb"
+[ "$sb" != none ] && [ "$wb" != 430 ] && pass "6. the maximize sends a configure with the maximized size" ||
+  fail "6. no maximized configure (serial $sb, ${wb}x$hb)"
+send "ack $sa"
+send commit
+sleep 2
+st=$(state)
+info "6. after the restore's commit: $st"
+python3 -c 'import json, sys; s = json.loads(sys.argv[1])
+ok = s and s["max"] == 0 and [round(v) for v in s["frame"]] == [73, 91, 430, 310]
+print(("PASS" if ok else "FAIL") + f" 6. the restore is taken first (mode 0, frame A): {s}")' "$st" >>"$CHK"
+send "ack $sb"
+send commit
+sleep 4
+st=$(state)
+info "6. after the maximize's commit: $st"
+python3 -c 'import json, sys; s = json.loads(sys.argv[1])
+print(("PASS" if s and s["max"] == 3 and round(s["frame"][2]) != 430 else "FAIL") + f" 6. then the maximize is taken: {s}")' "$st" >>"$CHK"
+record_is 73 91 430 310 && pass "6. the maximized frame that followed the restore is not recorded" || fail "6. the memory changed: $(memory)"
+send quit
+held_stop
+sleep 3
+record_is 73 91 430 310 && pass "6. closed maximized: the memory keeps A" || fail "6. the close changed the record: $(memory)"
+
 
 cp "$HOME/.config/plasmafusion-placementrc" "$OUT/memory-final.rc" 2>/dev/null || true
 info "placement log lines:"; grep -a 'plasmafusion-placement' "$KLOG" | tail -15 >>"$CHK" 2>/dev/null || true

@@ -34,11 +34,13 @@ ROOT=$(cd "$HERE/../../.." && pwd)
 # shellcheck source=tools/tests/lib/common.sh
 source "$HERE/../lib/common.sh"
 
-# scenario|path (from the repository root)|size|timeout|property (the scenario reports whether KWin
-# has Window.requestedGeometry, which must match the lane)
+# scenario|path (from the repository root)|size|timeout|property|session variables: property means
+# the scenario reports whether KWin has Window.requestedGeometry, which must match the lane; the
+# variables (PFV_*, space-separated) go to cvsession.sh. The placement scenario runs with Xwayland
+# so its X11 step (a window maximized and closed through Xwayland) is not skipped.
 SCENARIOS=(
-  "pending|packages/kwin/tests/vsession/scenario-placement-pending.sh|1440x900|240|property"
-  "placement|packages/kwin/tests/vsession/scenario-placement.sh|1440x900|300|"
+  "pending|packages/kwin/tests/vsession/scenario-placement-pending.sh|1440x900|360|property|"
+  "placement|packages/kwin/tests/vsession/scenario-placement.sh|1440x900|420||PFV_XWAYLAND=1"
 )
 RPMS=''; STAGE=$ROOT/stage/home; IMAGE=localhost/plasma-fusion-test:f44-6.7.5
 WORK=$ROOT/build/tests/kwin-backport; DRI=1; DUMPS=()
@@ -136,7 +138,8 @@ runs=()
 for lane in stock backport; do
   img=$IMAGE; [ "$lane" = stock ] || img=$BACKPORT
   for row in "${SCENARIOS[@]}"; do
-    IFS='|' read -r id scenario size tmo prop <<<"$row"
+    IFS='|' read -r id scenario size tmo prop vars <<<"$row"
+    read -r -a session_env <<<"$vars"
     runs+=("$lane:$id${prop:+:$prop}")
     n=kb-$lane-$id
     mkdir -p "$RES/$lane-$id"
@@ -146,8 +149,8 @@ for lane in stock backport; do
     fi
     echo "== $lane-$id ($(date +%T)): $scenario"
     ran=0
-    PFV_IMAGE=$img PFV_DRI=$DRI bash "$ROOT/tools/vsession/cvsession.sh" "$n" "$ROOT/$scenario" "$WORK/seed" \
-      "$size" "$tmo" >"$RES/cvsession-$lane-$id.log" 2>&1 || ran=$?
+    env PFV_IMAGE="$img" PFV_DRI="$DRI" "${session_env[@]}" bash "$ROOT/tools/vsession/cvsession.sh" "$n" \
+      "$ROOT/$scenario" "$WORK/seed" "$size" "$tmo" >"$RES/cvsession-$lane-$id.log" 2>&1 || ran=$?
     if [ -d "vsession-out/$n" ]; then
       rm -rf "${RES:?}/$lane-$id"; mv "vsession-out/$n" "$RES/$lane-$id"
       # Results are regular files: the held client's command FIFOs stay behind, and an upload that

@@ -167,7 +167,8 @@ updates). Its first job fails when that is not 6.7.5: the backport then needs a 
   the same image with the rebuilt packages, installed by the README's command
   (`tools/container/test/backport.Containerfile`, which also runs `rpm -V`). Each image runs
   `scenario-placement-pending.sh` (bug 527821's order: on the backport the memory must keep the
-  floating place; on stock that check is informational) and `scenario-placement.sh`. A run passes
+  floating place; on stock that check is informational) and `scenario-placement.sh`, the latter
+  with Xwayland (`PFV_XWAYLAND=1`) so that its X11 step runs. A run passes
   when its session ran to the end, every check passed, no log names a crash, `kwin.log` has no
   error from the script, the session saw its lane's KWin (the property and the package), and no core
   dump reached the runner's journal (`tools/tests/kwin-backport/verdict.py`).
@@ -176,9 +177,10 @@ updates). Its first job fails when that is not 6.7.5: the backport then needs a 
   the two scenarios use screenshots only for review. On the ThinkPad without its render node, both
   scenarios gave the same results as with it on 2026-10-26: the pending scenario 12 of 12 on the
   backport and 11 of 11 with the INFO line on stock, the placement scenario 25 of 25 on both.
-- Not covered: GPU rendering, X11 windows in a session (the scenarios' windows are Wayland clients;
-  testX11Window covers the X11 notification order), and the Memcheck run of
-  `testRequestedGeometryAfterMappingDestroysWindow` (README, "Checks").
+- Not covered: GPU rendering, and the Memcheck run of
+  `testRequestedGeometryAfterMappingDestroysWindow` (README, "Checks"). X11 is covered only by the
+  placement scenario's maximize step (an Xwayland KWrite; the lane sets `PFV_XWAYLAND=1`) and by
+  testX11Window's notification order; the other scenario windows are Wayland clients.
 - The rebuilt packages stay on the runner: the artifacts hold logs, the prepared spec, `SHA256SUMS`
   and the session results only. Publishing patched packages is the owner's decision.
 

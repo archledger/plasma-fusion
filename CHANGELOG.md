@@ -9,6 +9,13 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Window placement memory and maximized windows:** a window maximized and then closed keeps its
+  floating place. The memory used to record the maximized frame: the commit with which a Wayland
+  app answers a maximize request updates the frame before KWin's maximize mode, so the first frame
+  change already showed the maximized frame while the mode still read "restored" (issue #128). The
+  script now mirrors the mode KWin asked for from `maximizedAboutToChange`, and a restored window's
+  floating frame is recorded once KWin reports the restore as taken.
+
 - **Window placement memory and tiling:** with the `requestedGeometry` property of the optional
   KWin backport, the memory no longer records a frame the app has not caught up with. A window
   that was untiled and closed before its app answered keeps its floating place instead of the

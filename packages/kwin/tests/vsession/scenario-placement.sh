@@ -17,12 +17,24 @@
 #   5. IgnoreApps leaves that app alone (nothing recorded, nothing restored);
 #   6. a window rule that forces the position wins: the window opens at the rule's spot and the
 #      forced spot is not recorded;
-#   7. a disable/enable cycle with a window open: the unloaded instance's geometry handlers go with
-#      it (no errors from its context afterwards) and the new instance remembers the next move.
-# Run: tools/vsession/remote.sh place-1 packages/kwin/tests/vsession/scenario-placement.sh SEED 1440x900 300
+#   7. a disable/enable cycle with a window open: the unloaded instance's geometry and maximize
+#      handlers go with it (no errors from its context afterwards, also when the window is then
+#      maximized and restored) and the new instance remembers the next move;
+#   8. a window maximized by a script and closed keeps its floating place (issue #128: the commit
+#      that answers a maximize request moves the frame before the maximize mode); the same for a
+#      vertical-only maximize;
+#   9. the same through KWin's own maximize operation (shortcut, title bar), with a restore in
+#      between: the restored window floats where it was and that place is recorded again, a move
+#      after it is remembered, a close while maximized keeps it;
+#  10. an X11 window maximized and closed keeps its place (in a session with Xwayland; a session
+#      asked for Xwayland (PFV_XWAYLAND=1) that has none fails the step, else it is skipped).
+# Run: tools/vsession/remote.sh place-1 packages/kwin/tests/vsession/scenario-placement.sh SEED 1440x900 420
+#      (PFV_XWAYLAND=1 in the environment runs step 10)
 exec 2>&1
 export OUT
-set -euo pipefail
+# -E: the ERR trap below also fires for a command that fails inside a helper function (bash does
+# not inherit it there otherwise, and the run would stop without its FAIL line).
+set -Eeuo pipefail
 set -x
 CHK=$OUT/checks.txt
 KLOG=$OUT/kwin.log
@@ -102,6 +114,56 @@ gx, gy = int(parts[0]), int(parts[1])
 ok = abs(gx - wx) <= 8 and abs(gy - wy) <= 8
 print(("PASS" if ok else "FAIL") + f" {label}: got {gx},{gy}, wanted {wx},{wy}")
 PY
+}
+
+# win_js CLASS JS: run JS with w = the newest open normal window whose class contains CLASS (null
+# when there is none); JS calls report() once.
+win_js() {
+  K run "var l = workspace.windowList(), w = null;
+    for (var i = 0; i < l.length; ++i) { var c = l[i]; if (c.normalWindow && !c.deleted && String(c.resourceClass).indexOf('$1') >= 0) { w = c; } }
+    $2"
+}
+
+# The newest window of CLASS as one line for the checks: maximize mode, tile and frame.
+state() { # CLASS
+  win_js "$1" "if (!w) { report(null); } else { var g = w.frameGeometry;
+    report({ max: w.maximizeMode, tiled: !!w.tile, frame: [g.x, g.y, g.width, g.height] }); }" | tr -d ' \n'
+}
+
+check_max() { # CLASS MODE LABEL: the newest window of CLASS has that maximize mode (0 restored, 3 full)
+  local st
+  st=$(state "$1")
+  python3 - "$st" "$2" "$3" >>"$CHK" <<'PY'
+import json, sys
+s = json.loads(sys.argv[1])
+ok = bool(s) and s["max"] == int(sys.argv[2])
+print(("PASS" if ok else "FAIL") + f" {sys.argv[3]}: {sys.argv[1]}")
+PY
+}
+
+app_record() { # APP_ID -> the app's record as "x y w h", or none
+  kreadconfig6 --file "$HOME/.config/plasmafusion-placementrc" --group Windows --key windows 2>/dev/null |
+    python3 -c 'import json, sys
+try: r = json.load(sys.stdin).get("apps", {}).get(sys.argv[1])
+except Exception: r = None
+print("none" if not r else "%d %d %d %d" % (r["x"], r["y"], r["width"], r["height"]))' "$1"
+}
+
+check_record() { # APP_ID "X Y W H" LABEL: the app's record is exactly that rectangle, read once (a
+  # write is coalesced for about 2 s: a caller that expects NO change waits 4 s before this)
+  local got
+  got=$(app_record "$1")
+  [ "$got" = "$2" ] && pass "$3 (record $got)" || fail "$3: record $got, wanted $2"
+}
+
+wait_app_record() { # APP_ID "X Y W H" LABEL: the app's record becomes that rectangle (polls past the
+  # coalesced write)
+  local _
+  for _ in $(seq 1 10); do
+    if [ "$(app_record "$1")" = "$2" ]; then pass "$3 (record $2)"; return 0; fi
+    sleep 1
+  done
+  fail "$3: record $(app_record "$1"), wanted $2"
 }
 
 on_screen() { # CLASS LABEL: the newest window's centre lies on the 1440x900 screen
@@ -356,12 +418,116 @@ sleep 1
 place kwrite 329 163 600 400
 sleep 1
 wait_file_rect 329 163 600 400 "a move after the cycle is remembered by the new instance"
+# the window the unloaded instance watched is maximized and restored: a maximize handler it left
+# connected would call into its destroyed context now
+win_js kwrite "if (w) { workspace.activeWindow = w; workspace.slotWindowMaximize(); } report(!!w);" >>"$OUT/place.log"
+sleep 3
+check_max kwrite 3 "the window that lived through the cycle is maximized"
+win_js kwrite "if (w) { workspace.activeWindow = w; workspace.slotWindowMaximize(); } report(!!w);" >>"$OUT/place.log"
+sleep 3
+check_max kwrite 0 "and restored"
+check_record org.kde.kwrite "329 163 600 400" "the record after the maximize and restore is the floating place"
 errors_after=$(script_errors)
 [ "$errors_after" = "$errors_before" ] && pass "no errors from the unloaded instance's handlers ($errors_after before and after)" ||
   fail "the unloaded instance's handlers raised errors ($errors_before before, $errors_after after)"
 grep -a 'plasmafusion-placement' "$KLOG" | grep -aE 'Error|error:' | tail -4 >>"$CHK" || true
 close_class kwrite
 sleep 2
+
+# ---- 8. maximized by a script and closed: the floating place stays (issue #128). The commit with
+# which a Wayland client answers a maximize request updates the frame before the maximize mode
+# (KWin 6.7.5, xdgshellwindow.cpp handleCommit), so the first frame change after the request
+# already has the maximized frame while maximizeMode still reads 0; the script mirrors the mode
+# KWin asked for from maximizedAboutToChange. The step records what that signal delivers.
+kwrite >/dev/null 2>&1 &
+sleep 4
+place kwrite 205 145 600 400
+sleep 1
+wait_file_rect 205 145 600 400 "8. the floating place before the maximize"
+seen=$(win_js kwrite "var seen = null; if (w) { var f = function (m) { seen = { type: typeof m, mode: m }; w.maximizedAboutToChange.disconnect(f); };
+  w.maximizedAboutToChange.connect(f); w.setMaximize(true, true); } report(seen);" | tr -d ' \n')
+info "8. maximizedAboutToChange with the request: $seen"
+sleep 4
+check_max kwrite 3 "8. the window took the maximize"
+check_record org.kde.kwrite "205 145 600 400" "8. the maximized frame is not recorded"
+close_class kwrite
+sleep 4
+check_record org.kde.kwrite "205 145 600 400" "8. closed while maximized: the floating place kept"
+shot 80-maximized-closed
+# the same for a vertical-only maximize (mode 1)
+kwrite >/dev/null 2>&1 &
+sleep 4
+place kwrite 217 151 590 395
+sleep 1
+wait_file_rect 217 151 590 395 "8. the floating place before the vertical maximize"
+win_js kwrite "if (w) { w.setMaximize(true, false); } report(!!w);" >>"$OUT/place.log"
+sleep 4
+check_max kwrite 1 "8. the window took the vertical maximize"
+check_record org.kde.kwrite "217 151 590 395" "8. the vertically maximized frame is not recorded"
+close_class kwrite
+sleep 4
+check_record org.kde.kwrite "217 151 590 395" "8. closed while vertically maximized: the floating place kept"
+
+# ---- 9. KWin's own maximize operation - the Meta+PgUp shortcut, the title bar's button and its
+# double click all run Workspace::performWindowOperation(MaximizeOp) - then a restore: the window
+# floats where it was and the state that settles the restore records that place again (a second
+# window of the app set the record to its own place in between); a move after the restore is
+# remembered; a close while maximized keeps the place.
+kwrite >/dev/null 2>&1 &
+sleep 4
+place kwrite 229 157 580 390
+sleep 1
+wait_file_rect 229 157 580 390 "9. the floating place before the operation"
+win_js kwrite "if (w) { workspace.activeWindow = w; workspace.slotWindowMaximize(); } report(!!w);" >>"$OUT/place.log"
+sleep 4
+check_max kwrite 3 "9. the operation maximized the window"
+check_record org.kde.kwrite "229 157 580 390" "9. the operation's maximized frame is not recorded"
+# the second window takes the record to its own place and goes
+kwrite >/dev/null 2>&1 &
+sleep 4
+place kwrite 253 181 580 390
+sleep 1
+wait_file_rect 253 181 580 390 "9. a second window's place is the record meanwhile"
+win_js kwrite "if (w) { w.closeWindow(); } report(!!w);" >>"$OUT/close.log"
+sleep 4
+check_record org.kde.kwrite "253 181 580 390" "9. the second window's place stays after its close"
+win_js kwrite "if (w) { workspace.activeWindow = w; workspace.slotWindowMaximize(); } report(!!w);" >>"$OUT/place.log"
+sleep 3
+check_max kwrite 0 "9. the operation restored the window"
+check_geom kwrite 229 157 580 390 "9. the restored window floats where it was"
+wait_app_record org.kde.kwrite "229 157 580 390" "9. the restore records the floating place again"
+place kwrite 241 169 580 390
+sleep 1
+wait_file_rect 241 169 580 390 "9. a move after the restore is remembered"
+win_js kwrite "if (w) { workspace.activeWindow = w; workspace.slotWindowMaximize(); } report(!!w);" >>"$OUT/place.log"
+sleep 3
+check_max kwrite 3 "9. maximized again by the operation"
+close_class kwrite
+sleep 4
+check_record org.kde.kwrite "241 169 580 390" "9. closed while maximized by the operation: the floating place kept"
+shot 90-operation
+
+# ---- 10. an X11 window (Xwayland; only in a session started with PFV_XWAYLAND=1): KWin sets the
+# mode before it moves the frame, so the place was always kept there; the check guards that order.
+if [ -n "${DISPLAY:-}" ]; then
+  QT_QPA_PLATFORM=xcb kwrite >/dev/null 2>&1 &
+  sleep 4
+  info "10. X11 window: $(state kwrite)"
+  place kwrite 265 193 560 380
+  sleep 1
+  wait_file_rect 265 193 560 380 "10. the X11 window's floating place"
+  win_js kwrite "if (w) { w.setMaximize(true, true); } report(!!w);" >>"$OUT/place.log"
+  sleep 4
+  check_max kwrite 3 "10. the X11 window took the maximize"
+  check_record org.kde.kwrite "265 193 560 380" "10. the X11 maximized frame is not recorded"
+  close_class kwrite
+  sleep 4
+  check_record org.kde.kwrite "265 193 560 380" "10. the X11 window closed while maximized: the floating place kept"
+elif [ "${PFV_XWAYLAND:-0}" = 1 ]; then
+  fail "10. the session was asked for Xwayland (PFV_XWAYLAND=1) but has no DISPLAY: the X11 step could not run"
+else
+  info "10. X11 step skipped: no Xwayland in this session (PFV_XWAYLAND=1 runs it)"
+fi
 
 cp "$HOME/.config/plasmafusion-placementrc" "$OUT/memory-final.rc" 2>/dev/null || true
 info "memory file saved to memory-final.rc"

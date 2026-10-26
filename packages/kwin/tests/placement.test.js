@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-placement", "contents", "ui", "Placement.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { appId, identities, valid, parse, serialize, floating, settled, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreSize, restoreRect, restoreFor, remember, teardownWrite } = globalThis;
+const { appId, identities, valid, parse, serialize, floating, maximized, requestedMode, settled, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreSize, restoreRect, restoreFor, remember, teardownWrite } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const desktop = () => ({ normal: true, transient: false, modal: false, fullScreen: false, tiled: false, minimized: false, maximizeMode: 0 });
@@ -64,6 +64,26 @@ assert.ok(!eligible({ ...desktop(), normal: false }));
 assert.ok(!eligible({ ...desktop(), transient: true }));
 assert.ok(!eligible({ ...desktop(), modal: true }));
 assert.ok(!eligible({ ...desktop(), maximizeMode: 3 }));
+
+// ---- a maximize KWin asked for counts until the window has taken it (issue #128: the commit that
+// answers the request moves the frame before the mode)
+assert.ok(!maximized(desktop()), "no request tracked: the mode taken alone counts");
+assert.ok(maximized({ ...desktop(), maximizeMode: 3 }));
+assert.ok(maximized({ ...desktop(), maximizeMode: 0, maximizeRequested: 3 }), "full maximize asked for, not answered yet");
+assert.ok(maximized({ ...desktop(), maximizeMode: 0, maximizeRequested: 1 }), "vertical maximize asked for");
+assert.ok(maximized({ ...desktop(), maximizeMode: 0, maximizeRequested: -1 }), "a change asked for, its mode unknown");
+assert.ok(maximized({ ...desktop(), maximizeMode: 3, maximizeRequested: 0 }), "restore asked for, the frame still maximized");
+assert.ok(!maximized({ ...desktop(), maximizeMode: 0, maximizeRequested: 0 }), "restored and answered");
+assert.ok(!floating({ ...desktop(), maximizeRequested: 3 }), "the maximized frame the client commits first is not a floating one");
+assert.ok(floating({ ...desktop(), maximizeRequested: 0 }));
+assert.ok(!eligible({ ...desktop(), maximizeRequested: 3 }), "neither recorded nor restored while the maximize is pending");
+assert.ok(!eligible({ ...desktop(), maximizeRequested: -1 }));
+assert.strictEqual(requestedMode(3), 3, "the signal's mode");
+assert.strictEqual(requestedMode(0), 0, "a restore");
+assert.strictEqual(requestedMode(undefined), -1, "a signal without a usable mode: pending until maximizedChanged");
+assert.strictEqual(requestedMode(null), -1);
+assert.strictEqual(requestedMode(NaN), -1);
+assert.strictEqual(requestedMode("3"), -1, "not a number");
 
 // ---- IgnoreApps
 assert.ok(ignored("org.kde.konsole", "konsole"), "the last dot-separated part matches");
