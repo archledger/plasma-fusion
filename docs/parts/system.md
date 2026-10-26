@@ -196,8 +196,16 @@ The optional [KWin backport](../../packaging/patches/kwin/README.md) adds the up
 scripts the requested rectangle separately from the committed frame. It does not alter window
 placement or enable automatic tiling. Stock KWin remains supported; any consumer must detect the
 property at runtime. The directory contains the patch, guarded source-RPM rebuild scripts and
-offline packaging tests. Installation, a placement-script consumer and a patched CI lane are
-separate steps; the normal Plasma Fusion installer does not install a patched compositor.
+offline packaging tests. Plasma Fusion does not publish the packages, and its installer never
+installs a patched compositor. Tested on 2026-10-26 (ThinkPad):
+
+- eight native KWin test suites on the patched source, 532 QtTest results;
+- a full RPM build whose packages match Fedora's in files and dependencies, with the six checked
+  window-class layouts unchanged;
+- in a Fedora 44 VM: installation, a new login whose compositor reports the property through a
+  Konsole resize until it settles, and rollback to Fedora's build with `dnf distro-sync`.
+
+A placement-script consumer and a patched CI lane are separate steps.
 
 ## 2. The login greeter (plasma-login-manager 6.7.5)
 

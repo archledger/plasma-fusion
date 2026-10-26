@@ -4,12 +4,11 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 -->
 # Optional KWin backport
 
-**Draft: do not install or distribute these packages.** Further native callback-lifetime coverage
-and the full RPM build and installation test are pending. The build instructions below are for
-development in disposable environments only.
-
 Fedora 44's KWin 6.7.5, rebuilt with an upstream-proposed scripting property. Stock KWin remains
 supported. These packages are separate from Plasma Fusion and are never installed by its installer.
+Plasma Fusion does not publish them: they exist only where someone builds them with the script
+below. The property is still under review upstream and may change, so consumers must detect it at
+runtime.
 
 | Patch | What it provides | Upstream | When to drop |
 |---|---|---|---|
@@ -31,6 +30,13 @@ The last-notified rectangle is kept outside `Window` and removed when the window
 This avoids adding a member to an exported class that stock-built plugins access through inline
 functions. The post-mapping notification checks that a synchronous callback has not destroyed or
 deleted the window. Two additional tests cover mapping destruction and reentrant movement.
+
+Notifications sent during a move or resize have the same limit as KWin's existing geometry signals
+there: a native handler must not destroy the window synchronously. Stock 6.7.5 crashes the same way,
+and earlier, when a `frameGeometryAboutToChange` handler does this during `Tile::manage`. Deferring
+the destruction to a queued handler passes under Memcheck with both signals. The post-mapping
+notification is the exception and has a guard: stock 6.7.5 ends that commit handler with the
+mapping, so any access to the window after it would be new.
 
 Read `requestedGeometry` by its `x`, `y`, `width` and `height`, not JavaScript object identity.
 An empty size asks the client to choose its size. Equality with `frameGeometry` is useful for
@@ -64,17 +70,32 @@ RPM hashes.
 
 ## Installation and rollback
 
-Building does not install anything. Test the packages in a disposable VM first. If choosing to
-install on a host, verify `sha256sum -c SHA256SUMS` and install only its already-installed KWin
-subpackages together in one DNF transaction. Do not install either source RPM or every binary
-subpackage indiscriminately. Log out and back in to start the new compositor; do not replace a
-running desktop's KWin process for a test.
+Building does not install anything. Try the packages in a disposable VM first. To install them,
+check the hashes and install the rebuilt counterparts of the KWin subpackages installed now, in one
+DNF transaction. The other subpackages need not come along, and neither source package belongs in
+it:
 
-`6.7.5-1.fc44.pf1` sorts after `6.7.5-1.fc44` and before `6.7.5-2.fc44`, so Fedora's next release
-replaces it normally. For earlier rollback, use `dnf distro-sync` for the installed KWin subpackages
-against Fedora's repositories, review the transaction and log out and back in. Keep stock KWin's
-capabilities as the fallback; consumers must detect the property at runtime rather than infer it
-from the package version.
+```sh
+cd OUT_DIR && sha256sum -c SHA256SUMS
+sudo dnf install $(for f in *.rpm; do case $f in *.src.rpm) continue ;; esac
+    rpm -q "$(rpm -qp --qf '%{NAME}' "$f")" >/dev/null && echo "./$f"; done)
+```
+
+The packages are not signed, so DNF reports that it skipped their OpenPGP checks. `SHA256SUMS`,
+written by the build, is the integrity check. Log out and back in to start the new compositor; do
+not replace a running desktop's KWin process for a test.
+
+`6.7.5-1.fc44.pf1` sorts after `6.7.5-1.fc44` and before any later Fedora build (`6.7.5-2.fc44`,
+`6.7.5-1.fc44.1` or a new version), so Fedora's next update replaces it normally and the property
+disappears with it. To roll back earlier, return the installed subpackages of KWin's source package
+to Fedora's build, review the transaction, and log out and back in:
+
+```sh
+sudo dnf distro-sync $(rpm -qa --qf '%{NAME} %{SOURCERPM}\n' | awk '$2 ~ /^kwin-[0-9]/ {print $1}')
+```
+
+Keep stock KWin's capabilities as the fallback; consumers must detect the property at runtime
+rather than infer it from the package version.
 
 ## Checks
 
