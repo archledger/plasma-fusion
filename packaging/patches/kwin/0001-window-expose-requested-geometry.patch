@@ -15,6 +15,12 @@ end of that shared commit handler. Retain 6.7.5's existing geometry
 synchronization rules and describe them in its property documentation.
 No configure, tile-ownership or output-transfer behavior is changed.
 
+Keep the last-notified rectangle in a translation-unit cache, removed
+on Window destruction, rather than changing Window's binary layout.
+Guard the post-mapping notification against synchronous destruction.
+Two additional tests cover mapping destruction and reentrant moves;
+the destruction case is also exercised under a memory checker.
+
 ---
 diff --git a/autotests/integration/tiles_test.cpp b/autotests/integration/tiles_test.cpp
 index 1c4d673bba..f8e089fc05 100644
@@ -145,18 +151,28 @@ index 1c4d673bba..f8e089fc05 100644
 
  WAYLANDTEST_MAIN(KWin::TilesTest)
 diff --git a/autotests/integration/xdgshellwindow_test.cpp b/autotests/integration/xdgshellwindow_test.cpp
-index c654fac3b6..e5d21602ef 100644
+index c654fac3b6..780e81582b 100644
 --- a/autotests/integration/xdgshellwindow_test.cpp
 +++ b/autotests/integration/xdgshellwindow_test.cpp
-@@ -127,6 +127,7 @@ private Q_SLOTS:
+@@ -36,6 +36,7 @@
+ #include <KWayland/Client/surface.h>
+
+ #include <QDBusConnection>
++#include <QPointer>
+
+ // system
+ #include <sys/socket.h>
+@@ -127,6 +128,9 @@ private Q_SLOTS:
      void testRemoveActiveDesktopBeforeMap();
      void testRemoveActiveOutputBeforeInitialCommit();
      void testRemoveActiveOutputBeforeMap();
 +    void testRequestedGeometrySettlesOnCommit();
++    void testRequestedGeometryAfterMappingDestroysWindow();
++    void testRequestedGeometryReentrantMove();
  };
 
  void TestXdgShellWindow::testXdgPopupReactive_data()
-@@ -2995,5 +2996,64 @@ void TestXdgShellWindow::testRemoveActiveOutputBeforeMap()
+@@ -2995,5 +2999,115 @@ void TestXdgShellWindow::testRemoveActiveOutputBeforeMap()
      QCOMPARE(window->moveResizeOutput(), outputs[0]);
  }
 
@@ -219,6 +235,57 @@ index c654fac3b6..e5d21602ef 100644
 +    QCOMPARE(requestedGeometryChangedSpy.count(), 1);
 +}
 +
++void TestXdgShellWindow::testRequestedGeometryAfterMappingDestroysWindow()
++{
++    // A native mapping handler may destroy a window synchronously. The commit handler must not
++    // access it afterward, including reading the cached requested geometry without emitting.
++    std::unique_ptr<KWayland::Client::Surface> surface(Test::createSurface());
++    std::unique_ptr<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.get()));
++    QPointer<Window> mappedWindow;
++    bool destroyedDuringMap = false;
++    QObject context;
++    connect(workspace(), &Workspace::windowAdded, &context, [&](Window *window) {
++        mappedWindow = window;
++        window->setSkipCloseAnimation(true);
++        window->destroyWindow();
++        destroyedDuringMap = true;
++    });
++
++    Test::render(surface.get(), QSize(200, 100), Qt::red);
++    QTRY_VERIFY(destroyedDuringMap);
++    QVERIFY(mappedWindow.isNull());
++}
++
++void TestXdgShellWindow::testRequestedGeometryReentrantMove()
++{
++    std::unique_ptr<KWayland::Client::Surface> surface(Test::createSurface());
++    std::unique_ptr<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.get()));
++    QSignalSpy configureRequestedSpy(shellSurface->xdgSurface(), &Test::XdgSurface::configureRequested);
++    Window *window = Test::renderAndWaitForShown(surface.get(), QSize(200, 100), Qt::red);
++    QVERIFY(window);
++    QVERIFY(configureRequestedSpy.wait());
++    shellSurface->xdgSurface()->ack_configure(configureRequestedSpy.last().at(0).value<quint32>());
++    Test::render(surface.get(), QSize(200, 100), Qt::red);
++    QVERIFY(Test::waylandSync());
++
++    const QPointF first = window->pos() + QPointF(10, 10);
++    const QPointF second = first + QPointF(20, 20);
++    int notifications = 0;
++    QObject context;
++    connect(window, &Window::requestedGeometryChanged, &context, [&] {
++        if (++notifications == 1) {
++            window->move(second);
++        }
++    });
++
++    window->move(first);
++    QCOMPARE(notifications, 2);
++    QCOMPARE(window->frameGeometry().topLeft(), second);
++    QCOMPARE(window->property("requestedGeometry").value<RectF>().topLeft(), second);
++    window->move(second);
++    QCOMPARE(notifications, 2);
++}
++
  WAYLANDTEST_MAIN(TestXdgShellWindow)
  #include "xdgshellwindow_test.moc"
 diff --git a/src/internalwindow.cpp b/src/internalwindow.cpp
@@ -234,26 +301,58 @@ index 0b1322aa1b..a7739bf01a 100644
 
      updateDecoration(true);
 diff --git a/src/window.cpp b/src/window.cpp
-index e620a02ba6..87eeca94d8 100644
+index e620a02ba6..87f0529ac6 100644
 --- a/src/window.cpp
 +++ b/src/window.cpp
-@@ -3361,6 +3361,15 @@ void Window::setMoveResizeGeometry(const RectF &geo)
+@@ -47,6 +47,7 @@
+
+ #include <QDebug>
+ #include <QDir>
++#include <QHash>
+ #include <QJSEngine>
+ #include <QMouseEvent>
+ #include <QStyleHints>
+@@ -54,6 +55,14 @@
+ namespace KWin
+ {
+
++namespace
++{
++
++// Keep the same-version backport ABI-compatible with consumers built against stock headers.
++QHash<const Window *, RectF> s_notifiedRequestedGeometry;
++
++}
++
+ QHash<QString, std::weak_ptr<Decoration::DecorationPalette>> Window::s_palettes;
+ std::shared_ptr<Decoration::DecorationPalette> Window::s_defaultPalette;
+
+@@ -101,6 +110,7 @@ Window::Window()
+
+ Window::~Window()
+ {
++    s_notifiedRequestedGeometry.remove(this);
+ }
+
+ void Window::ref()
+@@ -3361,6 +3371,16 @@ void Window::setMoveResizeGeometry(const RectF &geo)
      setMoveResizeOutput(workspace()->outputAt(geo.center()));
  }
 
 +void Window::notifyRequestedGeometryChanged()
 +{
-+    if (m_moveResizeGeometry == m_notifiedMoveResizeGeometry) {
++    const RectF previous = s_notifiedRequestedGeometry.value(this);
++    if (m_moveResizeGeometry == previous) {
 +        return;
 +    }
-+    m_notifiedMoveResizeGeometry = m_moveResizeGeometry;
++    s_notifiedRequestedGeometry.insert(this, m_moveResizeGeometry);
 +    Q_EMIT requestedGeometryChanged();
 +}
 +
  LogicalOutput *Window::moveResizeOutput() const
  {
      return m_moveResizeOutput;
-@@ -3400,6 +3409,7 @@ void Window::move(const QPointF &point)
+@@ -3400,6 +3420,7 @@ void Window::move(const QPointF &point)
 
      setMoveResizeGeometry(rect);
      moveResizeInternal(rect, MoveResizeMode::Move);
@@ -261,7 +360,7 @@ index e620a02ba6..87eeca94d8 100644
  }
 
  void Window::resize(const QSizeF &size)
-@@ -3412,6 +3422,7 @@ void Window::resize(const QSizeF &size)
+@@ -3412,6 +3433,7 @@ void Window::resize(const QSizeF &size)
 
      setMoveResizeGeometry(rect);
      moveResizeInternal(rect, MoveResizeMode::Resize);
@@ -269,7 +368,7 @@ index e620a02ba6..87eeca94d8 100644
  }
 
  void Window::moveResize(const RectF &rect)
-@@ -3422,6 +3433,7 @@ void Window::moveResize(const RectF &rect)
+@@ -3422,6 +3444,7 @@ void Window::moveResize(const RectF &rect)
 
      setMoveResizeGeometry(rect);
      moveResizeInternal(rect, MoveResizeMode::MoveResize);
@@ -278,7 +377,7 @@ index e620a02ba6..87eeca94d8 100644
 
  bool Window::isPlaced() const
 diff --git a/src/window.h b/src/window.h
-index 3ba8ff50b9..98282386e0 100644
+index 3ba8ff50b9..d41b6b7a18 100644
 --- a/src/window.h
 +++ b/src/window.h
 @@ -475,6 +475,8 @@ class KWIN_EXPORT Window : public QObject
@@ -341,15 +440,6 @@ index 3ba8ff50b9..98282386e0 100644
      void setInteractiveMoveResizeGravity(Gravity gravity)
      {
          m_interactiveMoveResize.gravity = gravity;
-@@ -1889,6 +1921,8 @@ protected:
-     // geometry
-     LogicalOutput *m_moveResizeOutput = nullptr;
-     RectF m_moveResizeGeometry;
-+    // The value requestedGeometryChanged() was last emitted for.
-+    RectF m_notifiedMoveResizeGeometry;
-     RectF m_keyboardGeometryRestore;
-     RectF m_maximizeGeometryRestore;
-     RectF m_fullscreenGeometryRestore;
 diff --git a/src/x11window.cpp b/src/x11window.cpp
 index 7ec3e379c5..88e700830f 100644
 --- a/src/x11window.cpp
@@ -363,14 +453,27 @@ index 7ec3e379c5..88e700830f 100644
  }
 
 diff --git a/src/xdgshellwindow.cpp b/src/xdgshellwindow.cpp
-index e5a2fc0a91..5249abbadd 100644
+index e5a2fc0a91..36c50479e8 100644
 --- a/src/xdgshellwindow.cpp
 +++ b/src/xdgshellwindow.cpp
-@@ -168,6 +168,7 @@ void XdgSurfaceWindow::handleCommit()
+@@ -40,6 +40,8 @@
+ #include <KDecoration3/DecoratedWindow>
+ #include <KDecoration3/Decoration>
+
++#include <QPointer>
++
+ namespace KWin
+ {
+
+@@ -167,7 +169,11 @@ void XdgSurfaceWindow::handleCommit()
+     m_lastAcknowledgedConfigure.reset();
      m_lastAcknowledgedConfigureSerial.reset();
 
++    QPointer<XdgSurfaceWindow> guard(this);
      markAsMapped();
-+    notifyRequestedGeometryChanged();
++    if (guard && !guard->isDeleted()) {
++        guard->notifyRequestedGeometryChanged();
++    }
  }
 
  void XdgSurfaceWindow::handleRolePrecommit()

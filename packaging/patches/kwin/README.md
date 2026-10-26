@@ -4,9 +4,9 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 -->
 # Optional KWin backport
 
-**Draft: do not install or distribute these packages.** The initial backport still needs an
-ABI-preserving notification cache and mapping-lifetime validation. Native test compilation is in
-progress. The build instructions below are for development in disposable environments only.
+**Draft: do not install or distribute these packages.** Further native callback-lifetime coverage
+and the full RPM build and installation test are pending. The build instructions below are for
+development in disposable environments only.
 
 Fedora 44's KWin 6.7.5, rebuilt with an upstream-proposed scripting property. Stock KWin remains
 supported. These packages are separate from Plasma Fusion and are never installed by its installer.
@@ -26,6 +26,11 @@ The patch carries the three integration tests from the proposed commit unchanged
 handles xdg-shell commits in `XdgSurfaceWindow`, shared with picture-in-picture windows. The
 backport emits the notification at the end of that shared handler instead of the newer per-role
 handlers. It retains 6.7.5's existing geometry synchronization rules and documents that distinction.
+
+The last-notified rectangle is kept outside `Window` and removed when the window is destroyed.
+This avoids adding a member to an exported class that stock-built plugins access through inline
+functions. The post-mapping notification checks that a synchronous callback has not destroyed or
+deleted the window. Two additional tests cover mapping destruction and reentrant movement.
 
 Read `requestedGeometry` by its `x`, `y`, `width` and `height`, not JavaScript object identity.
 An empty size asks the client to choose its size. Equality with `frameGeometry` is useful for
@@ -84,3 +89,14 @@ incompatible-spec rejection, supported version bounds and output-directory prese
 backported native tests cover delayed tile/untile commits, notification ordering on X11 and
 settling to a client-selected size. Run `testTiles` and `testXdgShellWindow` on the built KWin;
 also run the move/resize, quick-tiling, internal-window, maximize and placement suites.
+
+Run `testRequestedGeometryAfterMappingDestroysWindow` under a memory checker as well. A normal
+QtTest pass alone does not detect a read from the already-freed window when no signal is emitted.
+
+For the same-version backport, compare debug builds of stock and patched KWin made with matching
+architecture, configuration and dependencies. `check-abi.sh` requires GDB and checks the size and
+member offsets of six window classes; it does not claim to check the whole KWin ABI:
+
+```sh
+packaging/patches/kwin/check-abi.sh STOCK_BUILD/bin/libkwin.so PATCHED_BUILD/bin/libkwin.so
+```
