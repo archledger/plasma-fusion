@@ -5,8 +5,9 @@
 # device's 6.7.5 from tools/container, or a pre-release from tools/container/beta), the apps and
 # services the scenarios use (the depth features' too: Kate and Okular for snap groups, Tesseract
 # for copy text, wl-clipboard for Quick Look, dbus-python and a PipeWire with its Pulse server and
-# tools for live chips; tools/tests/depth/run.sh), and Plasma Fusion's compiled parts built
-# against that Plasma.
+# tools for live chips; tools/tests/depth/run.sh), pywayland for the placement memory's held
+# client (tools/tests/lib/heldclient.py), and Plasma Fusion's compiled parts built against that
+# Plasma.
 # Build context: a directory holding packages/{common,decoration-cpp,kcm-cpp,navigation-cpp} and
 # tools/container/test/install-parts.sh (tools/container/test/build.sh assembles it), e.g.
 #   tools/container/test/build.sh localhost/plasma-fusion-build:f44-6.8beta localhost/plasma-fusion-test:f44-6.8beta
@@ -22,7 +23,7 @@ RUN dnf -y --setopt=install_weak_deps=False install \
       pipewire pipewire-pulseaudio pulseaudio-utils \
       qt6-qttools mesa-dri-drivers mesa-libEGL mesa-libgbm libei python3-gobject dbus-daemon \
       google-noto-sans-fonts google-noto-sans-mono-fonts libnotify procps-ng psmisc which findutils \
-      polkit python3-pillow \
+      polkit python3-pillow python3-pywayland \
  && dnf clean all \
  && useradd -m -u 1000 test
 COPY tools/container/test/install-parts.sh /usr/local/bin/install-parts.sh

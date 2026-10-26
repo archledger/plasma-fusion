@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-placement", "contents", "ui", "Placement.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { appId, identities, valid, parse, serialize, floating, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreSize, restoreRect, restoreFor, remember, teardownWrite } = globalThis;
+const { appId, identities, valid, parse, serialize, floating, settled, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreSize, restoreRect, restoreFor, remember, teardownWrite } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const desktop = () => ({ normal: true, transient: false, modal: false, fullScreen: false, tiled: false, minimized: false, maximizeMode: 0 });
@@ -136,6 +136,23 @@ assert.deepStrictEqual(restoreFor("konsole", { ...desktop(), resizable: false },
 const wideSaved = rect(-1200, 100, 3000, 500);
 assert.deepStrictEqual(restoreFor("kate", desktop(), wideSaved, screens, [], "", true, current), wideSaved, "the saved centre is on-screen");
 assert.strictEqual(restoreFor("kate", desktop(), wideSaved, screens, [], "", false, rect(0, 0, 400, 500)), null, "the size-only rectangle would be off-screen");
+
+// ---- settled: the frame is the geometry KWin requested (KDE bug 527821)
+const frame = rect(100, 120, 640, 480);
+assert.ok(settled(null, frame), "a KWin without requestedGeometry: every frame counts");
+assert.ok(settled(undefined, frame), "the property read on a KWin without it");
+assert.ok(settled(rect(100, 120, 640, 480), frame), "the client has caught up");
+assert.ok(!settled(rect(300, 200, 520, 380), frame), "untiled, the tile-sized frame still shown");
+assert.ok(!settled(rect(100, 120, 700, 480), frame), "a pending resize");
+assert.ok(!settled(rect(110, 120, 640, 480), frame), "a pending move");
+assert.ok(!settled(rect(100, 120, 0, 0), frame), "the client is asked to choose its size");
+assert.ok(!settled(rect(100, 120, 640, -1), frame), "a negative size is never settled");
+assert.ok(settled(rect(100.4, 119.6, 640.9, 479.2), frame), "an X11 frame: the request rounded to native pixels");
+assert.ok(!settled(rect(101, 120, 640, 480), frame), "1 px apart is a different geometry");
+assert.ok(settled(rect(NaN, 120, 640, 480), frame), "a request that is not numbers is ignored");
+assert.ok(settled("100,120,640,480", frame), "not an object: ignored");
+assert.ok(settled({ x: "100", y: "120", width: "640", height: "480" }, frame), "numeric strings compare as numbers");
+assert.ok(!settled({ x: "300", y: "200", width: "520", height: "380" }, frame), "numeric strings that differ are pending");
 
 // ---- remembering
 const apps = {};

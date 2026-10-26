@@ -20,6 +20,9 @@ import "Placement.js" as Placement
 //   after it opens and where it was when it closes; a window opened maximized keeps its last
 //   floating record. A window KWin holds in place (a window rule that forces its position) is
 //   left to KWin: the script's geometry write would bypass the rule.
+// - On a KWin with Window.requestedGeometry (the optional backport, packaging/patches/kwin), a
+//   frame the client has not yet brought up to KWin's request is not recorded: after an untile it
+//   can still have the tile's size (KDE bug 527821). Without the property every frame counts.
 // - The memory lives in ~/.config/plasmafusion-placementrc [Windows] and is written and read
 //   through plasmashell's desktop scripting: the KWin scripting API has no file write (only
 //   readConfig). The file is read once at start (with a few retries while plasmashell comes up);
@@ -202,6 +205,13 @@ Item {
         return { x: g.x, y: g.y, width: g.width, height: g.height };
     }
 
+    // The geometry KWin last asked the window to take, or null on a KWin without the property
+    // (Placement.settled).
+    function requestedRect(w) {
+        const g = w.requestedGeometry;
+        return g ? { x: g.x, y: g.y, width: g.width, height: g.height } : null;
+    }
+
     function appIdOf(w) {
         return Placement.appId(String(w.resourceClass || ""), String(w.desktopFileName || ""));
     }
@@ -252,6 +262,11 @@ Item {
         if (!loaded || !w || ignoredWindow(w) || !Placement.eligible(stateOf(w))) {
             return;
         }
+        // A frame the client has not brought up to KWin's request yet is not the window's place
+        // (the late tile-sized commit after an untile); the change that settles it records it.
+        if (!Placement.settled(requestedRect(w), frameRect(w))) {
+            return;
+        }
         if (Placement.remember(apps, id, frameRect(w))) {
             changed();
         }
@@ -281,6 +296,12 @@ Item {
         };
         entry.onGeometry = onGeometry;
         w.frameGeometryChanged.connect(onGeometry);
+        // A KWin with requestedGeometry: the request can catch up with the frame without a frame
+        // change (a commit that answers the last configure at the size already shown).
+        if (w.requestedGeometryChanged) {
+            w.requestedGeometryChanged.connect(onGeometry);
+            entry.onRequested = true;
+        }
         watched[key] = entry;
 
         if (restoreAllowed && loaded && id !== "" && !ignoredWindow(w) && Placement.eligible(stateOf(w))) {
@@ -329,6 +350,9 @@ Item {
         }
         if (entry.onGeometry) {
             w.frameGeometryChanged.disconnect(entry.onGeometry);
+            if (entry.onRequested) {
+                w.requestedGeometryChanged.disconnect(entry.onGeometry);
+            }
         }
         delete watched[key];
     }
@@ -411,6 +435,9 @@ Item {
             const entry = watched[key];
             if (entry.w && entry.onGeometry) {
                 entry.w.frameGeometryChanged.disconnect(entry.onGeometry);
+                if (entry.onRequested) {
+                    entry.w.requestedGeometryChanged.disconnect(entry.onGeometry);
+                }
             }
         }
     }

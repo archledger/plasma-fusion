@@ -413,14 +413,21 @@ on a restore. One second after an open the geometry the window settled at is rec
 spot unless the app moved itself again), every later floating change updates it, and so does the
 close: KWin marks a closing window deleted before `windowRemoved`, and the script reads its frame
 geometry and state as they were (a deleted window's tile request is a no-op, so the tile stays). The
-quiet second keeps the restore itself and an app's late repositioning out of the record. Windows
-already open when the script is enabled or reloaded (the Fusion setup enables it in a running
-session; a reconfigure can reload it) are watched - their moves and closes are remembered - but
-neither moved nor recorded on loading: recording every open window then would replace the records
-the user left. A remembered spot is given back only while the centre of the rectangle to apply
-still lies on a screen the session has (with `RememberSize` off that is the saved position with
-the size the window opens with); when a window of the same app already sits (within 8 px) on the
-spot on the same desktop and activity, KWin's own placement takes the new window instead (it
+quiet second keeps the restore itself and an app's late repositioning out of the record. On a KWin
+with `Window.requestedGeometry` (the optional backport, `packaging/patches/kwin`, or a KWin release
+that has it), a frame that does not yet match the geometry KWin requested is not recorded: a
+Wayland client answers a move or resize later, and a frame it commits after an untile can still
+have the tile's size (KDE [bug 527821](https://bugs.kde.org/show_bug.cgi?id=527821)). The record
+waits for the change that brings the two together, and a window that closes before that keeps its
+earlier record. Positions and sizes less than 1 px apart count as equal, as an X11 frame is the
+request rounded to native pixels. On a KWin without the property every frame counts, as before.
+Windows already open when the script is enabled or reloaded (the Fusion setup enables it in a
+running session; a reconfigure can reload it) are watched - their moves and closes are remembered -
+but neither moved nor recorded on loading: recording every open window then would replace the
+records the user left. A remembered spot is given back only while the centre of the rectangle to
+apply still lies on a screen the session has (with `RememberSize` off that is the saved position
+with the size the window opens with); when a window of the same app already sits (within 8 px) on
+the spot on the same desktop and activity, KWin's own placement takes the new window instead (it
 offsets it) and the held record stays - the new window's own geometry changes in its first second
 are not recorded either, while the user's later moves are.
 
@@ -548,8 +555,9 @@ Offline (laptop):
   placement rules - identity (desktop file over class, lowered), the file's round trip and broken
   records, the centre test (a between-screens gap, a screen left of the origin), the 8 px stack
   guard, size-only mode, the ignore list (app id and window class), windows held by a rule (forced
-  position, forced or fixed size), the teardown write (a change made while a write was in flight)
-  and the record's rounding.
+  position, forced or fixed size), the teardown write (a change made while a write was in flight),
+  the record's rounding, and the settled test against `requestedGeometry` (missing property, a
+  pending move or resize, an empty requested size, X11 rounding under 1 px, malformed values).
 - `node packages/kwin/tests/workspaces.test.js` (the build runs it when node is installed): the
   dynamic workspaces' rules - which windows hold a workspace (every exclusion), the plan (GNOME's
   cases, an empty one in the middle, the shown one, each screen's shown one, `KeepFirst` and its
@@ -634,6 +642,21 @@ and pointer drags inside the private session only).
   window rule that forces the position wins (the window opens at the rule's spot, the record
   stays); a disable/enable cycle with a window open leaves no errors from the unloaded instance and
   the new instance remembers the next move.
+- `scenario-placement-pending.sh` (strict mode, verdict and "scenario rc" as above): KDE bug
+  527821's order with `tools/tests/lib/heldclient.py`, an xdg-shell window whose answers to
+  configure events the scenario sends (it needs pywayland: `python3-pywayland` on Fedora, in the
+  test image; it refuses to run outside a private session). The window floats at A and is
+  remembered there; it is tiled, acknowledges the tile's configure without committing, is untiled,
+  then commits the tile-sized frame and closes before answering the untile's configure. On a KWin
+  with `requestedGeometry` the memory must keep A; on one without it the outcome is reported as
+  INFO (the tile size is recorded). Then a tile and untile with prompt answers: the window floats
+  at A again, A is kept, a later move and the close are remembered. For the backport's lane, build
+  a local image from the test image that installs the backport's packages with the command in
+  `packaging/patches/kwin/README.md` (the test image has `kwin-devel`, so it takes that
+  subpackage too). On 2026-10-26 (ThinkPad, `cvsession.sh`): 12 of 12 checks with the backport and
+  11 of 11 in the stock test image (the tile size recorded, as INFO, as with the previous script);
+  the previous script with the backport failed the check that the memory keeps A; and
+  `scenario-placement.sh` passed 25 of 25 in both images.
 - `scenario-workspaces.sh` (strict mode, verdict and "scenario rc" as above): the setup's four
   named workspaces and a window on Work, then the script on: nothing removed in the first seconds,
   then down to Work and Design; a window moved to the last workspace adds "Workspace 3" at once;

@@ -85,6 +85,32 @@ function floating(state) {
     return !state.fullScreen && !state.tiled && !state.minimized && state.maximizeMode === 0;
 }
 
+// Whether the frame is the geometry KWin asked the window to take. A Wayland client answers a move
+// or resize later, so a frame it commits after the window was untiled can still have the tile's
+// size (KDE bug 527821), and recording it would remember the tile as the window's floating place.
+// requested: the window's requestedGeometry (a KWin with the property: the optional backport in
+// packaging/patches/kwin, or a release that has it), or null on a KWin without it - every frame
+// counts there, as before. Less than 1 px apart in position and size is settled: an X11 frame is
+// the request rounded to native pixels. An empty requested size (the client is asked to choose)
+// differs from any mapped frame, so it stays pending until the client commits. A request that is
+// not four finite numbers is ignored like a missing property.
+function settled(requested, frame) {
+    if (!requested || typeof requested !== "object") {
+        return true;
+    }
+    const r = [requested.x, requested.y, requested.width, requested.height].map(Number);
+    if (!r.every(Number.isFinite)) {
+        return true;
+    }
+    const f = [frame.x, frame.y, frame.width, frame.height].map(Number);
+    for (let i = 0; i < 4; ++i) {
+        if (!(Math.abs(r[i] - f[i]) < 1)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // The windows the memory touches at all: ordinary app windows that float; dialogs, transient and
 // modal windows keep their own placement (KWin places them against their parent). A window KWin
 // holds in place (`movable` false: a window rule that forces its position, or moving switched off)
