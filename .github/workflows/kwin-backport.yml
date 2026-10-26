@@ -1,0 +1,194 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# The optional KWin backport (packaging/patches/kwin, docs/parts/ci.md "KWin backport lane"),
+# nightly and on changes to the backport or to what tests it, against Fedora 44's current KWin
+# source package. Both jobs run the repository's scripts in Podman on the runner, as on a
+# workstation:
+# - native: the backported tests and the suites around them, built from the prepared source with
+#   Fedora's own configuration and flags plus BUILD_TESTING (packaging/patches/kwin/native-tests.sh),
+#   once with the backport and once without; native-compare fails only on what the backport adds
+#   (tools/tests/kwin-backport/native_compare.py);
+# - sessions: the source package rebuilt with the patch (packaging/patches/kwin/build.sh), then the
+#   placement memory's session scenarios on stock KWin and on the rebuilt packages
+#   (tools/tests/kwin-backport/run.sh; the runners have no GPU, so the sessions paint in software
+#   and take no screenshots).
+# A Fedora KWin other than 6.7.5 fails the run: the backport then needs a reviewed update. The
+# rebuilt packages never leave the runner: only logs and results are uploaded.
+
+name: kwin-backport
+
+on:
+  pull_request:
+    paths:
+      - "packaging/patches/kwin/**"
+      - "packages/kwin/scripts/plasmafusion-placement/**"
+      - "packages/kwin/tests/vsession/scenario-placement.sh"
+      - "packages/kwin/tests/vsession/scenario-placement-pending.sh"
+      - "tools/tests/kwin-backport/**"
+      - "tools/tests/lib/**"
+      - "tools/vsession/**"
+      - "tools/container/**"
+      - ".github/workflows/kwin-backport.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "packaging/patches/kwin/**"
+      - "packages/kwin/scripts/plasmafusion-placement/**"
+      - "packages/kwin/tests/vsession/scenario-placement.sh"
+      - "packages/kwin/tests/vsession/scenario-placement-pending.sh"
+      - "tools/tests/kwin-backport/**"
+      - "tools/tests/lib/**"
+      - "tools/vsession/**"
+      - "tools/container/**"
+      - ".github/workflows/kwin-backport.yml"
+  # Nightly, so that a Fedora update (KWin, Qt, Frameworks) that breaks the backport shows up here.
+  schedule:
+    - cron: "15 4 * * *" # daily 04:15 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kwin-backport-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: "Fedora 44's KWin"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    container: registry.fedoraproject.org/fedora:44
+    outputs:
+      vr: ${{ steps.query.outputs.vr }}
+    steps:
+      - name: The newest KWin in Fedora 44 (stable updates)
+        id: query
+        run: |
+          set -euo pipefail
+          vr=$(dnf repoquery -q --arch x86_64 --qf '%{version}-%{release}\n' kwin | sort -V | tail -n 1)
+          echo "Fedora 44's KWin: ${vr:-none found}" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [[ ! $vr =~ ^6\.7\.5-[0-9]+\.fc44$ ]]; then
+            echo "::error::The backport is for KWin 6.7.5; Fedora 44 ships ${vr:-no KWin}. Update the backport first (packaging/patches/kwin/README.md)."
+            exit 1
+          fi
+          echo "vr=$vr" >>"$GITHUB_OUTPUT"
+
+  native:
+    name: "KWin tests, ${{ matrix.variant }} (Fedora's configuration)"
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [backport, stock]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build and run the suites
+        env:
+          VR: ${{ needs.source.outputs.vr }}
+          VARIANT: ${{ matrix.variant }}
+        # A failed suite (exit 1) is for native-compare to judge; a setup or build failure fails here.
+        run: |
+          rc=0
+          flag=(); [ "$VARIANT" = backport ] || flag=(--stock)
+          packaging/patches/kwin/native-tests.sh "${flag[@]}" "$RUNNER_TEMP/native" "$VR" || rc=$?
+          echo "native-tests.sh exit $rc"
+          [ "$rc" -le 1 ]
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: kwin-backport-native-${{ matrix.variant }}
+          path: ${{ runner.temp }}/native
+          retention-days: 14
+          if-no-files-found: warn
+
+  native-compare:
+    name: "Backported tests against stock KWin"
+    needs: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The comparison's own tests
+        run: python3 tools/tests/kwin-backport/native_compare_test.py
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: kwin-backport-native-*
+          path: ${{ runner.temp }}/native
+
+      - name: Compare
+        run: |
+          rc=0
+          python3 tools/tests/kwin-backport/native_compare.py "$RUNNER_TEMP/native/kwin-backport-native-stock" \
+            "$RUNNER_TEMP/native/kwin-backport-native-backport" "$RUNNER_TEMP/compare" || rc=$?
+          cat "$RUNNER_TEMP/compare/native-summary.md" >>"$GITHUB_STEP_SUMMARY" 2>/dev/null ||
+            echo "No comparison (see the log)." >>"$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+  sessions:
+    name: "Placement sessions (stock and backport KWin)"
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The verdict's own tests
+        run: python3 tools/tests/kwin-backport/verdict_test.py
+
+      - name: rsync for the session seeds (make_seed)
+        run: command -v rsync >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq rsync; }
+
+      - name: The HOME tree (tools/build.sh in Fedora 44, with the shared part's build requirements)
+        run: |
+          podman run --rm -v "$GITHUB_WORKSPACE:/src:Z" -w /src registry.fedoraproject.org/fedora:44 bash -c '
+            set -euo pipefail
+            dnf install -y -q dnf5-plugins rsync
+            dnf builddep -y -q --without compiled packaging/fedora/plasma-fusion.spec
+            tools/build.sh'
+
+      - name: Rebuild Fedora's KWin with the backport (the README's build)
+        env:
+          VR: ${{ needs.source.outputs.vr }}
+        run: packaging/patches/kwin/build.sh "$RUNNER_TEMP/kwin-rpms" "$VR"
+
+      - name: The placement sessions on stock KWin and on the backport
+        run: tools/tests/kwin-backport/run.sh --rpms "$RUNNER_TEMP/kwin-rpms" --work "$RUNNER_TEMP/kb" --no-gpu --coredumps
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            cat "$RUNNER_TEMP/kb/results/summary.md" 2>/dev/null || echo "No summary (see the logs)."
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/kb/results/images.txt" "$RUNNER_TEMP/kwin-rpms/SHA256SUMS" 2>/dev/null || true
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: kwin-backport-sessions
+          # Logs and results only: the rebuilt packages are never published.
+          path: |
+            ${{ runner.temp }}/kb/results
+            ${{ runner.temp }}/kwin-rpms/*.log
+            ${{ runner.temp }}/kwin-rpms/kwin.spec
+            ${{ runner.temp }}/kwin-rpms/SHA256SUMS
+            !**/*.rpm
+          retention-days: 14
+          if-no-files-found: warn
