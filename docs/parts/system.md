@@ -191,6 +191,22 @@ not part of the plasma-fusion RPM; a machine installs them separately.
 |---|---|---|---|
 | plasma-workspace | `6.7.5-1.fc44.pf1` | the global menu's Search crashed plasmashell after the active app rebuilt a submenu (KDE [bug 526561](https://bugs.kde.org/show_bug.cgi?id=526561), unfixed on master 19e67e2); the top bar shows Search only with this build (`menuSearch`, docs/parts/shell-topbar.md) | stock applet: the bug report's reproducer, a window switch with stale results and the typing sequence crash (3 of 3, twice); rebuilt applet: 0 crashes in 9 sequences with results shown each time, a result activated with Return |
 
+The optional [KWin backport](../../packaging/patches/kwin/README.md) adds the upstream-proposed
+`Window.requestedGeometry` property and change notification to Fedora 44 KWin 6.7.5. It gives
+scripts the requested rectangle separately from the committed frame. It does not alter window
+placement or enable automatic tiling. Stock KWin remains supported; any consumer must detect the
+property at runtime. The directory contains the patch, guarded source-RPM rebuild scripts and
+offline packaging tests. Plasma Fusion does not publish the packages, and its installer never
+installs a patched compositor. Tested on 2026-10-26 (ThinkPad):
+
+- eight native KWin test suites on the patched source, 532 QtTest results;
+- a full RPM build whose packages match Fedora's in files and dependencies, with the six checked
+  window-class layouts unchanged;
+- in a Fedora 44 VM: installation, a new login whose compositor reports the property through a
+  Konsole resize until it settles, and rollback to Fedora's build with `dnf distro-sync`.
+
+A placement-script consumer and a patched CI lane are separate steps.
+
 ## 2. The login greeter (plasma-login-manager 6.7.5)
 
 Sources read: `plasma-login-manager` v6.7.5 from invent.kde.org (`build/sy/src/`), KConfig v6.30.0
