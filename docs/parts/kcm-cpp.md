@@ -69,7 +69,8 @@ reported at once under `stepErrors`. One still running 15 s after the report's f
   times, and the report must still be complete;
 - `--step-hang focus` with `--report-deadline 2` must report `pending: ["focus"]` within 12 s;
 - `--step-fail focus` must report the error under `stepErrors` at once and skip the step's later
-  actions.
+  action (`stepSkipped`). The report also waits until every scheduled step action has run or been
+  skipped, so this holds under load as well.
 
 Each check fails when its part of the fix is removed: the report wait, the screenshot wait, the
 error handling or the skipping. Without the report wait, the report runs at its fixed time as before

@@ -19,7 +19,8 @@ width in the window).
 --navigation prints "REPORT_NAVIGATION {json}" with the section navigation's state, after the
 steps asked for (--scroll-roundtrip, --rapid-switch, --focus-switch) have finished. "pending" lists
 steps still unfinished 15 s (--report-deadline) after the report's first attempt; "stepErrors" maps
-each step that raised to its error. The test hooks --step-delay, --step-hang and --step-fail make
+each step that raised to its error, "stepSkipped" how many of its later actions were skipped. The
+test hooks --step-delay, --step-hang and --step-fail make
 the steps late, unfinished or failing, to check that ordering.
 Environment: PFKM_TMP (directory for the private configuration, default the system temp
 directory), PFKM_THEME (Qt platform theme, default kde).
@@ -75,8 +76,10 @@ def main():
     # broken step would behave.
     ap.add_argument("--step-delay", type=int, default=0,
                     help="delay every later action of the navigation steps by this many ms")
-    ap.add_argument("--step-hang", default="", help="never mark this navigation step finished")
-    ap.add_argument("--step-fail", default="", help="raise in this navigation step's first later action")
+    ap.add_argument("--step-hang", default="", choices=("", "scroll", "rapid", "focus"),
+                    help="never mark this navigation step finished")
+    ap.add_argument("--step-fail", default="", choices=("", "scroll", "rapid", "focus"),
+                    help="raise in this navigation step's first later action")
     ap.add_argument("--report-deadline", type=float, default=15,
                     help="seconds the navigation report waits for unfinished steps")
     ap.add_argument("--open-dropdown", type=int, default=-1,
@@ -352,16 +355,20 @@ QQC2.ApplicationWindow {
     # The navigation steps schedule their own later actions, so on a busy host they can end after
     # any fixed report time. The report waits for every step that was asked for (up to a deadline,
     # then names the unfinished ones), and the grab that quits waits for the report. A step that
-    # raises ends at once: its error is reported and its later actions are skipped.
+    # raises ends at once: its error is reported and its later actions are skipped. The report also
+    # waits until every scheduled action has run or been skipped, so what ran is complete.
     pending_steps = set()
     step_errors = {}
     step_calls = {}
+    step_skipped = {}
+    scheduled = []
     report_done = []
     report_deadline = []
 
     def step(name, action):
         def run():
             if name in step_errors:
+                step_skipped[name] = step_skipped.get(name, 0) + 1
                 return
             step_calls[name] = step_calls.get(name, 0) + 1
             try:
@@ -376,7 +383,14 @@ QQC2.ApplicationWindow {
         return run
 
     def later(ms, name, action):
-        QTimer.singleShot(ms + args.step_delay, step(name, action))
+        run = step(name, action)
+
+        def fire():
+            scheduled.remove(fire)
+            run()
+
+        scheduled.append(fire)
+        QTimer.singleShot(ms + args.step_delay, fire)
 
     def finish_step(name):
         if name != args.step_hang:
@@ -386,7 +400,7 @@ QQC2.ApplicationWindow {
         import time
         if not report_deadline:
             report_deadline.append(time.monotonic() + args.report_deadline)
-        if pending_steps and time.monotonic() < report_deadline[0]:
+        if (pending_steps or scheduled) and time.monotonic() < report_deadline[0]:
             QTimer.singleShot(50, navigation_report)
             return
         try:
@@ -415,7 +429,7 @@ QQC2.ApplicationWindow {
             "errorVisible": error.isVisible(), "infoVisible": info.isVisible(),
             "pendingVisible": pending.isVisible(), "scroll": scroll_result,
             "rapid": rapid_result, "focus": focus_result, "pending": sorted(pending_steps),
-            "stepErrors": step_errors, "warnings": warnings}))
+            "stepErrors": step_errors, "stepSkipped": step_skipped, "warnings": warnings}))
 
     scroll_result = {}
     rapid_result = {}

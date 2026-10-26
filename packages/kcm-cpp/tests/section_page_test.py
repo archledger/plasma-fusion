@@ -39,6 +39,7 @@ def run_preview(section, *args):
 
 def preview(section, *args):
     report, _, stderr = run_preview(section, *args)
+    assert report.get("available"), f"section navigation is missing: {report}"
     assert "pending" in report and "stepErrors" in report, report
     assert not report["stepErrors"], f"navigation steps failed: {report}\n{stderr}"
     assert not report["pending"], f"navigation steps did not finish: {report}"
@@ -49,9 +50,11 @@ def check_report_ordering():
     """The report and the quitting screenshot wait for late steps; a hung or failing step is named."""
     # Every later action of the steps comes after the report's (1 s) and the screenshot's (1.2 s)
     # own times, as on a starved event loop.
+    # The three steps interleave here, so only their completeness is checked; their behaviour is
+    # checked one at a time below.
     result = preview(0, "--width", "400", "--focus-switch", "--scroll-roundtrip", "--rapid-switch",
                      "--step-delay", "1500")
-    assert result["focus"]["tabIntoSection"] and result["focus"]["backtabToNavigation"], result["focus"]
+    assert {"tabIntoSection", "backtabToNavigation"} <= result["focus"].keys(), result["focus"]
     assert "after" in result["scroll"] and "after" in result["rapid"], result
     print("PASS the report and the screenshot wait for late navigation steps")
     report, seconds, _ = run_preview(0, "--width", "400", "--focus-switch", "--step-hang", "focus",
@@ -63,6 +66,7 @@ def check_report_ordering():
     report, seconds, stderr = run_preview(0, "--width", "400", "--focus-switch", "--step-fail", "focus")
     assert list(report["stepErrors"]) == ["focus"] and report["pending"] == [], report
     assert "--step-fail focus" in report["stepErrors"]["focus"], report
+    assert report["stepSkipped"] == {"focus": 1}, report
     assert "tabIntoSection" not in report["focus"], report["focus"]
     assert "Traceback" in stderr, stderr
     assert seconds < 12, seconds
