@@ -59,6 +59,32 @@ The first covers the real navigation control, keyboard/RTL behavior and large-te
 The second loads the actual page with the existing backend stand-in to check grouping, retained
 values, scroll and common messages. That stand-in does not prove Apply or dirty-state calculation;
 the existing native CTests and private System Settings tests cover those contracts.
+The scroll, rapid-switch and focus steps schedule their own later actions, so `offscreen_preview.py`
+prints its navigation report only after each requested step has finished. A step that raises is
+reported under `stepErrors` without waiting for the deadline. One still running 15 s after the
+report's first attempt (about 1 s in) is listed under `pending`. The test fails on either, naming
+the step.
+`section_page_test.py` checks this ordering without load, through the preview's test hooks:
+
+- `--step-delay 1500` moves every later step action after the report's and the screenshot's own
+  times, and the report must still be complete;
+- `--step-hang focus` with `--report-deadline 2` must report `pending: ["focus"]` within 12 s;
+- `--step-fail focus` must report the error under `stepErrors` without waiting for the deadline,
+  and skip the step's later action (`stepSkipped`). The report also waits until every scheduled
+  step action has run or been skipped, so this holds under load as well.
+
+Each check fails when its part of the fix is removed: the report wait, the screenshot wait, the
+error handling or the skipping. Without the report wait, the report runs at its fixed time as before
+the fix, and the first check fails with the steps still pending.
+
+Before this change (2026-10-25), the report ran at a fixed 1 s. A CI run failed with
+`KeyError: 'tabIntoSection'`, most likely because the report came before the Tab traversal had
+finished; that is inferred from the mechanism, as the runner's load was not measured. On the
+ThinkPad, three busy loops shared the test's core:
+
+- before: 10 of 10 focus runs reported early, and 3 of 3 suite runs failed with that error;
+- after: 20 of 20 focus runs completed, and the suite passed.
+
 CI also publishes `plasma-fusion-settings-previews`: offscreen dark, light and compact screenshots
 for visual review. They use the stand-in backend and are not evidence of a live settings change.
 
