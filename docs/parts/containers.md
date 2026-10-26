@@ -33,6 +33,10 @@ time limit. So these sessions take no screenshots: `shot` only lists the name in
 `shots-skipped.log` (`PFV_NO_SHOTS=1`, which `cvsession.sh` sets). Only scenarios that use
 screenshots for review alone fit this mode.
 
+`PFV_XWAYLAND=1` also creates `/tmp/.X11-unix` in the container (mode 1777): the test image has
+no X11 socket directory, and without it KWin logs `kwin_xwl: Failed to establish X11 socket` and
+runs without Xwayland, so `DISPLAY` stays empty for the scenario (found 2026-10-26).
+
 The results belong to the user who ran `cvsession.sh`: the container hands them back to the
 owner of the output directory after copying them out. Before 2026-10-26 they kept the session
 user's subordinate ids, which only `podman unshare` could move or remove.

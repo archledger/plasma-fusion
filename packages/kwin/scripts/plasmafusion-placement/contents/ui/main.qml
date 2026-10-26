@@ -20,6 +20,13 @@ import "Placement.js" as Placement
 //   after it opens and where it was when it closes; a window opened maximized keeps its last
 //   floating record. A window KWin holds in place (a window rule that forces its position) is
 //   left to KWin: the script's geometry write would bypass the rule.
+// - A maximize KWin has asked for counts as maximized until the window has taken it: the commit
+//   with which a Wayland client answers the request updates the frame before the maximize mode,
+//   so the frame change already shows the maximized frame while maximizeMode still reads 0 (KWin
+//   6.7.5, xdgshellwindow.cpp handleCommit; issue #128). The script mirrors KWin's requested mode
+//   from maximizedAboutToChange (emitted with the request, Wayland and X11, and the last emission
+//   is exactly what KWin keeps as the requested mode); at maximizedChanged, when a restore has
+//   been taken, the floating frame the window went back to is recorded.
 // - On a KWin with Window.requestedGeometry (the optional backport, packaging/patches/kwin), a
 //   frame the client has not yet brought up to KWin's request is not recorded: after an untile it
 //   can still have the tile's size (KDE bug 527821). Without the property every frame counts.
@@ -181,12 +188,15 @@ Item {
 
     // ---------------------------------------------------------------- windows
 
-    // internalId -> {w, onGeometry, quietUntil, settleSkip}: every ordinary window under watch.
+    // internalId -> {w, onGeometry, onAboutToMaximize, onMaximized, quietUntil, settleSkip, held,
+    // maximizeRequested}: every ordinary window under watch.
     property var watched: ({})
     // Windows whose settling pass is still due (compared by identity).
     property var settling: []
 
-    function stateOf(w) {
+    // The window's state for the pure rules. entry: its watch entry, which carries the maximize
+    // mode KWin asked for (Placement.maximized); without one the mode taken alone counts.
+    function stateOf(w, entry) {
         return {
             normal: w.normalWindow,
             transient: w.transient,
@@ -195,6 +205,7 @@ Item {
             tiled: !!w.tile,
             minimized: w.minimized,
             maximizeMode: w.maximizeMode,
+            maximizeRequested: entry ? entry.maximizeRequested : undefined,
             movable: w.moveable,
             resizable: w.resizeable
         };
@@ -259,7 +270,10 @@ Item {
     // The callers decide whether the window may still be read: the close path records a window KWin
     // already marked deleted (its geometry and state stay readable for the close animation).
     function record(w, id) {
-        if (!loaded || !w || ignoredWindow(w) || !Placement.eligible(stateOf(w))) {
+        if (!loaded || !w || ignoredWindow(w)) {
+            return;
+        }
+        if (!Placement.eligible(stateOf(w, watched[String(w.internalId)]))) {
             return;
         }
         // A frame the client has not brought up to KWin's request yet is not the window's place
@@ -290,12 +304,39 @@ Item {
         const id = appIdOf(w);
         // held: KWin holds the window in place (a forced-position rule), taken now because an X11
         // window's rules are already dropped when it closes.
-        const entry = { w: w, quietUntil: 0, settleSkip: false, held: w.moveable === false };
+        // maximizeRequested: the maximize mode KWin asked for, mirrored from maximizedAboutToChange
+        // (Placement.requestedMode); the mode taken to begin with. It is not reset from the mode
+        // taken: with two requests in flight (a restore, then a maximize) a client that answers
+        // them one by one takes the restore first, and the mirror must still say maximized when the
+        // maximized frame follows. Only a signal without a usable mode (-1) is settled by
+        // maximizedChanged.
+        const entry = {
+            w: w, quietUntil: 0, settleSkip: false, held: w.moveable === false,
+            maximizeRequested: w.maximizeMode
+        };
         const onGeometry = function () {
             root.geometryChanged(key);
         };
         entry.onGeometry = onGeometry;
         w.frameGeometryChanged.connect(onGeometry);
+        const onAboutToMaximize = function (mode) {
+            entry.maximizeRequested = Placement.requestedMode(mode);
+        };
+        // The mode is taken: a restore leaves the window floating at a frame the commit brought
+        // before this signal, so the state that settled it records that frame (never during the
+        // quiet second, like any geometry change).
+        const onMaximized = function () {
+            if (entry.maximizeRequested === -1) {
+                entry.maximizeRequested = w.maximizeMode;
+            }
+            root.geometryChanged(key);
+        };
+        entry.onAboutToMaximize = onAboutToMaximize;
+        entry.onMaximized = onMaximized;
+        // Both signals exist on every KWin this script runs on (6.7 and later), so unlike
+        // requestedGeometryChanged they are connected without a check.
+        w.maximizedAboutToChange.connect(onAboutToMaximize);
+        w.maximizedChanged.connect(onMaximized);
         // A KWin with requestedGeometry: the request can catch up with the frame without a frame
         // change (a commit that answers the last configure at the size already shown).
         if (w.requestedGeometryChanged) {
@@ -304,12 +345,13 @@ Item {
         }
         watched[key] = entry;
 
-        if (restoreAllowed && loaded && id !== "" && !ignoredWindow(w) && Placement.eligible(stateOf(w))) {
+        const state = stateOf(w, entry);
+        if (restoreAllowed && loaded && id !== "" && !ignoredWindow(w) && Placement.eligible(state)) {
             const saved = apps[id];
             const current = frameRect(w);
             const screens = screenRects();
             const others = siblings(id, w);
-            const rect = Placement.restoreFor(id, stateOf(w), saved, screens, others, ignoreList(), rememberSize(), current);
+            const rect = Placement.restoreFor(id, state, saved, screens, others, ignoreList(), rememberSize(), current);
             if (rect) {
                 entry.quietUntil = Date.now() + quietMillis;
                 w.frameGeometry = Qt.rect(rect.x, rect.y, rect.width, rect.height);
@@ -320,7 +362,7 @@ Item {
                 // the window's own geometry changes while it opens (the quiet second, as after a
                 // restore); the user's later moves are. (When the spot itself is unusable - off a
                 // screen - the settle pass heals the record to where KWin placed it.)
-                const finalRect = Placement.restoreRect(saved, current, Placement.restoreSize(stateOf(w), rememberSize()));
+                const finalRect = Placement.restoreRect(saved, current, Placement.restoreSize(state, rememberSize()));
                 if (Placement.onScreen(finalRect, screens) && Placement.collides(finalRect, others)) {
                     entry.settleSkip = true;
                     entry.quietUntil = Date.now() + quietMillis;
@@ -336,6 +378,26 @@ Item {
         }
     }
 
+    // Every handler the entry put on its window (the close path and the teardown).
+    function disconnectHandlers(entry) {
+        const w = entry.w;
+        if (!w) {
+            return;
+        }
+        if (entry.onGeometry) {
+            w.frameGeometryChanged.disconnect(entry.onGeometry);
+            if (entry.onRequested) {
+                w.requestedGeometryChanged.disconnect(entry.onGeometry);
+            }
+        }
+        if (entry.onAboutToMaximize) {
+            w.maximizedAboutToChange.disconnect(entry.onAboutToMaximize);
+        }
+        if (entry.onMaximized) {
+            w.maximizedChanged.disconnect(entry.onMaximized);
+        }
+    }
+
     function windowClosed(w) {
         const key = String(w.internalId);
         const entry = watched[key];
@@ -348,12 +410,7 @@ Item {
         if (loaded && !entry.held && Date.now() >= entry.quietUntil) {
             record(w, appIdOf(w));
         }
-        if (entry.onGeometry) {
-            w.frameGeometryChanged.disconnect(entry.onGeometry);
-            if (entry.onRequested) {
-                w.requestedGeometryChanged.disconnect(entry.onGeometry);
-            }
-        }
+        disconnectHandlers(entry);
         delete watched[key];
     }
 
@@ -432,13 +489,7 @@ Item {
             writeCall.call();
         }
         for (const key in watched) {
-            const entry = watched[key];
-            if (entry.w && entry.onGeometry) {
-                entry.w.frameGeometryChanged.disconnect(entry.onGeometry);
-                if (entry.onRequested) {
-                    entry.w.requestedGeometryChanged.disconnect(entry.onGeometry);
-                }
-            }
+            disconnectHandlers(watched[key]);
         }
     }
 }

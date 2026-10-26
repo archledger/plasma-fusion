@@ -13,7 +13,9 @@
 # plugin crashes) and CAP_SYS_NICE (kwin_wayland has that file capability; without it the exec
 # fails). PFV_DRI=0 leaves the render node out, as on a host without a GPU (GitHub's runners):
 # KWin then paints with QPainter, where a screenshot never returns, so the session takes none
-# (PFV_NO_SHOTS=1, vsession.sh). See docs/parts/containers.md.
+# (PFV_NO_SHOTS=1, vsession.sh). PFV_XWAYLAND=1 gets the X11 socket directory the image lacks
+# (/tmp/.X11-unix; without it KWin logs "Failed to establish X11 socket" and runs without
+# Xwayland). See docs/parts/containers.md.
 set -u
 NAME=${1:?name}; SCENARIO=${2:?scenario}; SEED=${3:?seed}; SIZE=${4:-1920x1200}; TMO=${5:-600}
 IMAGE=${PFV_IMAGE:-localhost/plasma-fusion-test:f44-6.7.5}
@@ -43,6 +45,7 @@ podman run --rm --name "pfv68-$NAME" --shm-size=1g --cap-add=SYS_NICE -e LANG=C.
     if [ -n "${PFV_PRE:-}" ]; then
       su test -s /bin/bash -c "cd $R/home && HOME=$R/home XDG_CONFIG_HOME=$R/home/.config XDG_DATA_HOME=$R/home/.local/share XDG_STATE_HOME=$R/home/.local/state $PFV_PRE" > /out/pre.log 2>&1; echo "pre rc=$?" >> /out/pre.log
     fi
+    [ "${PFV_XWAYLAND:-0}" = 1 ] && mkdir -p -m 1777 /tmp/.X11-unix
     cp /pfv/vsession.sh "$R.vsession.sh"; cp /scenario.sh "$R.scenario.sh"; cp /pfv/pfinput.py "$R.pfinput.py"
     chown -R test:test "$R" "$R".*
     env_opts=$(env | grep -E "^PFV_" | grep -vE "^PFV_(PRE|HOME_DIR)=" | tr "\n" " ")

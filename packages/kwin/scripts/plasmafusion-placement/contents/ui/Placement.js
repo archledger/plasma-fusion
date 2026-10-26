@@ -78,11 +78,33 @@ function serialize(apps) {
     return JSON.stringify({ v: 1, apps: apps });
 }
 
+// The maximize mode KWin asked a window to take, as the script learns it from the window's
+// maximizedAboutToChange signal: the mode when the signal delivers a number (KWin keeps the last
+// one as its requested mode), else -1 (a change was requested; its mode is unknown until
+// maximizedChanged reports the mode taken).
+function requestedMode(mode) {
+    return typeof mode === "number" && Number.isFinite(mode) ? mode : -1;
+}
+
+// Whether the window is maximized in any way (full, vertical-only or horizontal-only - mode 0
+// means restore), or asked to be. maximizeMode is the mode the window has taken; maximizeRequested
+// the mode KWin asked for (requestedMode), undefined when the caller does not track it. The two
+// differ while a Wayland client answers: the commit that answers a maximize request updates the
+// frame before the mode, so the first frame change after the request already has the maximized
+// frame while maximizeMode still reads 0 (KWin 6.7.5, xdgshellwindow.cpp handleCommit; issue
+// #128), and a window closed then would be remembered at that size.
+function maximized(state) {
+    if (state.maximizeMode !== 0) {
+        return true;
+    }
+    return state.maximizeRequested !== undefined && state.maximizeRequested !== 0;
+}
+
 // Whether the window floats on the desktop (the states in which the memory is recorded): not
-// maximized in any way (full, vertical-only or horizontal-only - mode 0 means restore), not full
-// screen and not tiled. state: {fullScreen, tiled, minimized, maximizeMode, ...}.
+// maximized in any way, nor asked to be (maximized), not full screen and not tiled.
+// state: {fullScreen, tiled, minimized, maximizeMode, maximizeRequested, ...}.
 function floating(state) {
-    return !state.fullScreen && !state.tiled && !state.minimized && state.maximizeMode === 0;
+    return !state.fullScreen && !state.tiled && !state.minimized && !maximized(state);
 }
 
 // Whether the frame is the geometry KWin asked the window to take. A Wayland client answers a move
