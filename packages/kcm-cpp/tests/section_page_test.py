@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 
 HERE = Path(__file__).resolve().parent
 TITLES = [
@@ -19,22 +20,57 @@ TITLES = [
 ]
 
 
-def preview(section, *args):
+def run_preview(section, *args):
+    """The navigation report, the time the preview took and its stderr; the screenshot must exist."""
     with tempfile.TemporaryDirectory(prefix="pf-kcm-sections-") as directory:
-        result = subprocess.run([sys.executable, str(HERE / "offscreen_preview.py"),
-                                 str(Path(directory) / "page.png"), "dark", "--navigation",
-                                 "--section", str(section), *args], capture_output=True, text=True,
-                                timeout=30, check=True)
+        page = Path(directory) / "page.png"
+        started = time.monotonic()
+        result = subprocess.run([sys.executable, str(HERE / "offscreen_preview.py"), str(page), "dark",
+                                 "--navigation", "--section", str(section), *args], capture_output=True,
+                                text=True, timeout=30, check=False)
+        seconds = time.monotonic() - started
+        assert result.returncode == 0, f"the preview exited {result.returncode}\n{result.stderr}"
+        assert page.is_file(), "the preview quit before its screenshot\n" + result.stderr
     for line in result.stdout.splitlines():
         if line.startswith("REPORT_NAVIGATION "):
-            report = json.loads(line.removeprefix("REPORT_NAVIGATION "))
-            assert not report.get("stepErrors"), f"navigation steps failed: {report}\n{result.stderr}"
-            assert not report.get("pending"), f"navigation steps did not finish: {report}"
-            return report
-    raise AssertionError(result.stdout + result.stderr)
+            return json.loads(line.removeprefix("REPORT_NAVIGATION ")), seconds, result.stderr
+    raise AssertionError("the preview printed no navigation report\n" + result.stdout + result.stderr)
+
+
+def preview(section, *args):
+    report, _, stderr = run_preview(section, *args)
+    assert "pending" in report and "stepErrors" in report, report
+    assert not report["stepErrors"], f"navigation steps failed: {report}\n{stderr}"
+    assert not report["pending"], f"navigation steps did not finish: {report}"
+    return report
+
+
+def check_report_ordering():
+    """The report and the quitting screenshot wait for late steps; a hung or failing step is named."""
+    # Every later action of the steps comes after the report's (1 s) and the screenshot's (1.2 s)
+    # own times, as on a starved event loop.
+    result = preview(0, "--width", "400", "--focus-switch", "--scroll-roundtrip", "--rapid-switch",
+                     "--step-delay", "1500")
+    assert result["focus"]["tabIntoSection"] and result["focus"]["backtabToNavigation"], result["focus"]
+    assert "after" in result["scroll"] and "after" in result["rapid"], result
+    print("PASS the report and the screenshot wait for late navigation steps")
+    report, seconds, _ = run_preview(0, "--width", "400", "--focus-switch", "--step-hang", "focus",
+                                     "--report-deadline", "2")
+    assert report["pending"] == ["focus"] and report["stepErrors"] == {}, report
+    assert report["focus"].get("tabIntoSection") is not None, report["focus"]
+    assert seconds < 12, seconds
+    print("PASS a step that never finishes is reported as pending after the deadline")
+    report, seconds, stderr = run_preview(0, "--width", "400", "--focus-switch", "--step-fail", "focus")
+    assert list(report["stepErrors"]) == ["focus"] and report["pending"] == [], report
+    assert "--step-fail focus" in report["stepErrors"]["focus"], report
+    assert "tabIntoSection" not in report["focus"], report["focus"]
+    assert "Traceback" in stderr, stderr
+    assert seconds < 12, seconds
+    print("PASS a failing step is reported at once and its later actions are skipped")
 
 
 def main():
+    check_report_ordering()
     for section, titles in enumerate(TITLES):
         result = preview(section, "--width", "1100")
         assert result["available"], "section navigation is missing"

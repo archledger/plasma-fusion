@@ -18,8 +18,9 @@ resources hold them. --report prints, once the page is laid out, where its conte
 width in the window).
 --navigation prints "REPORT_NAVIGATION {json}" with the section navigation's state, after the
 steps asked for (--scroll-roundtrip, --rapid-switch, --focus-switch) have finished. "pending" lists
-steps still unfinished 15 s after the report's first attempt; "stepErrors" maps each step that
-raised to its error.
+steps still unfinished 15 s (--report-deadline) after the report's first attempt; "stepErrors" maps
+each step that raised to its error. The test hooks --step-delay, --step-hang and --step-fail make
+the steps late, unfinished or failing, to check that ordering.
 Environment: PFKM_TMP (directory for the private configuration, default the system temp
 directory), PFKM_THEME (Qt platform theme, default kde).
 """
@@ -70,6 +71,14 @@ def main():
     ap.add_argument("--scroll-roundtrip", action="store_true", help="leave and restore a scrolled section")
     ap.add_argument("--rapid-switch", action="store_true", help="check saved scroll offsets during same-turn navigation")
     ap.add_argument("--focus-switch", action="store_true", help="switch sections while a setting has keyboard focus")
+    # Test hooks for the report's ordering (section_page_test.py), as a starved event loop or a
+    # broken step would behave.
+    ap.add_argument("--step-delay", type=int, default=0,
+                    help="delay every later action of the navigation steps by this many ms")
+    ap.add_argument("--step-hang", default="", help="never mark this navigation step finished")
+    ap.add_argument("--step-fail", default="", help="raise in this navigation step's first later action")
+    ap.add_argument("--report-deadline", type=float, default=15,
+                    help="seconds the navigation report waits for unfinished steps")
     ap.add_argument("--open-dropdown", type=int, default=-1,
                     help="open the Nth drop-down's list (0: the first) and print where it is (REPORT_DROPDOWN)")
     ap.add_argument("--gestures", action="store_true",
@@ -346,6 +355,7 @@ QQC2.ApplicationWindow {
     # raises ends at once: its error is reported and its later actions are skipped.
     pending_steps = set()
     step_errors = {}
+    step_calls = {}
     report_done = []
     report_deadline = []
 
@@ -353,7 +363,10 @@ QQC2.ApplicationWindow {
         def run():
             if name in step_errors:
                 return
+            step_calls[name] = step_calls.get(name, 0) + 1
             try:
+                if name == args.step_fail and step_calls[name] == 2:
+                    raise RuntimeError("--step-fail " + name)
                 action()
             except Exception as error:  # reported below; the test fails on it
                 import traceback
@@ -362,10 +375,17 @@ QQC2.ApplicationWindow {
                 pending_steps.discard(name)
         return run
 
+    def later(ms, name, action):
+        QTimer.singleShot(ms + args.step_delay, step(name, action))
+
+    def finish_step(name):
+        if name != args.step_hang:
+            pending_steps.discard(name)
+
     def navigation_report():
         import time
         if not report_deadline:
-            report_deadline.append(time.monotonic() + 15)
+            report_deadline.append(time.monotonic() + args.report_deadline)
         if pending_steps and time.monotonic() < report_deadline[0]:
             QTimer.singleShot(50, navigation_report)
             return
@@ -405,13 +425,13 @@ QQC2.ApplicationWindow {
         page_evaluate("flickable.contentY = 220")
         scroll_result["before"] = page_evaluate("flickable.contentY")
         select_section(4)
-        QTimer.singleShot(100, step("scroll", lambda: select_section(args.section if args.section is not None else 0)))
+        later(100, "scroll", lambda: select_section(args.section if args.section is not None else 0))
 
         def finish():
             scroll_result["after"] = page_evaluate("flickable.contentY")
-            pending_steps.discard("scroll")
+            finish_step("scroll")
 
-        QTimer.singleShot(300, step("scroll", finish))
+        later(300, "scroll", finish)
 
     def rapid_switch():
         page_evaluate("flickable.contentY = 100")
@@ -426,15 +446,15 @@ QQC2.ApplicationWindow {
             select_section(2)
             select_section(4)
 
-        QTimer.singleShot(100, step("rapid", remember_second))
-        QTimer.singleShot(200, step("rapid", switch_twice))
-        QTimer.singleShot(300, step("rapid", lambda: select_section(2)))
+        later(100, "rapid", remember_second)
+        later(200, "rapid", switch_twice)
+        later(300, "rapid", lambda: select_section(2))
 
         def finish():
             rapid_result["after"] = page_evaluate("flickable.contentY")
-            pending_steps.discard("rapid")
+            finish_step("rapid")
 
-        QTimer.singleShot(500, step("rapid", finish))
+        later(500, "rapid", finish)
 
     def focus_switch():
         from PySide6.QtCore import Qt
@@ -475,10 +495,10 @@ QQC2.ApplicationWindow {
             focus_result["tabIntoSection"] = valid and within(active, column)
             QTest.keyClick(win, Qt.Key.Key_Backtab)
             focus_result["backtabToNavigation"] = within(win.activeFocusItem(), navigation)
-            pending_steps.discard("focus")
+            finish_step("focus")
 
-        QTimer.singleShot(100, step("focus", press_after_switch))
-        QTimer.singleShot(350, step("focus", traverse_section))
+        later(100, "focus", press_after_switch)
+        later(350, "focus", traverse_section)
 
     def grab():
         if args.navigation and not report_done:
