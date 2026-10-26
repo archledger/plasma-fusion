@@ -61,16 +61,17 @@ values, scroll and common messages. That stand-in does not prove Apply or dirty-
 the existing native CTests and private System Settings tests cover those contracts.
 The scroll, rapid-switch and focus steps schedule their own later actions, so `offscreen_preview.py`
 prints its navigation report only after each requested step has finished. A step that raises is
-reported at once under `stepErrors`. One still running 15 s after the report's first attempt
-(about 1 s in) is listed under `pending`. The test fails on either, naming the step.
+reported under `stepErrors` without waiting for the deadline. One still running 15 s after the
+report's first attempt (about 1 s in) is listed under `pending`. The test fails on either, naming
+the step.
 `section_page_test.py` checks this ordering without load, through the preview's test hooks:
 
 - `--step-delay 1500` moves every later step action after the report's and the screenshot's own
   times, and the report must still be complete;
 - `--step-hang focus` with `--report-deadline 2` must report `pending: ["focus"]` within 12 s;
-- `--step-fail focus` must report the error under `stepErrors` at once and skip the step's later
-  action (`stepSkipped`). The report also waits until every scheduled step action has run or been
-  skipped, so this holds under load as well.
+- `--step-fail focus` must report the error under `stepErrors` without waiting for the deadline,
+  and skip the step's later action (`stepSkipped`). The report also waits until every scheduled
+  step action has run or been skipped, so this holds under load as well.
 
 Each check fails when its part of the fix is removed: the report wait, the screenshot wait, the
 error handling or the skipping. Without the report wait, the report runs at its fixed time as before

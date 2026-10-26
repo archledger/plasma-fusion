@@ -20,8 +20,8 @@ width in the window).
 steps asked for (--scroll-roundtrip, --rapid-switch, --focus-switch) have finished. "pending" lists
 steps still unfinished 15 s (--report-deadline) after the report's first attempt; "stepErrors" maps
 each step that raised to its error, "stepSkipped" how many of its later actions were skipped. The
-test hooks --step-delay, --step-hang and --step-fail make
-the steps late, unfinished or failing, to check that ordering.
+test hooks --step-delay, --step-hang and --step-fail make the steps late, unfinished or failing,
+to check that ordering.
 Environment: PFKM_TMP (directory for the private configuration, default the system temp
 directory), PFKM_THEME (Qt platform theme, default kde).
 """
