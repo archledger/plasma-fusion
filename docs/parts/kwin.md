@@ -650,13 +650,15 @@ and pointer drags inside the private session only).
   then commits the tile-sized frame and closes before answering the untile's configure. On a KWin
   with `requestedGeometry` the memory must keep A; on one without it the outcome is reported as
   INFO (the tile size is recorded). Then a tile and untile with prompt answers: the window floats
-  at A again, A is kept, a later move and the close are remembered. For the backport's lane, build
-  a local image from the test image that installs the backport's packages with the command in
-  `packaging/patches/kwin/README.md` (the test image has `kwin-devel`, so it takes that
-  subpackage too). On 2026-10-26 (ThinkPad, `cvsession.sh`): 12 of 12 checks with the backport and
-  11 of 11 in the stock test image (the tile size recorded, as INFO, as with the previous script);
-  the previous script with the backport failed the check that the memory keeps A; and
-  `scenario-placement.sh` passed 25 of 25 in both images.
+  at A again, A is kept, a later move and the close are remembered. For the backport's lane,
+  `tools/tests/kwin-backport/run.sh --rpms DIR` builds the image with the backport's packages,
+  installed with the command in `packaging/patches/kwin/README.md` (the test image has
+  `kwin-devel`, so it takes that subpackage too), and runs this scenario and
+  `scenario-placement.sh` in both images; the `kwin-backport` workflow runs it nightly without a
+  GPU (docs/parts/ci.md). On 2026-10-26 (ThinkPad, `cvsession.sh`): 12 of 12 checks with the
+  backport and 11 of 11 in the stock test image (the tile size recorded, as INFO, as with the
+  previous script); the previous script with the backport failed the check that the memory keeps A;
+  and `scenario-placement.sh` passed 25 of 25 in both images.
 - `scenario-workspaces.sh` (strict mode, verdict and "scenario rc" as above): the setup's four
   named workspaces and a window on Work, then the script on: nothing removed in the first seconds,
   then down to Work and Design; a window moved to the last workspace adds "Workspace 3" at once;

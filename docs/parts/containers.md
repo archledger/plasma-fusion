@@ -26,6 +26,17 @@ crashes), `--cap-add SYS_NICE` (kwin_wayland carries cap_sys_nice; a rootless co
 it otherwise). Not in the images: KDE Connect and Milou (their QML modules show as missing), a web
 browser (`preferred://browser` pins nothing), PAM for unlocking (lock tests stop at the prompt).
 
+`PFV_DRI=0` runs without the render node, as on a machine without a GPU (GitHub's runners: the
+`kwin-backport` workflow, docs/parts/ci.md). KWin then composites with QPainter. On 6.7.5
+(2026-10-26) a screenshot did not crash but never returned: Spectacle waited until the session's
+time limit. So these sessions take no screenshots: `shot` only lists the name in
+`shots-skipped.log` (`PFV_NO_SHOTS=1`, which `cvsession.sh` sets). Only scenarios that use
+screenshots for review alone fit this mode.
+
+The results belong to the user who ran `cvsession.sh`: the container hands them back to the
+owner of the output directory after copying them out. Before 2026-10-26 they kept the session
+user's subordinate ids, which only `podman unshare` could move or remove.
+
 ## PLASMA-68 results (6.7.5 vs 6.7.91, 2026-10-01)
 
 Fixed (all also right on 6.7.5): fe4a0f8 KWin 6.8's QML `Window` (its window class, uncreatable)

@@ -46,6 +46,9 @@
 #                           Never type a password into its lock screen: pam_faillock counts failures
 #                           against the host user. pfinput refuses Return, Enter and 'type' while the
 #                           screen is locked. The locker's own idle timeout applies (kscreenlockerrc).
+#   PFV_NO_SHOTS=1          shot only notes the name in out/shots-skipped.log: for a session without
+#                           the host's render node (cvsession.sh PFV_DRI=0), where KWin paints with
+#                           QPainter and a screenshot never returns
 # Extra scenario helpers: pfv_font PT, pfv_anim FACTOR, pfv_tablet on|off|auto (write the setting
 # and notify the running session), pfv_restart_shell (quit plasmashell, start it again, wait),
 # pfv_rotate [OUTPUT] normal|left|right|inverted (kscreen-doctor inside the session; default the
@@ -100,7 +103,11 @@ cat > "$PFV/inner.sh" <<'INNER'
 #!/bin/bash
 set -u
 OUT=$PFV/out
-shot() { spectacle -b -n -f -o "$OUT/$1.png" >>"$OUT/spectacle.log" 2>&1 || echo "shot $1 failed" >>"$OUT/errors.log"; }
+if [ "${PFV_NO_SHOTS:-0}" = 1 ]; then
+  shot() { echo "$1" >>"$OUT/shots-skipped.log"; }
+else
+  shot() { spectacle -b -n -f -o "$OUT/$1.png" >>"$OUT/spectacle.log" 2>&1 || echo "shot $1 failed" >>"$OUT/errors.log"; }
+fi
 qdbus() { qdbus-qt6 "$@"; }
 wait_for_name() { for _ in $(seq 1 40); do qdbus-qt6 | grep -qx " *$1" && return 0; sleep 0.5; done; echo "timeout waiting for $1" >>"$OUT/errors.log"; return 1; }
 evaljs() { local js; if [ "$1" = - ]; then js=$(cat); else js=$(cat "$1"); fi; qdbus-qt6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$js"; }
@@ -265,6 +272,7 @@ rm -f "$PFV/bus-env"
 [ -n "${PFV_LANGUAGE:-}" ] && OPT_ENV+=("LANGUAGE=$PFV_LANGUAGE") && echo LANGUAGE >>"$PFV/bus-env"
 [ -n "${PFV_SHELL:-}" ] && OPT_ENV+=("SHELL=$PFV_SHELL") && echo SHELL >>"$PFV/bus-env"
 [ "${PFV_LOCK:-0}" = 1 ] && OPT_ENV+=("PFV_LOCK=1")
+[ "${PFV_NO_SHOTS:-0}" = 1 ] && OPT_ENV+=("PFV_NO_SHOTS=1")
 KWIN_OPTS=(--no-lockscreen)
 [ "${PFV_LOCK:-0}" = 1 ] && KWIN_OPTS=()
 [ "${PFV_XWAYLAND:-0}" = 1 ] && KWIN_OPTS+=(--xwayland)

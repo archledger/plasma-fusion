@@ -16,9 +16,9 @@ installed, so consumers must detect it at runtime.
 | `0001-window-expose-requested-geometry.patch` | Read-only `Window.requestedGeometry` and `requestedGeometryChanged`, so scripts can distinguish the committed frame from geometry KWin has requested. | KDE [MR !10225](https://invent.kde.org/plasma/kwin/-/merge_requests/10225), proposed commit `3fd6cdb85cc2b7d562fbb403c035709462c0068a`; [bug 527821](https://bugs.kde.org/show_bug.cgi?id=527821). Closed without merging on 2026-10-26: upstream KWin will not take this change. | When Fedora's KWin provides the same information through an API of its own (update the consumers with it), or when the patch no longer applies to Fedora 44's KWin. There is no upstream version to follow. |
 
 This adds an observable property; it does not change how KWin configures or tiles windows. It does
-not enable automatic tiling or solve its remaining lifecycle requirements. The placement-script
-consumer and a patched CI lane belong to separate changes. No patched RPM repository is published
-by this change.
+not enable automatic tiling or solve its remaining lifecycle requirements. Its consumer is the
+placement memory (docs/parts/kwin.md); the `kwin-backport` workflow tests both, nightly
+(docs/parts/ci.md, "KWin backport lane"). No patched RPM repository is published.
 
 ## Backport scope
 
@@ -67,7 +67,17 @@ four CPUs and an 8 GiB memory limit. The builder:
 Fedora's current spec has no `%check` section. A successful RPM build alone therefore does not
 establish that the new native tests passed. Run those against the prepared source with
 `BUILD_TESTING=ON` before distributing packages. Keep the test logs with the exact patch and source
-RPM hashes.
+RPM hashes. `native-tests.sh` does this the same way the package build prepares the source, with
+Fedora's configuration and flags; its output directory must be empty too, and `inputs.sha256`
+there records the source package and the patch. With `--stock` it builds Fedora's source package
+without the patch, for comparison: some upstream tests fail in this configuration without it
+(`tools/tests/kwin-backport/native_compare.py` judges the two):
+
+```sh
+packaging/patches/kwin/native-tests.sh build/kwin-tests 6.7.5-1.fc44
+packaging/patches/kwin/native-tests.sh --stock build/kwin-tests-stock 6.7.5-1.fc44
+tools/tests/kwin-backport/native_compare.py build/kwin-tests-stock build/kwin-tests build/compare
+```
 
 ## Installation and rollback
 
@@ -111,6 +121,9 @@ incompatible-spec rejection, supported version bounds and output-directory prese
 backported native tests cover delayed tile/untile commits, notification ordering on X11 and
 settling to a client-selected size. Run `testTiles` and `testXdgShellWindow` on the built KWin;
 also run the move/resize, quick-tiling, internal-window, maximize and placement suites.
+`native-tests.sh` runs these and `testX11Window`. To try the packages in session scenarios
+without installing them, `tools/tests/kwin-backport/run.sh --rpms OUT_DIR` installs them into a
+test container next to a stock one (docs/parts/testing.md).
 
 Run `testRequestedGeometryAfterMappingDestroysWindow` under a memory checker as well. A normal
 QtTest pass alone does not detect a read from the already-freed window when no signal is emitted.

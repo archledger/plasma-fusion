@@ -50,6 +50,9 @@ Evidence: the tests build run of 2026-09-30, the maintainer's records (review:
 | `tools/tests/lib/teardown-test.sh` | self-test of `vsession.sh`'s teardown under a strict-mode scenario, with processes ending during the sweep (no session) |
 | `tools/tests/depth/run.sh` | the depth features' check: the six features' session scenarios, their seeds, one summary |
 | `tools/tests/depth/run-unit.sh` | its unit test with a stand-in session runner (CI `build`) |
+| `tools/tests/kwin-backport/run.sh` | the optional KWin backport's session check: the placement scenarios on a stock and a backport test image, one summary (CI `kwin-backport`, docs/parts/ci.md "KWin backport lane") |
+| `tools/tests/kwin-backport/verdict.py`, `verdict_test.py` | its pass rules and their unit test |
+| `tools/tests/kwin-backport/native_compare.py`, `native_compare_test.py` | the backport's KWin suites judged against the stock build's (CI `kwin-backport`, native-compare), and its unit test |
 
 ## Running them
 

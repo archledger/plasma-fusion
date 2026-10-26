@@ -11,7 +11,9 @@
 # PFV_IMAGE picks the test image (default: the device's Plasma 6.7.5). The container gets the
 # laptop's render node (--device /dev/dri: without a GPU KWin paints in software and its screenshot
 # plugin crashes) and CAP_SYS_NICE (kwin_wayland has that file capability; without it the exec
-# fails). See docs/parts/containers.md.
+# fails). PFV_DRI=0 leaves the render node out, as on a host without a GPU (GitHub's runners):
+# KWin then paints with QPainter, where a screenshot never returns, so the session takes none
+# (PFV_NO_SHOTS=1, vsession.sh). See docs/parts/containers.md.
 set -u
 NAME=${1:?name}; SCENARIO=${2:?scenario}; SEED=${3:?seed}; SIZE=${4:-1920x1200}; TMO=${5:-600}
 IMAGE=${PFV_IMAGE:-localhost/plasma-fusion-test:f44-6.7.5}
@@ -19,10 +21,11 @@ REPO=$(cd "$(dirname "$0")/../.." && pwd)
 OUTDIR=$(pwd)/vsession-out/$NAME
 podman unshare rm -rf "$OUTDIR"; mkdir -p "$OUTDIR"
 OPTS=()
+if [ "${PFV_DRI:-1}" = 0 ]; then OPTS+=(-e PFV_NO_SHOTS=1); else OPTS+=(--device /dev/dri --group-add keep-groups); fi
 for v in PFV_TABLET PFV_ANIM PFV_FONT_PT PFV_LANGUAGE PFV_SHELL PFV_CWD PFV_KDE_PROFILE PFV_XWAYLAND PFV_LOCK; do
   [ -n "${!v:-}" ] && OPTS+=(-e "$v=${!v}")
 done
-podman run --rm --name "pfv68-$NAME" --shm-size=1g --cap-add=SYS_NICE --device /dev/dri --group-add keep-groups -e LANG=C.UTF-8 \
+podman run --rm --name "pfv68-$NAME" --shm-size=1g --cap-add=SYS_NICE -e LANG=C.UTF-8 \
   -e "PFV_SCALE=${PFV_SCALE:-1}" -e "PFV_OUTPUTS=${PFV_OUTPUTS:-1}" "${OPTS[@]}" \
   -v "$REPO/tools/vsession:/pfv:ro,z" -v "$(realpath "$SCENARIO"):/scenario.sh:ro,z" \
   -v "$(realpath "$SEED"):/seed:ro,z" -v "$OUTDIR:/out:z" \
@@ -30,6 +33,7 @@ podman run --rm --name "pfv68-$NAME" --shm-size=1g --cap-add=SYS_NICE --device /
   "$IMAGE" bash -c '
     set -u
     R=/var/tmp/pfv-'"$NAME"'
+    owner=$(stat -c %u:%g /out)
     if [ -d /persist ]; then
       [ -n "$(ls -A /persist)" ] || cp -a /seed/. /persist/
       chown -R test:test /persist; mkdir -p "$(dirname "$R")"; ln -s /persist "$R/home" 2>/dev/null || { mkdir -p "$R"; ln -s /persist "$R/home"; }
@@ -45,6 +49,9 @@ podman run --rm --name "pfv68-$NAME" --shm-size=1g --cap-add=SYS_NICE --device /
     su test -s /bin/bash -c "cd /var/tmp && env $env_opts PFV_BASE=/var/tmp PFV_NO_GUARD=1 PFINPUT=$R.pfinput.py bash $R.vsession.sh '"$NAME"' $R.scenario.sh '"$SIZE"' '"$TMO"'"
     rc=$?
     cp -a "$R/out/." /out/ 2>/dev/null
+    # cp -a gave the results (and /out itself) the ids of the session user, outside subordinate ids
+    # that this user can neither move nor remove: hand them back to the owner of the mount point.
+    chown -R "$owner" /out
     echo "session rc=$rc" >> /out/container.log
     exit $rc'
 echo "results in $OUTDIR (rc $?)"

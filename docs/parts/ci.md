@@ -12,6 +12,7 @@ do when one of them speaks up. Set up 2026-10-01 (CI) and 2026-10-02 (automation
 | `build` | push, pull request | fedora:44: lint self-tests, the login-check unit tests, one version everywhere (`packaging/check-version.sh`), the shared part's RPM (`packaging/build-rpm.sh`, `%check`, rpmlint), the RPMs as an artifact; a second job runs the SDDM login screen's apply and restore as root in fedora:44 with its sddm package (`tools/system/tests/greeter-sddm-root.sh`) |
 | `packages` | changes to `packaging/`, the installer, the command or `VERSION`; weekly (Tuesdays 06:10 UTC) | every channel from a source tarball of the commit, each in a container of its system: the Fedora RPMs (`%check`, rpmlint), the Arch PKGBUILD (namcap), the Debian packages for Debian testing, Ubuntu 26.10 and KDE neon (lintian); each installed and checked (`tools/tests/packages/`: among others, every compiled part's built-against record and `plasma-fusion status` naming each part, `parts.sh`); and the installer: ShellCheck, `dash -n`, `busybox sh -n`, `tools/tests/installer/run.sh` |
 | `compiled` | changes to the compiled parts, weekly | navigation effect, decoration, settings module: `dnf builddep`, cmake with `CXXFLAGS=-Werror -Wno-error=deprecated-declarations` (a compiler warning fails the build, a deprecation stays a warning), ctest (see "Dynamic analysis" for the tests), against Fedora 44's Plasma (**stable**) and against KDE's Plasma beta packages (**beta**, the `@kdesig/kde-beta` Copr; may fail without failing the run: an early warning for the next Plasma release) |
+| `kwin-backport` | changes to the optional KWin backport (`packaging/patches/kwin/`), the placement memory, its session scenarios and their tools; nightly (04:15 UTC) | Fedora 44's newest KWin source package (it must be 6.7.5): **native**, the backported tests and the suites around them, built from the prepared source with Fedora's own configuration and flags plus `BUILD_TESTING`, with the backport and without it (`packaging/patches/kwin/native-tests.sh`), and **native-compare**, which fails only on what the backport adds; **sessions**, the RPMs rebuilt by the README's `build.sh`, then the placement memory's session scenarios on stock KWin and on the rebuilt packages, without a GPU (`tools/tests/kwin-backport/run.sh`). The rebuilt packages never leave the runner. See "KWin backport lane" |
 | `coverage` | weekly (Wednesdays 06:10 UTC), by hand | `tools/tests/coverage.sh` in fedora:44: statement coverage of Python, shell and JavaScript over the build and the offline tests, and of each compiled part over its tests; the tables in the job summary, the reports as artifacts (docs/parts/coverage.md). It fails when a test fails (its `tests.tsv` row) or the measurement itself does |
 | `plymouth` | changes to the boot splash scripts, weekly (Wednesdays 06:20 UTC) | `tools/system/tests/plymouth-root.sh` as root in a container per system with a kernel and its own initramfs builder and Plymouth: Fedora 44 (dracut), Debian testing (dracut, initramfs-tools), Ubuntu 26.10 (dracut, initramfs-tools as on KDE neon), Arch (mkinitcpio); docs/parts/plymouth.md |
 | `workflow-audit` | changes to workflows | zizmor (security) and actionlint (correctness) over the workflows |
@@ -126,6 +127,60 @@ input ("Uncaught Python exception", exit code 77).
 
 The base image's digest is not updated by Dependabot (it watches the actions only); to move it:
 `skopeo inspect --format '{{.Digest}}' docker://gcr.io/oss-fuzz-base/base-builder-python:latest`.
+
+## KWin backport lane (`kwin-backport`)
+
+Set up 2026-10-26. The optional KWin backport (`packaging/patches/kwin`, never published) is
+tested together with its consumer, the placement memory, which records a window's frame only once
+KWin's request has settled (docs/parts/kwin.md). The lane runs nightly and on changes to the
+backport, the placement memory or their test tools, against Fedora 44's newest KWin (stable
+updates). Its first job fails when that is not 6.7.5: the backport then needs a reviewed update
+(README).
+
+- **native** (`packaging/patches/kwin/native-tests.sh [--stock] OUT_DIR VERSION-RELEASE`):
+  Fedora's source package, prepared as `build.sh` prepares it (`rpmbuild -bp`), once with the patch
+  and once without (`--stock`), in two parallel jobs. Each is configured with Fedora's `%cmake_kf6`
+  (its flags: `-O2`, LTO, `_FORTIFY_SOURCE=3`, `_GLIBCXX_ASSERTIONS`) plus `BUILD_TESTING=ON`.
+  Both run testTiles (with the backported tests), testXdgShellWindow, testQuickTiling,
+  testMoveResize, testInternalWindow, testMaximized, testPlacement and testX11Window, each under its
+  own `dbus-run-session`. On the backport a failing suite runs again, up to three attempts, as in
+  KWin's own CI (`ctest --repeat until-pass:3` in its `.kde-ci.yml`). The stock build runs every
+  suite ten times, so that a test which fails there now and then shows it; the suites take about
+  15 s a round. Every attempt keeps its log. Fedora's
+  spec builds without tests, so this is where the backported tests run against Fedora's current
+  libraries. It is a release build, so `Q_ASSERT` is off; the Debug runs of the backport's review
+  had it on.
+- **native-compare** (`tools/tests/kwin-backport/native_compare.py`): upstream tests can fail in
+  this configuration without the backport. On 2026-10-26 (ThinkPad, 20 alternating runs of each
+  build), testX11Window's `testStackTopIfFromApplication` failed in 15 runs of either build and
+  `testStackAboveFromApplication` in 6 of either; 4 backport runs and 3 stock runs passed the whole
+  suite. Both passed in the Debug runs. So a failure counts only when the backport adds it:
+  - a test function that fails in every backport attempt and in none of the ten stock runs;
+  - a backported test (one the stock build does not have) that fails in any attempt;
+  - a function the stock build ran that no backport attempt reached (also when both crash);
+  - a suite that crashes in every attempt on the backport only.
+
+  Failures that also happen on stock, and functions that failed in only some attempts, are listed
+  in the job summary as passed.
+- **sessions**: `build.sh` as the README gives it, then `tools/tests/kwin-backport/run.sh`. It
+  uses two images: the stock test image (tools/container/test, built with Fedora's current Qt) and
+  the same image with the rebuilt packages, installed by the README's command
+  (`tools/container/test/backport.Containerfile`, which also runs `rpm -V`). Each image runs
+  `scenario-placement-pending.sh` (bug 527821's order: on the backport the memory must keep the
+  floating place; on stock that check is informational) and `scenario-placement.sh`. A run passes
+  when its session ran to the end, every check passed, no log names a crash, `kwin.log` has no
+  error from the script, the session saw its lane's KWin (the property and the package), and no core
+  dump reached the runner's journal (`tools/tests/kwin-backport/verdict.py`).
+- No GPU: the runners have no render node, so KWin paints with QPainter (`cvsession.sh`
+  `PFV_DRI=0`). A screenshot then never returns, so these sessions take none (`PFV_NO_SHOTS`);
+  the two scenarios use screenshots only for review. On the ThinkPad without its render node, both
+  scenarios gave the same results as with it on 2026-10-26: the pending scenario 12 of 12 on the
+  backport and 11 of 11 with the INFO line on stock, the placement scenario 25 of 25 on both.
+- Not covered: GPU rendering, X11 windows in a session (the scenarios' windows are Wayland clients;
+  testX11Window covers the X11 notification order), and the Memcheck run of
+  `testRequestedGeometryAfterMappingDestroysWindow` (README, "Checks").
+- The rebuilt packages stay on the runner: the artifacts hold logs, the prepared spec, `SHA256SUMS`
+  and the session results only. Publishing patched packages is the owner's decision.
 
 ## Repository settings
 
@@ -421,6 +476,13 @@ Checked on 2026-10-02 in Fedora 44 containers.
   library that Plasma Fusion cannot fix goes into `tools/sanitizers/lsan.supp`, with a comment
   saying why. A missing test (`ctest-required.sh`) means the build lacked `dbus-run-session` or the
   colour schemes.
+- **`kwin-backport` fails**: when the first job fails, Fedora 44's KWin is no longer 6.7.5. Update
+  the backport (packaging/patches/kwin/README.md), or retire it once Fedora's KWin has the
+  property. For **native-compare**, the job summary names the function and why it counts; the
+  `kwin-backport-native-*` artifacts hold every attempt's log of both builds. For
+  **sessions**, the job summary names the failed run and its checks, and the artifact holds each
+  session's logs. A run that also fails on stock points at the scenario or the image, not the
+  backport. A core dump fails the run (`coredumps.json` lists them).
 - **`compiled` fails on a warning**: fix the warning; a deprecation from a Fedora update stays a
   warning and does not fail the build.
 - **A code scanning or Scorecard alert**: Security tab; fix or dismiss with a reason.
