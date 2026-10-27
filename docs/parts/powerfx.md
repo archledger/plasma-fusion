@@ -63,7 +63,8 @@ programs. `ExecSearchPath` also becomes the process's `PATH`; the
 script appends `/usr/local/bin:/usr/bin:/bin:/run/current-system/sw/bin:/run/wrappers/bin` (the last
 two: NixOS's system profile and setuid wrappers, where `/usr/bin` holds only `env`).
 
-Installing enables nothing. Turn on: `systemctl --user enable --now plasma-fusion-powerfx.service`.
+`fusion-config.sh --install` installs and enables the user's unit. For manual setup, use
+`systemctl --user enable --now plasma-fusion-powerfx.service`.
 
 ## Command line
 
@@ -187,6 +188,18 @@ settings.
 | `tests/vsession/scen-unit.sh` (o1pw-unit2): the unit under a second `systemd --user` (sudo `systemd-run`, Delegate, the user's SELinux context) with the session's HOME and buses | ThinkPad | 21/21 |
 | `tests/vsession/scen-idle.sh` + `idle-frames.py` (o1pw-idle3): idle frames per tier, card visible, covered (Dolphin maximized), removed | ThinkPad, exclusive slot | acceptance met, table below |
 
+The cleanup checks in the offline and private-session suites use `tests/monitor-pids.py` to
+identify monitors by the private session bus they inherited. A running desktop may have identical
+`gdbus` command lines; its monitors must not fail another session's cleanup check. The helper also
+counts the test's system-bus monitors and treats an unreadable candidate as a failed scan.
+`tests/monitor-scope.py`, run by `offline.sh`, verifies ownership and surviving-process detection
+with real monitors on two private buses. `tests/monitor_read_test.py` covers command-line and
+environment read failures, disappearing processes, and non-monitor arguments.
+
+The unit scenario verifies that `fusion-config.sh` enabled the installed service, then disables it
+through its private manager before exercising `enable`. This adds one check to the original
+21-check scenario. Neither the logged-in desktop's manager nor its enable links are changed.
+
 Measurements (ThinkPad, private sessions):
 - Blur unloaded 599 ms after the Percentage event (0.5 s of it is the coalescing window).
 - Service: bash 4.3-4.6 MB RSS, its monitor subshell 2.8-3.0 MB, three gdbus 5.7-6.0 MB each; PSS
@@ -211,6 +224,8 @@ Measurements (ThinkPad, private sessions):
 
 ```
 node packages/powerfx/tests/widgets.test.js
+python3 packages/powerfx/tests/monitor-scope.py
+python3 packages/powerfx/tests/monitor_read_test.py
 packages/powerfx/tests/offline.sh build/o1pw/off        # needs dbus-daemon, busctl, gdbus, kwriteconfig6, node, python3-gobject
 # private sessions: seed = built stage at pf-stage, tools at pf-tools, packages/powerfx/tests at pf-powerfx
 PFV_SCALE=1.3333333 build/lead/vslot.sh tools/vsession/remote.sh o1pw-tiers packages/powerfx/tests/vsession/scen-tiers.sh SEED 1920x1200 420

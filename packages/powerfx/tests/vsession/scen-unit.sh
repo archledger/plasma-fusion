@@ -105,7 +105,13 @@ if ! wait_for 15 test -S "$PFV/run/systemd/private"; then
 fi
 sleep 1
 usys show -p Version -p Environment -p SystemState >"$OUT/um-manager.txt" 2>&1
-check "private manager: plasma-fusion-powerfx.service is found and disabled" [ "$(usys is-enabled plasma-fusion-powerfx.service 2>&1)" = disabled ]
+check "private manager: the installer enabled plasma-fusion-powerfx.service" \
+  [ "$(usys is-enabled plasma-fusion-powerfx.service 2>&1)" = enabled ]
+# fusion-config enables its installed user services. Start the enable/disable
+# exercise explicitly from disabled, using only this session's private manager.
+usys disable plasma-fusion-powerfx.service >"$OUT/um-disable-initial.txt" 2>&1
+check "private manager: the service can be disabled before the enable test" \
+  [ "$(usys is-enabled plasma-fusion-powerfx.service 2>&1)" = disabled ]
 usys enable plasma-fusion-powerfx.service >"$OUT/um-enable.txt" 2>&1
 check "enable: the [Install] link in graphical-session.target.wants" test -L "$UD/graphical-session.target.wants/plasma-fusion-powerfx.service"
 usys start graphical-session.target
