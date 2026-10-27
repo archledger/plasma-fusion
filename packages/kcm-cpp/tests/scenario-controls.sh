@@ -410,6 +410,8 @@ sleep 12
 kwriteconfig6 --file plasmafusionrc --group Power --key Tier critical
 kwriteconfig6 --file plasmafusionrc --group Power --key UserDockMagnify true
 kwriteconfig6 --file plasmafusionrc --group Power --key UserGlass Full
+kwriteconfig6 --file plasmafusionrc --group Power --key PageGlass --delete
+kwriteconfig6 --file plasmafusionrc --group Power --key PageDockMagnify --delete
 evaljs - >/dev/null <<'JS'
 var ps = panels();
 for (var i = 0; i < ps.length; ++i) { var d = ps[i].widgets("org.plasmafusion.dock"); for (var j = 0; j < d.length; ++j) { d[j].currentConfigGroup = ["General"]; d[j].writeConfig("magnify", false); } }
@@ -426,15 +428,19 @@ save
 K
 dump_state c13-critical
 check "critical: Glass" "$(ck plasmafusionrc Effects Glass)" Reduced
-check "critical: UserGlass" "$(ck plasmafusionrc Power UserGlass)" Reduced
+check "critical: original UserGlass is preserved" "$(ck plasmafusionrc Power UserGlass)" Full
+check "critical: PageGlass records the new choice" "$(ck plasmafusionrc Power PageGlass)" Reduced
 check "critical: blur stays unloaded" "$(blur_loaded)" false
 check "critical: dock glass left to the service" "$(wkey org.plasmafusion.dock glass)" full
 check "critical: panels follow Reduced" "$(popacity top)" opaque
 check "critical: UserDockMagnify" "$(ck plasmafusionrc Power UserDockMagnify)" false
+check "critical: PageDockMagnify records the new choice" "$(ck plasmafusionrc Power PageDockMagnify)" false
 check "critical: page showed the tier and the remembered magnification" "$(lastget powerCritical) $(lastget magnify)" "true true"
 kwriteconfig6 --file plasmafusionrc --group Power --key Tier full
 kwriteconfig6 --file plasmafusionrc --group Power --key UserGlass --delete
 kwriteconfig6 --file plasmafusionrc --group Power --key UserDockMagnify --delete
+kwriteconfig6 --file plasmafusionrc --group Power --key PageGlass --delete
+kwriteconfig6 --file plasmafusionrc --group Power --key PageDockMagnify --delete
 qdbus org.kde.KWin /Effects org.kde.kwin.Effects.loadEffect blur
 
 # 14. Defaults: everything back to the Plasma Fusion defaults.
