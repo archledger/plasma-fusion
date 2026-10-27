@@ -23,6 +23,25 @@ script() {
     python3 -c 'import sys,shlex; s=sys.stdin.read().strip(); print(shlex.split(s[2:])[0] if s.startswith("s ") else "")' || true
 }
 
+# Advertise touch before restarting the shell and keep the device for the whole
+# scenario. A new EIS device on every tap can send down before the Wayland client
+# binds wl_touch: it then receives only up, so no QML touch event is delivered.
+# The keeper sends no input; normal completion stops it, and the session's existing
+# runtime-directory teardown also covers failures without replacing its EXIT trap.
+touch_marker=$(mktemp "$OUT/touch-keeper.XXXXXX")
+PFINPUT_TOUCH=1 PFINPUT_MARKS="$touch_marker" python3 "$PFV/pfinput.py" \
+  'mark touch-keeper-started' 'sleep 600' >>"$OUT/pfinput.log" 2>&1 &
+touch_keeper=$!
+for _ in $(seq 1 100); do
+  [ -s "$touch_marker" ] && break
+  kill -0 "$touch_keeper" 2>/dev/null || break
+  sleep 0.1
+done
+if [ ! -s "$touch_marker" ] || ! kill -0 "$touch_keeper" 2>/dev/null; then
+  fail "the persistent touch device did not start"
+  exit 1
+fi
+
 # The Fusion layout first (the KWIN-2 recipe): without it the session keeps the seed's stock
 # panels, the launcher applet does not exist and the pill sits in a different bar.
 bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1
@@ -121,3 +140,9 @@ info "clipboard opens: $copens"
   || fail "only $copens clipboard opens were measured"
 info "clipboard settles: $(grep -o 'sheet settled, [0-9]* frames in 500 ms' "$PLOG" | tail -3 | tr '\n' ' ' || true)"
 info "scenario done"
+if ! kill -0 "$touch_keeper" 2>/dev/null; then
+  fail "the persistent touch device exited during the scenario"
+  exit 1
+fi
+kill "$touch_keeper"
+wait "$touch_keeper" 2>/dev/null || true
