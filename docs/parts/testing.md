@@ -261,6 +261,20 @@ runs them together against one built HOME tree, with one summary:
   through a stand-in `podman unshare`. Without
   any one of those rules its case fails.
 
+## Touch latency scenario
+
+`packages/kwin/tests/vsession/scenario-latency.sh` checks pointer and touch opens of the status
+sheet, launcher requests and the clipboard shortcut. It keeps a no-input EIS connection with
+touch capability alive before restarting plasmashell, through the final tap. The restarted
+Wayland client can therefore bind `wl_touch` before the measured input begins.
+
+Without a persistent device, a headless compositor can add touch capability at each `pfinput`
+invocation and process the first down event before plasmashell's `get_touch` request. A release
+arrives without its down, and Qt delivers no tap. This was reproduced on stock and backported
+KWin 6.7.5; a Wayland trace showed only `wl_touch.up` for the failing taps. The scenario's keeper
+sends no events, is stopped on normal completion, and belongs to the existing session teardown
+on failure. It does not change touch handling in the shipped UI.
+
 ## Harness additions (`tools/vsession`)
 
 All defaults keep the previous behaviour exactly: with none of the new variables set, a session
