@@ -38,7 +38,8 @@
 # the covered row); the dock windows' geometry changes during the sweep are counted (winmon.js).
 # Exit status: 0 no regression, 1 regression (or budget failure with --strict-budget), 2 setup
 # error, 3 no usable run, 4 the baseline is for another geometry, 5 worse than the baseline only in
-# runs that overlapped another virtual session (not counted as a regression; re-run when quiet).
+# runs that overlapped another virtual session (not counted as a regression; re-run when quiet),
+# 6 incompatible launcher timing in the baseline (record a separate card-aware baseline).
 # Each run holds every session slot and the container-build lock of build/lead/vslot.sh (a quiet
 # host; tools/tests/lib/common.sh, slot_prefix exclusive). Started under 'vslot.sh --exclusive',
 # the driver uses those locks; started under a single slot it refuses (exit 2).

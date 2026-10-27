@@ -149,6 +149,35 @@ per-frame CSV
 (`KWIN_LOG_PERFORMANCE_DATA=1`, written to `out/` with `PFV_CWD=out`); window mapping times come
 from `winmon.js`.
 
+Launcher timing requires the structured window records emitted by `winmon.js`: one plasmashell
+AppletPopup (window type 18) with positive dimensions per opening. The normal full-screen dimmer
+and tooltips do not count. Missing, ambiguous or malformed card records invalidate the launcher
+rows; all three openings in every usable run must be measured, not just whichever ones succeeded.
+The A/B report also labels incomplete launcher aggregates `INVALID` and exits 1. The gate refuses
+a requested run set containing an unusable run (for example, a missing input marker), rather than
+dropping that run and saving a partial result.
+The first-frame endpoint is the first output presentation whose composition starts after that
+card maps. This is an **output-wide proxy**, not surface-specific presentation feedback; the
+virtual backend uses synthetic presentation timestamps. It must not be described as the exact
+instant the card reaches a physical display. The input marker still precedes Meta-down, not
+Meta-release. These boundaries are unchanged by QML's own queued `frameSwapped` log.
+
+Results store the launcher contract `applet-popup/output-composition-after-map/v1`. A baseline
+without that exact contract is incompatible (exit 6), even if its numbers look plausible. Older
+launcher values could select the dimmer and cannot be converted by changing their metadata.
+Keep those files as historical evidence. Use `--baseline ''` for budget-only analysis, or record
+a separately named baseline with matching inputs after validating the new measurements. The
+50 ms first-frame and 300 ms settling budgets are unchanged. The gate still aggregates the median
+of three openings per run; it also retains each card ID, mapping/timing result, the first opening,
+and the cached-opening median in `per_run[].noise.launcher_timing`. Do not call the aggregate a
+cold-start statistic. Animation settling remains an output-idle estimate, not a card-specific
+animation-completion signal.
+
+Offline oracle tests run in the build workflow and locally without a desktop:
+
+    python3 -m unittest discover -s tools/tests/perf/tests
+    node --test tools/tests/perf/tests/winmon.test.js
+
 The table has one row per metric: the median over the runs (min..max), the section 7 budget and
 its verdict, the baseline median (min..max) and the baseline verdict. Noise is judged per metric
 window (for example `idle0`..`idle1` for the idle rows): a run's window is noisy when `pfstat.py`
@@ -168,7 +197,8 @@ settings did not open, no KWin frame log, the sweep did not run) and fails the g
 0 no regression, 1 regression or MISSING (with `--strict-budget` also any budget failure), 2 setup
 or internal error (also a `--baseline` file that does not exist; `--baseline ''` judges the budget
 only), 3 no usable run, 4 the baseline is for another geometry, 5 worse than the baseline only in
-noisy windows. Budget failures do not fail the gate by default because most rows fail today (see
+noisy windows, 6 an incompatible launcher timing contract. Budget failures do not fail the gate
+by default because most rows fail today (see
 the baseline below); the gate stops things from getting worse, `--strict-budget` is for when M4/M5
 have landed. When the host's packages differ from the baseline's the gate prints a note: re-record
 the baseline after a Plasma, KWin, Qt, Mesa or kernel update.
