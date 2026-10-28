@@ -19,6 +19,11 @@ N=0
 res() { N=$((N + 1)); echo "$1 $N $2" >>"$OUT/results.txt"; }
 check() { local d=$1; shift; if "$@"; then res ok "$d"; else res "not ok" "$d"; fi; }
 wait_for() { local end=$((SECONDS + $1)); shift; until "$@"; do [ "$SECONDS" -ge "$end" ] && return 1; sleep 0.1; done; }
+monitors_gone() {
+  local pids
+  pids=$(python3 "$T/monitor-pids.py" "$DBUS_SESSION_BUS_ADDRESS") || return 1
+  [ -z "$pids" ]
+}
 # The script's journal lines go to out/journal.log, not to the machine's journal.
 mkdir -p "$PFV/bin"
 printf '#!/bin/sh\nshift 2; [ "$1" = -- ] && shift; echo "$(date +%%T.%%3N) $*" >>%s\n' "$OUT/journal.log" >"$PFV/bin/logger"
@@ -160,7 +165,7 @@ sleep 1; dump 5-service-full
 check "AC: blur loaded, the user's magnify=true kept" [ "$(blur)/$(wkey org.plasmafusion.dock magnify)" = true/true ]
 t0=$EPOCHREALTIME; kill -TERM "$SVC"; wait "$SVC"; rcode=$?; t1=$EPOCHREALTIME
 check "SIGTERM: exit 0 in $(python3 -c "print(round(($t1 - $t0) * 1000))") ms" [ "$rcode" = 0 ]
-check "no monitor left" bash -c "! pgrep -f '[g]dbus monitor --session --dest org.kde.plasmashell --object-path /org/plasmafusion' -u $(id -u) -a | grep -q ."
+check "no monitor of this session left" wait_for 3 monitors_gone
 kill "$MOCKP" "$SYSBUS" 2>/dev/null
 cp "$HOME/.config/plasmafusionrc" "$OUT/plasmafusionrc-end"
 echo "done" >>"$OUT/results.txt"

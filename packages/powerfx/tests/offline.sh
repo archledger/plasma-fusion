@@ -21,6 +21,8 @@ W=${1:?work directory}
 for t in dbus-daemon busctl gdbus kwriteconfig6 node python3; do
   command -v "$t" >/dev/null || { echo "offline.sh needs $t" >&2; exit 2; }
 done
+python3 "$HERE/monitor-scope.py" || exit 1
+python3 "$HERE/monitor_read_test.py" || exit 1
 mkdir -p "$W/home/.config" "$W/run" "$W/bin" && chmod 700 "$W/run"
 W=$(cd "$W" && pwd)
 N=0 FAIL=0
@@ -106,15 +108,13 @@ wait_for() { # SECONDS COMMAND...: until COMMAND succeeds (every 50 ms)
 # (its monitor's command line is identical), so the two clean-up checks failed on a desktop that
 # has Plasma Fusion installed; the private bus address tells the test's monitors apart.
 test_monitors() {
-  local pid line
-  for pid in /proc/[0-9]*; do
-    [ -r "$pid/environ" ] || continue
-    tr '\0' '\n' <"$pid/environ" 2>/dev/null | grep -qxF "DBUS_SESSION_BUS_ADDRESS=$SES" || continue
-    line=$(tr '\0' ' ' <"$pid/cmdline" 2>/dev/null)
-    case $line in *gdbus\ monitor*org.plasmafusion*) echo "${pid#/proc/}" ;; esac
-  done
+  python3 "$HERE/monitor-pids.py" "$SES"
 }
-test_monitors_gone() { [ -z "$(test_monitors)" ]; }
+test_monitors_gone() {
+  local pids
+  pids=$(test_monitors) || return 1
+  [ -z "$pids" ]
+}
 st_is() { [ "$(rc_get plasmafusionrc Power "$1")" = "$2" ]; }
 
 # Realistic starting files, written by KConfig itself (so its own order).
