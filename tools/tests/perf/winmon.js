@@ -15,6 +15,11 @@ function log(s) {
     print(s);
     callDBus("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "NameHasOwner", s);
 }
+function windowEvent(kind, w) {
+    log("PFPERF window " + JSON.stringify({schema: 1, event: kind, time_ms: Date.now(),
+        id: String(w.internalId), resourceClass: String(w.resourceClass), caption: w.caption,
+        windowType: w.windowType, appletPopup: w.appletPopup, width: w.width, height: w.height}));
+}
 function watch(w) {
     if (!w.dock) {
         return;
@@ -27,9 +32,11 @@ function watch(w) {
 workspace.windowList().forEach(watch);
 workspace.windowAdded.connect(function (w) {
     log("PFPERF added " + Date.now() + " " + tag(w));
+    windowEvent("added", w);
     watch(w);
 });
 workspace.windowRemoved.connect(function (w) {
     log("PFPERF removed " + Date.now() + " " + tag(w));
+    windowEvent("removed", w);
 });
 log("PFPERF winmon loaded " + Date.now() + " geometry");

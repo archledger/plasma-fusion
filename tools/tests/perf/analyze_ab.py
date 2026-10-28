@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Copied unchanged from the perf-measure study (perf-measure/scripts/analyze_ab.py); gate.py imports
+# Based on the perf-measure study (perf-measure/scripts/analyze_ab.py); gate.py imports
 # analyze() and its helpers. Run directly it prints the stock/Fusion A/B table of that study.
 #
 # analyze_ab.py RUN_DIR... : per-run metrics from scen-perf.sh output (stats.jsonl, marks.jsonl,
@@ -10,6 +10,9 @@
 # per-arm means with min..max over runs.
 import csv, glob, json, os, re, statistics as st, sys
 from collections import defaultdict
+from pathlib import Path
+
+from launcher_timing import CONTRACT, launcher_timings
 
 EXCL = ("tool:", "dbus-monitor", "spectacle", "konsole", "kwrite", "python3", "sleep", "bash", "timeout",
         "qdbus-qt6", "qdbus", "inner.sh")
@@ -17,23 +20,26 @@ EXCL = ("tool:", "dbus-monitor", "spectacle", "konsole", "kwrite", "python3", "s
 
 def load(run):
     stats = {}
-    for l in open(os.path.join(run, "stats.jsonl")):
-        r = json.loads(l); stats[r["label"]] = r
+    with open(os.path.join(run, "stats.jsonl")) as source:
+        for l in source:
+            r = json.loads(l); stats[r["label"]] = r
     marks = {}
-    for l in open(os.path.join(run, "marks.jsonl")):
-        m = json.loads(l); marks[m["mark"]] = m
+    with open(os.path.join(run, "marks.jsonl")) as source:
+        for l in source:
+            m = json.loads(l); marks[m["mark"]] = m
     frames = []
     csvs = glob.glob(os.path.join(run, "kwin perf statistics*.csv"))
     if csvs:
-        for r in list(csv.reader(open(csvs[0])))[1:]:
-            if len(r) >= 9:
-                frames.append(tuple(int(x) for x in r[:4]))
+        with open(csvs[0]) as source:
+            for r in list(csv.reader(source))[1:]:
+                if len(r) >= 9:
+                    frames.append(tuple(int(x) for x in r[:4]))
     added = []
     dm = os.path.join(run, "dbusmon.log")
     if os.path.exists(dm):
-        for m in re.finditer(r'PFPERF (added|removed) (\d+) ([^"]*)', open(dm).read()):
+        for m in re.finditer(r'PFPERF (added|removed) (\d+) ([^"]*)', Path(dm).read_text()):
             added.append((m.group(1), int(m.group(2)) / 1000.0, m.group(3)))
-    arm = open(os.path.join(run, "arm.txt")).read().split()[0].split("=")[1]
+    arm = Path(run, "arm.txt").read_text().split()[0].split("=")[1]
     return arm, stats, marks, frames, added
 
 
@@ -107,6 +113,10 @@ def latency(marks, added, mark, pred):
 def analyze(run):
     arm, S, M, F, A = load(run)
     r = {"run": os.path.basename(run), "arm": arm}
+    log = Path(run, "dbusmon.log")
+    launcher = launcher_timings(M, F, log.read_text() if log.exists() else "")
+    r["launcher_timing_contract"] = CONTRACT
+    r["launcher_openings"] = launcher
     st_ = S["settled"]
     r["plasmashell_rss"] = mem(st_, "plasmashell", "VmRSS"); r["plasmashell_pss"] = mem(st_, "plasmashell", "Pss")
     r["plasmashell_anon"] = mem(st_, "plasmashell", "RssAnon")
@@ -133,7 +143,8 @@ def analyze(run):
     for name, n, pred in (("launcher", 3, shell), ("qs", 3, shell), ("alttab", 3, switcher)):
         lat, cpu_s, cpu_k, fr = [], [], [], []
         for i in range(1, n + 1):
-            lat.append(latency(M, A, f"{name}{i}", pred))
+            lat.append(launcher[i - 1]["mapped_ms"] if name == "launcher"
+                       else latency(M, A, f"{name}{i}", pred))
             a, b = S[f"{name}{i}-0"], S[f"{name}{i}-1"]
             cpu_s.append(cpu_pct(a, b, "plasmashell")); cpu_k.append(cpu_pct(a, b, "kwin_wayland"))
             m0 = M[f"{name}{i}"]["mono"]
@@ -143,6 +154,10 @@ def analyze(run):
         # mapped, and the end of the opening animation (last frame before a 100 ms pause)
         ff, settle = [], []
         for i in range(1, n + 1):
+            if name == "launcher":
+                ff.append(launcher[i - 1]["first_frame_ms"])
+                settle.append(launcher[i - 1]["settled_ms"])
+                continue
             m = M[f"{name}{i}"]
             if lat[i - 1] is None:
                 ff.append(None); settle.append(None); continue
@@ -183,6 +198,8 @@ if __name__ == "__main__":
 
     def agg(arm, fn, d=1):
         v = [fn(r) for r in arms[arm]]
+        if fn.requires_complete and any(x is None for x in v):
+            return "INVALID"
         v = [x for x in v if x is not None]
         if not v:
             return "-"
@@ -193,11 +210,14 @@ if __name__ == "__main__":
             v = r[key]
             if isinstance(v, list):
                 vv = [x[sub] if sub else x for x in v]
+                if f.requires_complete and (len(vv) != 3 or any(x is None for x in vv)):
+                    return None
                 vv = [x for x in vv if x is not None]
                 if not vv:
                     return None
                 return max(vv) if sub in ("max", "gap_max_ms") else st.median(vv)
             return v[sub] if sub else v
+        f.requires_complete = key in ("launcher_latency_ms", "launcher_first_frame_ms", "launcher_settled_ms")
         return f
 
     rows = [
@@ -259,3 +279,8 @@ if __name__ == "__main__":
     print("|---|" + "---|" * len(names))
     for label, fn, d in rows:
         print(f"| {label} | " + " | ".join(agg(a, fn, d) for a in names) + " |")
+    invalid = [r["run"] for r in runs if any(row["error"] for row in r["launcher_openings"])]
+    print("launcher timing: %s; output-wide proxy, not surface presentation" % CONTRACT)
+    if invalid:
+        print("incomplete launcher timing: " + ", ".join(invalid))
+        sys.exit(1)

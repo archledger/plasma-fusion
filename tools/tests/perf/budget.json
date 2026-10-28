@@ -166,16 +166,29 @@
         "rel": 0.05
       }
     },
-    "launcher_first_frame_ms": {
-      "label": "launcher: Meta -> first frame",
+    "launcher_first_open_ms": {
+      "label": "launcher: Meta -> first frame on first open (ceiling across runs)",
       "unit": "ms",
       "budget": {
-        "default": 50
+        "default": 150
       },
       "noise": {
         "abs": 15,
         "rel": 0.25
-      }
+      },
+      "source": "Owner-approved 2026-10-28: separate first/cached ceilings from corrected-oracle benchmarks; docs/parts/testing.md."
+    },
+    "launcher_cached_max_ms": {
+      "label": "launcher: Meta -> first frame on cached reopen (ceiling across runs)",
+      "unit": "ms",
+      "budget": {
+        "default": 80
+      },
+      "noise": {
+        "abs": 15,
+        "rel": 0.25
+      },
+      "source": "Owner-approved 2026-10-28: worst of opens 2 and 3, not their median; docs/parts/testing.md."
     },
     "launcher_settled_ms": {
       "label": "launcher: Meta -> opening animation done",

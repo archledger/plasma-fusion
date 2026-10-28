@@ -70,6 +70,11 @@ jobs:
       - name: Lint self-tests
         run: tools/checks/tests/run.sh
 
+      - name: Performance timing oracle unit tests
+        run: |
+          python3 -m unittest discover -s tools/tests/perf/tests
+          node --test tools/tests/perf/tests/winmon.test.js
+
       - name: Coverage failed-row unit tests
         run: tools/tests/coverage-status-unit.sh
 
