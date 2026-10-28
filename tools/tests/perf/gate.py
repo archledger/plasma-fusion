@@ -21,12 +21,16 @@
 # baseline file.
 # Exit status: 0 no regression (and with --strict-budget every budget met), 1 regression, missing
 # metric or budget failure, 2 internal error, 3 no usable run, 4 the baseline was measured at
-# another geometry, 5 worse only in noisy runs (re-run on a quiet host).
+# another geometry, 5 worse only in noisy runs (re-run on a quiet host), 6 incompatible launcher
+# timing contract (record a separate card-aware baseline; never relabel old results).
 import argparse, json, os, re, statistics as st, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import analyze_ab  # noqa: E402
+from launcher_timing import CONTRACT  # noqa: E402
+
+LAUNCHER_METRICS = ("launcher_first_frame_ms", "launcher_settled_ms")
 
 
 def mib(stats, label, comm, key):
@@ -80,6 +84,11 @@ def window(metric):
 def med(values):
     v = [x for x in values if x is not None]
     return st.median(v) if v else None
+
+
+def complete_med(values):
+    """A failed launcher opening must not disappear from its median."""
+    return med(values) if values and all(value is not None for value in values) else None
 
 
 def panel_resizes(run, M):
@@ -137,8 +146,8 @@ def metrics(run):
         "gem_launcher_first_open": g1 - g0 if g0 is not None and g1 is not None else None,
         "gem_plasmashell_end": mib(S, "end", "plasmashell", "gem_total_kB"),
         "kwin_rss_end": r["end_kwin_rss"],
-        "launcher_first_frame_ms": med(r["launcher_first_frame_ms"]),
-        "launcher_settled_ms": med(r["launcher_settled_ms"]),
+        "launcher_first_frame_ms": complete_med(r["launcher_first_frame_ms"]),
+        "launcher_settled_ms": complete_med(r["launcher_settled_ms"]),
         "qs_first_frame_ms": med(r["qs_first_frame_ms"]),
         "alttab_first_frame_ms": med(r["alttab_first_frame_ms"]),
         "alttab_settled_ms": med(r["alttab_settled_ms"]),
@@ -175,7 +184,10 @@ def metrics(run):
                    or foreign.get("%s..%s" % window(k), {}).get("noisy"))
     load = [float(s["load"][0]) for s in S.values()]
     noise = {"other_sessions": others, "noisy_metrics": noisy, "load1_max": max(load) if load else None,
-             "idle_machine_cpu": r["idle_noise_syscpu"], "sweep_events": sweep_events, "foreign_cpu": foreign}
+              "idle_machine_cpu": r["idle_noise_syscpu"], "sweep_events": sweep_events, "foreign_cpu": foreign}
+    noise["launcher_timing"] = {"contract": CONTRACT, "openings": r["launcher_openings"],
+                                "first_open_ms": r["launcher_first_frame_ms"][0],
+                                "cached_median_ms": complete_med(r["launcher_first_frame_ms"][1:])}
     return m, noise
 
 
@@ -200,22 +212,30 @@ def main():
     a = ap.parse_args()
     spec = json.load(open(a.budget))["metrics"]
     per_run = []
+    unusable = []
     for run in a.runs:
         try:
             m, noise = metrics(run)
-        except Exception as e:  # a broken run must not stop the others from being judged
+        except Exception as e:  # retain every failure; never silently reduce the requested run set
             print("run %s unusable: %s: %s" % (os.path.basename(run), type(e).__name__, e), file=sys.stderr)
+            unusable.append(os.path.basename(run))
             continue
         per_run.append({"run": os.path.basename(run), "metrics": m, "noise": noise,
                         "clean": not noise["noisy_metrics"]})
     if not per_run:
         print("no usable run")
         return 3
+    if unusable:
+        print("requested runs unusable; no complete result: " + ", ".join(unusable))
+        return 1
     clean = [r for r in per_run if r["clean"]]
     agg = {}
     for k in spec:
         # per metric: the values of the runs whose window for it was quiet; all values when none was
         allv = [r["metrics"].get(k) for r in per_run if r["metrics"].get(k) is not None]
+        if k in LAUNCHER_METRICS and len(allv) != len(per_run):
+            agg[k] = None
+            continue
         v = [r["metrics"].get(k) for r in per_run
              if k not in r["noise"]["noisy_metrics"] and r["metrics"].get(k) is not None]
         clean_k = bool(v)
@@ -231,6 +251,11 @@ def main():
         if base.get("geometry") != a.geometry:
             print("baseline %s was measured at %s, this run at %s" % (a.baseline, base.get("geometry"), a.geometry))
             return 4
+        if any(k in spec for k in LAUNCHER_METRICS) and base.get("launcher_timing_contract") != CONTRACT:
+            print("incompatible launcher timing in baseline %s (expected %s); "
+                  "record a separate baseline, or pass --baseline '' for budget-only analysis"
+                  % (a.baseline, CONTRACT))
+            return 6
     rows, regressions, budget_fail, noisy_worse, missing = [], [], [], [], []
     for k, s in spec.items():
         cur = agg.get(k)
@@ -245,7 +270,7 @@ def main():
             budget_fail.append(k)
         verdict, bdesc = "-", "-"
         b = (base or {}).get("metrics", {}).get(k)
-        if b and not cur:
+        if not cur and (b or k in LAUNCHER_METRICS):
             verdict = "MISSING"
             missing.append(k)
         if cur and b:
@@ -272,12 +297,21 @@ def main():
     print("|---|---|---|---|---|---|")
     print("\n".join(rows))
     print()
+    if any(k in spec for k in LAUNCHER_METRICS):
+        print("launcher timing: %s; output-wide proxy, not surface presentation; "
+              "median of three openings (first/cached values retained per run)" % CONTRACT)
     print("runs: %d (%d quiet in every window); geometry %s; label %s; per metric only the runs whose window for it "
           "was quiet are used (no other virtual session at its ends, CPU outside the session <= %g + %g x its own; "
           "\"noisy\": no run was quiet)" % (len(per_run), len(clean), a.geometry, a.label or "-", FOREIGN_ABS,
                                               FOREIGN_REL))
     for r in per_run:
         n = r["noise"]
+        for opening in n["launcher_timing"]["openings"]:
+            if opening["error"]:
+                print("  %s: launcher%d INVALID: %s" % (r["run"], opening["opening"], opening["error"]))
+        print("  %s: launcher first-open %s ms; cached median %s ms" % (
+            r["run"], fmt(n["launcher_timing"]["first_open_ms"], "ms"),
+            fmt(n["launcher_timing"]["cached_median_ms"], "ms")))
         print("  %s: other sessions %s (noisy: %s), load1 max %s, machine CPU busy during idle %.1f %%, "
               "sweep events %s" % (r["run"], ", ".join(n["other_sessions"]) or "none",
                                    ", ".join(n["noisy_metrics"]) or "none", n["load1_max"], n["idle_machine_cpu"],
@@ -295,7 +329,7 @@ def main():
         sum(1 for k in spec if agg.get(k)) - len(budget_fail), sum(1 for k in spec if agg.get(k)),
         ", ".join(regressions) or "none"))
     if missing:
-        print("MISSING in this build (the baseline has them): " + ", ".join(missing))
+        print("MISSING or invalid in this build: " + ", ".join(missing))
     if noisy_worse:
         print("worse than the baseline only in runs that overlapped another session (re-run on a quiet host): "
               + ", ".join(noisy_worse))
@@ -305,7 +339,7 @@ def main():
               "runs": len(per_run), "clean_runs": len(clean),
               "date": __import__("time").strftime("%Y-%m-%dT%H:%M:%S%z"), "metrics": agg, "per_run": per_run,
               "budget_fail": budget_fail, "regressions": regressions, "noisy_worse": noisy_worse,
-              "missing": missing, "packages": packages}
+               "missing": missing, "packages": packages, "launcher_timing_contract": CONTRACT}
     # REUSE-IgnoreEnd
     if a.host and os.path.exists(a.host):
         result["host"] = [json.loads(line) for line in open(a.host) if line.strip()]
