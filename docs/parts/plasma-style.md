@@ -42,6 +42,19 @@ Generated per variant (36 SVG files):
   `media-delegate`, `monitor`, `picker`, `plot-background`, `scrollwidget`, `branding`,
   `weather/wind-arrows`, `dialogs/shutdowndialog`. `icons/` is unused in 6.7.5.
 
+Frame atlases keep their full packed `viewBox`, but their intrinsic `width` and `height`
+describe the first nine-slice frame. KSvg can request a mask before an explicit frame size
+is assigned; using the whole atlas as that default creates large temporary pixmaps during
+panel and dialog startup. Named elements, their bounds, margins and drawing coordinates are
+unchanged. SVGs without a frame retain their natural document size.
+These files are named-element atlases, not whole-image artwork: a viewer displaying the entire
+SVG will use the smaller intrinsic size. Consumers drawing a named item at its natural element
+size or a frame at an explicit size retain the same geometry.
+
+`QT_QPA_PLATFORM=offscreen python3 generators/plasma-style/tests/test_intrinsic_size.py`
+checks the bounded frame default, standalone documents, and identical named-element bounds
+and pixels when rendered at explicit sizes.
+
 ## Build, install, apply
 
 ```
