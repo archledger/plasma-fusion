@@ -702,6 +702,7 @@ KWin.TabBoxSwitcher {
                                             return row ? root.describe(row) : { app: "", title: "" };
                                         }
                                         visible: root.shownMap[index] === true
+                                        previewActive: tabBox.visible && visible
                                         width: root.cellWidth
                                         height: root.cellHeight
                                         pal: root.pal

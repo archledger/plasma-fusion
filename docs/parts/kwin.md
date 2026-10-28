@@ -782,6 +782,15 @@ tools/vsession/remote.sh kw-3 packages/kwin/tests/vsession/scenario-evidence.sh 
 
 ## Test tooling (not installed)
 
+The switcher clears a thumbnail's client assignment while its card is filtered out or the
+switcher is closed. The card and thumbnail objects remain reusable; reopening restores the
+visible assignments. Clearing the assignment does not establish GPU texture reclamation:
+KWin may retain its texture provider and previous paint node.
+`packages/kwin/tests/offscreen/thumbnail_lifetime_test.py` checks assignment and object identity
+with the staged switcher on a private bus. It runs in the build workflow after the KWin stage
+is created; the test's KWin stub checks assignment and object lifecycle, not real compositor
+GPU memory usage. No memory saving is claimed without a native measurement.
+
 | Path | Use |
 |---|---|
 | `packages/kwin/tests/offscreen/run.sh`, `render.py`, `switcher-harness.qml`, `snap-harness.qml`, `stubs/org/kde/kwin/`, `session-bus.conf` | offscreen renders with a stand-in KWin module, on a private session bus that activates nothing; `PFK_PACKAGES=DIR` renders the built packages (`DIR/switcher/<id>`, `DIR/scripts/<id>`) |

@@ -168,6 +168,15 @@ jobs:
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/kwin/tests/offscreen/snaptest.py "$RUNNER_TEMP/snap-stage"
 
+      - name: Hidden switcher thumbnail lifetime (offscreen Qt)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/thumbnail-packages"
+          ln -s "$RUNNER_TEMP/snap-stage/.local/share/kwin/tabbox" "$RUNNER_TEMP/thumbnail-packages/switcher"
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/kwin/tests/offscreen/thumbnail_lifetime_test.py "$RUNNER_TEMP/thumbnail-packages"
+
       - name: Keep awake regression tests (native Plasma control, private bus)
         run: |
           set -euo pipefail
