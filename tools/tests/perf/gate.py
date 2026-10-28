@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Performance gate (BACKLOG M6): metrics of the scen-perf.sh runs, compared with the section 7
-# budget and a stored baseline.
+# budget (including the approved split launcher ceilings) and a stored baseline.
 #
 #   gate.py --geometry WxH@SCALE [--baseline FILE] [--budget FILE] [--save FILE] [--label TEXT]
 #           [--strict-budget] [--host FILE] RUN_DIR...
@@ -11,6 +11,7 @@
 # Per metric: the median over the runs (min..max), the budget verdict (PASS/FAIL) and the baseline
 # verdict: "regression" when the median exceeds the baseline's maximum by more than the metric's
 # noise margin (budget.json), "better" when it is below the baseline's minimum by more than it.
+# The first-open/cached launcher budgets use maxima; their regression checks still use medians.
 # A metric's window in a run is noisy when another virtual session had live processes at either
 # end of it, or when the host spent more CPU outside this session during it than FOREIGN_ABS +
 # FOREIGN_REL x this session's own CPU (% of one core; catches sessions that came and went inside
@@ -30,7 +31,9 @@ sys.path.insert(0, HERE)
 import analyze_ab  # noqa: E402
 from launcher_timing import CONTRACT  # noqa: E402
 
-LAUNCHER_METRICS = ("launcher_first_frame_ms", "launcher_settled_ms")
+LAUNCHER_RESPONSE_METRICS = ("launcher_first_open_ms", "launcher_cached_max_ms")
+LAUNCHER_RESPONSE_CONTRACT = "first-open/cached-max-per-run/v1"
+LAUNCHER_METRICS = ("launcher_first_frame_ms", "launcher_settled_ms") + LAUNCHER_RESPONSE_METRICS
 
 
 def mib(stats, label, comm, key):
@@ -131,6 +134,8 @@ def metrics(run):
     p95 = lambda frames: [f["p95"] for f in frames if f.get("p95") is not None]
     popups = r["launcher_frames"] + r["qs_frames"]
     g0, g1 = mib(S, "launcher1-0", "plasmashell", "gem_total_kB"), mib(S, "launcher1-1", "plasmashell", "gem_total_kB")
+    first_frames = r["launcher_first_frame_ms"]
+    complete_launcher = len(first_frames) == 3 and all(value is not None for value in first_frames)
     m = {
         "idle_fps": r["idle_frames"]["fps"],
         "idle_cpu_plasmashell": r["idle_cpu_plasmashell"],
@@ -147,6 +152,8 @@ def metrics(run):
         "gem_plasmashell_end": mib(S, "end", "plasmashell", "gem_total_kB"),
         "kwin_rss_end": r["end_kwin_rss"],
         "launcher_first_frame_ms": complete_med(r["launcher_first_frame_ms"]),
+        "launcher_first_open_ms": first_frames[0] if complete_launcher else None,
+        "launcher_cached_max_ms": max(first_frames[1:]) if complete_launcher else None,
         "launcher_settled_ms": complete_med(r["launcher_settled_ms"]),
         "qs_first_frame_ms": med(r["qs_first_frame_ms"]),
         "alttab_first_frame_ms": med(r["alttab_first_frame_ms"]),
@@ -164,7 +171,7 @@ def metrics(run):
     if not F:
         # no KWin frame log (KWIN_LOG_PERFORMANCE_DATA or PFV_CWD=out missing): 0 frames would read as
         # a perfect idle desktop, so every frame-based metric is unknown instead
-        for k in ("idle_fps", "launcher_first_frame_ms", "launcher_settled_ms", "qs_first_frame_ms",
+        for k in ("idle_fps", *LAUNCHER_METRICS, "qs_first_frame_ms",
                   "alttab_first_frame_ms", "alttab_settled_ms", "overview_late_frames", "idle_fps_covered",
                   "popup_render_p95_ms", "popup_late_frames", "overview_render_p95_ms",
                   "kwin_gpu_launcher_ms_per_frame"):
@@ -211,6 +218,7 @@ def main():
     ap.add_argument("--strict-budget", action="store_true")
     a = ap.parse_args()
     spec = json.load(open(a.budget))["metrics"]
+    response_metrics = [k for k in LAUNCHER_RESPONSE_METRICS if k in spec]
     per_run = []
     unusable = []
     for run in a.runs:
@@ -256,6 +264,12 @@ def main():
                   "record a separate baseline, or pass --baseline '' for budget-only analysis"
                   % (a.baseline, CONTRACT))
             return 6
+        if response_metrics and (base.get("launcher_response_contract") != LAUNCHER_RESPONSE_CONTRACT
+                                 or any(not base.get("metrics", {}).get(k) for k in response_metrics)):
+            print("incompatible launcher response metrics in baseline %s; "
+                  "reanalyze its retained raw runs into a separate baseline, or pass --baseline '' "
+                  "for budget-only analysis" % a.baseline)
+            return 6
     rows, regressions, budget_fail, noisy_worse, missing = [], [], [], [], []
     for k, s in spec.items():
         cur = agg.get(k)
@@ -265,7 +279,10 @@ def main():
             # an owner decision raised this row's limit (EFFECTS.md E12, E13)
             limit = "%s (%s)" % (exc["budget"].get(a.geometry, exc["budget"].get("default")), exc["id"])
         lim = float(str(limit).split()[0])
-        bv = "-" if cur is None else ("PASS" if cur["median"] <= lim else "FAIL")
+        # These are per-opening ceilings: neither a fast reopen nor a fast run hides a slow one.
+        # Round only binary-float residue below the source timestamps' nanosecond precision.
+        budget_value = None if cur is None else (round(cur["max"], 6) if k in response_metrics else cur["median"])
+        bv = "-" if cur is None else ("PASS" if budget_value <= lim else "FAIL")
         if bv == "FAIL":
             budget_fail.append(k)
         verdict, bdesc = "-", "-"
@@ -298,8 +315,11 @@ def main():
     print("\n".join(rows))
     print()
     if any(k in spec for k in LAUNCHER_METRICS):
-        print("launcher timing: %s; output-wide proxy, not surface presentation; "
-              "median of three openings (first/cached values retained per run)" % CONTRACT)
+        print("launcher timing: %s; output-wide proxy, not surface presentation" % CONTRACT)
+    if response_metrics:
+        print("launcher response: %s; first open and worst cached reopen per run; "
+              "ceilings use the maximum across selected runs, regression comparisons use medians"
+              % LAUNCHER_RESPONSE_CONTRACT)
     print("runs: %d (%d quiet in every window); geometry %s; label %s; per metric only the runs whose window for it "
           "was quiet are used (no other virtual session at its ends, CPU outside the session <= %g + %g x its own; "
           "\"noisy\": no run was quiet)" % (len(per_run), len(clean), a.geometry, a.label or "-", FOREIGN_ABS,
@@ -340,6 +360,8 @@ def main():
               "date": __import__("time").strftime("%Y-%m-%dT%H:%M:%S%z"), "metrics": agg, "per_run": per_run,
               "budget_fail": budget_fail, "regressions": regressions, "noisy_worse": noisy_worse,
                "missing": missing, "packages": packages, "launcher_timing_contract": CONTRACT}
+    if response_metrics:
+        result["launcher_response_contract"] = LAUNCHER_RESPONSE_CONTRACT
     # REUSE-IgnoreEnd
     if a.host and os.path.exists(a.host):
         result["host"] = [json.loads(line) for line in open(a.host) if line.strip()]
