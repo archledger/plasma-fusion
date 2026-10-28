@@ -3,20 +3,19 @@
 # shellcheck shell=bash
 #
 # Test tooling (not installed). "Top bar on every screen" off and on, "Reset Fusion layout" twice
-# (the widgets' global shortcuts carried over, the default ones given, dead entries released,
+# (widget shortcuts carried over, unbound pen kept unbound, notification binding preserved,
 # the glass level applied to the new panels, keys pressed afterwards open the widgets) and
 # "Restore my previous desktop", all through tests/kcmctl. Run with PFV_OUTPUTS=2 at 1920x1200 and
 # PFV_SCALE=1.3333333 (make-seed.sh ... dark, PF_KCMCTL set).
 #
-# The pen widget does not exist yet at this revision (the pen part builds it and the layout part
-# adds it to the top bar), so a stand-in org.plasmafusion.pen widget is installed in this HOME
-# and the HOME's copy of the layout script adds it, as the layout part will.
+# Uses the real staged pen widget and the top bars created by fusion_setup.
 exec 2>&1
 set -x
 source "$HOME/pf-kcm-tests/session-common.sh"
 export OUT
 META=$((0x10000000))
 KEY_A=$((META + 0x41)) KEY_N=$((META + 0x4e)) KEY_SHIFT_W=$((META + 0x02000000 + 0x57))
+KEY_CUSTOM=$((META + 0x04000000 + 0x59)) # Meta+Ctrl+Y
 # The action holding a key, as "component/action".
 holder() {
   busctl --user --json=short call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel actionList "(ai)" 4 "$1" 0 0 0 2>>"$OUT/busctl.log" |
@@ -33,71 +32,20 @@ top_bars() {
   evaljs - <<'JS'
 var ps = panels(), n = [];
 for (var i = 0; i < ps.length; ++i) if (ps[i].widgets("org.plasmafusion.appname").length > 0) n.push("screen" + ps[i].screen);
-print(n.join(" "));
+print(n.sort().join(" "));
 JS
 }
 
 fusion_setup
 
-# Stand-in pen widget and the layout script copy that adds it (test HOME only).
-PEN=$HOME/.local/share/plasma/plasmoids/org.plasmafusion.pen
-mkdir -p "$PEN/contents/ui"
-cat >"$PEN/metadata.json" <<'EOF'
-{
-    "KPackageStructure": "Plasma/Applet",
-    "KPlugin": {
-        "Authors": [{ "Email": "archledger236@gmail.com", "Name": "Wisbendji Fimerlus" }],
-        "Category": "Utilities",
-        "Id": "org.plasmafusion.pen",
-        "License": "GPL-2.0-or-later",
-        "Name": "Pen (test stand-in)",
-        "Version": "0.0"
-    },
-    "X-Plasma-API-Minimum-Version": "6.0"
-}
-EOF
-cat >"$PEN/contents/ui/main.qml" <<'EOF'
-import QtQuick
-import QtQuick.Layouts
-import org.kde.plasma.plasmoid
-import org.kde.plasma.components as PC3
-PlasmoidItem {
-    compactRepresentation: PC3.Label { text: "PEN" }
-    fullRepresentation: PC3.Label {
-        text: "PEN MENU (stand-in)"
-        Layout.minimumWidth: 220
-        Layout.minimumHeight: 80
-    }
-}
-EOF
-LAYOUT=$HOME/.local/share/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts/org.kde.plasma.desktop-layout.js
-cat >>"$LAYOUT" <<'EOF'
-
-// o1km test stand-in: the pen widget in the top bar, as the layout part will add it.
-(function () {
-    var ps = panels();
-    for (var i = 0; i < ps.length; ++i) {
-        if (ps[i].widgets("org.plasmafusion.quicksettings").length > 0) {
-            ps[i].addWidget("org.plasmafusion.pen");
-            break;
-        }
-    }
-})();
-EOF
-evaljs - >/dev/null <<'JS'
-var ps = panels();
-for (var i = 0; i < ps.length; ++i) if (ps[i].widgets("org.plasmafusion.quicksettings").length > 0) { ps[i].addWidget("org.plasmafusion.pen"); break; }
-JS
-# A second top bar on the second screen, as decision 8's ensure-topbars.js adds one.
-evaljs - >"$OUT/second-bar.txt" <<'JS'
-var p = new Panel;
-p.location = "top";
-p.screen = 1;
-p.height = 34;
-p.addWidget("org.plasmafusion.appname");
-p.addWidget("org.plasmafusion.clockpill");
-print("panel " + p.id + " screen " + p.screen);
-JS
+# The current layout provides both the real pen widget and the second screen's
+# bar. Adding historical stand-ins here duplicates that setup and QML may still
+# use the already-loaded real widget rather than the replacement file.
+if [ "$(widget_id org.plasmafusion.pen)" = "<none>" ]; then
+  check "setup: real staged pen widget" missing present
+  return 1
+fi
+check "setup: real staged pen widget" present present
 sleep 4
 dump_state b00-initial
 shot b00-two-screens
@@ -122,10 +70,12 @@ save
 K
 check "every screen on: key" "$(ck plasmafusionrc TopBar EveryScreen)" true
 
-# 2. Reset Fusion layout with the shortcuts of this revision's fusion-config.sh (quick settings
-#    Meta+N) and a pen widget without a shortcut.
+# 2. Reset with current setup defaults: quick settings uses Meta+A, notifications
+#    owns Meta+N independently of widgets, and the pen key is opt-in.
 QS_OLD=$(widget_id org.plasmafusion.quicksettings)
-check "before reset 1: quick settings key" "$(wshortcut org.plasmafusion.quicksettings)" Meta+N
+check "before reset 1: quick settings key" "$(wshortcut org.plasmafusion.quicksettings)" Meta+A
+check "before reset 1: pen is unbound" "$(wshortcut org.plasmafusion.pen)" ""
+check "before reset 1: notifications owns Meta+N" "$(holder $KEY_N)" "org.plasmafusion.notifications.desktop/_launch"
 kcm <<'K'
 waitshell
 call resetLayout
@@ -137,32 +87,46 @@ sleep 3
 dump_state b02-reset-1
 shot b02-after-reset-1
 QS_NEW=$(widget_id org.plasmafusion.quicksettings)
-PEN_ID=$(widget_id org.plasmafusion.pen)
 check "reset 1: new quick settings widget" "$([ "$QS_NEW" != "$QS_OLD" ] && [ "$QS_NEW" != "<none>" ] && echo new)" new
-check "reset 1: quick settings key carried over" "$(wshortcut org.plasmafusion.quicksettings)" Meta+N
-check "reset 1: pen key given" "$(wshortcut org.plasmafusion.pen)" Meta+Shift+W
-check "reset 1: Meta+N held by the new widget" "$(holder $KEY_N)" "plasmashell/activate widget $QS_NEW"
-check "reset 1: Meta+Shift+W held by the pen" "$(holder $KEY_SHIFT_W)" "plasmashell/activate widget $PEN_ID"
+check "reset 1: quick settings key carried over" "$(wshortcut org.plasmafusion.quicksettings)" Meta+A
+check "reset 1: pen stays unbound" "$(wshortcut org.plasmafusion.pen)" ""
+check "reset 1: Meta+A held by the new widget" "$(holder $KEY_A)" "plasmashell/activate widget $QS_NEW"
+check "reset 1: Meta+N still belongs to notifications" "$(holder $KEY_N)" "org.plasmafusion.notifications.desktop/_launch"
+check "reset 1: Meta+Shift+W stays free" "$(holder $KEY_SHIFT_W)" "<none>"
 check "reset 1: no error" "$(lastget errorText)" ""
-pfinput 'move 700 450' 'sleep 0.5' 'key meta+n' 'sleep 1.5'
+pfinput 'move 700 450' 'sleep 0.5' 'key meta+a' 'sleep 1.5'
+shot b02-meta-a
+pfinput 'key esc' 'sleep 1'
+pfinput 'key meta+n' 'sleep 1.5'
 shot b02-meta-n
 pfinput 'key esc' 'sleep 1'
-pfinput 'key meta+shift+w' 'sleep 1.5'
-shot b02-meta-shift-w
-pfinput 'key esc' 'sleep 1'
 
-# 3. The Windows-style set (decision 6: DEVICE-1 gives quick settings Meta+A), Reduced glass
-#    with an always-translucent top bar; then a second reset.
-H=$(holder $KEY_A)
-echo "Meta+A before: $H" >>"$OUT/shortcuts.txt"
+# 3. User-assigned quick settings and pen keys, Reduced glass with an
+#    always-translucent top bar; then a second reset. Never steal an occupied key.
+H=$(holder $KEY_CUSTOM)
+echo "Meta+Ctrl+Y before: $H" >>"$OUT/shortcuts.txt"
 if [ "$H" != "<none>" ]; then
-  busctl --user call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setForeignShortcut asai 4 "${H%%/*}" "${H#*/}" "" "" 0 >>"$OUT/busctl.log" 2>&1
+  check "test setup: custom key is free" "$H" "<none>"
+  return 1
+fi
+H=$(holder $KEY_SHIFT_W)
+if [ "$H" != "<none>" ]; then
+  check "test setup: opt-in pen key is free" "$H" "<none>"
+  return 1
 fi
 evaljs - >/dev/null <<'JS'
 var ps = panels();
-for (var i = 0; i < ps.length; ++i) { var q = ps[i].widgets("org.plasmafusion.quicksettings"); if (q.length > 0) q[0].globalShortcut = "Meta+A"; }
+for (var i = 0; i < ps.length; ++i) {
+    var q = ps[i].widgets("org.plasmafusion.quicksettings");
+    if (q.length > 0) { q[0].globalShortcut = "Meta+Ctrl+Y"; break; }
+}
+for (var i = 0; i < ps.length; ++i) {
+    var p = ps[i].widgets("org.plasmafusion.pen");
+    if (p.length > 0) { p[0].globalShortcut = "Meta+Shift+W"; break; }
+}
 JS
-check "before reset 2: quick settings key" "$(wshortcut org.plasmafusion.quicksettings)" Meta+A
+check "before reset 2: quick settings key" "$(wshortcut org.plasmafusion.quicksettings)" Meta+Ctrl+Y
+check "before reset 2: pen key assigned explicitly" "$(wshortcut org.plasmafusion.pen)" Meta+Shift+W
 kcm <<'K'
 waitshell
 set glass 1
@@ -170,6 +134,7 @@ set solidTopBar false
 save
 K
 QS_OLD=$(widget_id org.plasmafusion.quicksettings)
+PEN_OLD=$(widget_id org.plasmafusion.pen)
 kcm <<'K'
 waitshell
 call resetLayout
@@ -183,14 +148,22 @@ sleep 3
 dump_state b03-reset-2
 shot b03-after-reset-2
 QS_NEW=$(widget_id org.plasmafusion.quicksettings)
-check "reset 2: quick settings key carried over" "$(wshortcut org.plasmafusion.quicksettings)" Meta+A
+check "reset 2: quick settings widget was rebuilt" "$([ "$QS_NEW" != "$QS_OLD" ] && [ "$QS_NEW" != "<none>" ] && echo new)" new
+check "reset 2: quick settings key carried over" "$(wshortcut org.plasmafusion.quicksettings)" Meta+Ctrl+Y
 check "reset 2: pen key carried over" "$(wshortcut org.plasmafusion.pen)" Meta+Shift+W
-check "reset 2: Meta+A held by the new widget" "$(holder $KEY_A)" "plasmashell/activate widget $QS_NEW"
+PEN_ID=$(widget_id org.plasmafusion.pen)
+check "reset 2: pen widget was rebuilt" "$([ "$PEN_ID" != "$PEN_OLD" ] && [ "$PEN_ID" != "<none>" ] && echo new)" new
+check "reset 2: custom key held by the new widget" "$(holder $KEY_CUSTOM)" "plasmashell/activate widget $QS_NEW"
+check "reset 2: pen key held by the new widget" "$(holder $KEY_SHIFT_W)" "plasmashell/activate widget $PEN_ID"
+check "reset 2: notifications key remains unchanged" "$(holder $KEY_N)" "org.plasmafusion.notifications.desktop/_launch"
 check "reset 2: glass applied to the new panels" "$(popacity top) $(popacity dock) $(wkey org.plasmafusion.dock glass)" "opaque opaque reduced"
 check "reset 2: page after the reset" "$(lastget glass) $(lastget solidTopBar)" "1 false"
 check "reset 2: no error" "$(lastget errorText)" ""
-pfinput 'move 700 450' 'sleep 0.5' 'key meta+a' 'sleep 1.5'
-shot b03-meta-a
+pfinput 'move 700 450' 'sleep 0.5' 'key meta+ctrl+y' 'sleep 1.5'
+shot b03-custom-key
+pfinput 'key esc' 'sleep 1'
+pfinput 'key meta+shift+w' 'sleep 1.5'
+shot b03-pen-key
 pfinput 'key esc' 'sleep 1'
 kcm <<'K'
 waitshell

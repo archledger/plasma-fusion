@@ -149,7 +149,64 @@ per-frame CSV
 (`KWIN_LOG_PERFORMANCE_DATA=1`, written to `out/` with `PFV_CWD=out`); window mapping times come
 from `winmon.js`.
 
-The table has one row per metric: the median over the runs (min..max), the section 7 budget and
+Launcher timing requires the structured window records emitted by `winmon.js`: one plasmashell
+AppletPopup (window type 18) with positive dimensions per opening. The normal full-screen dimmer
+and tooltips do not count. Missing, ambiguous or malformed card records invalidate the launcher
+rows; all three openings in every usable run must be measured, not just whichever ones succeeded.
+The A/B report also labels incomplete launcher aggregates `INVALID` and exits 1. The gate refuses
+a requested run set containing an unusable run (for example, a missing input marker), rather than
+dropping that run and saving a partial result.
+The first-frame endpoint is the first output presentation whose composition starts after that
+card maps. This is an **output-wide proxy**, not surface-specific presentation feedback; the
+virtual backend uses synthetic presentation timestamps. It must not be described as the exact
+instant the card reaches a physical display. The input marker still precedes Meta-down, not
+Meta-release. These boundaries are unchanged by QML's own queued `frameSwapped` log.
+
+Results store the launcher contract `applet-popup/output-composition-after-map/v1`. A baseline
+without that exact contract is incompatible (exit 6), even if its numbers look plausible. Older
+launcher values could select the dimmer and cannot be converted by changing their metadata.
+Keep those files as historical evidence. Use `--baseline ''` for budget-only analysis, or record
+a separately named baseline with matching inputs after validating the measurements.
+
+The owner approved separate response ceilings on 2026-10-28, replacing the original 50 ms
+mixed-opening budget:
+
+| Metric | Per-run value | Absolute ceiling |
+|---|---|---|
+| `launcher_first_open_ms` | First opening's input-to-first-frame time | 150 ms |
+| `launcher_cached_max_ms` | Slower of openings 2 and 3 | 80 ms |
+
+For these two rows the budget verdict uses the **maximum across the selected runs**, not their
+median. One slow first open or cached reopen must not disappear among faster observations.
+The existing per-metric quiet-window selection still applies; a noisy-only result is labelled
+as such, not proof of quiet performance. Relative regression checks still compare medians
+against the baseline range with the existing noise margins. The table shows median and range
+so both the typical result and the value tested against the ceiling remain visible.
+
+The ceilings come from two completed, corrected-oracle campaigns on the ThinkPad at
+1920x1200, scale 4/3: 12 first opens ranged from 113.393 to 142.540 ms, and 24 cached opens from
+36.475 to 75.962 ms. These are provisional limits for that measured configuration, not a
+physical-display latency guarantee or a percentile estimate. Passing them does not waive
+memory, GPU, visual, functional or other failures.
+
+Split response results also store `launcher_response_contract: first-open/cached-max-per-run/v1`.
+A baseline lacking this contract or either requested response metric is incompatible (exit 6).
+Reanalyze retained, valid card-aware raw runs into a **new** baseline file; do not relabel a mixed
+summary, overwrite historical evidence or launch another benchmark just to convert its format.
+
+The 300 ms settling budget is unchanged and still uses the median of the three openings per run.
+Each card ID, mapping/timing result, first opening and cached-opening median remains available
+in `per_run[].noise.launcher_timing`. The legacy mixed first-frame value remains a diagnostic in
+`per_run[].metrics`, not a default budget row. First opening means after the fresh-session workload,
+not cold filesystem caches. Animation settling remains an output-idle estimate, not a card-specific
+animation-completion signal.
+
+Offline oracle tests run in the build workflow and locally without a desktop:
+
+    python3 -m unittest discover -s tools/tests/perf/tests
+    node --test tools/tests/perf/tests/winmon.test.js
+
+The table has one row per metric: the median over the runs (min..max), the applicable budget and
 its verdict, the baseline median (min..max) and the baseline verdict. Noise is judged per metric
 window (for example `idle0`..`idle1` for the idle rows): a run's window is noisy when `pfstat.py`
 saw another virtual session with live processes at either end of it, or when the host spent more
@@ -168,7 +225,8 @@ settings did not open, no KWin frame log, the sweep did not run) and fails the g
 0 no regression, 1 regression or MISSING (with `--strict-budget` also any budget failure), 2 setup
 or internal error (also a `--baseline` file that does not exist; `--baseline ''` judges the budget
 only), 3 no usable run, 4 the baseline is for another geometry, 5 worse than the baseline only in
-noisy windows. Budget failures do not fail the gate by default because most rows fail today (see
+noisy windows, 6 an incompatible launcher timing or response contract. Budget failures do not fail
+the gate by default because most rows fail today (see
 the baseline below); the gate stops things from getting worse, `--strict-budget` is for when M4/M5
 have landed. When the host's packages differ from the baseline's the gate prints a note: re-record
 the baseline after a Plasma, KWin, Qt, Mesa or kernel update.
@@ -176,8 +234,9 @@ the baseline after a Plasma, KWin, Qt, Mesa or kernel update.
 Metrics: idle frames/s, idle CPU of plasmashell, KWin and the whole session, idle plasmashell GPU,
 dock sweep CPU of plasmashell and KWin and plasmashell GPU, plasmashell PSS and session PSS after
 settle, plasmashell GEM after settle, after the first launcher open (growth) and after one round of
-use, KWin RSS with two windows, launcher first frame and animation end, quick settings first frame,
-Alt+Tab first frame and animation end, Overview late frames per cycle. Not encoded from section 7:
+use, KWin RSS with two windows, launcher first open, worst cached reopen and animation end, quick
+settings first frame, Alt+Tab first frame and animation end, Overview late frames per cycle.
+Not encoded from section 7:
 the frame-time rows (render p95 during pop-up animations, overview render p95, missed vblanks,
 GUI-thread time per frame), quick settings "first frame at most 50 ms after the release" (only
 "not slower than stock" is), and the device-only and desktop-file rows.
@@ -260,6 +319,20 @@ runs them together against one built HOME tree, with one summary:
   on the same work tree refused while the first runs, and results the user cannot remove cleared
   through a stand-in `podman unshare`. Without
   any one of those rules its case fails.
+
+## Touch latency scenario
+
+`packages/kwin/tests/vsession/scenario-latency.sh` checks pointer and touch opens of the status
+sheet, launcher requests and the clipboard shortcut. It keeps a no-input EIS connection with
+touch capability alive before restarting plasmashell, through the final tap. The restarted
+Wayland client can therefore bind `wl_touch` before the measured input begins.
+
+Without a persistent device, a headless compositor can add touch capability at each `pfinput`
+invocation and process the first down event before plasmashell's `get_touch` request. A release
+arrives without its down, and Qt delivers no tap. This was reproduced on stock and backported
+KWin 6.7.5; a Wayland trace showed only `wl_touch.up` for the failing taps. The scenario's keeper
+sends no events, is stopped on normal completion, and belongs to the existing session teardown
+on failure. It does not change touch handling in the shipped UI.
 
 ## Harness additions (`tools/vsession`)
 

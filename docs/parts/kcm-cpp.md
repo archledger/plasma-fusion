@@ -415,6 +415,24 @@ KCM-1 builder `o1km`; the lead took the lane over at 04:31Z and made the final b
 Evidence: the KCM-1 build run of 2026-09-30 (the maintainer's records; RPMs with
 `SHA256SUMS`, the three runs, notes).
 
+### Current layout-reset scenario
+
+`tests/scenario-actions.sh` uses the current shortcut contract from the action table above:
+quick settings starts on Meta+A, Meta+N remains owned by the notification command, and a pen
+widget without a shortcut stays unbound. The second reset preserves an explicitly assigned
+Meta+Ctrl+Y quick-settings key and the opt-in Meta+Shift+W pen key, with ownership checked against
+the new widget IDs. The test refuses to take an occupied setup key.
+
+The scenario uses the real pen widget and two top bars already created by `fusion-config.sh`,
+rather than overwriting a loaded widget or adding a third fixture bar. It verifies that both
+widgets get new IDs after the second reset. Run with `PF_KCMCTL` supplied to `make-seed.sh`, two
+outputs, and 1920x1200 at 4/3 scale as its header specifies.
+
+`tests/scenario-controls.sh` checks the critical-power contract separately: a new glass choice
+is written to `PageGlass`, while `UserGlass` preserves the original value for the power service.
+It also verifies the `PageDockMagnify` request and clears these simulated requests before the
+Defaults test.
+
 ## Deviations from the board, with reasons
 
 - The board's window is System Settings itself: its sidebar sections (Desktop & Dock, Top bar,
