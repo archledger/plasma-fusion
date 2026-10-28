@@ -135,6 +135,25 @@ class GateLauncherTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertNotIn('INVALID', result.stdout)
 
+    def test_ab_cli_preserves_fractional_late_frame_counts(self):
+        late = self.root / 'late'
+        shutil.copytree(self.run, late)
+        path = late / 'kwin perf statistics Virtual-0.csv'
+        lines = path.read_text().splitlines()
+        # Make exactly one frame late in each overview opening of the second run.
+        first_frames = {46_050_000_000, 50_050_000_000, 54_050_000_000}
+        for i in range(1, len(lines)):
+            fields = lines[i].split(',')
+            if int(fields[1]) in first_frames:
+                fields[3] = str(int(fields[0]) + 1000)
+                lines[i] = ','.join(fields)
+        path.write_text('\n'.join(lines) + '\n')
+        result = subprocess.run([sys.executable, str(PERF / 'analyze_ab.py'),
+                                 str(self.run), str(late)], cwd=self.root,
+                                text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('| overview: late frames (median) | 0.5 (0..1) |', result.stdout)
+
     def test_unknown_contract_is_rejected_without_overwriting_saved_output(self):
         baseline = self.root / 'baseline.json'
         baseline.write_text(json.dumps({'geometry': 'test', 'launcher_timing_contract': 'future'}))

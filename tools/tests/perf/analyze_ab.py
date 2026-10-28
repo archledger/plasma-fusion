@@ -2,13 +2,14 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Based on the perf-measure study (perf-measure/scripts/analyze_ab.py); gate.py imports
-# analyze() and its helpers. Run directly it prints the stock/Fusion A/B table of that study.
+# Based on the perf-measure study (perf-measure/scripts/analyze_ab.py); gate.py imports analyze()
+# and its helpers. Missing or reset GPU counters stay unavailable rather than becoming zeros.
 #
 # analyze_ab.py RUN_DIR... : per-run metrics from scen-perf.sh output (stats.jsonl, marks.jsonl,
 # dbusmon.log, "kwin perf statistics Virtual-0.csv"), printed as JSON lines and as a table of
 # per-arm means with min..max over runs.
 import csv, glob, json, os, re, statistics as st, sys
+import math
 from collections import defaultdict
 from pathlib import Path
 
@@ -64,11 +65,23 @@ def cpu_pct(a, b, comm=None, session=False):
 
 
 def gpu_pct(a, b, comm):
-    pa = {p["pid"]: p for p in a["procs"]}
-    dt = b["mono"] - a["mono"]; tot = 0
-    for p in b["procs"]:
-        if p["comm"] == comm and "gpu_ns" in p and p["pid"] in pa and "gpu_ns" in pa[p["pid"]]:
-            tot += p["gpu_ns"] - pa[p["pid"]]["gpu_ns"]
+    pa = {p["pid"]: p for p in a["procs"] if p["comm"] == comm}
+    pb = {p["pid"]: p for p in b["procs"] if p["comm"] == comm}
+    dt = b["mono"] - a["mono"]
+    if not pa or pa.keys() != pb.keys() or not math.isfinite(dt) or dt <= 0:
+        return None
+    tot = 0
+    for pid, p in pb.items():
+        previous = pa[pid]
+        values = (previous.get("gpu_ns"), p.get("gpu_ns"))
+        if previous.get("start") != p.get("start") or not all(
+            isinstance(v, (int, float)) and math.isfinite(v) and v >= 0 for v in values
+        ):
+            return None
+        delta = values[1] - values[0]
+        if delta < 0:
+            return None
+        tot += delta
     return 100.0 * tot / 1e9 / dt
 
 
@@ -184,6 +197,8 @@ def analyze(run):
 
 
 def fmt(v, d=1):
+    if v is not None and d == 0 and v != int(v):
+        d = 1
     return "-" if v is None else f"{v:.{d}f}"
 
 
@@ -203,7 +218,7 @@ if __name__ == "__main__":
         v = [x for x in v if x is not None]
         if not v:
             return "-"
-        return f"{st.mean(v):.{d}f} ({min(v):.{d}f}..{max(v):.{d}f})"
+        return f"{fmt(st.mean(v), d)} ({fmt(min(v), d)}..{fmt(max(v), d)})"
 
     def flat(key, sub=None, idx=None):
         def f(r):

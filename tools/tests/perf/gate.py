@@ -120,11 +120,10 @@ def kwin_gpu_ms_per_frame(S, M, F):
         a, b = S.get("launcher%d-0" % i), S.get("launcher%d-1" % i)
         if not a or not b:
             continue
-        ka = [p for p in a["procs"] if p["comm"] == "kwin_wayland" and "gpu_ns" in p]
-        kb = [p for p in b["procs"] if p["comm"] == "kwin_wayland" and "gpu_ns" in p]
         n = analyze_ab.frames_in(F, a["mono"], b["mono"])["n"] if F else 0
-        if ka and kb and n:
-            v.append((kb[0]["gpu_ns"] - ka[0]["gpu_ns"]) / 1e6 / n)
+        usage = analyze_ab.gpu_pct(a, b, "kwin_wayland")
+        if usage is not None and n:
+            v.append(usage / 100 * (b["mono"] - a["mono"]) * 1000 / n)
     return med(v)
 
 
@@ -202,6 +201,8 @@ def fmt(v, unit):
     if v is None:
         return "-"
     d = 0 if unit in ("MiB", "") or (unit == "ms" and abs(v) >= 20) else 2 if abs(v) < 10 else 1
+    if unit == "" and v != int(v):
+        d = 1
     return "%.*f" % (d, v)
 
 
