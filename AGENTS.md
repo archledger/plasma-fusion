@@ -178,6 +178,35 @@ checks, changed compatibility contracts or treating an incomplete feature as shi
   actual sources for the version at hand before relying on them; say what was verified and what
   is inference.
 
+## KDE-aligned design and review
+
+Write code a KDE contributor can readily understand and maintain. Follow the language-specific
+standards in [CONTRIBUTING.md](CONTRIBUTING.md), not just the formatter. Existing dense or
+inconsistent code is not a precedent for new work. When a maintainability pass is the agreed
+priority, complete its scoped steps before starting new features.
+
+- Before implementing, read the affected part and its tests; find an analogous local or
+  version-matched KDE/Qt implementation. For upstream submissions, also read prior maintainer
+  feedback and relevant merged patches with their review discussions. Passing CI alone does
+  not establish that a design fits upstream.
+- Fix behavior at the layer that owns it. Reuse existing components, helpers and state instead
+  of adding parallel machinery. Add an abstraction only when it removes real duplication or
+  makes responsibilities clearer; fewer lines alone are not an improvement.
+- In C++, make ownership and lifetimes clear using the appropriate QObject ownership,
+  connection contexts and RAII. In QML, prefer declarative bindings, explicit property types,
+  typed functions and existing Plasma/Qt components. Preserve Fusion's design tokens and
+  version-compatibility behavior. Python and shell keep their own documented conventions.
+- Keep functions and components focused, names descriptive and comments about non-obvious
+  reasons or constraints. Document public contracts; do not narrate obvious operations or
+  hide necessary lifecycle and error handling to shorten a patch.
+- Separate behavior-preserving cleanup from fixes and features. Limit it to a named scope,
+  preserve regression coverage and run the affected checks. Do not mass-reformat the tree or
+  introduce new formatter rules as incidental cleanup. Address existing issues incrementally;
+  validate each step before starting the next.
+- Describe the problem, correction and validation briefly in the pull request. Put detailed
+  investigation evidence where it can be referenced. Distinguish formatting checks, source
+  review and runtime tests; report which were actually completed.
+
 ## Testing: offline first, then a session, a VM, or hardware
 
 Prove the logic offline; use the lower rungs only for what genuinely needs a desktop.
