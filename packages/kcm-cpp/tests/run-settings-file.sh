@@ -154,6 +154,51 @@ check "  and the page says where, and that a panel of a screen not connected is 
   bash -c "grep -q 'saved in $work/export.json. A panel of a screen that is not connected is not in the file.' '$work/export.log'"
 check "  without an error" test -z "$(text export errorText)"
 
+# A watched configuration refresh updates both the page and its applied/exported state.
+# The lock file has no watcher of its own; the TopBar notification refreshes all file-backed fields.
+export XDG_CONFIG_HOME=$work/config-refresh
+mkdir -p "$XDG_CONFIG_HOME"
+for mode in designs familiar; do
+  if [ "$mode" = designs ]; then
+    icons=0 notifications=false summaries=true every_screen=false
+    expected='[0, False, True]'
+  else
+    icons=1 notifications=true summaries=false every_screen=true
+    expected='[1, True, False]'
+  fi
+  name=refresh-$mode
+  session "$name" \
+    "sh kwriteconfig6 --file plasmafusionrc --group Icons --key AppIcons $mode" \
+    "sh kwriteconfig6 --file kscreenlockerrc --group Greeter --group LnF --group General --key showNotifications --type bool $notifications" \
+    "sh kwriteconfig6 --file kscreenlockerrc --group Greeter --group LnF --group General --key showNotificationSummaries --type bool $summaries" \
+    "sh kwriteconfig6 --file plasmafusionrc --group TopBar --key EveryScreen --type bool --notify $every_screen" \
+    "wait 1000" "get everyScreen" "get iconsMode" "get lockNotifications" "get lockNotificationSummaries" "get needsSave" \
+    "call exportSettings $work/$name.json"
+  check "$name: watched setting refreshed" test "$(text "$name" everyScreen)" = "$every_screen"
+  check "$name: application icons refreshed" test "$(text "$name" iconsMode)" = "$icons"
+  check "$name: lock notifications refreshed" test "$(text "$name" lockNotifications)" = "$notifications"
+  check "$name: notification summaries refreshed" test "$(text "$name" lockNotificationSummaries)" = "$summaries"
+  check "$name: refresh leaves no pending change" test "$(text "$name" needsSave)" = false
+  check "$name: export contains refreshed applied settings" \
+    test "$(json "$work/$name.json" '[f["settings"][k] for k in ("iconsMode", "lockNotifications", "lockNotificationSummaries")]')" = "$expected"
+done
+
+session refresh-pending "set iconsMode 0" "set lockNotifications false" "set lockNotificationSummaries true" \
+  "sh kwriteconfig6 --file plasmafusionrc --group TopBar --key EveryScreen --type bool --notify false" \
+  "wait 1000" "get everyScreen" "get iconsMode" "get lockNotifications" "get lockNotificationSummaries" "get needsSave" \
+  "call exportSettings $work/refresh-pending.json" save
+check "refresh-pending: watched setting stays unchanged while editing" test "$(text refresh-pending everyScreen)" = true
+check "refresh-pending: icon edit is preserved" test "$(text refresh-pending iconsMode)" = 0
+check "refresh-pending: notification edit is preserved" test "$(text refresh-pending lockNotifications)" = false
+check "refresh-pending: summary edit is preserved" test "$(text refresh-pending lockNotificationSummaries)" = true
+check "refresh-pending: edits remain pending" test "$(text refresh-pending needsSave)" = true
+check "refresh-pending: export retains applied settings, not edits" \
+  test "$(json "$work/refresh-pending.json" '[f["settings"][k] for k in ("iconsMode", "lockNotifications", "lockNotificationSummaries")]')" = '[1, True, False]'
+check "saved lock notifications use the nested group" \
+  test "$(kreadconfig6 --file kscreenlockerrc --group Greeter --group LnF --group General --key showNotifications)" = false
+check "saved notification summaries use the nested group" \
+  test "$(kreadconfig6 --file kscreenlockerrc --group Greeter --group LnF --group General --key showNotificationSummaries)" = true
+
 # ---- Import into a fresh HOME ("Top bar on every screen" is on by default: the screens the file
 # had no bars for get theirs from ensure-topbars.js, a stand-in here).
 export XDG_CONFIG_HOME=$work/config-b

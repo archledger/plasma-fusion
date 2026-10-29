@@ -237,6 +237,9 @@ jobs:
           set -euo pipefail
           QT_QPA_PLATFORM=offscreen python3 packages/plasmoids/org.plasmafusion.dock/tests/menu_test.py
 
+      - name: Launcher opening request cancellation (offscreen Qt)
+        run: python3 packages/plasmoids/org.plasmafusion.launcher/tests/opening_test.py
+
       - name: Launcher views on Kicker's models (activity history, private bus)
         run: |
           set -euo pipefail

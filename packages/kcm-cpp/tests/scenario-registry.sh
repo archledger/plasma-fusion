@@ -59,7 +59,7 @@ call save
 waitidle
 EOF
 check "lock notifications writes showNotifications false" \
-  "$(ck "$HOME/.config/kscreenlockerrc" "Greeter][LnF][General" showNotifications)" "false"
+  "$(kreadconfig6 --file "$HOME/.config/kscreenlockerrc" --group Greeter --group LnF --group General --key showNotifications)" "false"
 
 kcm <<'EOF'
 set lockNotificationSummaries true
@@ -67,4 +67,4 @@ call save
 waitidle
 EOF
 check "lock summaries writes showNotificationSummaries true" \
-  "$(ck "$HOME/.config/kscreenlockerrc" "Greeter][LnF][General" showNotificationSummaries)" "true"
+  "$(kreadconfig6 --file "$HOME/.config/kscreenlockerrc" --group Greeter --group LnF --group General --key showNotificationSummaries)" "true"
