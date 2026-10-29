@@ -289,6 +289,15 @@ kwinrc, plasmafusionrc and the shell layout from a fusion-config.sh backup.
 - Changes made elsewhere (quick-settings Dark style tile, Colors page, automatic switching, the
   Animations page's slider, the quick-settings tablet switches, the power service) show up on the
   open page while nothing is pending (KConfigWatcher on kdeglobals, kwinrc and plasmafusionrc).
+  This refresh copies application-icon mode and both lock-notification choices into the page
+  and its applied state, so settings export includes the refreshed values. Pending edits still
+  prevent the refresh from replacing the page's state. The lock file has no watcher of its own;
+  its values are read on Load or when one of the existing watchers triggers a refresh.
+  Lock-notification keys use the nested `Greeter` / `LnF` / `General` group in `kscreenlockerrc`,
+  not a single group whose name contains brackets. Unrelated groups are left untouched.
+  Earlier stored opt-outs are handled once by `plasma-fusion update`, as described in
+  [the device upgrade policy](device.md); the settings module's Load operation does not migrate
+  or write configuration.
 - Errors (a tool failed, a theme is missing, the shell did not answer) are shown in an inline
   message at the top of the page; the dock / global-menu switches say so when the Plasma Fusion
   dock or top bar is not on the desktop, or when the Plasma shell is not running (they are read
