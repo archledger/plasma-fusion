@@ -68,6 +68,9 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   pre-fills the search), `close()`, `toggle()`. The dock's Search button can use
   `launcherApplet.open("search")` when it finds the applet, or the D-Bus call above.
 - The search field is focused whenever the card opens, so "Start" and "Search" both land in search.
+- Closing cancels pending presentation requests, not the prewarmed card or sheet. A newer open
+  request or posture change invalidates old output replies; completing an old load cannot reopen
+  the launcher after cancellation or replace the newer request's view.
 
 ## Behaviour
 
@@ -163,6 +166,11 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
 
 ## Verification
 
+- `tests/opening_test.py` runs the production opening, readiness and posture handlers on controlled
+  window, loader and output-reply objects under offscreen Qt. It covers close and request replacement
+  during deferred opening, both output-reply paths, posture changes, expanded-state cancellation,
+  immediate readiness and retained prewarming. This is request-lifetime coverage, not a rendering
+  or real D-Bus transport test.
 - `tests/views_test.py` (CI step "Launcher views on Kicker's models"): Kicker's real models on a
   private bus with a throw-away HOME, three test apps (kbuildsycoca6) and kactivitymanagerd fed with
   the events Kicker sends when it starts an app; the "Recent" chip and its two lists in order, and
@@ -486,4 +494,3 @@ on the left, the right side, the Small plate, null at the bottom or without a pl
 both ends, the keyboard's limit, the card narrowed to 664 px on a 768 px screen on either side,
 centred when less than 420 px is left, and a second screen's own edges. The session check is
 docs/parts/shell-dock.md's.
-
