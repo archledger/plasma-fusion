@@ -251,8 +251,10 @@ not a dedicated-VRAM measurement or memory that can be added to PSS without over
 
 Engine time is available only when all observed clients report nanoseconds. xe's cycle counters
 are not nanoseconds, so its GPU-time rows remain unavailable rather than showing false zeros.
-Missing counters, changed processes, counter resets and non-positive intervals also produce an
-unavailable time measurement. A supported counter explicitly reporting zero remains zero.
+Missing counters, changed processes, decreases in a process's summed counter and non-positive
+intervals also produce an unavailable time measurement. The snapshots retain process totals,
+not individual client/engine counters: a client reset or disappearance can go undetected if
+another counter's increase masks it. A supported counter explicitly reporting zero remains zero.
 The unitless-zero exception applies only to memory regions; engine time still requires `ns`.
 Comparisons must keep unavailable values separate from budget passes.
 Old xe snapshots containing the previous parser's artificial zero values must be recollected;
