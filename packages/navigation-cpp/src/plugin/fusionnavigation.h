@@ -18,6 +18,7 @@
 #include <QElapsedTimer>
 #include <QKeySequence>
 #include <QPointer>
+#include <QQuickItem>
 #include <QTimer>
 
 #include <KConfigWatcher>
@@ -80,6 +81,7 @@ public:
     FusionNavigationState(QObject *parent = nullptr);
 
     Q_INVOKABLE void init(KWin::QuickSceneEffect *parent);
+    Q_INVOKABLE void updateViewOpacity(QQuickItem *item);
 
     bool gestureEnabled() const;
     bool tabletMode() const;

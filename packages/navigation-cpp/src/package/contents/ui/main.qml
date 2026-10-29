@@ -21,6 +21,9 @@ SceneEffect {
         id: outputLoader
         readonly property QtObject output: SceneView.screen
         active: output !== null && output.name === taskSwitcherState.activeOutputName
+        // Apply before the first render; the native view is registered before completion.
+        Component.onCompleted: taskSwitcherState.updateViewOpacity(outputLoader)
+        onActiveChanged: taskSwitcherState.updateViewOpacity(outputLoader)
         // KWin may focus this view after input on a non-owning output. Keep dismissal available
         // without constructing another switcher or its task model there.
         focus: true

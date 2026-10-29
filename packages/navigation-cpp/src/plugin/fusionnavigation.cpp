@@ -243,6 +243,19 @@ QString FusionNavigationState::activeOutputName() const
     return m_activeOutputName;
 }
 
+void FusionNavigationState::updateViewOpacity(QQuickItem *item)
+{
+    if (!m_effect || !item) {
+        return;
+    }
+    QuickSceneView *view = QuickSceneView::findView(item);
+    if (!view || view->effect() != m_effect || !view->screen()) {
+        return;
+    }
+    // Empty non-owner views still have opaque buffers. Preserve their input handling.
+    view->setOpacity(view->screen()->name() == m_activeOutputName ? 1.0 : 0.0);
+}
+
 void FusionNavigationState::selectOutput(const QString &name)
 {
     const LogicalOutput *fallback = name.isEmpty() ? effects->activeScreen() : nullptr;

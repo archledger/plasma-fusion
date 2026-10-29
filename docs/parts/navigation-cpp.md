@@ -33,6 +33,17 @@ focus scope with an Escape handler that calls the shared state's existing animat
 Only the owner loads a TaskSwitcher; the other outputs can dismiss it without constructing task
 models or taking ownership. The loaded switcher's own Escape handler still handles owner input.
 
+### Native view opacity
+
+Every Loader updates its native view's opacity on completion and ownership changes.
+The owner remains opaque; other views remain visible and focusable with zero compositor opacity.
+This is separate from QML item opacity because the empty native view has an opaque buffer.
+The existing queued owner-focus assignment and non-owner Escape handler are unchanged.
+
+This path requires the KWin `OffscreenQuickView::setOpacity()` correction that propagates
+opacity to the compositor item. The stock 6.7.5 and 6.7.91 implementation only changes the
+internal Qt window. Matching the version string alone does not establish this capability.
+
 ## Verification
 
 Build with the matching existing build image, or the dependencies in the package's CMake file:
@@ -71,10 +82,25 @@ failure-injection checks need no compositor:
 python3 packages/navigation-cpp/tests/test_scenario_outputs.py
 ```
 
+The first-frame, state and runtime-log oracles have separate offline regressions:
+
+```
+python3 packages/navigation-cpp/tests/test_first_frame.py
+python3 packages/navigation-cpp/tests/native-input/test_wait_state.py
+python3 packages/navigation-cpp/tests/test_runtime.py
+```
+
+`tests/native-input` is an optional private-session probe, not part of the installed module.
+It requires the matching KWin source tree for test-only rendering headers. It checks native
+view initialization, the first matching framebuffer and the actual Qt focus object. A separate
+synthetic TextInput fixture exercises preedit, commit and key routing; it is not a production
+navigation field or a physical input-method qualification. Its README describes the boundary.
+The Fedora RPM workflow runs the offline regression oracles. Native rendering and input
+qualification still require a private compositor with the corrected KWin dependency.
+
 ## Remaining visual blocker
 
 The window-state and dismissal checks do not establish visual passthrough on other outputs.
-In the native two-output qualification, a non-owning output becomes black while navigation
-is open, although its control windows remain unminimized. KWin still creates a scene view for
-that output; leaving its Loader empty does not preserve the visible desktop. Keep this change
-in draft until non-owner rendering is corrected and checked with before/after captures.
+Private corrected-KWin integration must also check before/after captures, initial composition,
+input and output lifecycle. Keep this change in draft until that qualification is complete
+and the KWin prerequisite has a supported delivery path; no fixed release is assumed here.
