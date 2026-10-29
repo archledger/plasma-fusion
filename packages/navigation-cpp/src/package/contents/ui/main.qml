@@ -21,7 +21,10 @@ SceneEffect {
         id: outputLoader
         readonly property QtObject output: SceneView.screen
         active: output !== null && output.name === taskSwitcherState.activeOutputName
-        focus: active
+        // KWin may focus this view after input on a non-owning output. Keep dismissal available
+        // without constructing another switcher or its task model there.
+        focus: true
+        Keys.onEscapePressed: taskSwitcherState.deactivate(false)
         sourceComponent: TaskSwitcher {
             state: taskSwitcherState
         }

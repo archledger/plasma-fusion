@@ -25,12 +25,13 @@ This fixes the two-output case where a held swipe opened the switcher on one out
 second output immediately closed it. It also prevents populated outputs from competing over the
 same indices or minimizing unrelated windows.
 
-### Draft blocker: keyboard focus after non-owner input
+### Keyboard dismissal after non-owner input
 
-Focus is assigned to the owning view only when its Loader completes. KWin can later activate
-an empty non-owning view after a click or touch on that output. That view has no Escape handler,
-so this draft does not yet preserve dismissal after such input. Keep it blocked until keyboard
-routing stays with the owner or dismissal is handled independently of the focused view.
+Focus is initially assigned to the owning view when its Loader completes. KWin can later activate
+an empty non-owning view after a click or touch on that output. Every Loader remains a keyboard
+focus scope with an Escape handler that calls the shared state's existing animated close path.
+Only the owner loads a TaskSwitcher; the other outputs can dismiss it without constructing task
+models or taking ownership. The loaded switcher's own Escape handler still handles owner input.
 
 ## Verification
 
@@ -47,17 +48,33 @@ DESTDIR="$PWD/build/navigation-install" cmake --install build/navigation
 It requires a private `tools/vsession` session, 1280x800 at scale 1, tablet mode on and a matching
 navigation install in the seed. Copy the repository's tools to `~/pf-tools`. Put two integers in
 `~/navigation-case`: target output index, and count of control windows on the other output.
+An optional third field selects `none` (default), `click` or `touch` on the non-owning output.
 As with `packages/apppairs/tests/vsession/make-seed.sh`, put the effect under
 `~/.local/share/kwin/effects` and its native QML module under `~/pf-qml`, with `QML_IMPORT_PATH`
 in the seed's `.config/pfv-env` naming that session's absolute `~/pf-qml` path.
 
 Run one output with `0 0`; then two outputs with `0 0`, `1 0`, `0 2` and `1 2`. The regression
-asserts that a slow swipe stays open, control windows remain unminimized, Escape reaches the
-owning view, and disabling the owning output closes the effect. Repeat on both supported KWin
+asserts that a slow swipe stays open, control windows remain unminimized, Escape closes the
+switcher, and disabling the owning output closes the effect. Repeat on both supported KWin
 build/test images. This is an integration test, not an offline CTest: it needs a compositor,
 virtual outputs and emulated native input. Do not run it against a logged-in desktop.
 
-Before merging, extend the native regression to click and touch the empty non-owning output
-after opening the switcher, then press Escape and require the effect to close. This sequence
-is not covered by the current scenario. Rerun it and the existing matrix on both supported
-KWin build/test images after fixing focus routing.
+For each two-output case, also run with the third field set to `click` and `touch`. The scenario
+requires the switcher to remain open after that input, then close on Escape. This covers both
+empty and populated non-owning outputs without relying on which scene has keyboard focus.
+
+The scenario requires successful D-Bus queries for dismissal, a confirmed second opening before
+output removal, and an output snapshot confirming that the owner was removed. Its offline
+failure-injection checks need no compositor:
+
+```
+python3 packages/navigation-cpp/tests/test_scenario_outputs.py
+```
+
+## Remaining visual blocker
+
+The window-state and dismissal checks do not establish visual passthrough on other outputs.
+In the native two-output qualification, a non-owning output becomes black while navigation
+is open, although its control windows remain unminimized. KWin still creates a scene view for
+that output; leaving its Loader empty does not preserve the visible desktop. Keep this change
+in draft until non-owner rendering is corrected and checked with before/after captures.
