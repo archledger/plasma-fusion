@@ -1206,7 +1206,7 @@ void PlasmaFusionKcm::loadConfigState(State &state) const
     // shell's own defaults are true and false, docs/parts/lockscreen.md).
     KSharedConfig::Ptr lock = KSharedConfig::openConfig(u"kscreenlockerrc"_s, KConfig::NoGlobals);
     lock->reparseConfiguration();
-    const KConfigGroup lockGeneral(lock, u"Greeter][LnF][General"_s);
+    const KConfigGroup lockGeneral = KConfigGroup(lock, u"Greeter"_s).group(u"LnF"_s).group(u"General"_s);
     state.lockNotifications = lockGeneral.readEntry("showNotifications", true);
     state.lockNotificationSummaries = lockGeneral.readEntry("showNotificationSummaries", false);
     // File contents in search: Baloo's own key (System Settings > File Search), on by default.
@@ -1255,6 +1255,9 @@ void PlasmaFusionKcm::copyConfigState(const State &from, State &to) const
     to.everyDock = from.everyDock;
     to.dndBehavior = from.dndBehavior;
     to.lighterOnCritical = from.lighterOnCritical;
+    to.iconsMode = from.iconsMode;
+    to.lockNotifications = from.lockNotifications;
+    to.lockNotificationSummaries = from.lockNotificationSummaries;
     to.fileContentIndexing = from.fileContentIndexing;
     to.tabletMode = from.tabletMode;
     to.tabletApps = from.tabletApps;
@@ -1986,13 +1989,12 @@ void PlasmaFusionKcm::applyIconsMode(int mode)
     fusion->sync();
 }
 
-// kscreenlockerrc [Greeter][LnF][General]: the lock shell's notification keys (nested groups use
-// the bracket path). The lock screen reads them on the next lock.
+// The lock screen reads these nested-group notification keys on the next lock.
 void PlasmaFusionKcm::writeLockEntry(const QString &key, bool value)
 {
     KSharedConfig::Ptr lock = KSharedConfig::openConfig(u"kscreenlockerrc"_s, KConfig::NoGlobals);
     lock->reparseConfiguration();
-    KConfigGroup(lock, u"Greeter][LnF][General"_s).writeEntry(key, value, KConfig::Notify);
+    KConfigGroup(lock, u"Greeter"_s).group(u"LnF"_s).group(u"General"_s).writeEntry(key, value, KConfig::Notify);
     lock->sync();
 }
 
