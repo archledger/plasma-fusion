@@ -118,7 +118,25 @@ class GpuMeasurementTest(unittest.TestCase):
     def test_nonzero_fractional_counts_do_not_print_as_zero(self):
         self.assertEqual(gate.fmt(0.5, ""), "0.5")
         self.assertEqual(gate.fmt(0, ""), "0")
-        self.assertEqual(analyze_ab.fmt(0.5, 0), "0.5")
+        self.assertEqual(analyze_ab.fmt_count(0.5), "0.5")
+
+    def test_fractional_counts_keep_small_and_near_integer_values(self):
+        for value in (1 / 21, 0.01, 0.0001, 1e-12, 0.9999, 1.0001, 1000000.5):
+            with self.subTest(value=value):
+                self.assertEqual(float(gate.fmt(value, "")), value)
+                self.assertEqual(float(analyze_ab.fmt_count(value)), value)
+
+    def test_count_precision_does_not_change_other_units_or_missing_values(self):
+        self.assertEqual(gate.fmt(0.04, "ms"), "0.04")
+        self.assertEqual(gate.fmt(0.04, "MiB"), "0")
+        self.assertEqual(gate.fmt(0, ""), "0")
+        self.assertEqual(gate.fmt(None, ""), "-")
+        self.assertEqual(analyze_ab.fmt(0, 0), "0")
+        self.assertEqual(analyze_ab.fmt(None, 0), "-")
+        self.assertEqual(analyze_ab.fmt_count(0), "0")
+        self.assertEqual(analyze_ab.fmt_count(None), "-")
+        self.assertEqual(analyze_ab.fmt(12.3456, 0), "12")
+        self.assertEqual(analyze_ab.fmt(145.01234, 0), "145")
 
 
 if __name__ == "__main__":

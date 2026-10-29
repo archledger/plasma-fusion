@@ -154,6 +154,51 @@ class GateLauncherTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('| overview: late frames (median) | 0.5 (0..1) |', result.stdout)
 
+    def test_ab_cli_preserves_rare_late_frame_counts(self):
+        runs = []
+        for index in range(21):
+            run = self.root / f'sample-{index}'
+            shutil.copytree(self.run, run)
+            runs.append(run)
+        path = runs[-1] / 'kwin perf statistics Virtual-0.csv'
+        lines = path.read_text().splitlines()
+        first_frames = {46_050_000_000, 50_050_000_000, 54_050_000_000}
+        for index in range(1, len(lines)):
+            fields = lines[index].split(',')
+            if int(fields[1]) in first_frames:
+                fields[3] = str(int(fields[0]) + 1000)
+                lines[index] = ','.join(fields)
+        path.write_text('\n'.join(lines) + '\n')
+        result = subprocess.run([sys.executable, str(PERF / 'analyze_ab.py'), *map(str, runs)],
+                                cwd=self.root, text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        row = next(line for line in result.stdout.splitlines()
+                   if line.startswith('| overview: late frames (median) |'))
+        mean = row.split('|')[2].strip().split()[0]
+        self.assertAlmostEqual(float(mean), 1 / 21)
+        self.assertIn('(0..1)', row)
+
+    def test_ab_cli_keeps_memory_and_latency_precision(self):
+        path = self.run / 'stats.jsonl'
+        samples = [json.loads(line) for line in path.read_text().splitlines()]
+        for sample in samples:
+            for process in sample['procs']:
+                if process['comm'] == 'plasmashell':
+                    process['VmRSS'] = 12641
+        path.write_text(''.join(json.dumps(sample) + '\n' for sample in samples))
+        path = self.run / 'marks.jsonl'
+        marks = [json.loads(line) for line in path.read_text().splitlines()]
+        for mark in marks:
+            if mark['mark'] in ('qs1', 'qs2', 'qs3'):
+                mark['epoch'] += 0.0276544
+        path.write_text(''.join(json.dumps(mark) + '\n' for mark in marks))
+        result = subprocess.run([sys.executable, str(PERF / 'analyze_ab.py'), str(self.run)],
+                                cwd=self.root, text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for label in ('plasmashell RSS after settle, MiB', 'quick settings: click->window mapped ms'):
+            with self.subTest(label=label):
+                self.assertIn(f'| {label} | 12 (12..12) |', result.stdout)
+
     def test_unknown_contract_is_rejected_without_overwriting_saved_output(self):
         baseline = self.root / 'baseline.json'
         baseline.write_text(json.dumps({'geometry': 'test', 'launcher_timing_contract': 'future'}))

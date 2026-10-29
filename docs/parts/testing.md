@@ -265,6 +265,8 @@ partial/missing/malformed counters, true zeros, process/counter resets and table
 runs in the `build` workflow. The existing `tools/tests/perf/tests` suite also runs the real
 A/B CLI on two synthetic sessions to check a mean of 0.5 late frames. Fractional counts are
 printed as fractions instead of rounded to zero; the budget and its verdict are unchanged.
+Nonintegral counts use a round-trip decimal representation, preserving small nonzero averages
+and fractions near an integer. Other units keep their existing display precision.
 
 ## Depth features (2026-10-16)
 

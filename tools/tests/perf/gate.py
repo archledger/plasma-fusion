@@ -200,9 +200,9 @@ def metrics(run):
 def fmt(v, unit):
     if v is None:
         return "-"
-    d = 0 if unit in ("MiB", "") or (unit == "ms" and abs(v) >= 20) else 2 if abs(v) < 10 else 1
-    if unit == "" and v != int(v):
-        d = 1
+    if unit == "":
+        return analyze_ab.fmt_count(v)
+    d = 0 if unit == "MiB" or (unit == "ms" and abs(v) >= 20) else 2 if abs(v) < 10 else 1
     return "%.*f" % (d, v)
 
 
