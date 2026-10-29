@@ -432,8 +432,14 @@ PlasmoidItem {
 
     // The card is built on idle; an open request before that waits for it.
     property var pendingOpen: null
+    property int openingSerial: 0
     property real openStarted: 0
     property bool firstShown: false
+    function cancelOpening() {
+        ++openingSerial;
+        pendingOpen = null;
+        pendingSheet = null;
+    }
     function prepareCard() {
         launcherWindow.cardWanted = true;
     }
@@ -460,25 +466,32 @@ PlasmoidItem {
             openSheet(mode, argument, true);
             return;
         }
+        cancelOpening();
+        const serial = openingSerial;
         if (openStarted === 0) {
             openStarted = Date.now();
         }
         if (!launcherWindow.card) {
-            prepareCard();
             pendingOpen = { "mode": mode, "argument": argument };
+            prepareCard();
             return;
         }
         // qmllint disable missing-property
         const screens = Qt.application.screens;
         // qmllint enable missing-property
         if (screens.length > 1) {
+            const show = output => {
+                if (serial === root.openingSerial) {
+                    root.openOn(mode, argument, output);
+                }
+            };
             DBus.SessionBus.asyncCall({
                 "service": "org.kde.KWin",
                 "path": "/KWin",
                 "iface": "org.kde.KWin",
                 "member": "activeOutputName",
                 "arguments": []
-            }, reply => root.openOn(mode, argument, String(reply.value || "")), () => root.openOn(mode, argument, ""));
+            }, reply => show(String(reply.value || "")), () => show(""));
             return;
         }
         openOn(mode, argument, "");
@@ -513,10 +526,13 @@ PlasmoidItem {
     }
 
     function close() {
+        cancelOpening();
+        openStarted = 0;
         if (sheetWindow.visible) {
             closeSheet();
         }
         launcherWindow.visible = false;
+        syncExpanded();
     }
 
     function toggle() {
@@ -544,9 +560,10 @@ PlasmoidItem {
     property real sheetStarted: 0
     property int sheetFrames: 0
     function openSheet(mode, argument, animated) {
+        cancelOpening();
         if (!sheetWindow.sheet) {
-            sheetWindow.sheetWanted = true;
             pendingSheet = { "mode": mode, "argument": argument, "animated": animated };
+            sheetWindow.sheetWanted = true;
             return;
         }
         const s = screenArea();
@@ -579,8 +596,10 @@ PlasmoidItem {
         syncExpanded();
     }
     function closeSheet() {
+        pendingSheet = null;
         if (!sheetWindow.visible || !sheetWindow.sheet) {
             sheetWindow.visible = false;
+            syncExpanded();
             return;
         }
         sheetAnimation.stop();
@@ -678,9 +697,12 @@ PlasmoidItem {
     }
     // Leaving tablet posture closes the sheet.
     onTabletChanged: {
+        cancelOpening();
+        openStarted = 0;
         if (!tablet && sheetWindow.visible) {
             closeSheet();
         }
+        syncExpanded();
     }
     // END tablet sheet
 
@@ -709,7 +731,7 @@ PlasmoidItem {
         }
         if (root.expanded && !menuOpen) {
             open("home");
-        } else if (!root.expanded && menuOpen) {
+        } else if (!root.expanded) {
             close();
         }
     }
