@@ -75,6 +75,13 @@ jobs:
           python3 -m unittest discover -s tools/tests/perf/tests
           node --test tools/tests/perf/tests/winmon.test.js
 
+      - name: Navigation regression oracles
+        run: |
+          python3 packages/navigation-cpp/tests/test_scenario_outputs.py
+          python3 packages/navigation-cpp/tests/test_first_frame.py
+          python3 packages/navigation-cpp/tests/native-input/test_wait_state.py
+          python3 packages/navigation-cpp/tests/test_runtime.py
+
       - name: Coverage failed-row unit tests
         run: tools/tests/coverage-status-unit.sh
 
