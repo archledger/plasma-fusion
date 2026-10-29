@@ -241,6 +241,33 @@ the frame-time rows (render p95 during pop-up animations, overview render p95, m
 GUI-thread time per frame), quick settings "first frame at most 50 ms after the release" (only
 "not slower than stock" is), and the device-only and desktop-file rows.
 
+### DRM counter availability
+
+`pfstat.py` uses `drmstats.py` to sum the advertised memory regions, not only i915's `system0`.
+This includes xe's `gtt` allocations. Duplicate descriptors are counted once per driver, PCI
+device and client ID. Memory units are converted to KiB before the existing MiB presentation.
+Shared memory is already part of the total; it is not added again. These are buffer allocations,
+not a dedicated-VRAM measurement or memory that can be added to PSS without overlap.
+
+Engine time is available only when all observed clients report nanoseconds. xe's cycle counters
+are not nanoseconds, so its GPU-time rows remain unavailable rather than showing false zeros.
+Missing counters, changed processes, decreases in a process's summed counter and non-positive
+intervals also produce an unavailable time measurement. The snapshots retain process totals,
+not individual client/engine counters: a client reset or disappearance can go undetected if
+another counter's increase masks it. A supported counter explicitly reporting zero remains zero.
+The unitless-zero exception applies only to memory regions; engine time still requires `ns`.
+Comparisons must keep unavailable values separate from budget passes.
+Old xe snapshots containing the previous parser's artificial zero values must be recollected;
+they do not contain enough information for the analyzer to repair them after the fact.
+
+`python3 tools/tests/perf/perf_test.py` tests i915 and xe fixtures, units, duplicate/device identity,
+partial/missing/malformed counters, true zeros, process/counter resets and table precision. It
+runs in the `build` workflow. The existing `tools/tests/perf/tests` suite also runs the real
+A/B CLI on two synthetic sessions to check a mean of 0.5 late frames. Fractional counts are
+printed as fractions instead of rounded to zero; the budget and its verdict are unchanged.
+Nonintegral counts use a round-trip decimal representation, preserving small nonzero averages
+and fractions near an integer. Other units keep their existing display precision.
+
 ## Depth features (2026-10-16)
 
 The next queue's item 5 (approved 2026-10-16): reliability is part of a depth feature (the

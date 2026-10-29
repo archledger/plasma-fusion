@@ -2,13 +2,14 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Based on the perf-measure study (perf-measure/scripts/analyze_ab.py); gate.py imports
-# analyze() and its helpers. Run directly it prints the stock/Fusion A/B table of that study.
+# Based on the perf-measure study (perf-measure/scripts/analyze_ab.py); gate.py imports analyze()
+# and its helpers. Missing or reset GPU counters stay unavailable rather than becoming zeros.
 #
 # analyze_ab.py RUN_DIR... : per-run metrics from scen-perf.sh output (stats.jsonl, marks.jsonl,
 # dbusmon.log, "kwin perf statistics Virtual-0.csv"), printed as JSON lines and as a table of
 # per-arm means with min..max over runs.
 import csv, glob, json, os, re, statistics as st, sys
+import math
 from collections import defaultdict
 from pathlib import Path
 
@@ -64,11 +65,23 @@ def cpu_pct(a, b, comm=None, session=False):
 
 
 def gpu_pct(a, b, comm):
-    pa = {p["pid"]: p for p in a["procs"]}
-    dt = b["mono"] - a["mono"]; tot = 0
-    for p in b["procs"]:
-        if p["comm"] == comm and "gpu_ns" in p and p["pid"] in pa and "gpu_ns" in pa[p["pid"]]:
-            tot += p["gpu_ns"] - pa[p["pid"]]["gpu_ns"]
+    pa = {p["pid"]: p for p in a["procs"] if p["comm"] == comm}
+    pb = {p["pid"]: p for p in b["procs"] if p["comm"] == comm}
+    dt = b["mono"] - a["mono"]
+    if not pa or pa.keys() != pb.keys() or not math.isfinite(dt) or dt <= 0:
+        return None
+    tot = 0
+    for pid, p in pb.items():
+        previous = pa[pid]
+        values = (previous.get("gpu_ns"), p.get("gpu_ns"))
+        if previous.get("start") != p.get("start") or not all(
+            isinstance(v, (int, float)) and math.isfinite(v) and v >= 0 for v in values
+        ):
+            return None
+        delta = values[1] - values[0]
+        if delta < 0:
+            return None
+        tot += delta
     return 100.0 * tot / 1e9 / dt
 
 
@@ -187,6 +200,12 @@ def fmt(v, d=1):
     return "-" if v is None else f"{v:.{d}f}"
 
 
+def fmt_count(v):
+    if v is None:
+        return "-"
+    return str(v) if v != int(v) else f"{v:.0f}"
+
+
 if __name__ == "__main__":
     runs = [analyze(d) for d in sys.argv[1:]]
     with open("ab-runs.jsonl", "w") as fh:
@@ -203,9 +222,10 @@ if __name__ == "__main__":
         v = [x for x in v if x is not None]
         if not v:
             return "-"
-        return f"{st.mean(v):.{d}f} ({min(v):.{d}f}..{max(v):.{d}f})"
+        format_value = fmt_count if fn.is_count else lambda value: fmt(value, d)
+        return f"{format_value(st.mean(v))} ({format_value(min(v))}..{format_value(max(v))})"
 
-    def flat(key, sub=None, idx=None):
+    def flat(key, sub=None, idx=None, *, count=False):
         def f(r):
             v = r[key]
             if isinstance(v, list):
@@ -218,6 +238,7 @@ if __name__ == "__main__":
                 return max(vv) if sub in ("max", "gap_max_ms") else st.median(vv)
             return v[sub] if sub else v
         f.requires_complete = key in ("launcher_latency_ms", "launcher_first_frame_ms", "launcher_settled_ms")
+        f.is_count = count
         return f
 
     rows = [
@@ -229,7 +250,7 @@ if __name__ == "__main__":
         ("kwin_wayland RSS after settle, MiB", flat("kwin_rss"), 0),
         ("kwin_wayland anon RSS, MiB", flat("kwin_anon"), 0),
         ("session PSS after settle (kwin RSS), MiB", flat("session_pss"), 0),
-        ("session processes", flat("n_procs"), 0),
+        ("session processes", flat("n_procs", count=True), 0),
         ("plasmashell RSS at end, MiB", flat("end_plasmashell_rss"), 0),
         ("kwin RSS at end, MiB", flat("end_kwin_rss"), 0),
         ("idle 30 s: plasmashell CPU %", flat("idle_cpu_plasmashell"), 2),
@@ -245,7 +266,7 @@ if __name__ == "__main__":
         ("sweep: KWin render ms p50", flat("sweep_frames", "p50"), 2),
         ("sweep: KWin render ms p95", flat("sweep_frames", "p95"), 2),
         ("sweep: KWin render ms max", flat("sweep_frames", "max"), 2),
-        ("sweep: late frames", flat("sweep_frames", "late"), 0),
+        ("sweep: late frames", flat("sweep_frames", "late", count=True), 0),
         ("launcher: key->window mapped ms (median of 3)", flat("launcher_latency_ms"), 0),
         ("launcher: key->first frame showing it ms", flat("launcher_first_frame_ms"), 0),
         ("launcher: key->opening animation done ms", flat("launcher_settled_ms"), 0),
@@ -270,7 +291,7 @@ if __name__ == "__main__":
         ("overview: render ms p50", flat("ov_frames", "p50"), 2),
         ("overview: render ms p95", flat("ov_frames", "p95"), 2),
         ("overview: render ms max", flat("ov_frames", "max"), 2),
-        ("overview: late frames (median)", flat("ov_frames", "late"), 0),
+        ("overview: late frames (median)", flat("ov_frames", "late", count=True), 0),
         ("noise: machine CPU busy % during idle window", flat("idle_noise_syscpu"), 1),
         ("noise: load avg (1 min) during idle window", flat("idle_load1"), 2),
     ]

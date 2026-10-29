@@ -9,9 +9,11 @@
 # pfstat.py LABEL: snapshot every process of this private session (environ XDG_RUNTIME_DIR ==
 # $XDG_RUNTIME_DIR, plus KWin, whose environ is unreadable because of its file capabilities) and
 # append one JSON line to $OUT/stats.jsonl: CPU ticks, VmRSS/RssAnon/RssFile/RssShmem, PSS from
-# smaps_rollup, DRM (i915) buffer totals and render-engine ns from fdinfo, and system counters
+# smaps_rollup, DRM memory-region totals and available engine ns from fdinfo, and system counters
 # (/proc/stat, loadavg, meminfo, GPU RC6 residency) for noise.
 import json, os, sys, time
+
+import drmstats
 
 label = sys.argv[1]
 run = os.environ["XDG_RUNTIME_DIR"]
@@ -55,7 +57,6 @@ def sudo_fdinfo(pid):
 
 
 def drm(pid):
-    res = {}; seen = set()
     private = None
     try:
         fds = os.listdir(f"/proc/{pid}/fdinfo")
@@ -64,20 +65,8 @@ def drm(pid):
             return None
         private = sudo_fdinfo(pid)
         fds = list(private)
-    for fd in fds:
-        t = private.get(fd) if private is not None else rd(f"/proc/{pid}/fdinfo/{fd}")
-        if not t or "drm-client-id" not in t:
-            continue
-        d = kv(t, {"drm-client-id", "drm-total-system0", "drm-resident-system0", "drm-shared-system0"})
-        eng = sum(int(l.split()[1]) for l in t.splitlines() if l.startswith("drm-engine-") and "capacity" not in l)
-        cid = d.get("drm-client-id")
-        if cid in seen:
-            continue
-        seen.add(cid)
-        res["gpu_ns"] = res.get("gpu_ns", 0) + eng
-        res["gem_total_kB"] = res.get("gem_total_kB", 0) + d.get("drm-total-system0", 0)
-        res["gem_resident_kB"] = res.get("gem_resident_kB", 0) + d.get("drm-resident-system0", 0)
-    return res or None
+    return drmstats.summarize(private.get(fd) if private is not None else rd(f"/proc/{pid}/fdinfo/{fd}")
+                              for fd in fds)
 
 
 procs = []
