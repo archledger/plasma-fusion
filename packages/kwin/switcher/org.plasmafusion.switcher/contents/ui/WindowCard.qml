@@ -25,6 +25,8 @@ Item {
     property string title
     property bool selected: false
     property bool closeable: false
+    // Hidden cards do not need an assigned preview client.
+    property bool previewActive: true
     property int thumbnailHeight: 118
     // Touch mode: the close button shows on the selected card (there is no hover).
     property bool touch: false
@@ -95,7 +97,7 @@ Item {
                 readonly property real sourceWidth: Math.max(1, thumbnail.implicitWidth)
                 readonly property real sourceHeight: Math.max(1, thumbnail.implicitHeight)
                 readonly property real scale_: Math.max(thumbBox.width / sourceWidth, thumbBox.height / sourceHeight)
-                wId: card.windowId
+                wId: card.previewActive ? card.windowId : ""
                 width: Math.ceil(thumbnail.sourceWidth * thumbnail.scale_)
                 height: Math.ceil(thumbnail.sourceHeight * thumbnail.scale_)
                 x: Math.round((thumbBox.width - thumbnail.width) / 2)
