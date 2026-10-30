@@ -18,6 +18,8 @@ copyright lines. Plasma Fusion changes:
 - removed the Plasma Mobile shell dependencies (navigation panel, gesture panel, haptics, shell D-Bus state,
   panel constants);
 - the toggle shortcut has no default key;
+- the gesture's output owns its task switcher; other outputs' windows stay untouched (see
+  `docs/parts/navigation-cpp.md` for the output-lifetime contract and native regression);
 - a short swipe up (16 px or more, below home) over an app shows the dock; the switcher leaves out
   input-method panels, pop-ups, OSDs, zero-size windows and plasmashell's surfaces;
 - gesture numbers (TABLET2 N1, from the maintainer's research): a fast upward flick from an app goes

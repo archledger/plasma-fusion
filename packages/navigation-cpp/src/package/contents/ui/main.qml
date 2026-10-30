@@ -15,10 +15,31 @@ import org.plasmafusion.navigation.plugin as Nav
 SceneEffect {
     id: root
 
-    // Created per screen
-    delegate: TaskSwitcher {
-        id: taskSwitcher
-        state: taskSwitcherState
+    // KWin creates a view per output, but only the originating output owns the shared state.
+    // Not constructing other switchers also keeps their task models from minimizing windows.
+    delegate: Loader {
+        id: outputLoader
+        readonly property QtObject output: SceneView.screen
+        active: output !== null && output.name === taskSwitcherState.activeOutputName
+        // KWin may focus this view after input on a non-owning output. Keep dismissal available
+        // without constructing another switcher or its task model there.
+        focus: true
+        Keys.onEscapePressed: taskSwitcherState.deactivate(false)
+        sourceComponent: TaskSwitcher {
+            state: taskSwitcherState
+        }
+        function focusSwitcher(): void {
+            if (active && item) {
+                root.activateView(root.viewForScreen(output));
+            }
+        }
+        onLoaded: Qt.callLater(focusSwitcher)
+        // Called by the native state's close path on each view's root item.
+        function hideAnimation(): void {
+            if (item) {
+                item.hideAnimation();
+            }
+        }
     }
 
     ShortcutHandler {

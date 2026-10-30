@@ -88,6 +88,7 @@ void FusionNavigationState::init(KWin::QuickSceneEffect *parent)
 
     // Connect signals
     connect(this, &FusionNavigationState::gestureEnabledChanged, this, &FusionNavigationState::refreshBorders);
+    connect(m_border, &FusionTouchBorder::gestureStarted, this, &FusionNavigationState::selectOutput);
     connect(m_border, &FusionTouchBorder::touchPositionChanged, this, &FusionNavigationState::processTouchPositionChanged);
     connect(this, &FusionNavigationState::gestureInProgressChanged, this, [this]() {
         if (gestureInProgress()) {
@@ -96,6 +97,12 @@ void FusionNavigationState::init(KWin::QuickSceneEffect *parent)
     });
     connect(m_effectState, &FusionTouchBorderState::inProgressChanged, this, &FusionNavigationState::gestureInProgressChanged);
     connect(effects, &EffectsHandler::screenAboutToLock, this, &FusionNavigationState::realDeactivate);
+    connect(effects, &EffectsHandler::screenRemoved, this, [this](LogicalOutput *output) {
+        if (output->name() == m_activeOutputName) {
+            // KWin is removing the view; do not destroy its scene from inside that signal.
+            quickDeactivate();
+        }
+    });
 
     // Plasma Fusion: the gestures follow KWin's tablet mode (laptop posture keeps the native edges).
     if (TabletModeManager *manager = kwinApp()->tabletModeManager()) {
@@ -229,6 +236,26 @@ bool FusionNavigationState::gestureEnabled() const
 bool FusionNavigationState::tabletMode() const
 {
     return m_tabletMode;
+}
+
+QString FusionNavigationState::activeOutputName() const
+{
+    return m_activeOutputName;
+}
+
+void FusionNavigationState::selectOutput(const QString &name)
+{
+    const LogicalOutput *fallback = name.isEmpty() ? effects->activeScreen() : nullptr;
+    const QString outputName = fallback ? fallback->name() : name;
+    if (m_activeOutputName == outputName) {
+        return;
+    }
+    // A new swipe on another output must not inherit the old view's animations or task indices.
+    if (m_effect && m_effect->isRunning()) {
+        realDeactivate();
+    }
+    m_activeOutputName = outputName;
+    Q_EMIT activeOutputNameChanged();
 }
 
 void FusionNavigationState::setGestureEnabled(bool gestureEnabled)
@@ -573,6 +600,7 @@ void FusionNavigationState::activate()
         return;
     }
 
+    selectOutput(effects->activeScreen() ? effects->activeScreen()->name() : QString());
     resetGestureState();
     m_effectState->setInProgress(false);
     invokeEffect();
@@ -602,6 +630,8 @@ void FusionNavigationState::realDeactivate()
     m_effectState->setInProgress(false);
     setStatus(FusionNavigationState::Status::Inactive);
     m_effect->setRunning(false);
+    m_activeOutputName.clear();
+    Q_EMIT activeOutputNameChanged();
     setDBusState(false);
 }
 
@@ -619,7 +649,7 @@ void FusionNavigationState::setDBusState(bool active)
 
 void FusionNavigationState::invokeEffect()
 {
-    if (!m_effect) {
+    if (!m_effect || m_activeOutputName.isEmpty()) {
         return;
     }
     // Plasma Fusion: as Plasma Mobile 6.8: a new gesture during the 200 ms close of the last one
