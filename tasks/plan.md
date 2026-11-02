@@ -4,7 +4,7 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.4b2a are complete; NT02.4b2b is next.
+NT01 through NT02.4b2b are complete; NT02.5 is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Workspace and transient-root registry

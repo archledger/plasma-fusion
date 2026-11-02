@@ -52,7 +52,14 @@ an older quick-tile or output-transfer continuation.
 NT02.4b2a adds non-recursive pending output passes with retained backend/logical/Window
 identities and captured geometry/order inputs. Caller-side backend snapshots remain retained
 through post-reconciliation bookkeeping. Batch draining and guarded Workspace continuation
-loops remain NT02.4b2b; the pass is not an atomic global snapshot of backend properties.
+loops are supplied by NT02.4b2b; the pass is not an atomic global snapshot of backend properties.
+NT02.4b2b closes removed registrations before callbacks, drains before output notification,
+and guards Workspace Window continuations and ordinary evacuation. Migration records original
+placement and advances only the Window whose own result was verified, preserving valid
+active/inactive memberships without accepting another Window's callback-selected state.
+These caller-side checks do not establish exclusive causality or protect arbitrary deletion
+inside unchanged ordinary Tile methods. Compatibility entry points and actual restoration
+remain subsequent milestones.
 
 The previous external-root adapter is rejected as the product boundary: its roots are absent
 from native lookup, eviction and output/desktop teardown. Adding more geometry observers would

@@ -3,7 +3,7 @@
 
 # One-window native ownership proof
 
-NT01 through NT02.4b2a are complete; NT02.4b2b is next. No production tiler is enabled.
+NT01 through NT02.4b2b are complete; NT02.5 is next. No production tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
 Qt results, five compiled mutation controls, full KWin library linking and 448 selected core
@@ -62,6 +62,11 @@ NT02.4b2a is signed native commit `a4eeaba545ea77c76cea3e73a98538b0b5daf7bc`:
 Output updates now retain pending work and use held identities and captured pass inputs.
 Caller-side backend snapshots survive bookkeeping. Review is clear; batch draining and guarded
 Workspace evacuation/continuations remain NT02.4b2b.
+NT02.4b2b is signed native commit `c498fa2d8bfeded63376b682a4f29318f88b09e8`:
+243 Xdg checks, 766 results across 14 selected suites and seven compiled controls passed.
+Removed contexts drain before output notification. Guarded Window/tile snapshots preserve
+continuations, newer callback placement and valid multi-desktop migration. Review is clear;
+compatibility-entry-point checks, restoration and the real provider bridge remain later work.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -79,8 +84,8 @@ Files: contract document, baseline manifest and isolated build recipe (maximum t
   is refused with no manual layout or other-window changes. Admission checks requested and
   committed state, pending transitions, move/resize restrictions and rectangle feasibility;
   real adoption stays unavailable before NT07's exact-snapshot persistence acknowledgment.
-- [ ] Native lookup finds that owner without adding it to manual serialization or picking.
-- [ ] The test control without transient lookup fails; candidate and ordinary tile controls pass.
+- [x] Native lookup finds that owner without adding it to manual serialization or picking.
+- [x] The test control without transient lookup fails; candidate and ordinary tile controls pass.
 Verification: focused `testTiles` cases, a refusal table for each predicate, non-mutation
 snapshots, manual-tree/config comparisons and native suite. Native fixtures do not prove disk sync.
 Dependencies: NT01.
@@ -104,7 +109,7 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.4a — complete | Index controller-owned transient roots weakly in TileManager; use actual membership for lookup/forget, unregister by exact identity, and drain before desktop/manager teardown without changing manual serialization/picking. | TileManager header/source, controller source, Xdg integration test: four |
 | NT02.4b1 — complete | Workspace owns the idle controller; use guarded manager indexing with one QObject owner, close registration for shutdown, and safely reclaim or reconcile missing managers. Missing-manager consumers refuse tiling without accidentally releasing placement. | Workspace header/source, Window source, scripting wrapper source and Xdg integration test: five |
 | NT02.4b2a — complete | Serialize output reconciliation with a retained pending pass and freeze input values while retaining backend/logical output and captured Window lifetimes. | Workspace header/source and Xdg integration test: three |
-| NT02.4b2b | Close all removed registrations before draining; guard ordinary evacuation and Workspace window continuations through output removal. | Workspace header/source and Xdg integration test: three |
+| NT02.4b2b — complete | Close all removed registrations before draining; guard ordinary evacuation and Workspace window continuations through output removal. | Workspace header/source and Xdg integration test: three (two needed) |
 | NT02.5 | Window compatibility assignment and transient state exposure cannot bypass admission; retained references and X11 refusal are covered before any transient window is exposed. | `window.h`, `window.cpp`, `tiles_test.cpp`: three |
 
 Do not expose a production adoption entry point between these units or before NT07. If the
