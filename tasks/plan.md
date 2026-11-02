@@ -4,7 +4,43 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.3b1 are complete; NT02.3b2 is next. The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+NT01 through NT02.3b2.1 are complete; NT02.3b2.2 is next. The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+
+### Native geometry boundary before admission
+
+The next integration touches Window and Wayland request ordering, so split it before coding.
+First protect ordinary native geometry operations from stale reentrant continuations. Use a
+monotonic request generation for each move/resize intent, including equal rectangles, and retain
+the Window for the duration of the call. Check deletion and request generation after synchronous
+callbacks and before the outer request continues. A newer nested partial move/resize must carry
+the whole currently requested rectangle, including any size or position it inherited from the
+outer request, rather than dropping that pending part when the outer continuation stops.
+Track specifically whether that resize still awaits native submission. Xdg clears this flag
+immediately before applying or queueing it, with no intervening callback. Promote a nested Move
+only while that flag is set, not merely because requested and committed sizes differ. Ordinary
+Moves during an already queued resize retain their existing behavior.
+
+Committed geometry notifications need a distinct update generation: a nested queued request
+must not suppress notifications for a frame that really changed. Advance that generation only
+when client, frame or buffer geometry changes; stop old notifications if a newer committed update
+or closure occurred. Preserve the earliest undelivered old value for each notification in shared
+per-window pending state. A nested committed update inherits those pending notifications, so an
+output A-to-B transition is still announced if a buffer callback moves the window again within B.
+Clear each pending field before emitting its signal; drop net-zero undelivered changes.
+
+Hold the Window through the enclosing Xdg commit dispatch as well as explicit requests. Check
+deletion after callback-producing steps before accessing protocol or configure state again.
+Counter exhaustion refuses a new operation rather than reusing an identity. Cover nested
+same-rectangle intent, unsubmitted versus already-queued resize, immediate placement, queued
+resize, output notification handoff, and closure during requests and actual client commits.
+
+This geometry-safety leaf does not admit transient windows. The next leaf adds the private native
+transaction receipt and authoritative Xdg pending-state inspection. That receipt distinguishes
+superseded ownership from whether any requested geometry changed. A following writer leaf
+allows only proven no-request finalization, including an already-revoked Restoring generation;
+close still retains suppression through QObject destruction. Only then wire actual admission
+and its persistent restoration record. No public authorization flag or callback may grant a
+transient request; test access must not become a production admission bypass.
 
 ### Reservation handoff before window admission
 

@@ -3,7 +3,7 @@
 
 # One-window native ownership proof
 
-NT01 through NT02.3b1 are complete; NT02.3b2 and later tasks are unstarted. No tiler is enabled.
+NT01 through NT02.3b2.1 are complete; NT02.3b2.2 and later tasks are unstarted. No tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
 Qt results, five compiled mutation controls, full KWin library linking and 448 selected core
@@ -18,6 +18,9 @@ Static review is clear. This establishes empty-tree authority only, not window a
 NT02.3b1 is signed native commit `18de7379804172e945c5856f82d1241f4bb41707`: 36 writer
 checks, 539 selected regression results, and three compiled guard controls passed. Review is
 clear. Prepared reservations can be cancelled without pretending that restoration occurred.
+NT02.3b2.1 is signed native commit `e6ec2d49c5ff1eea37666f4b84e867eea5d9a704`:
+87 Xdg checks, 610 results across 14 selected suites, and three compiled controls passed.
+Review is clear. Native request/commit callbacks are guarded, but transient admission is not enabled.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -49,7 +52,10 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.2 — complete | Immutable transient kind and public mutation guards reject direct manage/geometry/resize changes; ordinary Tile behavior is unchanged. | `tile.h`, `tile.cpp`, `tiles_test.cpp`: three |
 | NT02.3a — complete | Controller creates and owns an empty transient root/leaf; only generation-bound private operations may change its geometry. Stale requests and reentrant clear/context destruction stop further notifications. No window can be attached yet. | New controller header/source, source CMake, `tiles_test.cpp`: four |
 | NT02.3b1 — complete | Add a prepared/owned reservation handoff: verify the expected key, provider incarnation/revision and uniqueness at activation; permit cancellation only before ownership; retain legitimate deferred updates on cancellation. | Writer header/source and writer test: three |
-| NT02.3b2 | Add writer-qualified window admission and controller-owned records using the handoff. Detach empties membership before root destruction, keeps restoration state, and stops adoption after synchronous cancellation. | Controller header/source, `tile.h`, `tile.cpp`, `tiles_test.cpp`: five; split further before coding if writer changes are needed |
+| NT02.3b2.1 — complete | Native geometry operations stop superseded continuations and survive callback closure; cover immediate and queued resize paths, nested partial requests, and committed-geometry notifications. | `window.h`, `window.cpp`, `xdgshellwindow.cpp`, `waylandwindow.cpp`, existing integration test: five |
+| NT02.3b2.2 | Add a private transient-request transaction with sticky request progress and authoritative Xdg pending-state inspection. Reject unsupported or stale admission before mutation. | `window.h/.cpp`, `xdgshellwindow.h/.cpp`, existing integration test: five |
+| NT02.3b2.3 | Finalize a revoked, proven-no-request ownership generation without a synthetic restore event; preserve close suppression and deferred-update ordering. | Writer header/source/test; native test build linkage if needed: four |
+| NT02.3b2.4 | Add writer-qualified window admission, surviving controller records, guarded membership and detach using the native transaction receipt. | Controller header/source, `window.h/.cpp`, `tiles_test.cpp`: five |
 | NT02.3c | Route public transient unmanage/forget into generation-checked controller release; no ambient authorization flag, and callbacks cannot resume an obsolete mutation. | `tile.h`, `tile.cpp`, controller source, `tiles_test.cpp`: four |
 | NT02.4 | Workspace owns controller lifetime; TileManager registers/evacuates only transient storage without changing manual serialization/picking. | Workspace and TileManager header/source pairs plus `tiles_test.cpp`: five |
 | NT02.5 | Window compatibility assignment and transient state exposure cannot bypass admission; retained references and X11 refusal are covered before any transient window is exposed. | `window.h`, `window.cpp`, `tiles_test.cpp`: three |
