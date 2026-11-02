@@ -3,11 +3,15 @@
 
 # One-window native ownership proof
 
-NT01 and NT02.1 are complete; NT02.2 and later tasks are unstarted. No tiler is enabled.
+NT01 through NT02.2 are complete; NT02.3 and later tasks are unstarted. No tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
 Qt results, five compiled mutation controls, full KWin library linking and 448 selected core
 regressions passed. Independent review is clear. The writer has no live desktop instance.
+NT02.2 is signed native commit `1f766a12369b20d22e4dc59cab508a2fbd8d324a`: 31 tile
+checks, 488 results across 12 freshly built suites, and three compiled guard-removal controls
+passed. Independent review is clear. Public transient membership calls fail closed until the
+controller routes them safely; no transient node is exposed to desktop callers.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -36,7 +40,7 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | Unit | Outcome and acceptance | Source-file bound |
 |---|---|---|
 | NT02.1 — complete | Native writer primitive uses the existing file; incarnation/revision rejection, map-versus-persisted revisions, sync/readback failure and same-key priority at both close and completion pass real temporary-file tests. Provider replacement gets the dirty map without granting admission. No QML provider or adoption is enabled. | New writer header/source, source CMake, unit-test source and its CMake: five |
-| NT02.2 | Immutable transient kind and public mutation guards reject direct manage/geometry/resize changes; ordinary Tile behavior is unchanged. | `tile.h`, `tile.cpp`, `tiles_test.cpp`: three |
+| NT02.2 — complete | Immutable transient kind and public mutation guards reject direct manage/geometry/resize changes; ordinary Tile behavior is unchanged. | `tile.h`, `tile.cpp`, `tiles_test.cpp`: three |
 | NT02.3 | Concrete transient nodes/controller empty membership before destruction and retain restoration state; callback cancellation stops further mutation and returns Superseded. | One new header/source pair, source CMake, `tiles_test.cpp`: four |
 | NT02.4 | Workspace owns controller lifetime; TileManager registers/evacuates only transient storage without changing manual serialization/picking. | Workspace and TileManager header/source pairs plus `tiles_test.cpp`: five |
 | NT02.5 | Window compatibility assignment and transient state exposure cannot bypass admission; retained references and X11 refusal are covered before any transient window is exposed. | `window.h`, `window.cpp`, `tiles_test.cpp`: three |
