@@ -4,7 +4,7 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.3b2.4b1 are complete; NT02.3b2.4b2 is next.
+NT01 through NT02.3b2.4b2 are complete; NT02.3c is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Writer-qualified admission and surviving records
@@ -73,6 +73,15 @@ Require one desktop matching the selected tree. Activities compiled out or expli
 by Workspace have a distinguished default context. A running Activities service requires a
 known effective current activity; ambiguous/all-activity state is refused when multiple actual
 activities exist. Unknown/NotRunning service state is not evidence of a singleton context.
+
+Implement structural release as a narrow controller Release lifetime guard, analogous to the
+existing Mutation guard. Its constructor holds only the Window and performs callback-free
+revocation/unlink/association clearing. Capture the original cleanup kind: Prepared cancellation
+must not become beginRestore or proof finalization. Clear the Window record's controller link
+with the controller index. Finish notifications explicitly after structural teardown, rechecking
+the Window generation and current association before each signal; finish/destructor fallback is
+idempotent and must not dereference a destroyed controller or node. A Requested record that cannot
+finalize does not make structural clear fail. Never emit treeChanged during controller destruction.
 
 ### Proven NoRequest finalization
 
