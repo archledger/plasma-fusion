@@ -3,7 +3,7 @@
 
 # One-window native ownership proof
 
-NT01 through NT02.3b2.1 are complete; NT02.3b2.2 and later tasks are unstarted. No tiler is enabled.
+NT01 through NT02.3b2.2 are complete; NT02.3b2.3 and later tasks are unstarted. No tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
 Qt results, five compiled mutation controls, full KWin library linking and 448 selected core
@@ -21,6 +21,9 @@ clear. Prepared reservations can be cancelled without pretending that restoratio
 NT02.3b2.1 is signed native commit `e6ec2d49c5ff1eea37666f4b84e867eea5d9a704`:
 87 Xdg checks, 610 results across 14 selected suites, and three compiled controls passed.
 Review is clear. Native request/commit callbacks are guarded, but transient admission is not enabled.
+NT02.3b2.2 is signed native commit `218181ba258e21416c53875848483166e8c7dc95`:
+117 Xdg checks, 640 selected regression results, four compiled mutation controls and private-access
+compiler probes passed. Review is clear. The private request receipt does not enable admission.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -53,7 +56,7 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.3a — complete | Controller creates and owns an empty transient root/leaf; only generation-bound private operations may change its geometry. Stale requests and reentrant clear/context destruction stop further notifications. No window can be attached yet. | New controller header/source, source CMake, `tiles_test.cpp`: four |
 | NT02.3b1 — complete | Add a prepared/owned reservation handoff: verify the expected key, provider incarnation/revision and uniqueness at activation; permit cancellation only before ownership; retain legitimate deferred updates on cancellation. | Writer header/source and writer test: three |
 | NT02.3b2.1 — complete | Native geometry operations stop superseded continuations and survive callback closure; cover immediate and queued resize paths, nested partial requests, and committed-geometry notifications. | `window.h`, `window.cpp`, `xdgshellwindow.cpp`, `waylandwindow.cpp`, existing integration test: five |
-| NT02.3b2.2 | Add a private transient-request transaction with sticky request progress and authoritative Xdg pending-state inspection. Reject unsupported or stale admission before mutation. | `window.h/.cpp`, `xdgshellwindow.h/.cpp`, existing integration test: five |
+| NT02.3b2.2 — complete | Add a private transient-request transaction with sticky request progress and authoritative Xdg pending-state inspection. Reject unsupported or stale admission before mutation. | `window.h/.cpp`, `xdgshellwindow.h/.cpp`, existing integration test: five |
 | NT02.3b2.3 | Finalize a revoked, proven-no-request ownership generation without a synthetic restore event; preserve close suppression and deferred-update ordering. | Writer header/source/test; native test build linkage if needed: four |
 | NT02.3b2.4 | Add writer-qualified window admission, surviving controller records, guarded membership and detach using the native transaction receipt. | Controller header/source, `window.h/.cpp`, `tiles_test.cpp`: five |
 | NT02.3c | Route public transient unmanage/forget into generation-checked controller release; no ambient authorization flag, and callbacks cannot resume an obsolete mutation. | `tile.h`, `tile.cpp`, controller source, `tiles_test.cpp`: four |

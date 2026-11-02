@@ -4,7 +4,7 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.3b2.1 are complete; NT02.3b2.2 is next. The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+NT01 through NT02.3b2.2 are complete; NT02.3b2.3 is next. The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Native geometry boundary before admission
 
@@ -41,6 +41,47 @@ allows only proven no-request finalization, including an already-revoked Restori
 close still retains suppression through QObject destruction. Only then wire actual admission
 and its persistent restoration record. No public authorization flag or callback may grant a
 transient request; test access must not become a production admission bypass.
+
+### Private native request boundary
+
+NT02.3b2.2 adds a private Window request path callable only by the controller and trusted native
+tests. A sealed, noncopyable request object binds the Window, transient Tile, ownership generation
+and controller validity check; it has no public constructor or QML exposure. The validity check
+is read-only and must not enter an event loop. Existing public `requestTile` rejects a transient
+destination, so policy code cannot bypass this path.
+The helper takes unique ownership of the request for the entire call. Its controller reference
+is guarded; controller destruction cannot destroy the checker while Window is using it. Only
+one private request may be active per Window. Nested private entry is rejected without replacing
+the outer request; ordinary nested native actions remain permitted.
+
+Window returns a receipt separating outcome from sticky progress: rejected/superseded/applied,
+and no automatic request/the automatic geometry-request path entered. Progress becomes Requested
+immediately before this request's first `setMoveResizeGeometry`, not after `moveResize` returns.
+It remains Requested even for an equal rectangle, or if a callback supersedes or closes the window.
+Public geometry/tile intent, including equal/no-op untile intent, cancels the in-flight authority.
+Nested ordinary geometry remains
+allowed; the old transient continuation must stop without blocking that newer operation.
+Cancellation precedes relevant public early returns in geometry, tile, compatibility, forget
+and quick-tile actions. The automatic exemption is passed to the exact native geometry call,
+never inferred from an ambient flag. On supersession, clear only a requested Tile installed by
+this attempt and still equal to it; do not undo newer geometry, restore fields or another Tile.
+
+Before mutation, Xdg checks its actual configure timer, queue, acknowledged configure/serial and
+pending commit state, rather than inferring readiness from rectangle equality. Restrict this
+first path to a live ordinary movable/resizable Wayland toplevel, no existing requested/committed
+tile, maximize, fullscreen or interactive operation, and an unchanged floating snapshot. Check
+the resulting padded target against both size-constraint axes and frame/client snapping. Refuse
+unsupported clients, infeasible targets or stale controller authority without requesting geometry.
+Initial preflight and continuation checks are distinct: continuation allows this attempt's own
+requested association/configure, but still requires exact attempt identity, live authority and
+context, an unchanged target rectangle and feasible current constraints. Tree generation alone
+does not freeze that target. Applied means this request boundary completed, not client ACK,
+commit or persistence acknowledgment.
+
+Tests use a narrowly scoped friend to supply native authority and inspect private receipts; no
+production test switch or freely writable authorization flag is added. A receipt is evidence for
+the subsequent no-request finalizer, not permission to release a real owned reservation here.
+Membership, persistence admission and actual restoration-record integration remain later leaves.
 
 ### Reservation handoff before window admission
 
