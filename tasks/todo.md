@@ -3,7 +3,7 @@
 
 # One-window native ownership proof
 
-NT01 through NT02.3c are complete; NT02.4 is next. No production tiler is enabled.
+NT01 through NT02.4a are complete; NT02.4b1 is next. No production tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
 Qt results, five compiled mutation controls, full KWin library linking and 448 selected core
@@ -48,6 +48,10 @@ NT02.3c is signed native commit `923cc849af85b719937d77d45a82922e96883a57`:
 196 Xdg checks, 719 results across 14 selected suites and seven compiled controls passed.
 Public transient unmanage/forget now route through a guarded generation-bound controller call.
 Removal does not claim restoration completion. Review is clear; ordinary Tile behavior is unchanged.
+NT02.4a is signed native commit `d31c0bb80992570f97ba87cdb3f20e64d092027b`:
+209 Xdg checks, 732 results across 14 selected suites and seven compiled controls passed.
+The weak active/retired registry supports native lookup and callback-safe draining without
+changing manual layout storage. Review is clear; Workspace ownership is not yet integrated.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -87,7 +91,9 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.3b2.4b1 — complete | Preserve transient ownership provenance in outgoing native configure state and reject stale tile commits even after the Tile QPointer becomes null. Ordinary native commits remain unchanged; no controller admission yet. | `window.h/.cpp`, `xdgshellwindow.h/.cpp`, Xdg test: five |
 | NT02.3b2.4b2 — complete | Add writer-qualified controller admission and two-phase guarded membership/detach using the surviving Window record and immutable snapshot. | Controller header/source, `window.h/.cpp`, Xdg test: five |
 | NT02.3c — complete | Route public transient unmanage/forget into generation-checked controller release; no ambient authorization flag, and callbacks cannot resume an obsolete mutation. | `tile.h`, `tile.cpp`, controller source, Xdg integration test: four |
-| NT02.4 | Workspace owns controller lifetime; TileManager registers/evacuates only transient storage without changing manual serialization/picking. | Workspace and TileManager header/source pairs plus `tiles_test.cpp`: five |
+| NT02.4a — complete | Index controller-owned transient roots weakly in TileManager; use actual membership for lookup/forget, unregister by exact identity, and drain before desktop/manager teardown without changing manual serialization/picking. | TileManager header/source, controller source, Xdg integration test: four |
+| NT02.4b1 | Workspace owns the idle controller; use guarded manager indexing with one QObject owner, close registration for shutdown, and safely reclaim managers or reconcile missing managers for surviving outputs. | Workspace header/source and Xdg integration test: three |
+| NT02.4b2 | Serialize output reconciliation with a retained pending pass, freeze and retain backend/logical output snapshots, and drain all removed transient contexts before outputRemoved without disrupting ordinary evacuation. | Workspace header/source and Xdg integration test: three |
 | NT02.5 | Window compatibility assignment and transient state exposure cannot bypass admission; retained references and X11 refusal are covered before any transient window is exposed. | `window.h`, `window.cpp`, `tiles_test.cpp`: three |
 
 Do not expose a production adoption entry point between these units or before NT07. If the

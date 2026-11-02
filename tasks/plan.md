@@ -4,8 +4,53 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.3c are complete; NT02.4 is next.
+NT01 through NT02.4a are complete; NT02.4b1 is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+
+### Workspace and transient-root registry
+
+Keep the controller as the sole QObject root owner. TileManager gains a weak active index by
+desktop plus weak lifetime tracking for roots retired from lookup but awaiting deletion. Shared
+metadata carries guarded root/controller identities, desktop/generation and a destroying flag;
+it owns no QObject. The concrete root sets that flag before destructor callbacks. Final
+registration validates the complete tuple after construction and before treeChanged; the
+pre-allocation availability check is only advisory. Unregistration removes lookup by exact tuple
+before clearing controller identity, but lifetime tracking lasts until actual destruction.
+
+Close registration before manager draining; exclude a removed desktop through its ordinary-root
+cleanup. Extract active and retired root metadata into value snapshots before callbacks. Local
+cleanup must finish the captured roots even if the manager is deleted, while draining-flag
+cleanup may touch only a surviving manager. Recheck the live destroying flag after controller
+clear before deleting a surviving captured root. Never select a replacement through the index.
+Keep an in-progress flag in the same shared metadata so a nested drain skips a root already
+being cleared, even before its destructor starts; the outer local cleanup still finishes it.
+Temporary desktop exclusion is restored only by the drain that acquired it and only if the
+manager survives. The native prepare-for-removal entry point is C++ only, not invokable from QML.
+The controller's existing leaf unlink ordering permits context cleanup of a retired ancestor
+without recursively deleting a still-parented leaf.
+
+Native lookup uses registered live trees and actual membership, never a Window record alone.
+Keep manual/quick maps, model, picking and saveSettings separate. forgetWindow holds the Window
+through callback-producing release and uses guarded desktop snapshots plus non-inserting lookup.
+The registry/controller leaf is four files; Workspace ownership and output-removal transactions
+follow separately. The latter must settle unique_ptr ownership before callbacks, block nested
+output updates while retaining a pending update, and close all removed registrations before
+the first drain. No native writer/provider is instantiated in these leaves.
+
+Workspace integration is two commits: ownership/shutdown, then output reconciliation. Keep
+LogicalOutput as the TileManager QObject owner and index managers with QPointer, not a competing
+unique_ptr. Explicitly delete surviving guarded managers at the existing removal points. A
+deleted manager on a still-active output must be recreated at a defined reconciliation point;
+getters remain read-only and may return null until then.
+
+Output reconciliation runs synchronously while idle. Nested requests set a pending bit and a
+single owned zero-delay timer schedules the later pass after cleanup. Consume pending work only
+at entry; cancel queued work during terminal shutdown. Freeze the input values needed by a pass
+before callbacks and retain both backend and logical outputs, releasing logical holds before
+backend holds. Close registration on all removed managers before any drain callback. Revalidate
+manager/root/desktop/Window guards before continuing ordinary evacuation. These guarantees cover
+the new drain/Workspace boundaries, not arbitrary deletion inside unchanged ordinary Tile
+methods.
 
 ### Public release routing
 
@@ -271,8 +316,9 @@ may destroy the controller without a later write into freed state. A concrete no
 its controller record at the start of its derived destructor, before Tile can emit structural
 notifications. Direct leaf destruction retires its remaining empty root through deferred deletion.
 
-In this slice the controller is the root's QObject parent and the sole deletion authority. The
-manager-parented integration belongs to NT02.4 and must preserve one unambiguous owner.
+The controller remains the root's QObject parent and the sole deletion authority. Reviewed
+NT02.4 integration adds a weak manager index and pre-destruction drain rather than changing
+parentage, preserving one unambiguous owner and the already-tested deletion model.
 
 Tests cover invalid normalized geometry/context, stale generation, direct property rejection,
 ordinary tree isolation, callback clear/reentry, context destruction, and controller teardown.

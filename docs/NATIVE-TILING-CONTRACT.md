@@ -16,8 +16,10 @@ transient nodes from manual and quick nodes. For existing native tiled-state/Res
 transient leaves report `QuickTileFlag::Custom`; the internal kind, not that shared flag, decides
 their ownership and destruction rules. No new public quick-tile bit is needed.
 
-`TileManager` parents separate transient roots indexed by desktop. They have no `TileModel` and
-never enter the manual root map, position picker, JSON serializer or saved `kwinrc` layout.
+`TileManager` keeps a weak index of separate transient roots by desktop. The controller remains
+their sole QObject owner; the manager unregisters and drains them before context destruction.
+They have no `TileModel` and never enter the manual root map, position picker, JSON serializer or
+saved `kwinrc` layout.
 The initial root has one leaf for the selected window; structure changes are controller-only.
 
 `Workspace` owns a `TransientTileController` and the placement writer described below. Each Window
@@ -26,10 +28,14 @@ index entries, not a second mutable copy. Records survive tile managers, policy 
 controller teardown without keeping those objects alive. The session writer must outlive
 outstanding records; its destruction is terminal unavailability, not permission to re-adopt via
 a replacement writer. Neither controller nor record keeps a dead output alive.
+LogicalOutput is the TileManager QObject owner; Workspace maintains guarded manager references
+and explicitly reclaims surviving managers at removal. A missing manager for a surviving output
+is reconciled explicitly, never created as a side effect of a lookup.
 Use the established native lifetime rules around calls that emit signals; `QPointer` observes
 destruction but does not keep an object alive across a reentrant operation.
 
-Before clearing tile managers, `Workspace` explicitly shuts the controller down. While the
+Workspace shutdown closes transient registration before its Window-close loops, then resets the
+controller before clearing tile managers. While the
 session is live, output removal detaches its transient memberships before `outputRemoved`
 observers and before manager destruction. The tile manager's desktop-removal path detaches before
 deleting that desktop's roots; its destructor performs idempotent fallback detachment before
