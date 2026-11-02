@@ -3,7 +3,7 @@
 
 # One-window native ownership proof
 
-NT01 through NT02.4b1 are complete; NT02.4b2 is next. No production tiler is enabled.
+NT01 through NT02.4b2a are complete; NT02.4b2b is next. No production tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
 Qt results, five compiled mutation controls, full KWin library linking and 448 selected core
@@ -57,6 +57,11 @@ NT02.4b1 is signed native commit `5b9f749503f05004a65ee3eeeed15be95f261aa7`:
 Workspace now owns an idle controller, closes registration before shutdown callbacks and
 reclaims guarded managers before outputs. Missing-manager consumers and callback-selected
 placement are covered. Review is clear; output reconciliation remains NT02.4b2.
+NT02.4b2a is signed native commit `a4eeaba545ea77c76cea3e73a98538b0b5daf7bc`:
+231 Xdg checks, 754 results across 14 selected suites and eight compiled controls passed.
+Output updates now retain pending work and use held identities and captured pass inputs.
+Caller-side backend snapshots survive bookkeeping. Review is clear; batch draining and guarded
+Workspace evacuation/continuations remain NT02.4b2b.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -98,7 +103,8 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.3c — complete | Route public transient unmanage/forget into generation-checked controller release; no ambient authorization flag, and callbacks cannot resume an obsolete mutation. | `tile.h`, `tile.cpp`, controller source, Xdg integration test: four |
 | NT02.4a — complete | Index controller-owned transient roots weakly in TileManager; use actual membership for lookup/forget, unregister by exact identity, and drain before desktop/manager teardown without changing manual serialization/picking. | TileManager header/source, controller source, Xdg integration test: four |
 | NT02.4b1 — complete | Workspace owns the idle controller; use guarded manager indexing with one QObject owner, close registration for shutdown, and safely reclaim or reconcile missing managers. Missing-manager consumers refuse tiling without accidentally releasing placement. | Workspace header/source, Window source, scripting wrapper source and Xdg integration test: five |
-| NT02.4b2 | Serialize output reconciliation with a retained pending pass, freeze and retain backend/logical output snapshots, and drain all removed transient contexts before outputRemoved without disrupting ordinary evacuation. | Workspace header/source and Xdg integration test: three |
+| NT02.4b2a — complete | Serialize output reconciliation with a retained pending pass and freeze input values while retaining backend/logical output and captured Window lifetimes. | Workspace header/source and Xdg integration test: three |
+| NT02.4b2b | Close all removed registrations before draining; guard ordinary evacuation and Workspace window continuations through output removal. | Workspace header/source and Xdg integration test: three |
 | NT02.5 | Window compatibility assignment and transient state exposure cannot bypass admission; retained references and X11 refusal are covered before any transient window is exposed. | `window.h`, `window.cpp`, `tiles_test.cpp`: three |
 
 Do not expose a production adoption entry point between these units or before NT07. If the

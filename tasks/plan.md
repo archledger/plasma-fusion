@@ -4,7 +4,7 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.4b1 are complete; NT02.4b2 is next.
+NT01 through NT02.4b2a are complete; NT02.4b2b is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Workspace and transient-root registry
@@ -58,6 +58,15 @@ backend holds. Close registration on all removed managers before any drain callb
 manager/root/desktop/Window guards before continuing ordinary evacuation. These guarantees cover
 the new drain/Workspace boundaries, not arbitrary deletion inside unchanged ordinary Tile
 methods.
+
+Split output integration into NT02.4b2a (queued, retained and frozen reconciliation) and
+NT02.4b2b (batch drain and guarded evacuation/Workspace continuations). Both use three files.
+The completion guard runs after every temporary lifetime release, including Window references,
+so destruction callbacks can only record pending work. Captured Windows stay alive for the pass
+to prevent raw-key address reuse in old-output mappings. The second leaf also snapshots and
+guards Windows inside desktopResized/rearrange instead of retaining raw iterators across calls.
+This is consistent input and lifetime handling for one reconciliation pass, not an atomic
+global snapshot: some public LogicalOutput accessors still delegate to the live backend.
 
 ### Public release routing
 

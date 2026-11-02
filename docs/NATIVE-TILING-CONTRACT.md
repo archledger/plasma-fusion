@@ -49,6 +49,10 @@ production writer/provider or admission entry point. Shutdown ordering and nulla
 consumers are qualified; the output-removal transaction above remains NT02.4b2. Missing non-None
 tiling requests are refused, not interpreted as untile. A callback's newer geometry wins over
 an older quick-tile or output-transfer continuation.
+NT02.4b2a adds non-recursive pending output passes with retained backend/logical/Window
+identities and captured geometry/order inputs. Caller-side backend snapshots remain retained
+through post-reconciliation bookkeeping. Batch draining and guarded Workspace continuation
+loops remain NT02.4b2b; the pass is not an atomic global snapshot of backend properties.
 
 The previous external-root adapter is rejected as the product boundary: its roots are absent
 from native lookup, eviction and output/desktop teardown. Adding more geometry observers would
