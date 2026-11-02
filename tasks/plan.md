@@ -4,7 +4,7 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 is complete; NT02.1 is the active leaf. The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+NT01 and NT02.1 are complete; NT02.2 is next. The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 Execution checklist: [todo.md](todo.md). Umbrella tracker: [#115](https://github.com/archledger/plasma-fusion/issues/115).
 
 ## First deliverable

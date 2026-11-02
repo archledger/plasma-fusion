@@ -3,7 +3,11 @@
 
 # One-window native ownership proof
 
-NT01 is complete; NT02.1 is starting and later tasks are unstarted. No tiler is enabled.
+NT01 and NT02.1 are complete; NT02.2 and later tasks are unstarted. No tiler is enabled.
+
+NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
+Qt results, five compiled mutation controls, full KWin library linking and 448 selected core
+regressions passed. Independent review is clear. The writer has no live desktop instance.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -31,7 +35,7 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 
 | Unit | Outcome and acceptance | Source-file bound |
 |---|---|---|
-| NT02.1 | Native writer primitive uses the existing file; incarnation/revision rejection, map-versus-persisted revisions, sync/readback failure and same-key priority at both close and completion pass real temporary-file tests. Provider replacement gets the dirty map without granting admission. No QML provider or adoption is enabled. | New writer header/source, source CMake, unit-test source and its CMake: five |
+| NT02.1 — complete | Native writer primitive uses the existing file; incarnation/revision rejection, map-versus-persisted revisions, sync/readback failure and same-key priority at both close and completion pass real temporary-file tests. Provider replacement gets the dirty map without granting admission. No QML provider or adoption is enabled. | New writer header/source, source CMake, unit-test source and its CMake: five |
 | NT02.2 | Immutable transient kind and public mutation guards reject direct manage/geometry/resize changes; ordinary Tile behavior is unchanged. | `tile.h`, `tile.cpp`, `tiles_test.cpp`: three |
 | NT02.3 | Concrete transient nodes/controller empty membership before destruction and retain restoration state; callback cancellation stops further mutation and returns Superseded. | One new header/source pair, source CMake, `tiles_test.cpp`: four |
 | NT02.4 | Workspace owns controller lifetime; TileManager registers/evacuates only transient storage without changing manual serialization/picking. | Workspace and TileManager header/source pairs plus `tiles_test.cpp`: five |

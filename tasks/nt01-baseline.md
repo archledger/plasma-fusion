@@ -16,11 +16,12 @@
 | Installed library SHA-256 | `0ae605f5743b88b418d82c7332d318f4fe6cf19c02b136faa1bb12468baafe9a` |
 | Builder image | `8e21595bc487be7fec1bed0acaf240e20846b44c213cf0256e11cea8d8d78eae` |
 
-The new ThinkPad worktree is `~/Projects/plasma-fusion-kwin-issue115/source`, branch
-`native/issue115-ownership-20261102`. Its HEAD is upstream; the two baseline patches are staged.
-Use the combined tree above, not HEAD alone, when checking its baseline. No new native change has
-been added. All 3,248 tracked files match the source used to build the installed `.pf2` RPM.
-The older private ownership experiments are not part of this tree.
+The ThinkPad worktree is `~/Projects/plasma-fusion-kwin-issue115/source`, branch
+`native/issue115-ownership-20261102`. At capture its HEAD was upstream with the two patches staged;
+the same baseline was then sealed as signed commit `19216d29517ac8fb8a1e30891083d22d63e2570c`.
+All 3,248 tracked baseline files match the source used to build the installed `.pf2` RPM.
+Later implementation commits are recorded in `todo.md`; compare against this sealed baseline,
+not an assumed current HEAD. The older private ownership experiments are not in this baseline.
 
 The active desktop remains the installed `.pf2` build. Neither this source worktree nor the
 new `build/` directory replaces its files or attaches to its session bus.
