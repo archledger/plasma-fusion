@@ -4,7 +4,7 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.3b2.4a are complete; NT02.3b2.4b1 is next.
+NT01 through NT02.3b2.4b1 are complete; NT02.3b2.4b2 is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Writer-qualified admission and surviving records
@@ -49,6 +49,11 @@ configure state and reject revoked/stale commits, including an actual delayed AC
 node deletion. Ignore a stale transient association rather than substituting a null/ordinary
 commit that could erase a newer manual association. This does not implement restoration serial
 completion. Keep this leaf to Window h/cpp, Xdg h/cpp and the Xdg test.
+The provenance belongs to the requested association that installed the tile, not the latest
+attempted generation (which can advance on rejection). Preserve it when a QPointer becomes null;
+replace or clear it only with explicit association intent. Keep public commitTile for ordinary
+callers and use a protected tagged entry point for native configure delivery. Successful tagged
+commits require a live exact Owned record and writer reservation, without a weaker test-only path.
 
 Membership then separates revocation, structural detach, notifications and persistence
 finalization. Mark Restoring/cancel first, attempt the writer transition, clear the controller
