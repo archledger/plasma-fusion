@@ -3,7 +3,7 @@
 
 # One-window native ownership proof
 
-NT01 through NT02.3a are complete; NT02.3b and later tasks are unstarted. No tiler is enabled.
+NT01 through NT02.3b1 are complete; NT02.3b2 and later tasks are unstarted. No tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
 Qt results, five compiled mutation controls, full KWin library linking and 448 selected core
@@ -15,6 +15,9 @@ controller routes them safely; no transient node is exposed to desktop callers.
 NT02.3a is signed native commit `0c301ae3e6aef34ec1ec8877fd55882bed795ab1`: 69 tile checks,
 526 results across the selected 12 suites, and two compiled generation/reentry controls passed.
 Static review is clear. This establishes empty-tree authority only, not window admission.
+NT02.3b1 is signed native commit `18de7379804172e945c5856f82d1241f4bb41707`: 36 writer
+checks, 539 selected regression results, and three compiled guard controls passed. Review is
+clear. Prepared reservations can be cancelled without pretending that restoration occurred.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -45,7 +48,8 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.1 — complete | Native writer primitive uses the existing file; incarnation/revision rejection, map-versus-persisted revisions, sync/readback failure and same-key priority at both close and completion pass real temporary-file tests. Provider replacement gets the dirty map without granting admission. No QML provider or adoption is enabled. | New writer header/source, source CMake, unit-test source and its CMake: five |
 | NT02.2 — complete | Immutable transient kind and public mutation guards reject direct manage/geometry/resize changes; ordinary Tile behavior is unchanged. | `tile.h`, `tile.cpp`, `tiles_test.cpp`: three |
 | NT02.3a — complete | Controller creates and owns an empty transient root/leaf; only generation-bound private operations may change its geometry. Stale requests and reentrant clear/context destruction stop further notifications. No window can be attached yet. | New controller header/source, source CMake, `tiles_test.cpp`: four |
-| NT02.3b | Add writer-qualified window admission and controller-owned records. Detach empties membership before root destruction, keeps restoration state, and stops adoption after synchronous cancellation. | Controller header/source, `tile.h`, `tile.cpp`, `tiles_test.cpp`: five; split further before coding if writer changes are needed |
+| NT02.3b1 — complete | Add a prepared/owned reservation handoff: verify the expected key, provider incarnation/revision and uniqueness at activation; permit cancellation only before ownership; retain legitimate deferred updates on cancellation. | Writer header/source and writer test: three |
+| NT02.3b2 | Add writer-qualified window admission and controller-owned records using the handoff. Detach empties membership before root destruction, keeps restoration state, and stops adoption after synchronous cancellation. | Controller header/source, `tile.h`, `tile.cpp`, `tiles_test.cpp`: five; split further before coding if writer changes are needed |
 | NT02.3c | Route public transient unmanage/forget into generation-checked controller release; no ambient authorization flag, and callbacks cannot resume an obsolete mutation. | `tile.h`, `tile.cpp`, controller source, `tiles_test.cpp`: four |
 | NT02.4 | Workspace owns controller lifetime; TileManager registers/evacuates only transient storage without changing manual serialization/picking. | Workspace and TileManager header/source pairs plus `tiles_test.cpp`: five |
 | NT02.5 | Window compatibility assignment and transient state exposure cannot bypass admission; retained references and X11 refusal are covered before any transient window is exposed. | `window.h`, `window.cpp`, `tiles_test.cpp`: three |

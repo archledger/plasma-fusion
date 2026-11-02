@@ -4,7 +4,37 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.3a are complete; NT02.3b is next. The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+NT01 through NT02.3b1 are complete; NT02.3b2 is next. The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+
+### Reservation handoff before window admission
+
+The writer needs a cancellable preparation boundary before controller callbacks can run.
+Split NT02.3b into this small writer prerequisite and the actual window-admission slice.
+`reserve` binds the expected canonical key, frame, provider incarnation and revision, persists A,
+and enters Prepared. `activateReservation` requires that same current provider/revision and key
+uniqueness, then enters Owned without callbacks. The controller must revalidate its native window
+snapshot before activation and before the first geometry request. No window mutation is added in
+the writer prerequisite.
+
+`cancelReservation` is available only in Prepared, including after provider retirement. It
+releases the key without inventing a restore-completion event. Legitimate updates received while
+prepared are deferred, including updates from the same window, and the latest native intent is
+applied when preparation is cancelled. An active/restoring reservation cannot use this shortcut.
+`beginRestore` requires Owned or Restoring; the normal restoration and close rules remain intact.
+A generation-bound ownership query is true only in Owned, allowing adoption to stop after a
+callback moves the reservation into Restoring. Existing writer fixtures explicitly activate
+before exercising owned/restoring behavior; no assertions or failure cases are removed.
+
+Before NT02.3b2 is implemented, resolve its post-activation/pre-request cancellation boundary:
+membership and native restore-field notifications can run before any geometry request exists.
+That path must use proven callback-safe ordering or an explicit native no-request abort, not
+`completeRestore` for an event that never occurred. This remains a blocking integration criterion;
+the isolated writer phase API is not by itself proof of a safe window-admission sequence.
+
+Acceptance covers wrong-key refusal before persistence, cancellation and stale generations,
+activation after provider/revision changes or a new same-key window, deferred-update priority,
+and refusal to cancel active ownership. The real provider and native Window integration stay
+disabled until their later gates.
 
 ### NT02.3 implementation order
 
