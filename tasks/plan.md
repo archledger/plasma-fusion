@@ -4,8 +4,30 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.3b2.4b2 are complete; NT02.3c is next.
+NT01 through NT02.3c are complete; NT02.4 is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+
+### Public release routing
+
+Existing tokenless Tile::unmanage(Window*) and Tile::forget(Window*) target membership current
+at dispatch. For transient tiles, delegate through a protected virtual hook whose base default
+rejects. The concrete controller-owned leaf verifies its controller, leaf identity, member and
+nonzero ownership generation before capturing that generation and requesting release. Public
+manage and the other transient mutation guards remain rejecting.
+
+The hook must retain only guarded receiver/controller references across callbacks and inspect
+only the guarded receiver afterward. unmanage reports whether this call removed membership,
+not whether persistence finalized; repeated unmanage returns false and repeated forget is
+harmless. Both public methods return immediately after routing, so they cannot resume ordinary
+geometry work after a callback invalidates their generation. Closing windows may still detach;
+the writer barrier remains through QObject destruction. This leaf requests no restoration
+geometry and does not fabricate completion.
+
+The public methods carry no caller generation and cannot infer historical external intent.
+Generation binding protects the dispatched operation and the existing generation-bearing
+Window/controller paths. Tests must distinguish these guarantees and cover stale generations
+after release/readmission without inventing a new tokenless-API promise. Keep four files by
+using the existing Xdg integration target for real Window/writer fixtures.
 
 ### Writer-qualified admission and surviving records
 
