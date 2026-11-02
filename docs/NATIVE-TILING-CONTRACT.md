@@ -20,9 +20,12 @@ their ownership and destruction rules. No new public quick-tile bit is needed.
 never enter the manual root map, position picker, JSON serializer or saved `kwinrc` layout.
 The initial root has one leaf for the selected window; structure changes are controller-only.
 
-`Workspace` owns a `TransientTileController` and the placement writer described below. The
-controller holds each window's ownership/restoration record and outlives tile managers and policy
-modules. It does not own the window or keep a dead output alive.
+`Workspace` owns a `TransientTileController` and the placement writer described below. Each Window
+owns its authoritative native ownership/restoration record; the controller keeps references or
+index entries, not a second mutable copy. Records survive tile managers, policy modules and
+controller teardown without keeping those objects alive. The session writer must outlive
+outstanding records; its destruction is terminal unavailability, not permission to re-adopt via
+a replacement writer. Neither controller nor record keeps a dead output alive.
 Use the established native lifetime rules around calls that emit signals; `QPointer` observes
 destruction but does not keep an object alive across a reentrant operation.
 

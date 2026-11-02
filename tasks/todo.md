@@ -3,7 +3,7 @@
 
 # One-window native ownership proof
 
-NT01 through NT02.3b2.3b are complete; NT02.3b2.4 is next. No tiler is enabled.
+NT01 through NT02.3b2.4a are complete; NT02.3b2.4b1 is next. No tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
 Qt results, five compiled mutation controls, full KWin library linking and 448 selected core
@@ -31,6 +31,10 @@ NT02.3b2.3b is signed native commit `af615955314f1af4902a3a8f69e03ad7713fd330`:
 132 Xdg checks, 655 results across the 14 selected suites and six compiled mutation controls
 passed. Review is clear, including the tracked-owner coverage correction. The finalizer consumes
 native proof once; actual controller admission is not part of this leaf.
+NT02.3b2.4a is signed native commit `20be704c9d0bc24bc23e46bdd3b51ccda22c2133`:
+150 Xdg checks, 673 results across 14 selected suites and seven compiled mutation controls
+passed. The Window-owned record retains immutable state and sticky native progress, with one
+shared NoRequest proof. Review is clear. Controller membership is not yet wired.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -66,7 +70,9 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.3b2.2 — complete | Add a private transient-request transaction with sticky request progress and authoritative Xdg pending-state inspection. Reject unsupported or stale admission before mutation. | `window.h/.cpp`, `xdgshellwindow.h/.cpp`, existing integration test: five |
 | NT02.3b2.3a — complete | Mint an opaque, noncopyable NoRequest proof from the native Window receipt. Bind Window identity, canonical owner generation and native attempt; reject proofs after a newer private attempt or during close. No writer mutation yet. | `window.h/.cpp`, writer header, existing integration test: four |
 | NT02.3b2.3b — complete | Consume that proof once to finalize the exact Owned/Restoring reservation without a synthetic restore event. Preserve close suppression and deferred-update ordering; test with real Window receipts. | Writer header/source, integration test and its source linkage: four |
-| NT02.3b2.4 | Add writer-qualified window admission, surviving controller records, guarded membership and detach using the native transaction receipt. | Controller header/source, `window.h/.cpp`, `tiles_test.cpp`: five |
+| NT02.3b2.4a — complete | Establish the Window-owned reservation/attempt record, non-reusable generation allocation, synchronous provider validation and activated-before-request NoRequest proof. Publish sticky progress before geometry; preserve failures and close suppression. Link integration tests to the single native writer. No controller membership yet. | `window.h/.cpp`, writer header, integration CMake and Xdg test: five |
+| NT02.3b2.4b1 | Preserve transient ownership provenance in outgoing native configure state and reject stale tile commits even after the Tile QPointer becomes null. Ordinary native commits remain unchanged; no controller admission yet. | `window.h/.cpp`, `xdgshellwindow.h/.cpp`, Xdg test: five |
+| NT02.3b2.4b2 | Add writer-qualified controller admission and two-phase guarded membership/detach using the surviving Window record and immutable snapshot. | Controller header/source, `window.h/.cpp`, Xdg test: five |
 | NT02.3c | Route public transient unmanage/forget into generation-checked controller release; no ambient authorization flag, and callbacks cannot resume an obsolete mutation. | `tile.h`, `tile.cpp`, controller source, `tiles_test.cpp`: four |
 | NT02.4 | Workspace owns controller lifetime; TileManager registers/evacuates only transient storage without changing manual serialization/picking. | Workspace and TileManager header/source pairs plus `tiles_test.cpp`: five |
 | NT02.5 | Window compatibility assignment and transient state exposure cannot bypass admission; retained references and X11 refusal are covered before any transient window is exposed. | `window.h`, `window.cpp`, `tiles_test.cpp`: three |

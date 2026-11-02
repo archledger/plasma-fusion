@@ -4,8 +4,70 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.3b2.3b are complete; NT02.3b2.4 is next.
+NT01 through NT02.3b2.4a are complete; NT02.3b2.4b1 is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+
+### Writer-qualified admission and surviving records
+
+Split the reservation/attempt lifetime from callback-producing membership. Window owns the one
+native record; the controller holds references, not another mutable copy. The record keeps the
+original floating frame and native context immutable, the writer/provider binding, a Window-
+allocated non-reusable ownership generation, and sticky native request progress. Allocation is
+separate from native attempt consumption; cancelling preparation never permits generation reuse.
+
+Preparation reserves the exact writer snapshot. Activation revalidates the original native
+snapshot and the writer's current provider incarnation/revision synchronously, then publishes
+Owned and a sealed NoRequest attempt before any membership notification. Queued provider-retired
+signals are not freshness evidence. The native request publishes Requested into the surviving
+record before its first geometry mutation, not only when returning a receipt.
+
+Revocation enters Restoring before removal or manual-record callbacks. Prepared may use ordinary
+cancellation. An activated attempt proven not to have entered geometry may use the one-shot
+NoRequest finalizer even when no native request call began. Requested/uncertain attempts retain
+their record and writer barrier for the later restoration implementation; do not invent a
+completion event. A failed writer cleanup retains the native record. Close retains suppression
+through `closed`; QObject-destruction cleanup captures UUID/writer identity without dereferencing
+destroyed Window fields. Writer lifetime must cover outstanding records; writer loss is terminal
+unavailability and cannot authorize re-adoption through a replacement.
+
+The writer becomes an explicit internal C++ library dependency, still non-installed and not QML
+registered. Integration tests link that same implementation and metadata instead of compiling a
+second writer into the executable. A small read-only incarnation/revision predicate belongs at
+the writer boundary. Keep the record/attempt leaf to Window h/cpp, writer header, integration
+CMake and Xdg tests; if a proper implementation needs another file, revise the bound first.
+
+The following membership leaf adds guarded private notifications, detaches before structural
+teardown, and refuses late transient commits after revocation. It rechecks the original frame,
+context, target and writer binding after every callback. Controller tree/lifetime changes must
+not discard the Window record. Actual restoration request/completion, Workspace ownership,
+public release routing and production enablement remain later gates.
+
+Before membership, add a bounded native configure-provenance leaf. A configure's Tile QPointer
+can become null after tree destruction; null alone cannot distinguish that stale transient
+commit from a real untile. Preserve the originating transient ownership identity in outgoing
+configure state and reject revoked/stale commits, including an actual delayed ACK/commit after
+node deletion. Ignore a stale transient association rather than substituting a null/ordinary
+commit that could erase a newer manual association. This does not implement restoration serial
+completion. Keep this leaf to Window h/cpp, Xdg h/cpp and the Xdg test.
+
+Membership then separates revocation, structural detach, notifications and persistence
+finalization. Mark Restoring/cancel first, attempt the writer transition, clear the controller
+index/member list and only matching Window associations without notifications, then emit
+guarded notifications and attempt NoRequest finalization. Failure or Requested progress must
+not prevent structural detach or discard the record. Closing windows still detach structurally
+but never finalize persistence before QObject destruction. Do not call public requestTile(null)
+to forget an association, since that requests restoration geometry.
+
+Direct node destruction marks the node as destroying and invalidates publication before
+callbacks. Empty memberships and sever structural/QObject links before outward notification;
+never emit from the dying node, and never recursively delete its parent inline. Preserve normal
+windowAdded/windowRemoved-before-windowsChanged ordering with checks between signals. Provisional
+admission and published membership are explicit transaction stages, not competing authorities.
+
+Require one desktop matching the selected tree. Activities compiled out or explicitly unused
+by Workspace have a distinguished default context. A running Activities service requires a
+known effective current activity; ambiguous/all-activity state is refused when multiple actual
+activities exist. Unknown/NotRunning service state is not evidence of a singleton context.
 
 ### Proven NoRequest finalization
 
