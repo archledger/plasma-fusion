@@ -4,7 +4,7 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.4a are complete; NT02.4b1 is next.
+NT01 through NT02.4b1 are complete; NT02.4b2 is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Workspace and transient-root registry
@@ -42,6 +42,13 @@ LogicalOutput as the TileManager QObject owner and index managers with QPointer,
 unique_ptr. Explicitly delete surviving guarded managers at the existing removal points. A
 deleted manager on a still-active output must be recreated at a defined reconciliation point;
 getters remain read-only and may return null until then.
+
+The ownership leaf also guards Window's manager/root consumers and the scripting wrapper.
+Unavailable non-None tiling requests are refused rather than interpreted as untile; explicit
+None requests retain their release behavior. Output transfer without a destination manager
+forgets the old association before ordinary geometry transfer, but stops if a callback closes
+the Window or selects a newer placement. Shutdown tests use the actual test-application
+destructor in an isolated child process and return a post-destructor verdict to the parent.
 
 Output reconciliation runs synchronously while idle. Nested requests set a pending bit and a
 single owned zero-delay timer schedules the later pass after cleanup. Consume pending work only

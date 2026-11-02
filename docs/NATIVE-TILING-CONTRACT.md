@@ -35,14 +35,20 @@ Use the established native lifetime rules around calls that emit signals; `QPoin
 destruction but does not keep an object alive across a reentrant operation.
 
 Workspace shutdown closes transient registration before its Window-close loops, then resets the
-controller before clearing tile managers. While the
-session is live, output removal detaches its transient memberships before `outputRemoved`
+controller before clearing tile managers. While the session is live, output removal detaches its
+transient memberships before `outputRemoved`
 observers and before manager destruction. The tile manager's desktop-removal path detaches before
 deleting that desktop's roots; its destructor performs idempotent fallback detachment before
 setting `tearingDown`. A transient node's destructor also requests fallback detachment if needed.
 All such paths empty memberships before the `Tile` base destructor runs. The transient-kind
 branch never falls back to assigning a manual tile. Session shutdown cancels native ownership
 without sending new requests through a half-destroyed workspace; the persisted A remains intact.
+
+Implementation status at NT02.4b1: Workspace creates only the idle controller. There is no
+production writer/provider or admission entry point. Shutdown ordering and nullable manager
+consumers are qualified; the output-removal transaction above remains NT02.4b2. Missing non-None
+tiling requests are refused, not interpreted as untile. A callback's newer geometry wins over
+an older quick-tile or output-transfer continuation.
 
 The previous external-root adapter is rejected as the product boundary: its roots are absent
 from native lookup, eviction and output/desktop teardown. Adding more geometry observers would
