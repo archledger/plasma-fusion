@@ -4,7 +4,41 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.2 are complete; NT02.3 is next. The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+NT01 through NT02.3a are complete; NT02.3b is next. The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+
+### NT02.3 implementation order
+
+Build the empty native tree before allowing it to own a window. `TransientTileController` is an
+internal QObject with no invokable methods or QML registration. Its first API creates one empty
+root/leaf for an existing manager and desktop, updates normalized geometry for the current
+generation, and clears that generation. It neither reserves a placement key nor requests window
+geometry. Window admission and writer integration remain unavailable until the next leaf.
+
+The controller owns the QObject tree, observes manager/desktop lifetimes, and invalidates its
+generation before deleting nodes. The concrete `TransientTile` implementation stays private to
+the controller source. It does not call the existing protected `insertChild`, which may evacuate
+members into the manual tree. The initial root/leaf links are built privately while empty.
+
+Private geometry operations carry the current generation plus guarded controller/node/context
+identities. After each signal, revalidate those identities before emitting another signal or
+doing further work. A callback may clear the tree or destroy its context; the outer operation
+then returns `Superseded`. Public inherited setters remain rejecting throughout. An in-flight
+operation rejects another geometry update rather than interleaving; clear is allowed to revoke it.
+Generation exhaustion refuses new trees, and a generation is never reused within a controller.
+Creation is also rejected while any operation or clear is unwinding. Shutdown becomes terminal
+before deleting nodes, and operation cleanup holds only a guarded controller pointer so a callback
+may destroy the controller without a later write into freed state. A concrete node invalidates
+its controller record at the start of its derived destructor, before Tile can emit structural
+notifications. Direct leaf destruction retires its remaining empty root through deferred deletion.
+
+In this slice the controller is the root's QObject parent and the sole deletion authority. The
+manager-parented integration belongs to NT02.4 and must preserve one unambiguous owner.
+
+Tests cover invalid normalized geometry/context, stale generation, direct property rejection,
+ordinary tree isolation, callback clear/reentry, context destruction, and controller teardown.
+Include direct root/leaf deletion and controller deletion during a geometry notification.
+This qualifies only empty-tree authority/lifetime, not occupied destruction or restoration.
+NT02.3b/3c add those paths within their own source-file bounds before NT02.4 exposes native lookup.
 Execution checklist: [todo.md](todo.md). Umbrella tracker: [#115](https://github.com/archledger/plasma-fusion/issues/115).
 
 ## First deliverable
