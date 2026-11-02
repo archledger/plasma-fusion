@@ -4,7 +4,42 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.3b2.2 are complete; NT02.3b2.3 is next. The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+NT01 through NT02.3b2.3b are complete; NT02.3b2.4 is next.
+The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+
+### Proven NoRequest finalization
+
+Split proof issuance from writer consumption so neither leaf needs a broad cross-module diff.
+Window alone mints an opaque, noncopyable proof attached to a genuine private receipt that has
+NoRequest progress. A valid private attempt gets its native sequence before eligibility checks,
+so native rejection can also prove that no automatic geometry request was issued. Nested,
+wrong-window, closed or exhausted attempts cannot mint usable proof.
+
+The proof binds the Window UUID, ownership generation (canonical decimal text at the writer
+boundary), and native private-attempt sequence. It holds a Window-generated read-only validity
+check using a guarded Window reference. Closure is checked from native deletion state, not the
+delivery order of `closed` handlers. A newer private attempt invalidates an older proof; ordinary
+manual geometry does not. Shared proof handles share one consumed bit, preventing replay.
+Window also retains the last consumed ownership generation for its entire lifetime. A new native
+attempt must have a strictly greater ownership generation; an equal or older generation gets no
+proof and cannot replace the earlier attempt's Requested history. This survives controller
+replacement. Test Requested followed by a same-generation rejected attempt explicitly.
+
+The writer accepts proof only for the matching Owned or Restoring reservation. It must reject
+null, replayed, superseded and closing-window proof without releasing the key. Prepared still
+uses ordinary cancellation. Successful finalization applies the latest valid deferred update,
+preserves per-key ordering and clears the reservation without adding a restoration watermark
+or writing a synthetic completion event. A failed application leaves proof unconsumed.
+Manual revocation must move the writer to Restoring before a callback records the user's new
+geometry; Owned deliberately suppresses such writes. Test this ordering in a real restore-field
+callback before consuming NoRequest proof. The finalizer must not reconstruct an update that was
+incorrectly submitted while still Owned. Production dispatch wiring remains a later gate.
+
+Keep the proof carrier in the lightweight writer header with a private Window-only constructor;
+Window's header uses a forward declaration and an opaque shared handle. The proof is not QML
+registered or caller-populated. Integration tests create real native receipts; their target may
+compile the writer source just as the existing standalone writer suite does, without exporting
+a new public writer ABI solely for testing. Both leaves retain full native linking/regressions.
 
 ### Native geometry boundary before admission
 

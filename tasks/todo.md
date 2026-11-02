@@ -3,7 +3,7 @@
 
 # One-window native ownership proof
 
-NT01 through NT02.3b2.2 are complete; NT02.3b2.3 and later tasks are unstarted. No tiler is enabled.
+NT01 through NT02.3b2.3b are complete; NT02.3b2.4 is next. No tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
 Qt results, five compiled mutation controls, full KWin library linking and 448 selected core
@@ -24,6 +24,13 @@ Review is clear. Native request/commit callbacks are guarded, but transient admi
 NT02.3b2.2 is signed native commit `218181ba258e21416c53875848483166e8c7dc95`:
 117 Xdg checks, 640 selected regression results, four compiled mutation controls and private-access
 compiler probes passed. Review is clear. The private request receipt does not enable admission.
+NT02.3b2.3a is signed native commit `20e1946ef1c47a1a4156b8ff04322ad1c15f50ec`:
+118 Xdg checks, 641 selected regression results and proof-access compiler probes passed.
+Window-issued NoRequest evidence is opaque and bound to strictly increasing ownership history.
+NT02.3b2.3b is signed native commit `af615955314f1af4902a3a8f69e03ad7713fd330`:
+132 Xdg checks, 655 results across the 14 selected suites and six compiled mutation controls
+passed. Review is clear, including the tracked-owner coverage correction. The finalizer consumes
+native proof once; actual controller admission is not part of this leaf.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -57,7 +64,8 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.3b1 — complete | Add a prepared/owned reservation handoff: verify the expected key, provider incarnation/revision and uniqueness at activation; permit cancellation only before ownership; retain legitimate deferred updates on cancellation. | Writer header/source and writer test: three |
 | NT02.3b2.1 — complete | Native geometry operations stop superseded continuations and survive callback closure; cover immediate and queued resize paths, nested partial requests, and committed-geometry notifications. | `window.h`, `window.cpp`, `xdgshellwindow.cpp`, `waylandwindow.cpp`, existing integration test: five |
 | NT02.3b2.2 — complete | Add a private transient-request transaction with sticky request progress and authoritative Xdg pending-state inspection. Reject unsupported or stale admission before mutation. | `window.h/.cpp`, `xdgshellwindow.h/.cpp`, existing integration test: five |
-| NT02.3b2.3 | Finalize a revoked, proven-no-request ownership generation without a synthetic restore event; preserve close suppression and deferred-update ordering. | Writer header/source/test; native test build linkage if needed: four |
+| NT02.3b2.3a — complete | Mint an opaque, noncopyable NoRequest proof from the native Window receipt. Bind Window identity, canonical owner generation and native attempt; reject proofs after a newer private attempt or during close. No writer mutation yet. | `window.h/.cpp`, writer header, existing integration test: four |
+| NT02.3b2.3b — complete | Consume that proof once to finalize the exact Owned/Restoring reservation without a synthetic restore event. Preserve close suppression and deferred-update ordering; test with real Window receipts. | Writer header/source, integration test and its source linkage: four |
 | NT02.3b2.4 | Add writer-qualified window admission, surviving controller records, guarded membership and detach using the native transaction receipt. | Controller header/source, `window.h/.cpp`, `tiles_test.cpp`: five |
 | NT02.3c | Route public transient unmanage/forget into generation-checked controller release; no ambient authorization flag, and callbacks cannot resume an obsolete mutation. | `tile.h`, `tile.cpp`, controller source, `tiles_test.cpp`: four |
 | NT02.4 | Workspace owns controller lifetime; TileManager registers/evacuates only transient storage without changing manual serialization/picking. | Workspace and TileManager header/source pairs plus `tiles_test.cpp`: five |
