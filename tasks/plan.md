@@ -7,8 +7,8 @@ Status: the owner approved continuation of this first-milestone plan on 2026-11-
 NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
 NT02.5a2b2a (the immutable fence) and NT02.5a2b2b1 (guarded commit) are also complete.
 NT02.5a2b2b2a (restore field) and NT02.5a2b2b3a (committed-geometry publication) are complete.
-Requested-state/output synchronization at NT02.5a2b2b3b1 is also complete. Backend geometry
-requests at NT02.5a2b2b3b2 are next, before the remaining normalization steps.
+Requested-state/output synchronization at NT02.5a2b2b3b1 is also complete, as are the guarded
+backend geometry requests at NT02.5a2b2b3b2; the remaining normalization steps are next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment

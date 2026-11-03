@@ -557,6 +557,17 @@ It can finish an interrupted same-output synchronization without allocating a ge
 generation or emitting requestedGeometryChanged. Existing transient ownership is refused without
 release. Property hooks may schedule configures; backend dispatch and client completion remain
 separate from this storage step.
+The private backend geometry request builds on that synchronizer. It reserves the request
+generation, the exact synchronization writes, one committed-geometry change and one publication
+generation before mutating anything, then allocates its generation and only afterwards takes the
+checkpoint it validates at every callback boundary. Immediate updates consume the publication
+helper's result; a resize that needs the client is staged as a queued configure and reported as
+such, and the client's later acknowledgement completes it through the ordinary commit path. A
+superseded request keeps the state it already applied and returns no authority. Only xdg toplevels
+take these requests; everything else is refused before any effect. Callers pass a complete frame
+rectangle with Move, Resize or MoveResize, as the legacy path does; a Move during an unsubmitted
+resize is promoted to MoveResize. The step does not route transient-tile requests, normalize
+maximize state or admit controller membership.
 The lane's Memcheck runs use a labelled profile: `QT_HASH_SEED=0` in the Valgrind environment
 only. Qt 6.11.2's AES short-string hash deliberately loads 16 bytes for keys shorter than that
 and masks the surplus; Memcheck reports it whenever that window leaves the key's heap block, which

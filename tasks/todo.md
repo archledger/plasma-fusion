@@ -7,7 +7,7 @@ NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
 NT02.5a2b2a (the immutable fence) and NT02.5a2b2b1 (guarded commit) are also complete.
 NT02.5a2b2b2a (restore field) is complete. The guarded committed-geometry prerequisite
 NT02.5a2b2b3a and requested-state/output synchronization at NT02.5a2b2b3b1 are complete.
-Backend geometry requests at NT02.5a2b2b3b2 are next, before maximize normalization.
+Backend geometry requests at NT02.5a2b2b3b2 are complete; maximize normalization is next.
 No production tiler is enabled.
 The startup Memcheck diagnostics mentioned below are closed: the two uninitialized values are
 fixed with regressions on the private branch `fix/startup-initialization`
@@ -120,6 +120,19 @@ NT02.5a2b2b3b1 is signed native commit `a0cb13a7c8888062edb28e96946cacd55ae7c699
 Frozen requested-state/output synchronization now has exact headroom, per-write checkpoints,
 versioned pending transitions and refusal of active transient ownership. The pending-only nested
 completion case is isolated. This does not allocate request identity or dispatch backend geometry.
+NT02.5a2b2b3b2 is signed native commit `59ae3174f07292f9667489eb9f57cc9c497e263a`:
+414 Xdg checks, 947 results across 14 selected suites and nine compiled controls passed.
+Under the labelled Memcheck lane profile the five new request functions show only the two known
+startup initializer contexts of the base, which `fix/startup-initialization` addresses; no Qt
+hash over-read and no context in the new code. The private
+guarded request allocates its generation before taking its own checkpoint, reserves every budget
+before the first mutation, synchronizes through the shared 3b1 writer, dispatches through the Xdg
+backend shared with the legacy path, and reports immediate publications and queued configures
+separately. After the first mutation a failed step is Superseded, never a no-effect refusal.
+Queued means staged for the coalesced configure, not sent or completed; client completion still
+runs the ordinary commit path. Toplevels only; popups, X11, internal and layer-shell windows are
+refused without effects. Maximize normalization, transient-request routing and controller
+admission remain later leaves.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -171,7 +184,7 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.5a2b2b2a — complete | Implement a private guarded geometry-restore field step. Version actual legacy/private changes before notification, preserve no-op/sentinel semantics, and never cancel ownership or request geometry from the storage setter. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
 | NT02.5a2b2b3a — complete | Guard Wayland committed client/frame/buffer/output publication, including explicit pending-notification drain, callback supersession and output lifetime. Version actual legacy output changes to detect round trips. This is not a geometry request or client completion. | `window.h/.cpp`, `waylandwindow.h/.cpp`, Xdg test: five |
 | NT02.5a2b2b3b1 — complete | Guard requested-rectangle/output-property synchronization with frozen output values, exact headroom and callback checks; retain pending obligations without cancelling ownership or inventing request identity. Prepare narrow Xdg access to the publication helper. | `window.h/.cpp`, `waylandwindow.h`, Xdg test: four |
-| NT02.5a2b2b3b2 | Implement guarded Window/Xdg backend geometry requests, consuming synchronized state and the publication result for immediate updates; qualify queued branches separately from client completion. | Window header/source, Xdg header/source, Xdg test: at most five; after 3b1 |
+| NT02.5a2b2b3b2 — complete | Implement guarded Window/Xdg backend geometry requests, consuming synchronized state and the publication result for immediate updates; qualify queued branches separately from client completion. | Window header/source, Xdg header/source, Xdg test: at most five; after 3b1 |
 | NT02.5a2b2b2b | Implement explicit owned Window/Xdg request and normalization steps using the completed field and geometry primitives. Validate before mutation and reject foreign activity without refresh. | Window header/source, Xdg header/source, Xdg test: at most five; after 3b |
 | NT02.5a2b2c | Add X11 specialization with explicit immediate-commit provenance and guarded maximize/geometry behavior. | X11 header/source, necessary Window interface changes, Tiles test: at most five; refine before coding |
 | NT02.5a2b2d | Add guarded Tile membership/ingress and original-membership cleanup. Public reentrant calls inherit no token; relevant membership no-ops supersede the older operation. | Tile header/source, necessary Window plumbing, Tiles test: at most five; refine before coding |
