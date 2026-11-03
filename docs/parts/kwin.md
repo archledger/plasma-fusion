@@ -557,6 +557,19 @@ It can finish an interrupted same-output synchronization without allocating a ge
 generation or emitting requestedGeometryChanged. Existing transient ownership is refused without
 release. Property hooks may schedule configures; backend dispatch and client completion remain
 separate from this storage step.
+The lane's Memcheck runs use a labelled profile: `QT_HASH_SEED=0` in the Valgrind environment
+only. Qt 6.11.2's AES short-string hash deliberately loads 16 bytes for keys shorter than that
+and masks the surplus; Memcheck reports it whenever that window leaves the key's heap block, which
+made startup results address-dependent without pointing at KWin code. With a zero global seed Qt
+uses its non-AES hash, so the profile avoids the path rather than suppressing the function. It
+changes the hash algorithm, container iteration order and performance of the test process, so the
+ordinary randomized functional runs stay as they are, and a clean Memcheck result under this
+profile qualifies neither the AES path nor other Qt startup code. Qt's `QT_NO_CPU_FEATURE` switch
+cannot serve instead: from 6.8 to 6.11 its feature-name table carries leading spaces that its
+parser does not skip. The two startup initializer defects the lane found (an `Options` boolean
+and the test fixture's relative-tablet flag) are fixed with their regressions on the private
+branch `fix/startup-initialization` (`136c04f435704ce5d9d1593ea35913862f2572bb`), not in the
+native commits, and are not merged or installed.
 
 Dynamic tiling is not implemented or installed. Its approved plan starts with a native ownership
 gate. The test-only `tests/vsession/auto_tiling_probe.py` and `scenario-auto-tiling.sh` characterize

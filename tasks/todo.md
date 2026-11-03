@@ -9,6 +9,11 @@ NT02.5a2b2b2a (restore field) is complete. The guarded committed-geometry prereq
 NT02.5a2b2b3a and requested-state/output synchronization at NT02.5a2b2b3b1 are complete.
 Backend geometry requests at NT02.5a2b2b3b2 are next, before maximize normalization.
 No production tiler is enabled.
+The startup Memcheck diagnostics mentioned below are closed: the two uninitialized values are
+fixed with regressions on the private branch `fix/startup-initialization`
+(`136c04f435704ce5d9d1593ea35913862f2572bb`, not merged), and the remaining 16-byte read is
+Qt 6.11.2's deliberate AES short-string hash over-read, which the lane now avoids with the
+`QT_HASH_SEED=0` profile described in docs/parts/kwin.md. Neither changes the native commits.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
 Qt results, five compiled mutation controls, full KWin library linking and 448 selected core
