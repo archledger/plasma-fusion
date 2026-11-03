@@ -521,8 +521,11 @@ rows the workspaces are added and removed in KWin's linear order and the grid re
 The isolated native-ownership lane also tests the deprecated `Window.tile` compatibility setter.
 A refused manual destination must leave the previous manual assignment and geometry unchanged.
 Direct and Qt-property calls are covered with Wayland and X11 clients, alongside successful
-cross-desktop and explicit-null controls. Callback-lifetime hardening and actual owned-state
-tests remain separate NT02.5 leaves; the public state/completion API remains NT04 work.
+cross-desktop and explicit-null controls. The cancellation continuation retains the Window and
+guards the destination against destruction, newer cancellation/geometry intent and committed-only
+changes. Pending/committed owner tests cover these checks; cancellation does not mean restoration
+has completed. Post-management cleanup and broader owned-state validation remain separate NT02.5
+leaves; the public state/completion API remains NT04 work.
 
 Dynamic tiling is not implemented or installed. Its approved plan starts with a native ownership
 gate. The test-only `tests/vsession/auto_tiling_probe.py` and `scenario-auto-tiling.sh` characterize

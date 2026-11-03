@@ -3,7 +3,7 @@
 
 # One-window native ownership proof
 
-NT01 through NT02.4b2b and NT02.5a1 are complete; NT02.5a2 is next.
+NT01 through NT02.4b2b, NT02.5a1 and NT02.5a2a are complete; NT02.5a2b is next.
 No production tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
@@ -73,6 +73,12 @@ NT02.5a1 is signed native commit `7f48df9b95a07e326c997e038e7a426917716a5e`:
 Refused compatibility destinations preserve the previous manual assignment; successful
 cross-desktop and null assignments remain unchanged. Review is clear. Callback lifetime,
 newer-intent protection and actual owned-state coverage remain NT02.5a2/b.
+NT02.5a2a is signed native commit `82baba9decab2228a1303cbfd360eafe8295b401`:
+267 Xdg checks, 796 results across 14 selected suites and four compiled controls passed.
+Cancellation continuations now reject newer intent and target destruction with guarded lifetime.
+Removing the helper hold produces the intended freed-Window read under Memcheck. Candidate and
+startup control retain unresolved startup diagnostics; no globally clean memory gate is claimed.
+Review is clear within this boundary. Post-management cleanup remains NT02.5a2b.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -117,7 +123,8 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.4b2a — complete | Serialize output reconciliation with a retained pending pass and freeze input values while retaining backend/logical output and captured Window lifetimes. | Workspace header/source and Xdg integration test: three |
 | NT02.4b2b — complete | Close all removed registrations before draining; guard ordinary evacuation and Workspace window continuations through output removal. | Workspace header/source and Xdg integration test: three (two needed) |
 | NT02.5a1 — complete | Refused compatibility destinations preserve the previous manual membership, requested state and geometry; retain successful active/inactive-desktop and explicit-null behavior. | `window.cpp`, `tiles_test.cpp`: two |
-| NT02.5a2 | Guard compatibility cancellation and subsequent assignment against Window/Tile destruction and newer callback intent, including equal-null cancellation. Retained transient references and X11 refusal cannot bypass admission. | `window.h`, `window.cpp`, `tiles_test.cpp`: three |
+| NT02.5a2a — complete | Guard the compatibility continuation after cancellation against Window/target destruction, newer cancellation or geometry intent, and committed-only changes. Use actual pending/committed ownership fixtures. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
+| NT02.5a2b | Guard post-management cleanup without changing successful cross-desktop semantics. Retained transient references and X11 refusal cannot bypass admission. | `window.h`, `window.cpp`, `tiles_test.cpp`: three |
 | NT02.5b | Use the actual controller-owned Xdg fixture to verify release ordering, cancellation supersession and retained state. New public state/token/completion properties remain NT04 work. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
 
 Do not expose a production adoption entry point between these units or before NT07. If the

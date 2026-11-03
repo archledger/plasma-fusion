@@ -4,7 +4,7 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.4b2b and NT02.5a1 are complete; NT02.5a2 is next.
+NT01 through NT02.4b2b, NT02.5a1 and NT02.5a2a are complete; NT02.5a2b is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment
@@ -22,6 +22,16 @@ numbers cannot be reused as a cancellation stamp. Subsequent cleanup must be qua
 the original association rather than adopting callback-selected state. A separate Xdg leaf uses
 real controller-owned membership and pending records to test these boundaries; it does not claim
 restoration completion. New public state/token/completion properties remain at NT04.
+
+Split a2 into the cancellation boundary (a2a) and post-management cleanup (a2b). The first uses
+the existing Xdg fixture within its three-file bound. A private saturating continuation revision
+advances for every cancellation, including no-ops, and actual committed-association changes.
+The release's own direct detach does not advance that revision. This detects committed-only
+replacement and replacement-then-null callbacks without treating normal revocation as newer
+intent. The cancellation helper retains the Window while checking its result; true means only
+that this continuation remains current, not that restoration or reservation cleanup finished.
+The compatibility setter separately retains the Window and target and checks geometry intent
+after cancellation. Post-management cleanup remains unqualified until a2b.
 
 ### Workspace and transient-root registry
 
