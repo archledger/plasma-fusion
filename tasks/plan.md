@@ -5,7 +5,7 @@
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
 NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
-NT02.5a2b2 is next.
+NT02.5a2b2a (the immutable fence) is also complete; NT02.5a2b2b is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment
@@ -46,6 +46,22 @@ may touch only the captured original membership and must also stop on reentrant 
 The existing three-file caller-only bound cannot implement that contract; establish the actual
 core/backend file groups before coding it. Keep arbitrary deletion inside unchanged Tile
 traversal outside any claim until the relevant callee boundaries are hardened.
+
+The first b2 leaf establishes only `TileAssignmentFence`, an immutable native snapshot with a
+private Window factory. It retains exactly one Window reference, records identity, placement,
+requested/committed association and geometry-request counters, plus guarded original Tile
+pointers and non-null presence flags. Construction and queries perform no cancellation,
+revision advancement, association mutation or notification. Currentness requires the same live
+Window, unsaturated matching counters and surviving matching original associations. The fence
+is noncopyable/nonmovable and has no refresh, mutation grant, QML API or asynchronous use.
+This is a dependency-only leaf, not yet an assignment token or management receipt. Membership
+changes/no-ops that do not advance Window counters are outside its detection contract.
+
+After this three-file prerequisite, separately review Window/Xdg native steps, X11 specialization
+and Tile membership/ingress in groups of at most five files each. The first production consumer
+is the owned-native-step work, not the compatibility setter. Preserve maximized-to-tiled behavior:
+normalization and X11's immediate commit need explicit owned provenance. Never infer it from a
+matching destination or refresh a checkpoint after arbitrary callbacks.
 
 ### Workspace and transient-root registry
 

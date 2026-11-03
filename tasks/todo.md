@@ -4,7 +4,7 @@
 # One-window native ownership proof
 
 NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
-NT02.5a2b2 is next.
+NT02.5a2b2a (the immutable fence) is also complete; NT02.5a2b2b is next.
 No production tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
@@ -85,6 +85,11 @@ NT02.5a2b1 is signed native commit `0e2d1e412d040d1580880ed27af29cf8a6206813`:
 with the same test binary remove the three sampled freed-previous-Tile contexts; unrelated
 startup diagnostics remain. Review is clear for this lifetime-only fix. Native-operation
 provenance and newer-intent-safe cleanup remain NT02.5a2b2/b3.
+NT02.5a2b2a is signed native commit `7ecc7e48bb6d28ad5fc3d13152f9f6adf9e298e3`:
+288 Xdg checks, 821 results across 14 selected suites and six compiled controls passed.
+The private immutable fence retains Window lifetime and validates captured versioned state;
+it grants no mutation authority and has no production consumer. Review is clear. Membership
+ingress, native-step provenance and compatibility-setter receipt consumption remain later work.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -131,7 +136,10 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.5a1 — complete | Refused compatibility destinations preserve the previous manual membership, requested state and geometry; retain successful active/inactive-desktop and explicit-null behavior. | `window.cpp`, `tiles_test.cpp`: two |
 | NT02.5a2a — complete | Guard the compatibility continuation after cancellation against Window/target destruction, newer cancellation or geometry intent, and committed-only changes. Use actual pending/committed ownership fixtures. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
 | NT02.5a2b1 — complete | Guard the captured previous Tile against destruction after target management; preserve successful legacy cleanup. This is lifetime protection only, not newer-intent qualification. | `window.cpp`, `tiles_test.cpp`: two |
-| NT02.5a2b2 | Define and implement the private guarded Tile/Window operation receipt needed for newer-intent-safe management and cleanup. Preserve active/inactive cross-desktop semantics, no-op/round-trip intent and X11's immediate commit. Revise/split the native/backend file bound before coding; no ambient token inheritance. | Scope after native-operation design review; existing three-file caller-only bound is insufficient |
+| NT02.5a2b2a — complete | Establish an immutable, noncopyable Window-bound lifetime/revision fence with a private factory, saturated-counter refusal and original-association presence flags. Observation only: no mutation grants or setter integration. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
+| NT02.5a2b2b | Implement explicit owned Window/Xdg request, geometry and commit steps. Validate before mutation, record owned state before notifications and reject foreign activity without refresh. Preserve ordinary paths; unsupported guarded paths remain unavailable. | Window header/source, Xdg header/source, Xdg test: at most five; refine before coding |
+| NT02.5a2b2c | Add X11 specialization with explicit immediate-commit provenance and guarded maximize/geometry behavior. | X11 header/source, necessary Window interface changes, Tiles test: at most five; refine before coding |
+| NT02.5a2b2d | Add guarded Tile membership/ingress and original-membership cleanup. Public reentrant calls inherit no token; relevant membership no-ops supersede the older operation. | Tile header/source, necessary Window plumbing, Tiles test: at most five; refine before coding |
 | NT02.5a2b3 | Consume the qualified management receipt and guard original-membership cleanup; retained references and X11 refusal cannot bypass admission. | Bound after NT02.5a2b2 establishes the actual native operation |
 | NT02.5b | Use the actual controller-owned Xdg fixture to verify release ordering, cancellation supersession and retained state. New public state/token/completion properties remain NT04 work. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
 
