@@ -542,7 +542,8 @@ connected to the compatibility setter.
 Saved restore-geometry field changes also advance the private continuation revision before
 notification. The guarded field writer returns a checked checkpoint without cancelling ownership
 or requesting geometry. Equal field writes remain no-ops, and empty/invalid restore sentinels
-remain supported. This does not yet guard maximize normalization, fullscreen/keyboard restore
+remain supported. The fullscreen restore field has the same guarded, versioned writer, and its
+legacy setter advances the same revision on change. This does not yet guard keyboard restore
 storage or backend geometry completion.
 The private Wayland publication step handles synchronous committed client/frame/buffer/output
 updates, not geometry requests or client configure completion. Actual geometry and legacy output
@@ -604,7 +605,33 @@ managed rectangle frozen beforehand through that owned geometry entry keyed by t
 generation; the step-result carrier is a tagged provenance validated by every child step.
 Publishing the mode to the client is the mode write's own guarded obligation and reports no
 success; after supersession nothing falls through to the legacy path. The acknowledgement of the
-maximize configure still commits a kept association. Fullscreen and X11 remain separate.
+maximize configure still commits a kept association. X11 remains separate.
+An owned window's ordinary fullscreen toggle keeps its ownership as well. The toplevel decides
+before the first callback, from the same ownership-validity predicate, whether it acts as the
+owner; an interactive operation, a client-requested output other than the one the ownership
+lives on, or any lapse of the record selects the legacy path, which moves and releases as before.
+The owned path writes the requested state, configures the decoration as a callback boundary
+(plugin code creates it), revalidates the fence, the ownership, the separately versioned state and
+output intent (a nested output-only request publishes nothing, so it must not suppress the state's
+publication), the frozen requested-output identity and the maximize revision. Entering, it stores
+the rectangle an owned exit returns to, the managed rectangle or the maximize-area extents on the
+maximized axes of a retained requested mode, through the guarded fullscreen-restore writer, and
+requests the fullscreen area through the owned geometry entry with the intent and feasibility as
+its constraint. Exiting, every non-maximized axis must be able to return to the managed extent
+under the client's size limits: the plan checks this with the undecorated conversion, exact when
+no server decoration returns and with that decoration's enforced minimum as a necessary condition
+otherwise, and the exact check runs once the restored decoration is configured, a prefix the
+legacy path shares; an extent the restored decoration cannot return to, with the client's size
+hints unchanged, hands the exit to the legacy path (a predictable effect, not a supersession),
+while changed hints end the operation where it stands, and a superseded owned operation never
+reaches the legacy tail. The exit returns to the frozen rectangle, never to the stored field.
+Publishing the state is the state write's own guarded obligation. The explicit untile-or-restore
+action releases an owned fullscreen window on its first press: the dispatch routes an owned window
+to the owning layer, which leaves a requested fullscreen state, acknowledged or still pending, as
+the owner and releases only if that exit completed as the current intent (a nested round trip
+ending not fullscreen holds the newer intent and survives; a pending entry's stale configure commits
+no association); the window's lifetime is retained, and windows without ownership keep the one-step
+semantics. The acknowledgement path is unchanged.
 The lane's Memcheck runs use a labelled profile: `QT_HASH_SEED=0` in the Valgrind environment
 only. Qt 6.11.2's AES short-string hash deliberately loads 16 bytes for keys shorter than that
 and masks the surplus; Memcheck reports it whenever that window leaves the key's heap block, which

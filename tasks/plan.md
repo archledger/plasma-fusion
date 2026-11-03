@@ -437,6 +437,58 @@ revision is discriminated by a row that exhausts the publication generation firs
 round trip writes modes without any fenced change. Fullscreen and X11 remain separate; the
 combined maximize/fullscreen contract is not claimed.
 
+### Owned fullscreen normalization
+
+The probe on the same fixture (NT02.5a2b2b2b3) showed that the fullscreen path already stored
+the managed rectangle as its own restore field and returned to it; the defect was again the
+release: the public move-resize cancelled the native request and revoked the ownership on entry,
+so the exit happened with the ownership gone and nothing completing the restore.
+
+The owned fullscreen operation reuses the ownership-validity predicate, the owned geometry entry
+and the provenance constraint of the maximize operation, with four differences the design review
+required. First, the fullscreen restore field is a legacy consumer's memory (the placement tracker
+reads it, and a legacy exit after a release returns to it), so the owned entry still writes it,
+through a guarded, versioned writer that shares its body with the maximize restore writer: every
+change of the field, including the legacy setter's, advances the continuation revision, the
+checkpoint is taken after the write and before the notification and is never refreshed, so a
+handler's replacement, or a change away and back, stands and ends the operation. The value written
+is the rectangle an owned exit returns to: the managed rectangle, or the maximize-area extents on
+the maximized axes of a retained requested maximize mode, so a later legacy exit stays consistent
+with that mode; the owned exit returns to that rectangle frozen before the first callback, never
+to the stored field. Second, the decoration an exit restores does not exist while fullscreen, and
+`configureDecoration()` creates it through plugin code: it is a callback boundary, with the
+Window lifetime retained and a full revalidation after it. The plan checks the exit's return
+feasibility (every non-maximized axis returning exactly to the managed extent under the client's
+size limits) with the undecorated conversion, which is exact when no server decoration returns,
+and with the returning decoration's enforced minimum as a necessary condition otherwise; the exact
+check runs right after the decoration is configured: the exit's dispatch is validated after a
+prefix (the state write and the decoration configuration) that the legacy path shares. An extent
+the restored decoration cannot return to, with the client's size hints equal to the plan's, is the
+exit's predictable effect, not a supersession, so the legacy exit takes the operation over and
+releases as before; changed hints are a handler's newer intent and end the operation where it
+stands, and a superseded owned operation never reaches the legacy tail. The hint comparison is
+deliberately narrow (rule limits and the decoration's state are separate inputs the exact check
+reflects), and no hook exists at that boundary, so supersession there is covered by the
+revalidation's control, not by a row. Third, the
+requested state and the requested output are versioned separately: the state revision backs the
+publication obligation (a nested output-only client request returns early from the state write and
+publishes nothing, so it must not suppress the outer publication), while the intent revision,
+advanced by both, together with the frozen identity and presence of the requested output (a
+destroyed output nulls the pointer without any write), backs the geometry; on entry a client-
+requested output other than the one the ownership lives on selects the legacy path, which moves and
+releases as before. Fourth, the explicit untile-or-restore action releases an owned fullscreen
+window on its first press: the owned exit to the managed rectangle, then the release, in one
+dispatch. The dispatch routes an owned window (a new public accessor of the ownership generation)
+to the owning layer, which leaves a requested fullscreen state, acknowledged or still pending, as
+the owner and releases only if that exit completed as the current intent (the owned operation
+reports Legacy, Stopped or Applied; equal final values prove nothing, since a nested round trip
+ending not fullscreen holds the newer intent and survives); a pending entry is left before the
+release, so its stale configure commits no association and the newer placement lands; the window's
+lifetime is retained across the exit, a closed window is not touched, and windows without
+ownership keep the one-step semantics. No legacy un-fullscreen requests the stored field over the
+restoration intent. The acknowledgement path is unchanged. Completion of the restoration after a
+release and X11 remain later leaves.
+
 ### Private native request boundary
 
 NT02.3b2.2 adds a private Window request path callable only by the controller and trusted native
