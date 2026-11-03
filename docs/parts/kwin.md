@@ -568,6 +568,23 @@ take these requests; everything else is refused before any effect. Callers pass 
 rectangle with Move, Resize or MoveResize, as the legacy path does; a Move during an unsubmitted
 resize is promoted to MoveResize. The step does not route transient-tile requests, normalize
 maximize state or admit controller membership.
+The private transient request now runs on those guarded steps. Its restore write goes through
+the guarded restore writer, the requested association is installed between a validated fence and
+an immediate checkpoint, and its geometry goes through an owned form of the guarded geometry
+request that takes the exact active request, derives the target from it and always dispatches a
+full move-resize; ordinary callers still refuse active ownership and active requests. Each step
+result carries the borrowed request, because its external authority can lapse without any Window
+counter changing, and the restore writer, the synchronized output-property writes, the Xdg
+dispatcher and the Wayland publication helper validate it next to their checkpoint. The carrier
+joins the result right after the callback-free rectangle write, since the request's own predicate
+cannot hold between generation allocation and that write. Progress becomes Requested at
+allocation and stays so. The geometry result's checkpoint then validates the quick-tile update and
+the final requested-tile notification, so a handler that changes fenced state with the authority
+intact supersedes the attempt as well. Known headroom and a backend without a guarded dispatcher
+are rejected in preflight; a restore-writer refusal is rejected without effects, and a later child
+refusal supersedes and removes only this attempt's association. The transient commit on client
+completion stays gated on the ownership record. Owned maximize normalization is a separate,
+generation-bound operation designed next.
 The lane's Memcheck runs use a labelled profile: `QT_HASH_SEED=0` in the Valgrind environment
 only. Qt 6.11.2's AES short-string hash deliberately loads 16 bytes for keys shorter than that
 and masks the surplus; Memcheck reports it whenever that window leaves the key's heap block, which

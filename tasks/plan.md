@@ -8,7 +8,8 @@ NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
 NT02.5a2b2a (the immutable fence) and NT02.5a2b2b1 (guarded commit) are also complete.
 NT02.5a2b2b2a (restore field) and NT02.5a2b2b3a (committed-geometry publication) are complete.
 Requested-state/output synchronization at NT02.5a2b2b3b1 is also complete, as are the guarded
-backend geometry requests at NT02.5a2b2b3b2; the remaining normalization steps are next.
+backend geometry requests at NT02.5a2b2b3b2 and the owned transient-request routing at
+NT02.5a2b2b2b1; owned maximize normalization is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment
@@ -368,6 +369,36 @@ allows only proven no-request finalization, including an already-revoked Restori
 close still retains suppression through QObject destruction. Only then wire actual admission
 and its persistent restoration record. No public authorization flag or callback may grant a
 transient request; test access must not become a production admission bypass.
+
+### Owned request provenance
+
+NT02.5a2b2b2b1 moves the private transient request onto the guarded primitives without changing
+its receipt contract. The restore write uses the guarded restore writer; the requested association
+is installed inline between a validated fence and an immediate checkpoint, with no callback in
+between; the geometry uses an owned form of the guarded geometry request that takes the exact
+active request, derives its target from it and always dispatches a full move-resize. Ordinary
+callers never inherit that exemption.
+
+The request's external authority can lapse without any Window counter changing, so each step
+result borrows the request and every child step (restore writer, synchronized output-property
+writes, Xdg dispatcher, Wayland publication) validates it next to its checkpoint. The carrier
+joins the result only after the callback-free rectangle write: the request predicate cannot hold
+between generation allocation and that write. Request and ownership-record progress become
+Requested at allocation, before the first synchronized write, and stay so whatever follows. The
+geometry result's checkpoint also validates the quick-tile update and the final requested-tile
+notification, so a handler that changes fenced state with authority intact supersedes the attempt.
+
+Headroom known before any effect (request generation, association revision with room for install
+and removal, a backend without a guarded dispatcher) is rejected in preflight; a restore-writer
+refusal is rejected without effects; any later child refusal supersedes and removes only this
+attempt's association. Request-bound results are locals that die before the uniquely owned request.
+
+Owned maximize normalization (NT02.5a2b2b2b2) is a separate, generation-bound operation with its
+own reason and target; it cannot reuse a completed adoption request. Fallback to the legacy path
+is chosen only before any owned mutation; after supersession the operation stops. A missing or
+unusable ownership tile follows the canonical release policy rather than keeping ownership on a
+recorded rectangle. Demonstrate the exact A-contamination scenario before changing maximize
+behaviour; legacy maximize captures the restore field conditionally.
 
 ### Private native request boundary
 

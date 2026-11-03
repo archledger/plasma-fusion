@@ -7,7 +7,8 @@ NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
 NT02.5a2b2a (the immutable fence) and NT02.5a2b2b1 (guarded commit) are also complete.
 NT02.5a2b2b2a (restore field) is complete. The guarded committed-geometry prerequisite
 NT02.5a2b2b3a and requested-state/output synchronization at NT02.5a2b2b3b1 are complete.
-Backend geometry requests at NT02.5a2b2b3b2 are complete; maximize normalization is next.
+Backend geometry requests at NT02.5a2b2b3b2 and the owned transient-request routing at
+NT02.5a2b2b2b1 are complete; owned maximize normalization is next.
 No production tiler is enabled.
 The startup Memcheck diagnostics mentioned below are closed: the two uninitialized values are
 fixed with regressions on the private branch `fix/startup-initialization`
@@ -185,7 +186,8 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.5a2b2b3a — complete | Guard Wayland committed client/frame/buffer/output publication, including explicit pending-notification drain, callback supersession and output lifetime. Version actual legacy output changes to detect round trips. This is not a geometry request or client completion. | `window.h/.cpp`, `waylandwindow.h/.cpp`, Xdg test: five |
 | NT02.5a2b2b3b1 — complete | Guard requested-rectangle/output-property synchronization with frozen output values, exact headroom and callback checks; retain pending obligations without cancelling ownership or inventing request identity. Prepare narrow Xdg access to the publication helper. | `window.h/.cpp`, `waylandwindow.h`, Xdg test: four |
 | NT02.5a2b2b3b2 — complete | Implement guarded Window/Xdg backend geometry requests, consuming synchronized state and the publication result for immediate updates; qualify queued branches separately from client completion. | Window header/source, Xdg header/source, Xdg test: at most five; after 3b1 |
-| NT02.5a2b2b2b | Implement explicit owned Window/Xdg request and normalization steps using the completed field and geometry primitives. Validate before mutation and reject foreign activity without refresh. | Window header/source, Xdg header/source, Xdg test: at most five; after 3b |
+| NT02.5a2b2b2b1 — complete | Route the private transient request through the guarded restore, inline association and owned geometry steps. Carry the borrowed request through every child step so an authority lapse without a counter change supersedes without refresh; validate the geometry result's checkpoint through the final notifications; reject known headroom and unsupported backends before any effect. | `window.h`, `window.cpp`, `waylandwindow.cpp`, `xdgshellwindow.cpp`, Xdg test: five |
+| NT02.5a2b2b2b2 | Owned maximize normalization as its own generation-bound operation: an ordinary maximize toggle under live ownership keeps ownership and returns to the managed rectangle; floating A is never overwritten by an automatic rectangle; no legacy fallthrough after an owned mutation; a missing or unusable ownership tile follows the canonical release policy. Demonstrate the exact A-contamination scenario first. | Window header/source, Xdg header/source, Xdg test: at most five; design before coding |
 | NT02.5a2b2c | Add X11 specialization with explicit immediate-commit provenance and guarded maximize/geometry behavior. | X11 header/source, necessary Window interface changes, Tiles test: at most five; refine before coding |
 | NT02.5a2b2d | Add guarded Tile membership/ingress and original-membership cleanup. Public reentrant calls inherit no token; relevant membership no-ops supersede the older operation. | Tile header/source, necessary Window plumbing, Tiles test: at most five; refine before coding |
 | NT02.5a2b3 | Consume the qualified management receipt and guard original-membership cleanup; retained references and X11 refusal cannot bypass admission. | Bound after NT02.5a2b2 establishes the actual native operation |
