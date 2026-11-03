@@ -583,8 +583,28 @@ the final requested-tile notification, so a handler that changes fenced state wi
 intact supersedes the attempt as well. Known headroom and a backend without a guarded dispatcher
 are rejected in preflight; a restore-writer refusal is rejected without effects, and a later child
 refusal supersedes and removes only this attempt's association. The transient commit on client
-completion stays gated on the ownership record. Owned maximize normalization is a separate,
-generation-bound operation designed next.
+completion stays gated on the ownership record.
+An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
+first callback whether it acts as the owner, from a live ownership-validity predicate (same
+generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live
+tile holding the window in a current context, the window's own single desktop and move-resize
+output equal to the recorded ones, association unchanged) that is separate from admission
+feasibility, and from a mode-aware plan: every axis the toggle releases must be able to return to
+the managed extent under the client's size limits. An interactive or electric-border operation, a
+caller-supplied restore rectangle, a record whose tile or context is unusable or a managed extent
+the client cannot honour selects the legacy path, which releases as before; an owner is never
+silently enlarged or recentred. The owned path emits the about-to-change signal, revalidates the
+fence, the ownership, that feasibility and a requested-mode revision that every requested-mode
+write advances, writes the mode, treats each decoration signal as its own callback boundary
+(guarded pointer, scoped recursion flag, revalidation after every emission), and passes the
+feasibility to the owned geometry entry as the operation's own constraint, which the
+ownership-kind provenance evaluates at every child boundary; it never touches the restore field
+or the tile. It requests maximized axes from the maximize area and released axes exactly from the
+managed rectangle frozen beforehand through that owned geometry entry keyed by the ownership
+generation; the step-result carrier is a tagged provenance validated by every child step.
+Publishing the mode to the client is the mode write's own guarded obligation and reports no
+success; after supersession nothing falls through to the legacy path. The acknowledgement of the
+maximize configure still commits a kept association. Fullscreen and X11 remain separate.
 The lane's Memcheck runs use a labelled profile: `QT_HASH_SEED=0` in the Valgrind environment
 only. Qt 6.11.2's AES short-string hash deliberately loads 16 bytes for keys shorter than that
 and masks the surplus; Memcheck reports it whenever that window leaves the key's heap block, which

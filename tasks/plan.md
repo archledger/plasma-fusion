@@ -393,12 +393,49 @@ and removal, a backend without a guarded dispatcher) is rejected in preflight; a
 refusal is rejected without effects; any later child refusal supersedes and removes only this
 attempt's association. Request-bound results are locals that die before the uniquely owned request.
 
-Owned maximize normalization (NT02.5a2b2b2b2) is a separate, generation-bound operation with its
-own reason and target; it cannot reuse a completed adoption request. Fallback to the legacy path
-is chosen only before any owned mutation; after supersession the operation stops. A missing or
-unusable ownership tile follows the canonical release policy rather than keeping ownership on a
-recorded rectangle. Demonstrate the exact A-contamination scenario before changing maximize
-behaviour; legacy maximize captures the restore field conditionally.
+### Owned maximize normalization
+
+The probe on the real controller fixture (NT02.5a2b2b2b2) showed no A-contamination on the
+maximize path: a transient tile reports a Custom quick-tile mode, so the legacy restore capture is
+skipped, and the placement key stays frozen while reserved. The defect was release: every maximize
+called `exitQuickTileMode()`, which reached the controller's release through the tile, left the
+record Restoring with nothing completing the restore, and the later unmaximize returned to floating
+A rather than the managed rectangle.
+
+The owned maximize operation is generation-bound and decided before the first callback. It is
+selected only for an ordinary toggle (no caller-supplied restore rectangle, no interactive or
+electric-border operation) on a live record that passes a new ownership-validity predicate: same
+Window and generation, Owned phase, nothing executing or releasing, writer/provider/reservation
+valid, live transient tile holding this window in a current manager/output/desktop context, the
+window's own current context (single desktop equal to the recorded one, move-resize output equal
+to the recorded output), and the requested association unchanged. Admission feasibility is not
+reused, because an owner may be maximized; a tile or context that is no longer usable selects the
+legacy path, which releases as before, never the recorded adoption rectangle. The managed rectangle
+is frozen from the tile before any callback, and the plan is mode-aware: each axis the toggle
+releases must be able to return to the managed extent under the client's size limits (frame-size
+constraint equal to the managed extent); otherwise the legacy path is selected, and an owner is
+never silently enlarged or recentred. Infeasibility that arises after a callback stops the owned
+continuation instead of falling through: the revalidation before the mode write includes it, and
+the owned geometry entry carries it as the operation's own constraint, which the ownership-kind
+provenance evaluates at every child boundary (synchronization, dispatch, publication), because a
+client's size-hint change touches neither the Window fence nor the ownership record.
+
+The owned path emits `maximizedAboutToChange`, then revalidates the Window fence, the ownership and
+a requested-mode revision advanced by every requested-mode write (legacy and owned), so a nested
+round trip cannot revive an older continuation; only then does it write the mode. Each decoration
+signal is a callback boundary of its own: the decorated window is held by a guarded pointer, the
+recursion flag is reset by scope, and the operation revalidates after every emission, including
+the decoration's identity. It never writes the restore field and never leaves the tile. Maximized
+axes span the maximize area; released axes return exactly to the frozen managed extent, requested
+through an owned geometry entry keyed by the ownership generation. The step-result carrier is a
+tagged provenance, exclusively the borrowed adoption request or the ownership generation,
+validated by every child step. Publishing the mode to the client is the mode write's own
+obligation, discharged while that write is current whatever happened to the geometry, and it
+reports no success; after supersession nothing falls through to the legacy path. The
+acknowledgement of the maximize configure still commits a kept association. The requested-mode
+revision is discriminated by a row that exhausts the publication generation first, so a nested
+round trip writes modes without any fenced change. Fullscreen and X11 remain separate; the
+combined maximize/fullscreen contract is not claimed.
 
 ### Private native request boundary
 
