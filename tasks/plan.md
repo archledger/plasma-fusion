@@ -5,7 +5,8 @@
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
 NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
-NT02.5a2b2a (the immutable fence) is also complete; NT02.5a2b2b is next.
+NT02.5a2b2a (the immutable fence) and NT02.5a2b2b1 (guarded commit) are also complete.
+NT02.5a2b2b2 is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment
@@ -62,6 +63,21 @@ and Tile membership/ingress in groups of at most five files each. The first prod
 is the owned-native-step work, not the compatibility setter. Preserve maximized-to-tiled behavior:
 normalization and X11's immediate commit need explicit owned provenance. Never infer it from a
 matching destination or refresh a checkpoint after arbitrary callbacks.
+
+The first native mutation leaf is a guarded committed-association step, not a complete
+assignment operation. Its private writer retains Window independently and uses the input fence
+only before callbacks. Validate the fence, then compare the raw target with the current requested
+association before dereferencing it; reject transient targets. For an actual change, refuse if
+the committed or placement revision would reach MAX. Matching no-ops at MAX-1 remain valid.
+
+Reuse the existing committed-association writer. Guarded writes capture an owned output fence
+after their two counter updates and before tileChanged. Recheck that same fence after tileChanged
+and quickTileModeChanged. Return AppliedCurrent with a checkpoint only if it remains current;
+otherwise return Superseded without rollback or a newly refreshed checkpoint. Preflight refusal
+returns Refused without mutation. The input fence may be destroyed by a callback and is never
+read afterward. Legacy public and tagged-transient commit paths retain their existing behavior
+and do not allocate checkpoints. Native normalization, geometry, membership and general mutation
+provenance remain subsequent leaves.
 
 ### Workspace and transient-root registry
 

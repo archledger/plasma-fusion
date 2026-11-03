@@ -534,6 +534,11 @@ The internal prerequisites now include an immutable Window-bound assignment fenc
 versioned Window state and retains its lifetime, but grants no mutation authority and has no
 scripting entry point. Tile membership/no-op detection and owned native-step receipts are still
 separate work; the fence is not connected to the compatibility setter.
+A private native commit step validates that checkpoint and the current requested association,
+then captures its own result before notifications. Superseded callbacks discard the result
+without rollback; ordinary commit paths keep their existing behavior. This covers committed
+association state only, not membership, geometry completion or eligibility, and is not yet
+connected to the compatibility setter.
 
 Dynamic tiling is not implemented or installed. Its approved plan starts with a native ownership
 gate. The test-only `tests/vsession/auto_tiling_probe.py` and `scenario-auto-tiling.sh` characterize
