@@ -539,6 +539,11 @@ then captures its own result before notifications. Superseded callbacks discard 
 without rollback; ordinary commit paths keep their existing behavior. This covers committed
 association state only, not membership, geometry completion or eligibility, and is not yet
 connected to the compatibility setter.
+Saved restore-geometry field changes also advance the private continuation revision before
+notification. The guarded field writer returns a checked checkpoint without cancelling ownership
+or requesting geometry. Equal field writes remain no-ops, and empty/invalid restore sentinels
+remain supported. This does not yet guard maximize normalization, fullscreen/keyboard restore
+storage or backend geometry completion.
 
 Dynamic tiling is not implemented or installed. Its approved plan starts with a native ownership
 gate. The test-only `tests/vsession/auto_tiling_probe.py` and `scenario-auto-tiling.sh` characterize

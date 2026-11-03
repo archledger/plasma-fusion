@@ -5,7 +5,7 @@
 
 NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
 NT02.5a2b2a (the immutable fence) and NT02.5a2b2b1 (guarded commit) are also complete.
-NT02.5a2b2b2 is next.
+NT02.5a2b2b2a (restore field) is complete; NT02.5a2b2b2b is next.
 No production tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
@@ -97,6 +97,11 @@ The private commit writer returns a current checkpoint only after both notificat
 Refusal, saturation, null/no-op behavior, borrowed-input lifetime and legacy behavior are covered.
 The reordered-target control produces a specific freed-target read under Memcheck; candidate
 startup diagnostics remain unresolved. No request/geometry or compatibility integration exists.
+NT02.5a2b2b2a is signed native commit `0d1e0b99117e53575d792732e3e36e37d38cf971`:
+335 Xdg checks, 868 results across 14 selected suites and nine compiled controls passed.
+The shared restore-field writer versions actual changes before notification without cancelling
+ownership or requesting geometry; no-ops and invalid/empty sentinels retain their semantics.
+Private results now share AssignmentStepResult/Outcome names. Full normalization remains later.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -145,7 +150,8 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.5a2b1 — complete | Guard the captured previous Tile against destruction after target management; preserve successful legacy cleanup. This is lifetime protection only, not newer-intent qualification. | `window.cpp`, `tiles_test.cpp`: two |
 | NT02.5a2b2a — complete | Establish an immutable, noncopyable Window-bound lifetime/revision fence with a private factory, saturated-counter refusal and original-association presence flags. Observation only: no mutation grants or setter integration. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
 | NT02.5a2b2b1 — complete | Implement a private guarded committed-association step. Validate the input fence and requested target, reject would-exhaust changes, capture output before notifications, and return Refused/Superseded/AppliedCurrent without changing legacy commits. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
-| NT02.5a2b2b2 | Implement explicit owned Window/Xdg request and normalization steps. Validate before mutation, record owned state before notifications and reject foreign activity without refresh. | Window header/source, Xdg header/source, Xdg test: at most five; refine before coding |
+| NT02.5a2b2b2a — complete | Implement a private guarded geometry-restore field step. Version actual legacy/private changes before notification, preserve no-op/sentinel semantics, and never cancel ownership or request geometry from the storage setter. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
+| NT02.5a2b2b2b | Implement explicit owned Window/Xdg request and normalization steps using the completed field primitives. Validate before mutation and reject foreign activity without refresh. | Window header/source, Xdg header/source, Xdg test: at most five; refine before coding |
 | NT02.5a2b2b3 | Implement guarded Window/Xdg geometry/backend continuations; unsupported guarded paths remain unavailable and ordinary paths retain their behavior. | Window header/source, Xdg header/source, Xdg test: at most five; refine before coding |
 | NT02.5a2b2c | Add X11 specialization with explicit immediate-commit provenance and guarded maximize/geometry behavior. | X11 header/source, necessary Window interface changes, Tiles test: at most five; refine before coding |
 | NT02.5a2b2d | Add guarded Tile membership/ingress and original-membership cleanup. Public reentrant calls inherit no token; relevant membership no-ops supersede the older operation. | Tile header/source, necessary Window plumbing, Tiles test: at most five; refine before coding |

@@ -6,7 +6,7 @@
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
 NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
 NT02.5a2b2a (the immutable fence) and NT02.5a2b2b1 (guarded commit) are also complete.
-NT02.5a2b2b2 is next.
+NT02.5a2b2b2a (restore field) is complete; NT02.5a2b2b2b is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment
@@ -78,6 +78,21 @@ returns Refused without mutation. The input fence may be destroyed by a callback
 read afterward. Legacy public and tagged-transient commit paths retain their existing behavior
 and do not allocate checkpoints. Native normalization, geometry, membership and general mutation
 provenance remain subsequent leaves.
+
+Before whole-request normalization, add the geometry-restore storage step in Window h/cpp and
+the Xdg test. Its private writer copies the desired rectangle, validates the input fence and
+holds Window independently. Actual changes, through either the public setter or guarded helper,
+advance the placement-continuation revision before the restore notification. The setter must
+not cancel transient work, untile or request geometry. Equal field writes remain true no-ops;
+they are not a new high-level placement intent.
+
+For a changed guarded write, reject MAX-1 headroom before mutation, then capture the output
+checkpoint after the field/revision write and before notification. Revalidate afterward without
+refresh or rollback. MAX-2 changes and equal MAX-1 writes are supported; an initially saturated
+fence is invalid. Preserve existing rectangle values, including empty/invalid sentinels; this is
+state storage, not feasibility validation. Reuse neutral AssignmentStepResult/Outcome names for
+the two private field writers rather than duplicating the result shape. Maximize state, keyboard
+and fullscreen restore stores, backend geometry and whole-request provenance remain later work.
 
 ### Workspace and transient-root registry
 
