@@ -7,7 +7,8 @@ Status: the owner approved continuation of this first-milestone plan on 2026-11-
 NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
 NT02.5a2b2a (the immutable fence) and NT02.5a2b2b1 (guarded commit) are also complete.
 NT02.5a2b2b2a (restore field) and NT02.5a2b2b3a (committed-geometry publication) are complete.
-Guarded geometry requests at NT02.5a2b2b3b precede the remaining normalization steps.
+Requested-state/output synchronization at NT02.5a2b2b3b1 is also complete. Backend geometry
+requests at NT02.5a2b2b3b2 are next, before the remaining normalization steps.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment
@@ -122,6 +123,22 @@ Window/Xdg request group consumes publication results in its immediate branch an
 qualifies queued requests/output synchronization. Recheck private-helper access and the actual
 header/source group before that implementation; split rather than silently exceeding five files.
 Maximize normalization follows those steps.
+
+Split the geometry-request layer at its output-synchronization boundary. The first real mutation
+step synchronizes requested rectangle/output/scale/transform/color using frozen target values and
+an explicit stack-local guarded context. It does not allocate a geometry-request generation,
+cancel transient ownership, submit backend geometry or emit requestedGeometryChanged. Refuse an
+existing transient owner or active transient request without effects. Hooks may queue configures;
+that is not delivery or client completion.
+
+Version actual requested-state/property changes and pending-synchronization transitions before
+callbacks in shared legacy/private writers. Guarded calls replace their checkpoint only adjacent
+to an owned write, and validate after each virtual hook and signal. Public callbacks inherit no
+context. Preserve unfinished synchronization on interruption; a subsequent explicit call can
+finish it. Exact frozen write counts determine headroom before the first mutation; never return
+Refused after applying a prefix. Equal fully synchronized state is a no-op. This four-file leaf
+also gives XdgSurfaceWindow narrow native access to the existing publication helper so the next
+backend request group need not introduce an access-only change.
 
 ### Workspace and transient-root registry
 

@@ -551,6 +551,12 @@ pending for an explicitly invoked guarded drain; a pending-only drain takes a ne
 generation without changing placement. The helper rejects stale callbacks without refreshing
 their checkpoint. Full Window/Xdg request orchestration and maximize normalization remain later
 work; none of these private helpers enables production tiling.
+The private requested-state synchronizer freezes the target output properties and versions
+requested rectangle/output, property and pending-synchronization changes before callbacks.
+It can finish an interrupted same-output synchronization without allocating a geometry-request
+generation or emitting requestedGeometryChanged. Existing transient ownership is refused without
+release. Property hooks may schedule configures; backend dispatch and client completion remain
+separate from this storage step.
 
 Dynamic tiling is not implemented or installed. Its approved plan starts with a native ownership
 gate. The test-only `tests/vsession/auto_tiling_probe.py` and `scenario-auto-tiling.sh` characterize
