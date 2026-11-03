@@ -544,6 +544,13 @@ notification. The guarded field writer returns a checked checkpoint without canc
 or requesting geometry. Equal field writes remain no-ops, and empty/invalid restore sentinels
 remain supported. This does not yet guard maximize normalization, fullscreen/keyboard restore
 storage or backend geometry completion.
+The private Wayland publication step handles synchronous committed client/frame/buffer/output
+updates, not geometry requests or client configure completion. Actual geometry and legacy output
+changes advance the continuation revision before callbacks. Interrupted notifications remain
+pending for an explicitly invoked guarded drain; a pending-only drain takes a new publication
+generation without changing placement. The helper rejects stale callbacks without refreshing
+their checkpoint. Full Window/Xdg request orchestration and maximize normalization remain later
+work; none of these private helpers enables production tiling.
 
 Dynamic tiling is not implemented or installed. Its approved plan starts with a native ownership
 gate. The test-only `tests/vsession/auto_tiling_probe.py` and `scenario-auto-tiling.sh` characterize

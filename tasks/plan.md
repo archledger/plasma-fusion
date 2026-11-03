@@ -6,7 +6,8 @@
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
 NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
 NT02.5a2b2a (the immutable fence) and NT02.5a2b2b1 (guarded commit) are also complete.
-NT02.5a2b2b2a (restore field) is complete; NT02.5a2b2b2b is next.
+NT02.5a2b2b2a (restore field) and NT02.5a2b2b3a (committed-geometry publication) are complete.
+Guarded geometry requests at NT02.5a2b2b3b precede the remaining normalization steps.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment
@@ -93,6 +94,34 @@ fence is invalid. Preserve existing rectangle values, including empty/invalid se
 state storage, not feasibility validation. Reuse neutral AssignmentStepResult/Outcome names for
 the two private field writers rather than duplicating the result shape. Maximize state, keyboard
 and fullscreen restore stores, backend geometry and whole-request provenance remain later work.
+
+The next geometry prerequisite is the complete Wayland committed-geometry publication boundary,
+not another requested-association storage helper. Keep the implementation shared with the legacy
+`updateGeometry()` path. Its private guarded entry retains Window, reads the borrowed fence once,
+then uses an independent entry snapshot while computing geometry/output values. Before writes,
+revalidate that snapshot, the geometry-update generation and the original output identity.
+
+Actual guarded geometry/output changes require placement and geometry-update counter headroom.
+Write committed client/frame/buffer/output state and version actual changes before capturing the
+publication checkpoint, updating rules or notifying observers. At every callback boundary check
+that checkpoint, the publication generation and the expected output's identity and lifetime.
+Live supersession preserves pending notifications; logical close discards them. Never refresh
+after foreign callbacks or roll back callback-selected state.
+
+An explicitly invoked guarded update with unchanged geometry may drain pending notifications.
+That drain takes a new geometry-update generation without advancing placement; nested drains
+therefore supersede the older publisher. A true no-op has neither pending entries nor changed
+geometry/output and does not advance either counter. Legacy no-ops retain their existing behavior.
+Guarded output-only changes are real changes. Refuse would-exhaust counters before mutation or
+pending-entry consumption. This boundary does not submit or complete a client configure.
+
+Version actual `Window::setOutput()` changes before their signal so output round trips cannot
+hide behind final pointer equality. Equal output writes remain no-ops. Limit this leaf to Window
+header/source, Wayland header/source and the Xdg test. The later
+Window/Xdg request group consumes publication results in its immediate branch and separately
+qualifies queued requests/output synchronization. Recheck private-helper access and the actual
+header/source group before that implementation; split rather than silently exceeding five files.
+Maximize normalization follows those steps.
 
 ### Workspace and transient-root registry
 

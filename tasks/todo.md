@@ -5,7 +5,9 @@
 
 NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
 NT02.5a2b2a (the immutable fence) and NT02.5a2b2b1 (guarded commit) are also complete.
-NT02.5a2b2b2a (restore field) is complete; NT02.5a2b2b2b is next.
+NT02.5a2b2b2a (restore field) is complete. The guarded committed-geometry prerequisite
+NT02.5a2b2b3a is complete. Guarded geometry requests at NT02.5a2b2b3b are next, before
+request orchestration and maximize normalization.
 No production tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
@@ -102,6 +104,12 @@ NT02.5a2b2b2a is signed native commit `0d1e0b99117e53575d792732e3e36e37d38cf971`
 The shared restore-field writer versions actual changes before notification without cancelling
 ownership or requesting geometry; no-ops and invalid/empty sentinels retain their semantics.
 Private results now share AssignmentStepResult/Outcome names. Full normalization remains later.
+NT02.5a2b2b3a is signed native commit `776ce4da5e02e47feaf31cdce7a38561e49faf5a`:
+361 Xdg checks, 894 results across 14 selected suites and nine compiled controls passed.
+The shared committed-geometry publisher guards entry, output lifetime and each notification;
+explicit pending-only drains take a new publication generation. Actual legacy output changes
+are versioned, closing an output-roundtrip gap reproduced before the fix. This is not a geometry
+request or client-completion guarantee. Startup memory diagnostics remain unresolved.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -151,8 +159,9 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.5a2b2a — complete | Establish an immutable, noncopyable Window-bound lifetime/revision fence with a private factory, saturated-counter refusal and original-association presence flags. Observation only: no mutation grants or setter integration. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
 | NT02.5a2b2b1 — complete | Implement a private guarded committed-association step. Validate the input fence and requested target, reject would-exhaust changes, capture output before notifications, and return Refused/Superseded/AppliedCurrent without changing legacy commits. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
 | NT02.5a2b2b2a — complete | Implement a private guarded geometry-restore field step. Version actual legacy/private changes before notification, preserve no-op/sentinel semantics, and never cancel ownership or request geometry from the storage setter. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
-| NT02.5a2b2b2b | Implement explicit owned Window/Xdg request and normalization steps using the completed field primitives. Validate before mutation and reject foreign activity without refresh. | Window header/source, Xdg header/source, Xdg test: at most five; refine before coding |
-| NT02.5a2b2b3 | Implement guarded Window/Xdg geometry/backend continuations; unsupported guarded paths remain unavailable and ordinary paths retain their behavior. | Window header/source, Xdg header/source, Xdg test: at most five; refine before coding |
+| NT02.5a2b2b3a — complete | Guard Wayland committed client/frame/buffer/output publication, including explicit pending-notification drain, callback supersession and output lifetime. Version actual legacy output changes to detect round trips. This is not a geometry request or client completion. | `window.h/.cpp`, `waylandwindow.h/.cpp`, Xdg test: five |
+| NT02.5a2b2b3b | Implement guarded Window/Xdg geometry requests and output synchronization, consuming the publication result for immediate updates; qualify queued branches separately from client completion. | At most five per leaf; review actual private-helper access/header needs before coding and split if needed |
+| NT02.5a2b2b2b | Implement explicit owned Window/Xdg request and normalization steps using the completed field and geometry primitives. Validate before mutation and reject foreign activity without refresh. | Window header/source, Xdg header/source, Xdg test: at most five; after 3b |
 | NT02.5a2b2c | Add X11 specialization with explicit immediate-commit provenance and guarded maximize/geometry behavior. | X11 header/source, necessary Window interface changes, Tiles test: at most five; refine before coding |
 | NT02.5a2b2d | Add guarded Tile membership/ingress and original-membership cleanup. Public reentrant calls inherit no token; relevant membership no-ops supersede the older operation. | Tile header/source, necessary Window plumbing, Tiles test: at most five; refine before coding |
 | NT02.5a2b3 | Consume the qualified management receipt and guard original-membership cleanup; retained references and X11 refusal cannot bypass admission. | Bound after NT02.5a2b2 establishes the actual native operation |
