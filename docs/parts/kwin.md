@@ -532,8 +532,17 @@ it does not establish that a newer assignment may safely be cleared. The private
 receipt and newer-intent-safe cleanup remain planned work.
 The internal prerequisites now include an immutable Window-bound assignment fence. It observes
 versioned Window state and retains its lifetime, but grants no mutation authority and has no
-scripting entry point. Tile membership/no-op detection and owned native-step receipts are still
-separate work; the fence is not connected to the compatibility setter.
+scripting entry point. Owned native-step receipts are still separate work; the fence is not
+connected to the compatibility setter.
+The fence also observes a per-window membership revision. Every actual tile membership change of
+a window, ordinary or transient, advances it before the corresponding notification, and the
+otherwise-valid public membership no-ops (managing an existing member, unmanaging or forgetting a
+non-member of an ordinary tile) record the same intent under a conservative same-window rule;
+refusals and the internal misses of an evacuation record nothing. Saturation counts as exhausted.
+The transient admission snapshots the revision after its membership add and treats a change
+across its publication as supersession. Public membership paths keep their bodies; a stale public
+continuation resuming after a nested public re-management remains an explicit exclusion until the
+guarded ingress.
 A private native commit step validates that checkpoint and the current requested association,
 then captures its own result before notifications. Superseded callbacks discard the result
 without rollback; ordinary commit paths keep their existing behavior. This covers committed

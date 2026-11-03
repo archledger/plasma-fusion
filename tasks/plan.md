@@ -59,7 +59,8 @@ revision advancement, association mutation or notification. Currentness requires
 Window, unsaturated matching counters and surviving matching original associations. The fence
 is noncopyable/nonmovable and has no refresh, mutation grant, QML API or asynchronous use.
 This is a dependency-only leaf, not yet an assignment token or management receipt. Membership
-changes/no-ops that do not advance Window counters are outside its detection contract.
+changes/no-ops that do not advance Window counters were outside its detection contract until the
+membership revision of NT02.5a2b2d1 (below).
 
 After this three-file prerequisite, separately review Window/Xdg native steps, X11 specialization
 and Tile membership/ingress in groups of at most five files each. The first production consumer
@@ -488,6 +489,39 @@ lifetime is retained across the exit, a closed window is not touched, and window
 ownership keep the one-step semantics. No legacy un-fullscreen requests the stored field over the
 restoration intent. The acknowledgement path is unchanged. Completion of the restoration after a
 release and X11 remain later leaves.
+
+### Membership revision in the assignment fence
+
+NT02.5a2b2d (guarded Tile membership/ingress) was refined, after a design consult, into four
+leaves: the membership revision (NT02.5a2b2d1), a guarded maximized-to-tiled normalization
+prerequisite for ordinary assignment (NT02.5a2b2d2, with its own receipt and requested-mode
+currentness, because the public `setMaximize` legitimately invalidates an input fence and a
+fence taken afterwards would absorb arbitrary callbacks), the guarded Tile/association ingress
+(NT02.5a2b2d3: refusals including an unsupported backend before any mutation, a stable evacuation
+worklist with retained Window and guarded destination/source/manager/desktop identities,
+validation after each membership notification, a requested-association step whose quick-tile
+protocol state and notification obligation are defined after partial failure, and public entry
+points that establish their own operation after stamping intent) and the compatibility setter's
+consumption (NT02.5a2b2d4: cleanup only of the captured original membership, X11 on the legacy
+sequence selected before any guarded mutation).
+
+The revision (NT02.5a2b2d1) is a per-window saturating counter. Every actual membership change of
+the window, ordinary (`Tile::add`/`remove`) or transient (the controller's admission add and the
+release's removal), advances it before the corresponding notification, so a guarded writer's
+checkpoint taken after the write and before the callbacks sees its own change and any later one
+as foreign; `TileAssignmentFence` records and compares it and treats saturation as exhausted, so
+no later fence of that window is current again. The otherwise-valid public membership no-ops
+record the same intent under a documented conservative same-window rule: managing an existing
+member (after the transient and resizability refusals), unmanaging or forgetting a non-member of
+an ordinary tile. Refusals (a transient target, an unresizable window, a window not on the
+tile's desktop) and the internal misses of an evacuation record nothing, and the equal
+requested-tile paths keep their existing cancellation stamp rather than a duplicate. The transient
+admission publishes its membership before any of its fences exist, so it snapshots the revision
+after the transient add and treats a change across that publication as supersession instead of
+absorbing a foreign membership or a public no-op made by a callback. Public paths keep their
+bodies; public-path reentrancy through them (a stale public continuation resuming after a nested
+public re-management) is an explicit exclusion until the public entry points establish their own
+operation in NT02.5a2b2d3.
 
 ### Private native request boundary
 
