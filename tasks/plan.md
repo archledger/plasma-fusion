@@ -4,7 +4,8 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.4b2b, NT02.5a1 and NT02.5a2a are complete; NT02.5a2b is next.
+NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
+NT02.5a2b2 is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment
@@ -32,6 +33,19 @@ intent. The cancellation helper retains the Window while checking its result; tr
 that this continuation remains current, not that restoration or reservation cleanup finished.
 The compatibility setter separately retains the Window and target and checks geometry intent
 after cancellation. Post-management cleanup remains unqualified until a2b.
+
+A2b starts with a separate lifetime-only correction: keep the captured previous Tile weakly
+guarded across management, and skip its cleanup if it was destroyed. This does not qualify
+newer intent. The subsequent native-operation design must pass a private per-call token or
+receipt through Tile membership and Window request/geometry/commit boundaries. It must record
+owned changes before notifications and reject foreign changes without refreshing a superseded
+token. Public reentrant calls cannot inherit it. X11's immediate commit needs explicit treatment;
+do not guess how many revision increments a successful management operation should produce.
+The operation result must distinguish refusal, current success and supersession. Final cleanup
+may touch only the captured original membership and must also stop on reentrant replacement.
+The existing three-file caller-only bound cannot implement that contract; establish the actual
+core/backend file groups before coding it. Keep arbitrary deletion inside unchanged Tile
+traversal outside any claim until the relevant callee boundaries are hardened.
 
 ### Workspace and transient-root registry
 

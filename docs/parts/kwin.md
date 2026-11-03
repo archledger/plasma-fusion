@@ -526,6 +526,10 @@ guards the destination against destruction, newer cancellation/geometry intent a
 changes. Pending/committed owner tests cover these checks; cancellation does not mean restoration
 has completed. Post-management cleanup and broader owned-state validation remain separate NT02.5
 leaves; the public state/completion API remains NT04 work.
+The previous manual Tile is tracked with a guarded pointer across destination management, so its
+destruction prevents a later cleanup call on the freed object. This is lifetime protection only;
+it does not establish that a newer assignment may safely be cleared. The private native-operation
+receipt and newer-intent-safe cleanup remain planned work.
 
 Dynamic tiling is not implemented or installed. Its approved plan starts with a native ownership
 gate. The test-only `tests/vsession/auto_tiling_probe.py` and `scenario-auto-tiling.sh` characterize

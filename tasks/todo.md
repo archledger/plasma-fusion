@@ -3,7 +3,8 @@
 
 # One-window native ownership proof
 
-NT01 through NT02.4b2b, NT02.5a1 and NT02.5a2a are complete; NT02.5a2b is next.
+NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
+NT02.5a2b2 is next.
 No production tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
@@ -79,6 +80,11 @@ Cancellation continuations now reject newer intent and target destruction with g
 Removing the helper hold produces the intended freed-Window read under Memcheck. Candidate and
 startup control retain unresolved startup diagnostics; no globally clean memory gate is claimed.
 Review is clear within this boundary. Post-management cleanup remains NT02.5a2b.
+NT02.5a2b1 is signed native commit `0e2d1e412d040d1580880ed27af29cf8a6206813`:
+79 Tiles checks and 800 results across 14 selected suites passed. Matched Memcheck runs
+with the same test binary remove the three sampled freed-previous-Tile contexts; unrelated
+startup diagnostics remain. Review is clear for this lifetime-only fix. Native-operation
+provenance and newer-intent-safe cleanup remain NT02.5a2b2/b3.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -124,7 +130,9 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.4b2b — complete | Close all removed registrations before draining; guard ordinary evacuation and Workspace window continuations through output removal. | Workspace header/source and Xdg integration test: three (two needed) |
 | NT02.5a1 — complete | Refused compatibility destinations preserve the previous manual membership, requested state and geometry; retain successful active/inactive-desktop and explicit-null behavior. | `window.cpp`, `tiles_test.cpp`: two |
 | NT02.5a2a — complete | Guard the compatibility continuation after cancellation against Window/target destruction, newer cancellation or geometry intent, and committed-only changes. Use actual pending/committed ownership fixtures. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
-| NT02.5a2b | Guard post-management cleanup without changing successful cross-desktop semantics. Retained transient references and X11 refusal cannot bypass admission. | `window.h`, `window.cpp`, `tiles_test.cpp`: three |
+| NT02.5a2b1 — complete | Guard the captured previous Tile against destruction after target management; preserve successful legacy cleanup. This is lifetime protection only, not newer-intent qualification. | `window.cpp`, `tiles_test.cpp`: two |
+| NT02.5a2b2 | Define and implement the private guarded Tile/Window operation receipt needed for newer-intent-safe management and cleanup. Preserve active/inactive cross-desktop semantics, no-op/round-trip intent and X11's immediate commit. Revise/split the native/backend file bound before coding; no ambient token inheritance. | Scope after native-operation design review; existing three-file caller-only bound is insufficient |
+| NT02.5a2b3 | Consume the qualified management receipt and guard original-membership cleanup; retained references and X11 refusal cannot bypass admission. | Bound after NT02.5a2b2 establishes the actual native operation |
 | NT02.5b | Use the actual controller-owned Xdg fixture to verify release ordering, cancellation supersession and retained state. New public state/token/completion properties remain NT04 work. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
 
 Do not expose a production adoption entry point between these units or before NT07. If the
