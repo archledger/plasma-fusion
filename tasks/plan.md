@@ -4,8 +4,24 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.4b2b are complete; NT02.5 is next.
+NT01 through NT02.4b2b and NT02.5a1 are complete; NT02.5a2 is next.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
+
+### Compatibility assignment
+
+Split NT02.5 before changing its public boundary. First preserve the previous manual assignment
+when a destination refuses management. Cover both direct and Qt-property calls, Wayland and X11,
+and keep successful active/inactive-desktop assignment and explicit-null behavior unchanged.
+Direct Tile::manage preserves independent per-desktop memberships; the deprecated Window setter
+has distinct successful cleanup semantics and must not silently become equivalent to it.
+
+The next leaf handles cancellation and callback lifetime, not merely a guarded old Tile pointer.
+It must protect the Window and target, preserve newer intent even for equal-null cancellation,
+and distinguish a destroyed target from an explicit null. Existing native attempt sequence
+numbers cannot be reused as a cancellation stamp. Subsequent cleanup must be qualified against
+the original association rather than adopting callback-selected state. A separate Xdg leaf uses
+real controller-owned membership and pending records to test these boundaries; it does not claim
+restoration completion. New public state/token/completion properties remain at NT04.
 
 ### Workspace and transient-root registry
 

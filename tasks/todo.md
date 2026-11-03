@@ -3,7 +3,8 @@
 
 # One-window native ownership proof
 
-NT01 through NT02.4b2b are complete; NT02.5 is next. No production tiler is enabled.
+NT01 through NT02.4b2b and NT02.5a1 are complete; NT02.5a2 is next.
+No production tiler is enabled.
 
 NT02.1 is signed native commit `9d7d5c18fbe56c6dc212f4799469ba897a8c168c`: 23 writer
 Qt results, five compiled mutation controls, full KWin library linking and 448 selected core
@@ -67,6 +68,11 @@ NT02.4b2b is signed native commit `c498fa2d8bfeded63376b682a4f29318f88b09e8`:
 Removed contexts drain before output notification. Guarded Window/tile snapshots preserve
 continuations, newer callback placement and valid multi-desktop migration. Review is clear;
 compatibility-entry-point checks, restoration and the real provider bridge remain later work.
+NT02.5a1 is signed native commit `7f48df9b95a07e326c997e038e7a426917716a5e`:
+75 Tiles checks, 772 results across 14 selected suites and two compiled controls passed.
+Refused compatibility destinations preserve the previous manual assignment; successful
+cross-desktop and null assignments remain unchanged. Review is clear. Callback lifetime,
+newer-intent protection and actual owned-state coverage remain NT02.5a2/b.
 Do not mark historical prototype tests as completion of a task here.
 
 ## NT01 — Establish the baseline and native contract
@@ -110,7 +116,9 @@ Run these leaf units in order, not as one large change. Each has focused tests i
 | NT02.4b1 — complete | Workspace owns the idle controller; use guarded manager indexing with one QObject owner, close registration for shutdown, and safely reclaim or reconcile missing managers. Missing-manager consumers refuse tiling without accidentally releasing placement. | Workspace header/source, Window source, scripting wrapper source and Xdg integration test: five |
 | NT02.4b2a — complete | Serialize output reconciliation with a retained pending pass and freeze input values while retaining backend/logical output and captured Window lifetimes. | Workspace header/source and Xdg integration test: three |
 | NT02.4b2b — complete | Close all removed registrations before draining; guard ordinary evacuation and Workspace window continuations through output removal. | Workspace header/source and Xdg integration test: three (two needed) |
-| NT02.5 | Window compatibility assignment and transient state exposure cannot bypass admission; retained references and X11 refusal are covered before any transient window is exposed. | `window.h`, `window.cpp`, `tiles_test.cpp`: three |
+| NT02.5a1 — complete | Refused compatibility destinations preserve the previous manual membership, requested state and geometry; retain successful active/inactive-desktop and explicit-null behavior. | `window.cpp`, `tiles_test.cpp`: two |
+| NT02.5a2 | Guard compatibility cancellation and subsequent assignment against Window/Tile destruction and newer callback intent, including equal-null cancellation. Retained transient references and X11 refusal cannot bypass admission. | `window.h`, `window.cpp`, `tiles_test.cpp`: three |
+| NT02.5b | Use the actual controller-owned Xdg fixture to verify release ordering, cancellation supersession and retained state. New public state/token/completion properties remain NT04 work. | `window.h`, `window.cpp`, `xdgshellwindow_test.cpp`: three |
 
 Do not expose a production adoption entry point between these units or before NT07. If the
 selected implementation needs more files than a leaf permits, split that leaf before coding.
