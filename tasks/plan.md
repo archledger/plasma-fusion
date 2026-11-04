@@ -832,6 +832,27 @@ semantics by requesting that rectangle; it also adds the decoration generation i
 (advanced by every decoration change) and the policy revision in `X11Window` (advanced by every
 policy write), each with its saturating writer. NT02.5a2b2c2b then routes the transition as
 above.
+The implementation of NT02.5a2b2c2b added, from its runs: the recorder's currentness closure is
+defined on the checkpoint minted after the restore capture, not on the fence before it; the
+recorder is bound to a newly created decoration before that decoration's initial state is
+applied, since the application announces the borders and would otherwise take the legacy path;
+the supported recreation sequence therefore allows border reactions between the creation and the
+update's own check; and the decorated rows force a normal border size, because the automatic
+border size follows Breeze's recommendation of none, under which a maximized and a restored
+decoration have the same borders and no border reaction occurs.
+The source review added: the installation behind the decoration setter is an owned path in the
+base window that reports the installed incarnation's generation at its commit, before any observer
+runs, and withholds its final notification once that incarnation is gone, the public setter
+unchanged; the recorder expects, at every boundary, the incarnation and the policy revision it
+recorded for, advanced only by its own creation and the operation's own policy write, so a foreign
+policy-only change or a bare generation advance on the kept decoration ends the operation at the
+next boundary and the later maximize signals are not emitted; the recorder's active scope ends
+before the geometry request; each helper's own obligations (the shadow, the frame extents, the
+policy's rules and notification) follow its own write's currentness, not the operation's; the
+frame-extents obligation is gated by the recorded incarnation's identity and generation; the
+quick-tile exclusion covers the borderless recreation, undecorated at entry; and the post-transition
+comparisons are a redundant layer behind the closure's clauses, with the controls targeting the
+clauses through rows that observe a suppressed notification or a counted property write.
 
 ### Private native request boundary
 

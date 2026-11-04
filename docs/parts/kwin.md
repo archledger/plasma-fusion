@@ -614,6 +614,25 @@ decorated window and the borderless-maximized policy (the decoration transition 
 through public paths on X11 and is routed through the operation in a later part), a fullscreen
 window and an invalid prospective restore rectangle are refused before any mutation and keep the
 legacy remainder.
+The decoration transition is now the operation's own. A recorder, passed explicitly through
+private variants of the policy setter, the decoration update, the creation and the destruction,
+records the identified internal reactions instead of writing them (the border hook's workspace
+check on a planned rectangle through the read-only decision, the creation's gravitated frame, the
+update's own check, the frame-extents update), bound to the decoration incarnation it records for
+before that decoration's initial state is applied; the public entry points keep their behaviour,
+so a foreign call from a handler still writes and the fence detects it. The owned path takes no
+geometry-update block, revalidates after every callback-producing step against the incarnation
+and the policy revision it recorded for (the base window's installation reports the installed
+incarnation's generation at its commit and withholds its final notification once that incarnation
+is gone; each helper's own obligations follow its own write's currentness), bounds the supported
+reaction sequences, ends the recorder's scope before the geometry request, validates the
+authorized changes after the transition (the decoration
+identity, the generation, the policy and its revision) and establishes the receipt against the
+post-transition constraints, the border metrics included; the single guarded request commits the
+client and buffer rectangles under the new borders, and the frame extents are an obligation of
+the incarnation recorded for. A decorated window with a requested quick tile stays refused before
+any mutation. The intermediate rectangles the legacy path installed and announced per write are
+not installed and not announced; the committed result is announced accurately.
 Two prerequisites for routing that decoration transition through the operation are in place.
 The workspace-position computation of `checkWorkspacePosition` is a read-only decision (nothing
 for a deleted, dock, desktop or unplaceable window; the legacy special-state branch for a
