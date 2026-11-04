@@ -543,6 +543,14 @@ The transient admission snapshots the revision after its membership add and trea
 across its publication as supersession. Public membership paths keep their bodies; a stale public
 continuation resuming after a nested public re-management remains an explicit exclusion until the
 guarded ingress.
+A guarded maximize normalization serves ordinary assignment: it makes its own recorded writes and
+guarded child calls instead of the public unmaximize, refuses without effect where the backend
+would refuse (an owner or active request, an unresizable window, a rule-forced maximize, an
+interactive or electric-border operation, the recursion guard, missing headroom, a backend
+without guarded requests), captures the restore with the exact legacy formula, and returns a
+receipt carried as an operation provenance (the requested-mode revision and the frozen size
+limits) that every child boundary and later step evaluates; after its mode write every stop is a
+supersession. X11 keeps its legacy path.
 A private native commit step validates that checkpoint and the current requested association,
 then captures its own result before notifications. Superseded callbacks discard the result
 without rollback; ordinary commit paths keep their existing behavior. This covers committed

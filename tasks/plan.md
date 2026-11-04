@@ -523,6 +523,49 @@ bodies; public-path reentrancy through them (a stale public continuation resumin
 public re-management) is an explicit exclusion until the public entry points establish their own
 operation in NT02.5a2b2d3.
 
+### Guarded normalization prerequisite
+
+NT02.5a2b2d2 provides the maximized-to-tiled normalization an ordinary guarded ingress needs: the
+public `setMaximize(false, false)` legitimately invalidates an input fence (its restore write and
+geometry request advance fenced counters), and a fence taken afterwards would absorb arbitrary
+callbacks, so the ingress needs a step that records its own changes and returns a receipt whose
+validity every later step checks. The step is a private virtual
+`normalizeMaximizeForAssignment(fence, provenance)`; the base implementation refuses without
+effect (an unsupported backend, X11 included), so the ingress selects the legacy path before any
+mutation, and a refusal is never permission to fall through after an earlier mutation. The Xdg
+override makes its own recorded writes and guarded child calls, never the public unmaximize, and
+honours the maximize recursion guard at entry. It refuses, mutation-free, a transient owner or an
+active request (an ingress that must revoke ownership does so at its public cancellation boundary
+first), an unresizable or applet-popup window, a rule-forced maximize, an interactive or
+electric-border operation, and insufficient headroom for the whole operation (a budget covering
+the restore capture's placement increment plus the guarded request's worst-case synchronization
+writes and committed change, so a shortage known at entry refuses before any write); it returns
+AppliedCurrent with a fresh checkpoint and no stamp when the requested mode is already Restore
+(requested, not acknowledged). Otherwise it takes its own snapshot of the validated entry state
+(the caller's fence is borrowed and never read after the first callback), emits the about-to-change
+signal as a boundary (fenced state, provenance, requested-mode revision and the effective size
+limits must still hold before the mode write), writes the requested mode (advancing its revision)
+under a publication obligation discharged only while that write is current, treats each decoration
+signal as a boundary, and crosses the borderless reconfiguration as its own transition: the policy
+it set, the client's rule-checked limits and the fenced state must hold across it, and the receipt
+is then established against the effective limits after it (a client decoration-preference change
+inside that transition's own handlers is absorbed by design, since the geometry is computed only
+afterwards under the resulting limits). It captures the restore with the exact legacy formula
+(refreshing only the axes that were not maximized in the old mode, skipped when a quick tile is
+already requested) through the guarded restore writer, and requests the legacy geometry (a valid
+restore: its size clamped to the minimum and centred on the restore per axis; an invalid one: the
+maximize area's origin and a zero size the client chooses) through the guarded request. Its
+receipt is the request's result carrying a constraint-kind provenance: the requested-mode revision
+and the effective size limits the geometry was computed under, by value, chained onto the incoming
+provenance (every provenance kind evaluates its chained constraint), evaluated by every child
+boundary and by every later ingress step; a mode change away and back cannot revive it, and a
+property-only size-limit change at the geometry boundary supersedes the frozen request instead of
+letting an obsolete rectangle through.
+A child refusal after the mode write is Superseded, never Refused. The helper performs no
+cancellation, evacuation, association or cleanup; AppliedCurrent means its synchronous request
+completed while current, not that the client acknowledged unmaximizing. X11's immediate commit
+remains outside its qualification.
+
 ### Private native request boundary
 
 NT02.3b2.2 adds a private Window request path callable only by the controller and trusted native
