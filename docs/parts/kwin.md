@@ -694,6 +694,16 @@ intact supersedes the attempt as well. Known headroom and a backend without a gu
 are rejected in preflight; a restore-writer refusal is rejected without effects, and a later child
 refusal supersedes and removes only this attempt's association. The transient commit on client
 completion stays gated on the ownership record.
+The application of an ownership can now return, alongside that receipt, a qualified continuation
+for a caller that goes on after it. The step result the request validated itself against borrows
+the request, which the application consumes and destroys, so the continuation is translated while
+the request still exists: the same checkpoint, preserved, with an ownership provenance bound to the
+generation and, by value, to this attempt's native sequence, progress, request generation and
+target, chained with the caller's own admission constraint. It is validated after the request's
+destruction and the end of the execution, where current success is exported from only; an
+attempt that ended without a current application is concluded, an application that did not start
+is refused, and nothing is ever refreshed. The ownership, the receipt, the callers and the release
+policy are unchanged; the controller's admission does not consume the continuation yet.
 An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
 first callback whether it acts as the owner, from a live ownership-validity predicate (same
 generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live

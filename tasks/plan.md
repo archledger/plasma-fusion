@@ -854,6 +854,114 @@ quick-tile exclusion covers the borderless recreation, undecorated at entry; and
 comparisons are a redundant layer behind the closure's clauses, with the controls targeting the
 clauses through rows that observe a suppressed notification or a counted property write.
 
+### Transient admission receipt
+
+The design consult on NT02.5a2b3 reconciled the roadmap row with what the compatibility setter
+already implements: its "original-membership cleanup" wording came from the compatibility
+assignment, which `Window::setTileCompatibility` now performs under guard, and it is no permission
+to turn the automatic admission into a manual-tile takeover. The leaf qualifies the admission's
+existing native operation and broadens no eligibility. An ordinary membership anywhere stays
+ineligible (`freeOfNativeMembership`; the ownership contract makes an existing manual association
+ineligible, and removing memberships first would change both the eligibility and the meaning of
+the persisted floating frame); cleanup means releasing this attempt's captured transient
+membership and matching associations through the generation-specific release, preserving a manual
+membership or association a callback installed, never public untiling or the ordinary
+unmanagement step. X11 stays refused before any reservation or membership: the backend boundary is
+`canStartTransientTileRequest()`, false on X11, checked by the ownership preparation before it
+allocates or reserves and by the controller's complete preflight before any provisional admission
+mutation, the window-level checks kept as defence in depth; the guarded ordinary geometry support
+of NT02.5a2b2c does not establish transient admission support, and no X11 override is added.
+
+Receipt consumption: the membership-only revision check (a bare revision pointer closure for the
+publication) is replaced by a checkpoint minted after the admission's own callback-free writes
+(the ownership activation and the membership add) with an admission-bound provenance, carried
+through the controller-only add and publication path (the ordinary `manageForAssignment` is not
+called on the transient tile and its transient-target rejection is not weakened) and through the
+native request. The geometry result's provenance of kind Request borrows the request pointer that
+`requestTransientTile` consumes and destroys, so the admission cannot simply return that result:
+either the request is retained for the whole validation interval, or its validated continuation is
+translated, before the destruction, into a stable generation-bound provenance that preserves the
+checkpoint (never a checkpoint replaced after callbacks). The transient request receipt keeps its
+progress, ownership generation, native sequence and NoRequest proof; the assignment result
+supplements that restoration evidence. The stable admission provenance binds the controller, tree
+and leaf identity with the generation, the exact window and ownership generation (not merely the
+controller's current window), the writer and provider incarnation, the reservation and the frozen
+native context, and the admission's continuing validity; where `transientOwnershipIsCurrent`
+rejects an executing owner, the provenance appropriate to each lifecycle phase is chosen rather
+than bypassing that condition.
+
+Preflight and ordering: before the ownership activation or the membership publication, the
+admission validates a live, current tree, leaf, manager, output and desktop with no teardown or
+competing admission; the window's eligibility, unique identity, one matching desktop and activity
+and the placement key; no ordinary membership anywhere, no requested or committed association, no
+owner, no active request, no unresolved transient marker; the backend's admission readiness, the
+settled native geometry, a finite floating frame and a feasible target; the frozen writer,
+provider and map revision with the durable reservation through the existing writer protocol; and
+the headroom for the entire selected synchronous path including its structural failure cleanup
+(the membership: the transient addition and a possible release removal, so the entry revision
+below the sentinel minus two; the requested association: the install and a possible detach,
+likewise; the placement: the restore capture plus the guarded request's bound; the geometry
+request and update generations: the request and a possible synchronous publication; the ownership
+and native sequence under their non-reuse and exhaustion rules), never only the successful prefix,
+the later asynchronous commit headroom kept distinct. After the activation and the addition the
+operation's own writes are sealed before `windowAdded`; the full currentness is validated after
+`windowAdded`, after `windowsChanged`, through the native request and after the final publication;
+Accepted requires a successful native receipt and a current continuation; a later failure is
+Superseded with the generation-specific release, never a fallback or a refreshed authority, and
+Requested progress still retains the record and the barrier when the restoration cannot finish.
+
+Files: the controller's header and source, Window's header and source, and the Tiles test, where
+the admission fixtures are; the affected Xdg suite rows (the delayed commits, the NoRequest
+finalization) run alongside. The receipt-lifetime prerequisite is split out rather than weakened
+to fit the bound. Rows: the membership publication superseded at each notification including
+counter-free context and provenance changes; the controller, leaf, window or writer destroyed
+during the admission; the ordinary-membership rejection on active and inactive desktops and other
+outputs; the X11 rejection with no reservation, membership or association effect; a known headroom
+shortage before the publication; a callback-installed manual placement surviving the failed
+admission's cleanup; a retained old request or receipt and a delayed commit after revocation or
+readmission; a NoRequest failure against a Requested failure with the right persistence barrier;
+a success that goes stale at the last callback.
+
+The confirmation split the leaf. NT02.5a2b3p (prerequisite, Window and its test only; the
+controller untouched, no admission broadened, no release policy changed, no claim that the
+controller consumes the result yet) produces the safe qualified continuation alongside the
+existing transient request receipt through an internal aggregate or guarded overload, the
+receipt's progress, identity and NoRequest proof preserved. Translation rules: the borrowed
+Request-kind continuation is validated while the request still exists; its checkpoint is preserved
+exactly (no fence minted after the request's callbacks); the borrowed authority is replaced by
+bindings that survive the request's destruction (values, guarded identities, a stable constraint;
+never a closure calling the request's authority through the destroyed request); the result is
+revalidated after the request's destruction, after the executing flag is cleared and after any
+release or finalization callback, before current success is exported; the exact ownership
+generation and the native attempt sequence are bound (the same window and controller identity is
+insufficient after a release and readmission); a successful receipt is evidence of that attempt,
+not permission to replay it; and the later controller caller gets an explicit way to supply its
+stable admission constraint, window-only checks never silently substituted for the controller,
+tree and admission bindings. Phases: Prepared is reservation only (no completed-application
+continuation, no ownership exemption); Owned and activated before execution may support the
+controller's provisional membership continuation but is no evidence that the request completed;
+Owned and executing validates internally through the live request and exports no terminal current
+success; Owned with the request finished exports a current qualification only after the execution
+ended, the active request is cleared and the exact attempt, checkpoint, reservation and admission
+constraints still validate; Restoring or releasing invalidates the application-success
+qualification while progress and proof are preserved for the release machinery; a closed window,
+a removed record, a lost writer or controller, or a superseded attempt invalidates it, never
+refreshed or retargeted. The existing Ownership provenance with a stable constraint may express the
+finished phase if its rejection of executing and releasing owners stays intact; the terminal
+descriptor may be constructed before the destruction, its successful validation happens after.
+The initial untiled readiness predicate is not reused after the request installed its association,
+and generic owner validity (which permits later owner operations) is not the full continuation
+predicate. Its rows drive the ownership preparation, activation and application directly with
+the real writer protocol, the real backend checks and a narrowly scoped test request whose
+authority callbacks own stable test state, and prove: the request's destructor ran before the
+returned qualification is checked; success stays current after that destruction; geometry,
+membership, association and stable-authority changes invalidate it; Prepared, executing,
+restoring or releasing and revoked states yield no completed current success; a release and
+readmission cannot make an old receipt current again; reentrancy from the request's destructor can
+invalidate the result; failed and Requested attempts keep the right progress and barrier semantics.
+The controller fixtures stay regression coverage during the prerequisite and become the direct
+qualification suite when NT02.5a2b3 consumes the carrier.
+
 ### Private native request boundary
 
 NT02.3b2.2 adds a private Window request path callable only by the controller and trusted native
