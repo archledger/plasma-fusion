@@ -600,8 +600,20 @@ geometry request publishes synchronously as the request's own write (sealed befo
 with every X11 notification still announced), its immediate tile commit is the association
 write's own publication through a carrier the step passes (a superseded request still publishes
 the still-current association without being resurrected), and both committed changes are
-budgeted before any mutation; an unmanaged window, blocked geometry updates and a maximized
-window (until its normalization) are refused before any mutation and keep the legacy remainder.
+budgeted before any mutation; an unmanaged window and blocked geometry updates are refused
+before any mutation and keep the legacy remainder.
+The X11 backend normalizes a maximized undecorated window for assignment as its own recorded
+operation: the mode is written through one saturating writer the legacy maximize uses too, the
+receipt pins that revision with the complete geometry constraints by value (the rule-checked
+limits, the resize increments, the base size and aspect with their presence, the strict-geometry
+rule, the decoration state and policy, the client frame extents and the Xwayland scale), the
+restore is captured by the legacy formula through the guarded restore writer, the final rectangle
+is requested through the guarded request, and the mode write's publication is its own obligation
+gated by the live window and the revision alone, completed before the outcome is decided. A
+decorated window and the borderless-maximized policy (the decoration transition writes geometry
+through public paths on X11 and is routed through the operation in a later part), a fullscreen
+window and an invalid prospective restore rectangle are refused before any mutation and keep the
+legacy remainder.
 A private native commit step validates that checkpoint and the current requested association,
 then captures its own result before notifications. Superseded callbacks discard the result
 without rollback; ordinary commit paths keep their existing behavior. This covers committed

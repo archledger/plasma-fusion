@@ -705,6 +705,80 @@ unchanged guarded request must not report success over stale consumers), and the
 after the first notification is controlled rather than described as indistinguishable, since its
 removal also removes the closure-triggered clearing.
 
+### X11 normalization split
+
+The design consult on NT02.5a2b2c2 (the X11 normalization) found that X11's decoration
+transition writes geometry synchronously: `createDecoration` and `destroyDecoration` call the
+public move-resize, and a real decoration's border reaction to the maximize signals reaches
+`checkWorkspacePosition`, which calls it too, so the Xdg override's rule that the written fence
+holds across every decoration signal would supersede every decorated X11 window's normalization
+under Breeze, which the pipeline's container loads for the Tiles suite's default X11 fixtures.
+The reviewer rejected crossing that transition with a by-value validation: the public move-resize
+advances the request generation as well as the placement revision, so no clause set separates the
+operation's own reaction from a foreign public move inside a callback, and a fresh checkpoint
+afterwards cannot establish which writes belonged to the normalization. The preferred design
+routes the identified internal reactions through the operation (a scoped recorder that suppresses
+the known reactions without granting ambient ownership to public calls, covering creation,
+destruction and border changes, preserving gravitation, the client/frame conversion, the
+workspace-position effects, the frame extents and the notification obligations, with receipts and
+budget coverage for any retained internal write and a bounded recorder lifetime bound to the
+decoration identity); a mutation-free exclusion is accepted as a temporary bound, not as the
+completion of decorated X11 normalization. The leaf is split accordingly. NT02.5a2b2c2a
+qualifies the X11 normalization for the undecorated window (the client-decorated X11 application;
+fixtures through the motif no-decoration hint) and refuses, mutation-free and documented, a
+decorated window and the borderless-maximized policy; NT02.5a2b2c2b routes the decoration
+reactions explicitly and qualifies them on Breeze-decorated fixtures, including the borderless
+recreation and a foreign public move inside a decoration callback.
+
+Contract of NT02.5a2b2c2a, from the consult. X11 overrides `normalizeMaximizeForAssignment` and
+`canNormalizeMaximizeForAssignment`; the ingress, its preflight and the compatibility setter
+already call them, so the maximized undecorated X11 window leaves the legacy remainder without a
+change to those paths. X11's mode is requested and effective at once, so the revision lives on
+`X11Window` (one saturating writer for every runtime write of the mode, the legacy `maximize`
+included; initialized normally; pinned by the receipt so a change away and back cannot revive
+it). The receipt freezes X11's complete geometry constraints by value, not the minimum and maximum
+alone: the size hints (minimum, maximum, resize increments, base size, aspect), the
+strict-geometry rule and the decoration state, since `constrainClientSize` reads them all; a
+relevant change at any boundary supersedes. Mutation-free refusals: the decoration recursion
+guard, an owner or an active request, an unresizable or applet-popup window, an interactive or
+electric-border operation, a rule-forced maximize, an unsupported request (unmanaged, blocked), a
+fullscreen window (the legacy Restore branch would send it to the fullscreen area, which is no
+normalization for tiling; a fullscreen assignment whose mode is already Restore is not excluded
+by this), a decorated window or the borderless-maximized policy (2c2b), an invalid prospective
+restore rectangle (the stored values on the maximized axes merged with the current ones on the
+others; the whole stored rectangle being invalid is not by itself a refusal), and the headroom
+clauses. A requested mode already Restore is the operation-owned no-op with a fresh checkpoint
+and a receipt. Otherwise: the entry snapshot, `maximizedAboutToChange(Restore)` as the first
+boundary (fenced state, provenance, revision, constraints), the mode write through the writer,
+and from there every stop is Superseded, never Refused (a restore validity lost after the write
+included). The restore capture follows the legacy block exactly (the non-maximized axes refreshed
+from the entry geometry, skipped while a quick tile is requested) through the guarded restore
+writer, before the decoration transition point; the final rectangle is read after that point, as
+the legacy Restore branch reads its starting geometry after the decoration reactions, with the
+maximized axes taken literally from the restore and the size through `constrainFrameSize` with
+the any-size mode; the request uses the move-resize mode (never the current mode's accidental
+equivalence) through the guarded request, and an applied request marks the window placed. The
+publication is the mode write's own obligation, gated by the live window and the specific
+revision independently of the geometry's outcome, in the legacy order: the NET state (a property
+write without callbacks), `updateAllowedActions` (which emits signals, so the live window and the
+revision are rechecked after it), the maximize rules, and `maximizedChanged` last; the obligation
+completes before the returned outcome is decided, and the result's currentness is re-evaluated
+after it so a callback of the publication cannot leave a stale success. The override takes no
+geometry-update block (the guarded body is the single committed publication and refuses while
+blocked). The stale backend comment in the membership ingress is corrected in this leaf. Tests in
+the Tiles suite: a function for the override with the supported path on undecorated fixtures and
+the exclusions on the default decorated fixtures; the flipped ingress and setter rows on
+undecorated maximized fixtures; a decorated maximized X11 window stays on the legacy remainder,
+documented; a control per clause. The source review added: the first boundary's constraints
+clause is independently discriminable (its removal lets the mode be written before the receipt
+rejects the change), so it is controlled rather than described as caught later; rows lapse the
+incoming provenance inside the first boundary and change the resize increments, the aspect
+presence and the base-size presence synchronously inside the restore notification (the client
+writes the hints and round-trips, the window re-reads them through its hints object), each with
+a control omitting that clause or field; the recursion guard is stated as reachable through a
+cross-window decoration callback and not exercised; the owner, active-request and allowed-actions
+statements are unexercised coverage, not equivalence.
+
 ### Private native request boundary
 
 NT02.3b2.2 adds a private Window request path callable only by the controller and trusted native
