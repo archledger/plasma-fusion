@@ -667,6 +667,44 @@ a refusal. The explicit post-preparation context check is kept as required but i
 independently discriminable: the only callbacks during the preparation are the release's, and
 either the chained provenance or the release's own verdict stops the setter just the same.
 
+The step-level consult on NT02.5a2b2c split the X11 specialization: NT02.5a2b2c1 qualifies the
+guarded geometry request and the association, forget, membership and setter paths for X11 windows
+that need no unmaximize (a maximized X11 window is refused by the association step's preflight and
+keeps the legacy remainder until NT02.5a2b2c2, the X11 normalization). Required: the X11 guarded
+geometry body is X11's own (the Wayland publication helper is not reusable), preserving the native
+rounding, the frame/client/buffer conversion, the buffer scale and output selection, the native
+configure and the rule, stacking, shape and geometry notifications, validating after
+`frameGeometryAboutToChange` and before the prepared values are written, versioning the committed
+publication and sealing the carrier before the changed signals, and revalidating between them;
+never the public move-resize from the guarded dispatcher. X11 is not unconditionally synchronous:
+an unmanaged window and blocked geometry updates are refused by the read-only predicate before the
+shared request writes its rectangle and before any parent mutation, and rechecked at the dispatch
+(a block raised by a callback supersedes rather than reporting a publication). The immediate tile
+commit is the association write's own publication through a hook that takes the carrier by
+parameter (never an ambient current operation): a guarded entry validates the incoming
+continuation before committing, leaves an equal committed tile alone without a fresh checkpoint,
+seals only its own write and checks the full currentness (checkpoint and provenance) after
+`tileChanged`. The operation's sticky result stays apart from the association-write obligation: a
+superseded geometry request still publishes the still-current association, without resurrecting
+the operation; only a successful operation adopts the commit's checkpoint, after validating the
+incoming one; no fresh full-operation checkpoint after arbitrary callbacks. Two committed changes
+are budgeted before parent mutation: the committed geometry inside the request (already reserved)
+and the committed association in the obligation (a committed-association revision and one more
+placement increment, for the forget step too). Commit first, then `requestedTileChanged`, with
+the association's revision, target identity and presence and the marker rechecked after the
+commit's callbacks. Public X11 paths keep their cancellation boundary and legacy ordering; the
+exclusion is removed only for the newly qualified cases. The source review added: the X11 body
+keeps undelivered notifications for the next committed update, as the Wayland publication does,
+and revalidates at every boundary (a newer update or the closure ends the frame's announcements);
+the commit writer validates the full carrier, checkpoint and provenance, before its secondary
+notification; the forget step's terminal validation sets Superseded explicitly, since the
+publication promoted its carrier; the stale backend comment in the membership ingress is deferred
+to NT02.5a2b2c2. Its follow-up added: an unchanged guarded publication delivers what an older
+superseded frame left pending under its own versioned, validated continuation (a repeated
+unchanged guarded request must not report success over stale consumers), and the revalidation
+after the first notification is controlled rather than described as indistinguishable, since its
+removal also removes the closure-triggered clearing.
+
 ### Private native request boundary
 
 NT02.3b2.2 adds a private Window request path callable only by the controller and trusted native

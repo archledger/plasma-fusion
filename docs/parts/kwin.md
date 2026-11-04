@@ -595,6 +595,13 @@ reserved in the ingress's headroom, its null association preflighted), the ingre
 cleanup of the captured original consumed on currentness with no retry, fallback or refreshed
 checkpoint after the ingress applied; legacy only for a backend without guarded requests, at the
 exhaustion edge and on an ingress refused without effect.
+The X11 backend now takes the guarded paths for windows that need no unmaximize: its guarded
+geometry request publishes synchronously as the request's own write (sealed before any callback,
+with every X11 notification still announced), its immediate tile commit is the association
+write's own publication through a carrier the step passes (a superseded request still publishes
+the still-current association without being resurrected), and both committed changes are
+budgeted before any mutation; an unmanaged window, blocked geometry updates and a maximized
+window (until its normalization) are refused before any mutation and keep the legacy remainder.
 A private native commit step validates that checkpoint and the current requested association,
 then captures its own result before notifications. Superseded callbacks discard the result
 without rollback; ordinary commit paths keep their existing behavior. This covers committed
