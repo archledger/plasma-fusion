@@ -614,6 +614,16 @@ decorated window and the borderless-maximized policy (the decoration transition 
 through public paths on X11 and is routed through the operation in a later part), a fullscreen
 window and an invalid prospective restore rectangle are refused before any mutation and keep the
 legacy remainder.
+Two prerequisites for routing that decoration transition through the operation are in place.
+The workspace-position computation of `checkWorkspacePosition` is a read-only decision (nothing
+for a deleted, dock, desktop or unplaceable window; the legacy special-state branch for a
+fullscreen, maximized or quick-tiled request with the rectangle it starts from and both screen
+areas; otherwise the rectangle after the strut, edge, offscreen, size-constraint and rule checks),
+and the wrapper keeps the legacy writes and their order, requesting an ordinary rectangle publicly
+even when it equals the current one. A saturating decoration generation versions every
+installation, removal and replacement of the decoration, advanced with the new pointer before any
+observer runs while the displaced decoration is held; the X11 decoration policy is written through
+one saturating writer that versions every change, installed before the decoration update.
 A private native commit step validates that checkpoint and the current requested association,
 then captures its own result before notifications. Superseded callbacks discard the result
 without rollback; ordinary commit paths keep their existing behavior. This covers committed

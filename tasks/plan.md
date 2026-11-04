@@ -779,6 +779,60 @@ a control omitting that clause or field; the recursion guard is stated as reacha
 cross-window decoration callback and not exercised; the owner, active-request and allowed-actions
 statements are unexercised coverage, not equivalence.
 
+### X11 decoration transition
+
+The design consult on NT02.5a2b2c2b accepted routing the identified internal decoration reactions
+through the normalization with a scoped recorder, with these Required corrections, which fix the
+contract. Recording scope is separate from call ownership: the recorder is passed explicitly
+through the normalization's private policy, update, create and destroy helpers, and the public
+entry points keep their ordinary behaviour, so a foreign policy change or decoration invalidation
+inside a callback still writes through the public paths and is detected by the written fence; the
+border-signal hook records its identified reaction (the workspace check and the frame-extents
+update) only for the recorded decoration incarnation. Every callback-producing helper on the owned
+path revalidates before continuing (the decoration's own notification, the input-shape and
+border-radius updates, the shadow update, the policy notification), so a closure or a replacement
+inside any of them stops the obsolete helper. The owned path takes no geometry-update block, since
+the unblock sends a configure even when every write was recorded; the public path keeps its block.
+The reactions are folded, in their legacy order, into a planned rectangle that starts at the entry
+geometry: a creation or destruction maps it through the same gravitation and frame/client
+conversion the legacy write would apply, and a recorded workspace check maps it through the pure
+computation; the final rectangle takes the maximized axes from the restore and the others from
+the planned rectangle, is constrained and requested once, so the X11 body commits the client and
+buffer rectangles under the new borders with accurate notifications for the committed result
+(including a client change with the frame unchanged), fabricates no notification for a rectangle
+never installed, and leaves the legacy path unchanged without a recorder. The supported reaction
+sequences are bounded explicitly (the kept decoration's border reactions; the borderless
+recreation's creation, update check and any border reaction after it); any other recorded sequence
+supersedes. The receipt is established after the transition only once the authorized changes are
+validated: the written fence, the provenance and the mode revision; the client-side constraints
+unchanged (the rule-checked limits, the increments, the base size and aspect with their presence,
+the strict-geometry rule, the client frame extents, the Xwayland scale); the exact decoration
+incarnation and policy transition, through a saturating decoration generation advanced by every
+decoration change and a saturating policy revision advanced by every policy write, so an
+away-and-back change cannot hide; the post-transition border metrics, which the receipt pins with
+the rest. The frame-extents update is an obligation keyed to the decoration incarnation,
+discharged whatever the geometry's outcome, so a superseded request never leaves the extents
+describing the old decoration and an obsolete recorder never overwrites a newer decoration's
+extents. A requested quick tile or another special state at the workspace check is refused
+mutation-free until its restore-field effects are supported. The budget stays unchanged only if
+the settled implementation adds no guarded write needing a reservation. Qualification on
+Breeze-decorated fixtures adds: a foreign public policy change or recreation during the owned
+transition; a closure or replacement from the decoration, shadow or border-radius notifications; a
+late decoration replacement during the final client-geometry notification ending Superseded; the
+frame extents consistent after a supersession; the client-observed configure count (no unblock
+configure); the quick-tile exclusion; a client change with the frame unchanged when the borders
+are restored.
+
+The leaf is split. NT02.5a2b2c2bp (prerequisite) extracts the pure workspace-position computation
+from `Window::checkWorkspacePosition` as a bounded decision: nothing for the deleted, dock, desktop
+and unplaceable early returns, the special-state branch left to the legacy wrapper (it also writes
+the fullscreen and maximize restore fields), and otherwise the rectangle after the strut, edge,
+offscreen, size-constraint and rule checks; the wrapper keeps its write order and callback
+semantics by requesting that rectangle; it also adds the decoration generation in `Window`
+(advanced by every decoration change) and the policy revision in `X11Window` (advanced by every
+policy write), each with its saturating writer. NT02.5a2b2c2b then routes the transition as
+above.
+
 ### Private native request boundary
 
 NT02.3b2.2 adds a private Window request path callable only by the controller and trusted native
