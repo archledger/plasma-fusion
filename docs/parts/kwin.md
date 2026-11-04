@@ -551,6 +551,14 @@ without guarded requests), captures the restore with the exact legacy formula, a
 receipt carried as an operation provenance (the requested-mode revision and the frozen size
 limits) that every child boundary and later step evaluates; after its mode write every stop is a
 supersession. X11 keeps its legacy path.
+The public cancellation boundary has a qualified variant for a guarded ingress: its checkpoint is
+taken after the cancellation's own callback-free writes (the placement stamp and, for an owner,
+the release's transient membership removal and association detachment) and validated once after
+the release's notifications and finalization, threaded through the controller's release and the
+window's own revoke path without counting increments; exhaustion known before the stamp is
+refused, a foreign change or a deleted window makes the continuation stale, and a current
+continuation is reported even when the release cannot finalize, leaving the owner for a
+consumer's entry refusal. The release and the legacy helper are unchanged.
 A private native commit step validates that checkpoint and the current requested association,
 then captures its own result before notifications. Superseded callbacks discard the result
 without rollback; ordinary commit paths keep their existing behavior. This covers committed

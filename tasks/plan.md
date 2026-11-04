@@ -566,6 +566,36 @@ cancellation, evacuation, association or cleanup; AppliedCurrent means its synch
 completed while current, not that the client acknowledged unmaximizing. X11's immediate commit
 remains outside its qualification.
 
+### Guarded ingress refinement
+
+The design consult on NT02.5a2b2d3 accepted its split into three five-file leaves and fixed the
+contracts. A read-only preflight is never a reservation: before any membership mutation the
+ingress budgets the whole selected path (the membership removals and addition, the normalization
+with its own geometry request, the restore capture, the requested-association change, the final
+geometry request and its publication), and a child refusal after a mutation is the operation's
+supersession, never a fallback. The public cancellation boundary must yield a qualified
+continuation: the legacy helper only checks its placement revision while an ownership release
+emits notifications that can change the membership revision, so a fence taken afterwards would
+absorb foreign intent; NT02.5a2b2d3p therefore adds a cancellation variant whose checkpoint is
+taken after the cancellation's own callback-free writes and validated after the release's
+notifications, threaded through the controller's release and the window's own revoke path
+without counting increments. A valid manual assignment intent revokes automatic ownership before
+publishing new membership, after the existing mutation-free rejections and never because an
+invalid destination was named; `Window::requestTile` keeps its own cancellation semantics. The
+requested-association write carries an obligation discharged before the result is finalized (the
+backend's quick-tile protocol state, a recheck of the live window, the unchanged non-exhausted
+association revision, the target identity with its original presence and the transient-generation
+state, then the notification and a terminal validation); callbacks that invalidate the operation
+make it Superseded although the write stands, and X11, whose protocol state commits immediately,
+is excluded before any mutation. The evacuation worklist is stable but not authority: the
+destination, source, manager, desktop and the active-versus-inactive decision are frozen and
+validated after every notification, a destroyed source is skipped only while the checkpoint still
+validates, and a destroyed destination is never read as explicit null. Private no-ops do not
+duplicate the public intent stamp. Public `manage` returns true only for a current successful
+management; the interactive untiling adjustment stays on the legacy path, which the guarded path
+never reaches because interactive operations are refused; the closed public reentrancy is
+qualified to the guarded paths, the X11 and interactive legacy branches staying unqualified.
+
 ### Private native request boundary
 
 NT02.3b2.2 adds a private Window request path callable only by the controller and trusted native
