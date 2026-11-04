@@ -639,6 +639,34 @@ false on supersession, which also stops the compatibility setter's unconditional
 NT02.5a2b2d4 qualifies it; the destination's guarded identity is captured before the cancellation
 and no legacy remainder is entered after it disappeared.
 
+The step-level consult on NT02.5a2b2d4 added: the setter captures the destination's frozen
+context (the same predicate the public management uses) before the first callback, validates it
+after the qualified preparation and chains it into the ingress's provenance, since the private
+ingress would otherwise accept a destination changed during the cancellation as fresh; the complete
+selected path is preflighted before any guarded membership mutation, including the original
+membership's cleanup (one membership increment reserved in the ingress's headroom and the null
+association's read-only preflight when the original stays requested), and a capacity consumed by a
+later callback stops the setter without rollback, never switching to legacy cleanup after the
+ingress applied; both the ingress and the cleanup are consumed on currentness (AppliedCurrent and
+the result still current), the cleanup chains the ingress's checkpoint and provenance, and any other
+cleanup outcome ends the setter with no public retry, fallback, replacement target or refreshed
+checkpoint; `Tile` befriends `Window` for the private steps; the setter's equal-association marker
+clearing stays as public behaviour after its stamp, distinct from the private no-op's refusal; the
+cleanup is the guarded unmanagement (removal plus the null association when the captured original
+is still requested), never membership-only; legacy fallback only at the initial refusal, unsupported
+backend and exhaustion boundaries, with the full legacy sequence (its own cancellation) and the
+legacy remainder (after the qualified cancellation) kept distinct, their extra stamps part of the
+exclusion; the property write's boolean means Qt accepted the write, not that the assignment
+completed. The source review added: the explicit post-preparation context check is observable only
+where a decision precedes the ingress (the equal path, the known-shortage selection), since the
+chained provenance stops the ingress at its entry anyway; a null target runs no ingress, so the
+cleanup's own membership increment is preflighted by the setter (a known shortage selects the
+legacy remainder, as for a destination); the ingress reserve is zero or one, nothing
+general-purpose; a superseded ingress is an incomplete assignment whose writes stand, distinct from
+a refusal. The explicit post-preparation context check is kept as required but is not
+independently discriminable: the only callbacks during the preparation are the release's, and
+either the chained provenance or the release's own verdict stops the setter just the same.
+
 ### Private native request boundary
 
 NT02.3b2.2 adds a private Window request path callable only by the controller and trusted native

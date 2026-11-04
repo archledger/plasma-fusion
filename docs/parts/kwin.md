@@ -588,6 +588,13 @@ is published; a refusal without effect selects the legacy remainder; a supersess
 false), misses and deleted members keep the legacy membership-only paths (the workspace's removal
 notification relies on the release of a dead member), and the outer quick-tile boundary verifies
 its qualified preparation's currentness before the public management runs.
+The compatibility setter (the deprecated window.tile property) consumes the guarded ingress with
+its own continuation: the destination's context and the original membership captured before the
+first callback, the complete path preflighted before any guarded mutation (the original's cleanup
+reserved in the ingress's headroom, its null association preflighted), the ingress and the
+cleanup of the captured original consumed on currentness with no retry, fallback or refreshed
+checkpoint after the ingress applied; legacy only for a backend without guarded requests, at the
+exhaustion edge and on an ingress refused without effect.
 A private native commit step validates that checkpoint and the current requested association,
 then captures its own result before notifications. Superseded callbacks discard the result
 without rollback; ordinary commit paths keep their existing behavior. This covers committed
