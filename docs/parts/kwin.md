@@ -559,6 +559,21 @@ window's own revoke path without counting increments; exhaustion known before th
 refused, a foreign change or a deleted window makes the continuation stale, and a current
 continuation is reported even when the release cannot finalize, leaving the owner for a
 consumer's entry refusal. The release and the legacy helper are unchanged.
+A guarded requested-association step serves ordinary assignment: a read-only preflight (never a
+grant) refuses before any mutation a transient tile, a backend without guarded requests, an owner
+or active request, a transient marker no ordinary step may consume, an interactive operation, the
+normalization's own refusals when tiling a maximized window, and the whole path's conservative
+headroom; an equal association is an operation-owned no-op; otherwise the step takes its own
+snapshot, runs the guarded normalization when needed and carries its receipt, captures the restore
+through the guarded writer, writes the association under its own checkpoint, requests the geometry
+through the guarded request, and discharges the association write's obligation (the backend's
+quick-tile protocol state and the notification behind a recheck of the live window, the unchanged
+association revision, the destination's identity with its original presence and the marker)
+before the result is finalized; callbacks that invalidate the operation make it superseded although
+the write stands. The public entry points establish their own operation: the qualified
+cancellation is their single stamp, a refusal without effect selects the legacy body after the
+cancellation, and a supersession stops; X11, interactive operations and the exhaustion edge stay
+on the legacy path.
 A private native commit step validates that checkpoint and the current requested association,
 then captures its own result before notifications. Superseded callbacks discard the result
 without rollback; ordinary commit paths keep their existing behavior. This covers committed

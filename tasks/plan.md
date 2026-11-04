@@ -596,6 +596,20 @@ management; the interactive untiling adjustment stays on the legacy path, which 
 never reaches because interactive operations are refused; the closed public reentrancy is
 qualified to the guarded paths, the X11 and interactive legacy branches staying unqualified.
 
+The step-level consult on NT02.5a2b2d3a added: the normalization's mutation-free refusal is a
+refusal of the association step only while nothing of that step had an effect (a Tile ingress that
+already mutated membership translates it into its own supersession); a nonzero transient-generation
+marker is refused by the read-only preflight rather than cleared, so the equal-association no-op is
+a genuine no-op; the destination's identity and original presence are captured before the first
+callback, including the public cancellation, and validated before every dereference; the
+normalization's checkpoint and its receipt provenance are both carried forward; the public entry
+points keep a single stamp (the qualified cancellation) with the legacy body after the cancel moved
+verbatim into a private remainder selected on a refusal without effect, and the exhaustion edge
+keeps the legacy cancellation as an explicit legacy exclusion; the forget step has its own complete
+preflight including the headroom of its one association change; the aggregate placement bound
+(twice the guarded request's worst case) is a conservative bound revalidated after callbacks, never
+a count of expected increments.
+
 ### Private native request boundary
 
 NT02.3b2.2 adds a private Window request path callable only by the controller and trusted native
