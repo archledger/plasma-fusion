@@ -610,6 +610,35 @@ preflight including the headroom of its one association change; the aggregate pl
 (twice the guarded request's worst case) is a conservative bound revalidated after callbacks, never
 a count of expected increments.
 
+The step-level consult on NT02.5a2b2d3b added: the backend refusal applies unconditionally before
+any membership mutation (inactive management without evacuation, an unmanagement that clears no
+association and a membership-only forget would otherwise mutate before discovering an unsupported
+follow-up); the removal follow-ups are preflighted read-only before the removal (the null
+association when an unmanagement clears this requested tile, the forget step's own refusals), a
+later refusal still mapping to supersession; the outer quick-tile boundary uses the qualified
+preparation and verifies its currentness before entering the public management, so two stamps are
+acceptable only with currentness between them, and no caller infers an inherited preparation; the
+frozen context covers the window's desktop membership, the destination manager's identity and live
+output, the original parent's identity and presence, the planned active decision and the target
+geometry, validated after every individual notification; the worklist is collected without
+callbacks and the callback-driven visitor is never reused for mutation; a destroyed unprocessed
+source that held the window changed its membership and ends the operation, while a benign deletion
+after an operation-owned removal leaves the checkpoint current; a manager's teardown flag is set
+only by its destructor, so destination validity is checked against live workspace state (its
+manager, output and desktop) rather than that flag alone, and source outputs need not remain
+registered for an evacuation; public existing-member management, non-member unmanagement and
+forgetting keep their membership-only stamps without cancellation, while a deleted member is
+released through the legacy membership-only removal (the workspace's removal notification relies
+on it) and a deleted window is never reported as managed, not even as an existing member; a
+window's requested tile destroyed during an ingress after its evacuation supersedes the ingress
+(an incomplete, superseded assignment: the membership stands, no association is published over
+the vanished one, the public management returns false) where legacy published the destination; a
+new membership through the public entry point carries the qualified cancellation's placement
+stamp even on an inactive destination without evacuation, as a new manual intent; the public management returns
+false on supersession, which also stops the compatibility setter's unconditional cleanup until
+NT02.5a2b2d4 qualifies it; the destination's guarded identity is captured before the cancellation
+and no legacy remainder is entered after it disappeared.
+
 ### Private native request boundary
 
 NT02.3b2.2 adds a private Window request path callable only by the controller and trusted native

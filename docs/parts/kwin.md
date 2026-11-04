@@ -574,6 +574,20 @@ the write stands. The public entry points establish their own operation: the qua
 cancellation is their single stamp, a refusal without effect selects the legacy body after the
 cancellation, and a supersession stops; X11, interactive operations and the exhaustion edge stay
 on the legacy path.
+The Tile membership ingress has guarded steps of the same shape: refusals before any mutation (the
+backend first, a transient tile, an unresizable or applet window, a window not on the destination's
+desktop, a destination that is not live, the follow-up's read-only preflight, membership headroom),
+operation-owned no-ops, the evacuation over a worklist collected without callbacks with the Window
+retained and the destination's context frozen and validated after every notification, each
+membership write sealed by its own checkpoint with its notifications as that write's obligation,
+then the association step chaining the last checkpoint; a refusal after the first mutation is a
+supersession and a destroyed destination is never read as explicit null. The public manage,
+unmanage and forget establish their own operation after the mutation-free rejections (the qualified
+cancellation first, so a valid manual intent revokes automatic ownership before any new membership
+is published; a refusal without effect selects the legacy remainder; a supersession stops with
+false), misses and deleted members keep the legacy membership-only paths (the workspace's removal
+notification relies on the release of a dead member), and the outer quick-tile boundary verifies
+its qualified preparation's currentness before the public management runs.
 A private native commit step validates that checkpoint and the current requested association,
 then captures its own result before notifications. Superseded callbacks discard the result
 without rollback; ordinary commit paths keep their existing behavior. This covers committed
