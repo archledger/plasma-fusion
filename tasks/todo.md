@@ -211,7 +211,7 @@ selected implementation needs more files than a leaf permits, split that leaf be
 ## NT03 — Preserve floating state on explicit release
 Approved specification: [NT03-RESTORATION-SPEC.md](../docs/NT03-RESTORATION-SPEC.md).
 Implementation plan and this breakdown were approved on 2026-11-05. NT03.0 is complete;
-NT03.1 is next and has not started.
+NT03.1 is complete; NT03.2 is next and has not started.
 The old four-file allocation is replaced by these bounded leaves. Detailed dependency rationale
 and verification profiles W/X are in [the plan](plan.md#nt03-implementation-sequence).
 
@@ -227,10 +227,10 @@ Dependencies: NT02.5b and implementation-plan approval.
 Files: `autotests/integration/xdgshellwindow_test.cpp` in the disposable copy; evidence/recipe.
 Result: [eight-row observations and accepted policy](nt03-old-buffer-characterization.md).
 
-### NT03.1 — Query exact restoring reservations
-- [ ] Add a mutation-free writer query for exact owner UUID, generation and Restoring phase.
-- [ ] Reject wrong/old tuples without changing map, provider or reservation state.
-- [ ] Preserve existing Owned/ordinary semantics; the query itself grants no restoration.
+### NT03.1 — Query exact restoring reservations — complete
+- [x] Add a mutation-free writer query for exact owner UUID, generation and Restoring phase.
+- [x] Reject wrong/old tuples without changing map, provider or reservation state.
+- [x] Preserve existing Owned/ordinary semantics; the query itself grants no restoration.
 Verification: profile W, negative tuple/phase cases and a compiled equality/phase control;
 profile I rebuilds the real library/integration targets before the full campaign.
 Dependencies: implementation-plan approval; independent of the NT03.0 content policy.

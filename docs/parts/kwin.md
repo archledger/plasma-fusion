@@ -722,6 +722,10 @@ Window; the reservation and any deferred same-key manual update remain blocked u
 destruction. Selective Qt-property rows exercise the same cancellation supersession checks as the
 direct compatibility setter. These are native tests, not public completion APIs or provider
 integration.
+The internal placement writer can inspect an exact Restoring reservation by owner UUID and
+generation without changing it. This predicate is distinct from its Owned-phase query. It does
+not flush the map, consume deferred intent, prove provider freshness or authorize restoration;
+native attempt and context validation remain separate.
 An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
 first callback whether it acts as the owner, from a live ownership-validity predicate (same
 generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live
