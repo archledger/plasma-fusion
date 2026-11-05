@@ -209,16 +209,107 @@ Do not expose a production adoption entry point between these units or before NT
 selected implementation needs more files than a leaf permits, split that leaf before coding.
 
 ## NT03 — Preserve floating state on explicit release
-- [ ] Capture floating A before adoption; release/disable returns to A instead of automatic B.
-- [ ] Repeated release and stale ownership requests have no effect on a later manual placement.
-- [ ] Closing during release leaves no stale ownership entry or invalid native access.
-Verification: settled-release RED/GREEN, duplicate/stale operations and callback-closure controls.
-Dependencies: NT02.
-Files: KWin `src/window.{h,cpp}`, `src/tiles/tilemanager.cpp`, `tiles_test.cpp` (maximum four).
+Approved specification: [NT03-RESTORATION-SPEC.md](../docs/NT03-RESTORATION-SPEC.md).
+Implementation plan and this breakdown were approved on 2026-11-05. NT03.0 is complete;
+NT03.1 is next and has not started.
+The old four-file allocation is replaced by these bounded leaves. Detailed dependency rationale
+and verification profiles W/X are in [the plan](plan.md#nt03-implementation-sequence).
+
+### NT03.0 — Characterize old-buffer placement — complete
+- [x] Record pending-admission, newer-resize and old-configure ACK/commit sequences with exact
+  serial/content/frame/requested-state observations and ordinary unowned controls.
+- [x] Review a content-versus-placement decision table; preserve unsafe baseline observations
+  without blessing them as required behavior or discarding valid client buffers.
+- [x] State any serial-wrap/matcher limitation and stop dependent implementation if unresolved.
+Verification: bounded diagnostic patch in a disposable Xdg test copy; profile X and retained
+trace/hash receipts. No production fix or permanent unsafe oracle.
+Dependencies: NT02.5b and implementation-plan approval.
+Files: `autotests/integration/xdgshellwindow_test.cpp` in the disposable copy; evidence/recipe.
+Result: [eight-row observations and accepted policy](nt03-old-buffer-characterization.md).
+
+### NT03.1 — Query exact restoring reservations
+- [ ] Add a mutation-free writer query for exact owner UUID, generation and Restoring phase.
+- [ ] Reject wrong/old tuples without changing map, provider or reservation state.
+- [ ] Preserve existing Owned/ordinary semantics; the query itself grants no restoration.
+Verification: profile W, negative tuple/phase cases and a compiled equality/phase control;
+profile I rebuilds the real library/integration targets before the full campaign.
+Dependencies: implementation-plan approval; independent of the NT03.0 content policy.
+Files: `src/tiles/transientplacementwriter.{h,cpp}`, `autotests/test_transientplacementwriter.cpp`.
+
+### NT03.2 — Claim and retain one explicit attempt
+- [ ] Claim a non-reusable, exhaustion-checked attempt for the exact eligible Owned generation,
+  binding immutable A, context and writer identity before callbacks; no geometry is sent yet.
+- [ ] Reject promotion of generic Restoring records; cancel on newer intent/close and keep the
+  record through detach/finalization boundaries without a self-retaining checkpoint.
+- [ ] Refuse unsupported initial modes/context before mutation, with no public routing change.
+Verification: profile X; duplicate/reentrant claim, NoRequest boundary, loss/cancellation and
+retained-close cases; compiled identity/cancellation controls and scoped memory checks.
+Dependencies: NT03.1.
+Files: `src/window.{h,cpp}`, `autotests/integration/xdgshellwindow_test.cpp`.
+
+### Checkpoint — Restore identity
+- [ ] Exact reservation, one-shot identity and lifetime cases pass and have independent review.
+- [ ] Existing generic release/cancellation remains unchanged; no restore geometry or action
+  routing has been enabled.
+
+### NT03.3 — Request exact A through private restoration authority
+- [ ] Add distinct restoration provenance and private normal-mode dispatch; publish allocated
+  geometry-request identity to retained state before callback-producing work.
+- [ ] Revalidate the same claim at every boundary; distinguish Staged, Published and superseded
+  outcomes, preserving partial writes and the writer barrier without retry or fallback.
+- [ ] Prove A differs from B and mutable restore fields; preserve ordinary ownership guards.
+Verification: profile X and the 18-suite campaign; exact-target, callback supersession, headroom,
+duplicate and lifecycle controls plus scoped memory checks. No delayed-configure safety claim yet.
+Dependencies: NT03.2 and the NT03.0 content-policy decision checkpoint.
+Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
+`autotests/integration/xdgshellwindow_test.cpp` (maximum five).
+
+### NT03.4 — Block obsolete configure placement authority
+- [ ] Bind the restore identity into configure processing before obsolete geometry can regain
+  compositor position/requested-state authority; implement the reviewed content policy.
+- [ ] Cover old admission/restore commits after new manual intent, including actual serial wrap;
+  retain valid client-content processing and never finalize the reservation here.
+- [ ] Split any extra matcher/helper work before exceeding the source-file bound.
+Verification: profile X and the 18-suite campaign; old-buffer, old-serial, wrap and no-ACK cases;
+compiled missing-provenance controls and scoped memory checks.
+Dependencies: NT03.0 decision table and NT03.3.
+Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
+`autotests/integration/xdgshellwindow_test.cpp` (maximum five).
+
+### Checkpoint — Private request safety
+- [ ] Exact-A dispatch, stale-configure protection and newer-intent safety pass and are reviewed.
+- [ ] All paths remain private; no action routing, completion notification or barrier release.
+
+### NT03.5 — Normalize owned modes without losing A
+- [ ] Qualify maximize/fullscreen normalization under the explicit attempt, preserving immutable
+  A through mode writes, prospective decoration changes and actual constraint/scale checks.
+- [ ] Complete obligations for writes already made; stop superseded paths without legacy fallthrough.
+- [ ] Keep current owned mode and unowned controls passing; split mode-specific work if needed.
+Verification: profile X and the 18-suite campaign; pending/committed mode, decoration, constraint,
+callback-close and exact-A cases; mode/currentness controls and scoped memory checks.
+Dependencies: NT03.4 request-safety checkpoint.
+Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
+`autotests/integration/xdgshellwindow_test.cpp` (maximum five).
+
+### NT03.6 — Consume explicit restore actions safely
+- [ ] Route the qualified restore from explicit action dispatch with handled separate from
+  no-start/staged/published/superseded; preserve the Owned-only query and unowned behavior.
+- [ ] Consume in-flight/Restoring duplicate actions without another generation or ordinary
+  fullscreen/tile/maximize fallthrough; keep generic manual revocation and teardown detach-only.
+- [ ] Verify real action dispatch and newer manual intent; do not enable a provider, QML state API
+  or production admission path.
+Verification: profile X and the 18-suite campaign; real `UntileOrRestoreOp`, duplicate/reentrant,
+unowned control, mode/close and stale callback cases; dispatch controls and scoped memory checks.
+Dependencies: NT03.5.
+Files: `src/window.{h,cpp}`, `src/xdgshellwindow.cpp`, `src/useractions.cpp`,
+`autotests/integration/xdgshellwindow_test.cpp` (maximum five).
 
 ## Checkpoint A
 - [ ] Baseline and candidate identities, native tests and static checks are recorded.
 - [ ] Independent review finds no unresolved ownership, serialization or lifetime blocker.
+- [ ] Integrated exact-A, mode, duplicate, stale-configure, close and ordinary-control proof passes;
+  never-ACK remains pending, with no geometry-equality/timer completion shortcut.
+- [ ] Required source groups are privately signed and archived; NT04 finalization remains separate.
 
 ## NT04 — Resolve asynchronous restoration
 - [ ] Keep restoration pending across old tile commits, superseded configures and serial wrap.

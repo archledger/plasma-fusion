@@ -7,6 +7,9 @@ Status: the owner approved continuation of this first-milestone plan on 2026-11-
 NT01 through NT02.4b2b and NT02.5a are complete, including the transient admission's consumption
 of the qualified continuation. NT02.5b also completes test-only release/cancellation qualification
 on the actual controller-owned Xdg fixture.
+The owner approved [the NT03 specification](../docs/NT03-RESTORATION-SPEC.md) on 2026-11-05.
+The owner approved the NT03 implementation sequence on 2026-11-05. NT03.0 is complete;
+NT03.1 is next. Later work remains subject to the per-leaf validation requirements.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment
@@ -158,6 +161,133 @@ rows: pending/committed crossed with unchanged, equal-null cancellation, committ
 and replacement-to-null. A true Qt property-write result proves dispatch, not successful placement.
 Existing assertions decide whether the older operation stopped and newer intent survived. Public
 state/token/completion properties remain NT04, actual restoration remains NT03.
+
+### NT03 implementation sequence
+
+Keep the existing NT02 implementation and qualification intact. The approved NT03 specification
+separates request initiation from NT04 completion and requires stale-configure placement safety
+before action routing. The former four-file NT03 allocation is superseded by the explicit leaves
+in `tasks/todo.md`; no leaf may silently grow beyond five source/test files.
+
+Dependency order:
+
+```text
+NT03.0 characterize old-buffer/placement behavior
+  -> checkpoint: accept the content-versus-placement decision table ----+
+NT03.1 exact writer reservation query                                 |
+  -> NT03.2 explicit claim and surviving restore-attempt record
+  -> checkpoint: identity, cancellation and lifetime proof ------------+
+  -> NT03.3 private normal-mode guarded request (both checkpoints)
+  -> NT03.4 configure provenance and stale-placement protection (also requires NT03.0)
+  -> checkpoint: request safety, still no action routing
+  -> NT03.5 guarded mode normalization
+  -> NT03.6 consumed-action routing
+  -> Checkpoint A: integrated request-facing qualification
+  -> NT04: native completion and reservation finalization
+```
+
+Work is serial on the existing private branch and isolated ThinkPad build. Review can run against
+a frozen candidate, but no build, mutation copy or source update may race another writer of that
+source/build. Preserve the installed `.pf2` desktop. An isolated successful precursor is not an
+installable or complete tiler.
+Start with NT03.0 to expose the highest uncertainty. If its decision is blocked, the independent
+writer query and no-geometry record primitive may proceed after plan approval; backend mechanics
+and routing remain blocked.
+
+NT03.0 is a bounded characterization, not a fix. Use a disposable test copy to record content size,
+frame position, requested rectangle, serial order and association state when an old buffer is
+committed with a newer resize outstanding. Include pending admission and ordinary unowned
+controls. Preserve unsafe observations as evidence, not permanent tests asserting that unsafe
+behavior is required. The decision table must distinguish accepted client content from obsolete
+compositor placement. If this cannot be resolved, NT03.3 and dependent work remain blocked;
+only NT03.1/NT03.2 may proceed. Do not invent a rule.
+The completed observations and accepted narrow policy are in
+[`nt03-old-buffer-characterization.md`](nt03-old-buffer-characterization.md). This closes the
+characterization gate, not the later stale-configure implementation or serial-wrap proof.
+
+NT03.1 is a read-only exact-tuple query in the writer. It verifies owner UUID, generation and
+Restoring phase without changing a reservation or map. It does not turn a provider revision,
+`isReserved` boolean or caller assertion into permission. Existing Owned and ordinary writer
+behavior stays unchanged.
+
+NT03.2 makes explicit restoration an individually claimed operation in the Window record. It
+binds immutable A, Window/ownership/attempt identities and native context, with exhaustion and
+normal-mode eligibility checked before mutation. Generic revocation still grants no restore
+permission. The record must survive its own detach/finalization boundaries, and cancellation must
+invalidate the claim before later work. Do not store a Window-retaining fence inside the record.
+This leaf sends no restore geometry and is not wired to public action dispatch.
+
+NT03.3 dispatches an exact-A request only through the private claim and distinct restoration
+provenance. Record the allocated geometry-request generation before callback-producing work.
+Carry the same authority across each guarded step; never reconstitute it from a callback's
+current state. Stage and Published outcomes are distinguished, and failures after a prefix are
+superseded rather than mutation-free refusals. Ordinary ownership guards remain strict.
+The precursor remains private and must not be called safe against delayed configures until
+NT03.4 passes.
+
+NT03.4 connects that identity to native configure processing. Use the accepted NT03.0 policy:
+valid client content is not rejected merely because its old configure has lost placement
+authority. Prevent old admission/restore configures from restoring position, requested-state or
+completion authority after a newer action. Test actual serial wrap for every matching operation
+that depends on ordering. If the existing matcher or a required helper forces another file group,
+split and review it before editing; do not preserve the size limit by omitting the hard case.
+Reservation finalization remains absent.
+
+NT03.5 qualifies maximize/fullscreen normalization under the same explicit intent. Preserve A
+while requested-mode and decoration changes run, validate actual prospective constraints/scale,
+and discharge notifications for writes already made. Unsupported cases stop without a legacy
+fallback after mutation. Do not replace previously covered owned mode behavior with the limited
+normal-mode precursor. Keep mode-specific child steps independently testable within the leaf;
+split the leaf if it no longer fits one focused change.
+
+NT03.6 alone wires the qualified operation into explicit action dispatch. Use a typed distinction
+between unhandled/no-record and consumed, with separate no-start/staged/published/superseded
+outcomes. Existing transient records consume duplicate or unsupported actions without starting
+again or reaching ordinary fullscreen/tile/maximize fallthrough. Keep the existing Owned-only
+query semantics; preserve unrelated/unowned action behavior and user shortcuts. Generic manual
+revocation and teardown remain detach-only. No production provider/admission or new QML API is
+enabled by this routing.
+
+Every implementation leaf needs meaningful fail-first or compiled negative-control evidence,
+actual changed-line formatting and affected native tests. Runtime changes run the selected
+18-suite campaign in the pinned environment; reuse unchanged evidence only with explicit source
+and binary bindings. Use the existing memory lane for the affected lifecycle functions and
+retain its profile limitations. Review and a signed private checkpoint precede the next leaf.
+
+Verification profiles used in the task list (inside the existing container):
+
+```sh
+# W: writer behavior and exact tuple handling
+cmake --build /build --parallel 4 --target testTransientPlacementWriter
+ctest --test-dir /build --output-on-failure --no-tests=error --timeout 120 \
+  -R '^kwin-testTransientPlacementWriter$'
+# X: Window/backend/action behavior, including new explicitly enumerated rows
+cmake --build /build --parallel 4 --target kwin testXdgShellWindow
+ctest --test-dir /build --output-on-failure --no-tests=error --timeout 120 \
+  -R '^kwin-testXdgShellWindow$'
+# I: rebuild the actual library and all selected integration targets before the full campaign
+cmake --build /build --parallel 4 --target kwin kill testTiles testXdgShellWindow \
+  testQuickTiling testMoveResize testFractionalScaling testX11Window testDecorationInput \
+  testDontCrashEmptyDeco testDontCrashAuroraeDestroyDeco testOutputChanges testMaximized \
+  testScreenChanges testOffscreenQuickView testInternalWindow testTabBox \
+  testTransientPlacementWriter testPlacement testTransientPlacement
+ctest --test-dir /build --output-on-failure --no-tests=error --timeout 120 \
+  -R '^kwin-test(X11Window|DecorationInput|DontCrashEmptyDeco|DontCrashAuroraeDestroyDeco|Tiles|XdgShellWindow|QuickTiling|MoveResize|FractionalScaling|OutputChanges|Maximized|ScreenChanges|OffscreenQuickView|InternalWindow|TabBox|TransientPlacementWriter|Placement|TransientPlacement)$'
+```
+
+Profile W compiles the writer source into its unit-test target separately. It is not proof that
+the integration library was rebuilt. Apply profile I after runtime changes and verify actual
+loaded-library and source identities; never reuse pre-existing binaries for a changed writer.
+
+The formatting and scoped Memcheck commands and environment are recorded in
+the approved specification and prior qualified recipes. No commands above are newly executed
+results. The task list names negative controls and acceptance boundaries, not merely green exit
+codes. Native REUSE omissions remain reported, never recategorized as a pass.
+
+Checkpoint A requires a source-bound integrated proof of exact A, older-command supersession,
+duplicate handling, content-versus-placement behavior, mode handling, close/lifetime safety and
+unchanged ordinary controls. A never-ACK client must remain pending. This checkpoint does not
+clear the writer barrier, qualify production deployment or complete NT04.
 
 ### Workspace and transient-root registry
 
