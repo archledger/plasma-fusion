@@ -273,6 +273,12 @@ capture. Refuse fullscreen, borderless-maximized policy and pending decoration r
 before claiming in this slice. Explicit attempt stages and a backend state constraint protect
 normalization separately from geometry dispatch. Fullscreen and returning-decoration work
 remain required later slices; NT03.5a alone does not complete NT03.5.
+Returning decorations need separate lifecycle prerequisites before Window/Xdg integration.
+The first is same-instance settings-read safety: nested settings updates must supersede the
+remaining writes of an older read, destruction must stop it, and emitted payloads must not
+alias members changed by nested callbacks. Factory retirement, complete configuration
+application, stable window iteration and unpublished decoration handoff remain separate
+proofs; a bridge token checked only after callbacks is insufficient.
 The qualified first slice uses Claimed, Normalizing, Dispatching and Returned stages; Returned
 is a synchronous wrapper state, not client completion. A backend predicate installed before
 release binds requested-mode/output-intent revisions, policy, guarded decoration identity,

@@ -767,6 +767,12 @@ notifications. Revision-bound backend state prevents later mode/output-intent wr
 reviving an old request. Existing SSD borders are checked exactly after their normal-mode
 response, and a failed consumed attempt preserves its mode-publication obligation without
 falling back. The normal-only claim and public owned toggles keep their separate behavior.
+The returning-decoration work also guards reads of one decoration settings instance. It
+snapshots values before notifications, stops after a nested read or destruction, and emits
+stable local payloads rather than references to members a callback can replace. An older
+read cannot re-enable the application-menu view service or announce completion after a newer
+read took over. This does not yet guard the bridge's complete configuration operation,
+cross-generation settings, factory lifetime or decoration publication.
 An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
 first callback whether it acts as the owner, from a live ownership-validity predicate (same
 generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live

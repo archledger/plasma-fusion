@@ -304,6 +304,11 @@ Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
   (43/3/32/39/3) with zero errors/contexts/suppressions and twelve compiled controls.
   Actual old maximize content, post-write publication, late intent and phase barriers are
   covered. Fullscreen and returning-decoration normalization remain unqualified.
+- [x] Returning-decoration prerequisite: guard same-instance decoration settings reads against
+  nested updates and destruction; keep each signal's payload stable. This does not complete
+  bridge configuration, factory lifetime, decoration publication or restoration integration.
+  Qualified 1,783 checks across 18 suites, two memory profiles (7/3) with zero reported errors
+  and eight compiled controls; source, delta and final evidence reviews cleared this scope.
 - [ ] Qualify maximize/fullscreen normalization under the explicit attempt, preserving immutable
   A through mode writes, prospective decoration changes and actual constraint/scale checks.
 - [ ] Complete obligations for writes already made; stop superseded paths without legacy fallthrough.
