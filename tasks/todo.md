@@ -309,6 +309,12 @@ Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
   bridge configuration, factory lifetime, decoration publication or restoration integration.
   Qualified 1,783 checks across 18 suites, two memory profiles (7/3) with zero reported errors
   and eight compiled controls; source, delta and final evidence reviews cleared this scope.
+- [x] Returning-decoration prerequisite: recreate decorations over a callback-free snapshot of
+  guarded windows, skip members deleted during the pass and hold the visited window through
+  its callback. Collection and lifetime safety only; configuration authority, plugin-creation
+  failures, factory ownership and restoration enablement stay open. Qualified 1,790 checks
+  across 18 suites with seven traversal rows, one memory profile with zero reported errors,
+  three compiled controls and a per-row legacy probe; reviews cleared this scope.
 - [ ] Qualify maximize/fullscreen normalization under the explicit attempt, preserving immutable
   A through mode writes, prospective decoration changes and actual constraint/scale checks.
 - [ ] Complete obligations for writes already made; stop superseded paths without legacy fallthrough.

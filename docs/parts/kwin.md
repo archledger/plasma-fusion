@@ -773,6 +773,11 @@ stable local payloads rather than references to members a callback can replace. 
 read cannot re-enable the application-menu view service or announce completion after a newer
 read took over. This does not yet guard the bridge's complete configuration operation,
 cross-generation settings, factory lifetime or decoration publication.
+Decoration recreation on a plugin or theme change visits a snapshot of guarded windows in
+workspace order instead of the live list. A member deleted by an earlier callback is skipped,
+the visited window is retained until its callback returns so that closing itself cannot free
+it while its decoration is being constructed, and windows mapped by a callback wait for a later
+pass. Nested configuration passes and plugin-creation failures remain unguarded.
 An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
 first callback whether it acts as the owner, from a live ownership-validity predicate (same
 generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live

@@ -279,6 +279,10 @@ remaining writes of an older read, destruction must stop it, and emitted payload
 alias members changed by nested callbacks. Factory retirement, complete configuration
 application, stable window iteration and unpublished decoration handoff remain separate
 proofs; a bridge token checked only after callbacks is insufficient.
+The second is stable decoration recreation: the bridge visits a callback-free snapshot of
+guarded windows in list order, skips members deleted during the pass, retains the visited
+window through its callback and leaves windows mapped by a callback to a later pass. Plugin
+creation itself, nested configuration passes and factory ownership remain unguarded.
 The qualified first slice uses Claimed, Normalizing, Dispatching and Returned stages; Returned
 is a synchronous wrapper state, not client completion. A backend predicate installed before
 release binds requested-mode/output-intent revisions, policy, guarded decoration identity,
