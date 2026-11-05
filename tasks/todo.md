@@ -277,20 +277,25 @@ Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
   Qualified 1,694 checks across 18 suites; memory profiles 12/6/5/32 and six compiled controls
   passed. Prefix/selected-object destruction is guarded against close, nested commit and
   counter exhaustion. The wire fixture does not wrap libwayland's internal serial allocator.
-- [ ] Bind the restore identity into configure processing before obsolete geometry can regain
+- [x] Bind the restore identity into configure processing before obsolete geometry can regain
   compositor position/requested-state authority; implement the reviewed content policy.
-- [ ] Cover old admission/restore commits after new manual intent, including actual serial wrap;
+- [x] Cover old admission/restore commits after new manual intent, including actual serial wrap;
   retain valid client-content processing and never finalize the reservation here.
-- [ ] Split any extra matcher/helper work before exceeding the source-file bound.
+- [x] Split any extra matcher/helper work before exceeding the source-file bound.
 Verification: profile X and the 18-suite campaign; old-buffer, old-serial, wrap and no-ACK cases;
 compiled missing-provenance controls and scoped memory checks.
+Completed within the private normal-mode/fixed-context scope: 1,735 checks across 18 suites,
+711 full-Xdg checks, five memory profiles (29/10/8/6/32) with no errors/contexts/suppressions,
+and eleven compiled controls. Protected admission and restore wire cases cross MAX to zero;
+the libwayland allocator itself is not advanced through wrap. Evidence is in the shared
+`2026-11-05-issue115-configure-provenance` artifacts and `tests.json`.
 Dependencies: NT03.0 decision table and NT03.3.
 Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
 `autotests/integration/xdgshellwindow_test.cpp` (maximum five).
 
 ### Checkpoint — Private request safety
-- [ ] Exact-A dispatch, stale-configure protection and newer-intent safety pass and are reviewed.
-- [ ] All paths remain private; no action routing, completion notification or barrier release.
+- [x] Exact-A dispatch, stale-configure protection and newer-intent safety pass and are reviewed.
+- [x] All paths remain private; no action routing, completion notification or barrier release.
 
 ### NT03.5 — Normalize owned modes without losing A
 - [ ] Qualify maximize/fullscreen normalization under the explicit attempt, preserving immutable

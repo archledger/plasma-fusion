@@ -741,15 +741,24 @@ also checks the active wrapper, unused generation, exact target and MoveResize m
 refuses without cancelling the original; a failed consumed request remains superseded with its
 reached generation and dispatch evidence. Pending admission geometry is allowed, but pending
 gravity is not silently cleared. Queued and Published requests remain distinct, and neither clears
-the ownership record or writer barrier. The request is qualified only within this private scope:
-stale-configure placement safety, public action routing and completion are later gates.
+the ownership record or writer barrier. The request and configure-placement protection are
+qualified only within the private normal-mode/fixed-context scope; public action routing and
+completion are later gates.
 Configure acknowledgements now select one exact uint32 serial in queue order, preserving later
 events across serial wrap. Unknown or ambiguous matches select nothing. The selected prefix is
 detached before old configure objects are destroyed, because releasing a decoration can close
 the window or reenter commit handling. A per-dispatch generation and consumed ACK prevent the
 outer invocation from continuing after that reentry; selected-object tail disposal is guarded
-as well. This matcher prerequisite does not yet classify obsolete restore placement or provide
-the persistent configure provenance required by the next step.
+as well.
+Each geometry allocation also records a value-only origin, copied into native configures before
+it can be confused with later manual intent. During explicit restoration, obsolete or unknown
+content is accepted at the current committed position without synchronizing requested A. Current
+restoration may place content but cannot replace A with client-selected dimensions; a genuinely
+new ordinary request retains ordinary behavior. No-ACK content retains its origin, not old bounds.
+A separate pending snapshot carries unfinished decoration, scale and committed-mode work across
+nested dispatch. Pending content blocks new admission and supplies fullscreen interpretation for
+interactive positioning. Guarded native synchronization preserves newer claims, and association
+commit checks preserve newer manual placement. The writer reservation still waits for NT04.
 An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
 first callback whether it acts as the owner, from a live ownership-validity predicate (same
 generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live
