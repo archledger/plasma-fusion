@@ -272,6 +272,11 @@ Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
 `autotests/integration/xdgshellwindow_test.cpp` (maximum five).
 
 ### NT03.4 — Block obsolete configure placement authority
+- [x] NT03.4a prerequisite: exact serial matching with chronological prefix consumption;
+  qualify ordinary, unknown/ambiguous and wrap-valued wire ACKs in a three-file slice.
+  Qualified 1,694 checks across 18 suites; memory profiles 12/6/5/32 and six compiled controls
+  passed. Prefix/selected-object destruction is guarded against close, nested commit and
+  counter exhaustion. The wire fixture does not wrap libwayland's internal serial allocator.
 - [ ] Bind the restore identity into configure processing before obsolete geometry can regain
   compositor position/requested-state authority; implement the reviewed content policy.
 - [ ] Cover old admission/restore commits after new manual intent, including actual serial wrap;

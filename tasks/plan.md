@@ -10,7 +10,8 @@ on the actual controller-owned Xdg fixture.
 The owner approved [the NT03 specification](../docs/NT03-RESTORATION-SPEC.md) on 2026-11-05.
 The owner approved the NT03 implementation sequence on 2026-11-05. NT03.0 is complete;
 NT03.1's exact reservation query, NT03.2's explicit claim and NT03.3's private request are
-qualified within their scopes. NT03.4 is next; later work retains its per-leaf validation gates.
+qualified within their scopes. NT03.4a's ACK matcher prerequisite is also qualified; remaining
+NT03.4 provenance/placement protection is next. Later work retains its per-leaf validation gates.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment
@@ -238,6 +239,15 @@ completion authority after a newer action. Test actual serial wrap for every mat
 that depends on ordering. If the existing matcher or a required helper forces another file group,
 split and review it before editing; do not preserve the size limit by omitting the hard case.
 Reservation finalization remains absent.
+
+Split NT03.4's matcher prerequisite as NT03.4a before the provenance integration. Its three-file
+scope is Xdg header/source and the Xdg test: exact uint32 serial lookup, chronological prefix
+consumption and no consumption for an unknown or ambiguous match. Exercise wrap-valued serials
+through real wire delivery, client ACK and production commit matching; this tests the matcher,
+not libwayland's internal serial generator. Keep the later provenance/content/callback work
+separate and within five files. The qualified matcher also detaches its prefix before destructor
+callbacks, consumes each invocation's pending ACK, and checks a saturating dispatch generation
+before resuming after disposal or nested commits. The matcher checkpoint alone cannot close NT03.4.
 
 NT03.5 qualifies maximize/fullscreen normalization under the same explicit intent. Preserve A
 while requested-mode and decoration changes run, validate actual prospective constraints/scale,

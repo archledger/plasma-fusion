@@ -743,6 +743,13 @@ reached generation and dispatch evidence. Pending admission geometry is allowed,
 gravity is not silently cleared. Queued and Published requests remain distinct, and neither clears
 the ownership record or writer barrier. The request is qualified only within this private scope:
 stale-configure placement safety, public action routing and completion are later gates.
+Configure acknowledgements now select one exact uint32 serial in queue order, preserving later
+events across serial wrap. Unknown or ambiguous matches select nothing. The selected prefix is
+detached before old configure objects are destroyed, because releasing a decoration can close
+the window or reenter commit handling. A per-dispatch generation and consumed ACK prevent the
+outer invocation from continuing after that reentry; selected-object tail disposal is guarded
+as well. This matcher prerequisite does not yet classify obsolete restore placement or provide
+the persistent configure provenance required by the next step.
 An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
 first callback whether it acts as the owner, from a live ownership-validity predicate (same
 generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live
