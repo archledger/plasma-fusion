@@ -910,9 +910,11 @@ Accepted requires a successful native receipt and a current continuation; a late
 Superseded with the generation-specific release, never a fallback or a refreshed authority, and
 Requested progress still retains the record and the barrier when the restoration cannot finish.
 
-Files: the controller's header and source, Window's header and source, and the Tiles test, where
-the admission fixtures are; the affected Xdg suite rows (the delayed commits, the NoRequest
-finalization) run alongside. The receipt-lifetime prerequisite is split out rather than weakened
+Files: the controller's header and source, Window's header and source, and the Xdg test, where
+the controller admission fixtures are (the consult assumed the Tiles test; the Tiles suite holds
+the membership-during-admission rows and the X11 fixtures, so the X11 refusal row goes there as
+a sixth file); the affected Xdg suite rows (the delayed commits, the NoRequest finalization) run
+alongside. The receipt-lifetime prerequisite is split out rather than weakened
 to fit the bound. Rows: the membership publication superseded at each notification including
 counter-free context and provenance changes; the controller, leaf, window or writer destroyed
 during the admission; the ordinary-membership rejection on active and inactive desktops and other

@@ -703,7 +703,17 @@ target, chained with the caller's own admission constraint. It is validated afte
 destruction and the end of the execution, where current success is exported from only; an
 attempt that ended without a current application is concluded, an application that did not start
 is refused, and nothing is ever refreshed. The ownership, the receipt, the callers and the release
-policy are unchanged; the controller's admission does not consume the continuation yet.
+policy are unchanged by that translation. The controller's admission now consumes the continuation:
+it preflights eligibility and headroom for the complete synchronous path, including failure cleanup,
+before reserving or publishing membership. An ordinary membership on any desktop or output remains
+ineligible, and X11 is refused before reservation. After its callback-free membership writes, the
+admission seals a checkpoint with its controller, tree, window, generation, writer/provider and
+context validity as provenance. Both membership notifications validate it. Acceptance requires
+the native receipt and its current continuation after the request has been destroyed; a later
+failure releases only this generation's transient membership and associations. A Requested attempt
+keeps its restoration barrier, and loss of the writer leaves the unavailable record rather than
+allowing another writer to reuse the window. These are private native paths; production tiling and
+the public completion API remain disabled.
 An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
 first callback whether it acts as the owner, from a live ownership-validity predicate (same
 generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live
