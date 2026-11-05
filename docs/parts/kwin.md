@@ -759,6 +759,14 @@ A separate pending snapshot carries unfinished decoration, scale and committed-m
 nested dispatch. Pending content blocks new admission and supplies fullscreen interpretation for
 interactive positioning. Guarded native synchronization preserves newer claims, and association
 commit checks preserve newer manual placement. The writer reservation still waits for NT04.
+A separate private maximize-capable claim can normalize horizontal, vertical or full maximize,
+including a pending committed mode, before requesting the immutable floating frame. It supports
+CSD and a surviving same-identity SSD; fullscreen, borderless-maximized policy and returning or
+replacement decorations remain refused. Explicit stages prevent geometry dispatch during mode
+notifications. Revision-bound backend state prevents later mode/output-intent writes from
+reviving an old request. Existing SSD borders are checked exactly after their normal-mode
+response, and a failed consumed attempt preserves its mode-publication obligation without
+falling back. The normal-only claim and public owned toggles keep their separate behavior.
 An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
 first callback whether it acts as the owner, from a live ownership-validity predicate (same
 generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live

@@ -298,6 +298,12 @@ Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
 - [x] All paths remain private; no action routing, completion notification or barrier release.
 
 ### NT03.5 — Normalize owned modes without losing A
+- [x] NT03.5a: private maximize-only normalization to A, with explicit stages and backend state
+  binding; existing CSD/SSD only, fullscreen/borderless/returning-decoration paths refused.
+  Qualified 1,777 checks across 18 suites, 753 full-Xdg checks, five memory profiles
+  (43/3/32/39/3) with zero errors/contexts/suppressions and twelve compiled controls.
+  Actual old maximize content, post-write publication, late intent and phase barriers are
+  covered. Fullscreen and returning-decoration normalization remain unqualified.
 - [ ] Qualify maximize/fullscreen normalization under the explicit attempt, preserving immutable
   A through mode writes, prospective decoration changes and actual constraint/scale checks.
 - [ ] Complete obligations for writes already made; stop superseded paths without legacy fallthrough.

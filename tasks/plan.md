@@ -11,8 +11,9 @@ The owner approved [the NT03 specification](../docs/NT03-RESTORATION-SPEC.md) on
 The owner approved the NT03 implementation sequence on 2026-11-05. NT03.0 is complete;
 NT03.1's exact reservation query, NT03.2's explicit claim and NT03.3's private request are
 qualified within their scopes. NT03.4's matcher and protected configure placement are qualified
-for the private normal-mode/fixed-context path. NT03.5 mode normalization is next; later work
-retains its per-leaf validation gates.
+for the private normal-mode/fixed-context path. NT03.5a also qualifies maximize-only
+normalization; fullscreen and returning-decoration paths remain next. Later work retains
+its per-leaf validation gates.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment
@@ -264,6 +265,20 @@ and discharge notifications for writes already made. Unsupported cases stop with
 fallback after mutation. Do not replace previously covered owned mode behavior with the limited
 normal-mode precursor. Keep mode-specific child steps independently testable within the leaf;
 split the leaf if it no longer fits one focused change.
+
+Start NT03.5 with a separate maximize-only slice, NT03.5a. Preserve the normal-only claim and
+use a distinct private mode-capable entry. Qualify requested/committed maximize combinations,
+CSD and an already-current SSD, without an intermediate geometry request or mutable restore
+capture. Refuse fullscreen, borderless-maximized policy and pending decoration replacement
+before claiming in this slice. Explicit attempt stages and a backend state constraint protect
+normalization separately from geometry dispatch. Fullscreen and returning-decoration work
+remain required later slices; NT03.5a alone does not complete NT03.5.
+The qualified first slice uses Claimed, Normalizing, Dispatching and Returned stages; Returned
+is a synchronous wrapper state, not client completion. A backend predicate installed before
+release binds requested-mode/output-intent revisions, policy, guarded decoration identity,
+client limits and scale. It rejects exhausted bindings while preserving no-write MAX-1
+headroom. Existing SSD geometry gets necessary preflight checks and exact post-notification
+border/limit validation. No mutable restore capture or intermediate request is made.
 
 NT03.6 alone wires the qualified operation into explicit action dispatch. Use a typed distinction
 between unhandled/no-record and consumed, with separate no-start/staged/published/superseded
