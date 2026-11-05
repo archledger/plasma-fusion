@@ -4,12 +4,9 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
-NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
-NT02.5a2b2a (the immutable fence) and NT02.5a2b2b1 (guarded commit) are also complete.
-NT02.5a2b2b2a (restore field) and NT02.5a2b2b3a (committed-geometry publication) are complete.
-Requested-state/output synchronization at NT02.5a2b2b3b1 is also complete, as are the guarded
-backend geometry requests at NT02.5a2b2b3b2 and the owned transient-request routing at
-NT02.5a2b2b2b1; owned maximize normalization is next.
+NT01 through NT02.4b2b and NT02.5a are complete, including the transient admission's consumption
+of the qualified continuation. NT02.5b also completes test-only release/cancellation qualification
+on the actual controller-owned Xdg fixture.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment
@@ -141,6 +138,26 @@ finish it. Exact frozen write counts determine headroom before the first mutatio
 Refused after applying a prefix. Equal fully synchronized state is a no-op. This four-file leaf
 also gives XdgSurfaceWindow narrow native access to the existing publication helper so the next
 backend request group need not introduce an access-only change.
+
+### Controller-owned release qualification
+
+NT02.5b adds no state API or implementation path. Two rows observe every release notification for
+pending and actually committed controller-owned admission. Each observes the same generation and
+floating frame, Restoring/releasing state, detached controller/membership/associations, the writer
+barrier and no new geometry request. The exact notification order is checked; a scheduled state
+configure is not forbidden. Cancellation can return a current continuation while its record stays
+Restoring, which is not restoration completion.
+
+The returned checkpoint then retains the Window across logical close. Its continuation is stale,
+but the identity and writer barrier survive until the checkpoint is dropped and QObject destruction
+finishes. A same-key manual update submitted after release remains deferred until that destruction;
+the source UUID exercises the writer protocol, not another live provider/client.
+
+The existing compatibility-cancellation fixture keeps its direct rows and adds only eight property
+rows: pending/committed crossed with unchanged, equal-null cancellation, committed-only replacement
+and replacement-to-null. A true Qt property-write result proves dispatch, not successful placement.
+Existing assertions decide whether the older operation stopped and newer intent survived. Public
+state/token/completion properties remain NT04, actual restoration remains NT03.
 
 ### Workspace and transient-root registry
 

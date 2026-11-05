@@ -714,6 +714,14 @@ failure releases only this generation's transient membership and associations. A
 keeps its restoration barrier, and loss of the writer leaves the unavailable record rather than
 allowing another writer to reuse the window. These are private native paths; production tiling and
 the public completion API remain disabled.
+The controller-owned release tests observe every notification in both pending and committed
+admission: the generation and floating frame are retained, transient membership and matching
+associations are already detached, and the writer barrier remains. A current cancellation
+continuation does not mean restoration completed. Its checkpoint can retain a logically closed
+Window; the reservation and any deferred same-key manual update remain blocked until actual
+destruction. Selective Qt-property rows exercise the same cancellation supersession checks as the
+direct compatibility setter. These are native tests, not public completion APIs or provider
+integration.
 An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
 first callback whether it acts as the owner, from a live ownership-validity predicate (same
 generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live
