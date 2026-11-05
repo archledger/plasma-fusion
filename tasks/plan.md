@@ -9,8 +9,8 @@ of the qualified continuation. NT02.5b also completes test-only release/cancella
 on the actual controller-owned Xdg fixture.
 The owner approved [the NT03 specification](../docs/NT03-RESTORATION-SPEC.md) on 2026-11-05.
 The owner approved the NT03 implementation sequence on 2026-11-05. NT03.0 is complete;
-NT03.1's exact reservation query is qualified; NT03.2 is next. Later work remains subject to
-the per-leaf validation requirements.
+NT03.1's exact reservation query and NT03.2's explicit claim are qualified. NT03.3 is next;
+later work remains subject to the per-leaf validation requirements.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment

@@ -211,7 +211,7 @@ selected implementation needs more files than a leaf permits, split that leaf be
 ## NT03 — Preserve floating state on explicit release
 Approved specification: [NT03-RESTORATION-SPEC.md](../docs/NT03-RESTORATION-SPEC.md).
 Implementation plan and this breakdown were approved on 2026-11-05. NT03.0 is complete;
-NT03.1 is complete; NT03.2 is next and has not started.
+NT03.1 and NT03.2 are complete; NT03.3 is next and has not started.
 The old four-file allocation is replaced by these bounded leaves. Detailed dependency rationale
 and verification profiles W/X are in [the plan](plan.md#nt03-implementation-sequence).
 
@@ -236,20 +236,20 @@ profile I rebuilds the real library/integration targets before the full campaign
 Dependencies: implementation-plan approval; independent of the NT03.0 content policy.
 Files: `src/tiles/transientplacementwriter.{h,cpp}`, `autotests/test_transientplacementwriter.cpp`.
 
-### NT03.2 — Claim and retain one explicit attempt
-- [ ] Claim a non-reusable, exhaustion-checked attempt for the exact eligible Owned generation,
+### NT03.2 — Claim and retain one explicit attempt — complete
+- [x] Claim a non-reusable, exhaustion-checked attempt for the exact eligible Owned generation,
   binding immutable A, context and writer identity before callbacks; no geometry is sent yet.
-- [ ] Reject promotion of generic Restoring records; cancel on newer intent/close and keep the
+- [x] Reject promotion of generic Restoring records; cancel on newer intent/close and keep the
   record through detach/finalization boundaries without a self-retaining checkpoint.
-- [ ] Refuse unsupported initial modes/context before mutation, with no public routing change.
+- [x] Refuse unsupported initial modes/context before mutation, with no public routing change.
 Verification: profile X; duplicate/reentrant claim, NoRequest boundary, loss/cancellation and
 retained-close cases; compiled identity/cancellation controls and scoped memory checks.
 Dependencies: NT03.1.
 Files: `src/window.{h,cpp}`, `autotests/integration/xdgshellwindow_test.cpp`.
 
 ### Checkpoint — Restore identity
-- [ ] Exact reservation, one-shot identity and lifetime cases pass and have independent review.
-- [ ] Existing generic release/cancellation remains unchanged; no restore geometry or action
+- [x] Exact reservation, one-shot identity and lifetime cases pass and have independent review.
+- [x] Existing generic release/cancellation semantics are preserved; no restore geometry or action
   routing has been enabled.
 
 ### NT03.3 — Request exact A through private restoration authority

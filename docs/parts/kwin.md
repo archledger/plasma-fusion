@@ -726,6 +726,14 @@ The internal placement writer can inspect an exact Restoring reservation by owne
 generation without changing it. This predicate is distinct from its Owned-phase query. It does
 not flush the map, consume deferred intent, prove provider freshness or authorize restoration;
 native attempt and context validation remain separate.
+The private explicit-restore precursor claims one Window-local sequence before release callbacks.
+Its external result carries Window identity, ownership generation and the release checkpoint;
+the Window record stores no self-retaining fence. A claim that fails after allocation stays
+consumed. Accepted manual cancellation/commit intent and effective Window membership/output
+changes invalidate it, while native configure commits keep their origin distinction. Stable
+attempt validity is separate from the synchronous continuation. The precursor sends no geometry
+and is not connected to public actions; global desktop/activity navigation and later asynchronous
+completion are not qualified by it.
 An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
 first callback whether it acts as the owner, from a live ownership-validity predicate (same
 generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live
