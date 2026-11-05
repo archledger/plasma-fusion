@@ -9,8 +9,8 @@ of the qualified continuation. NT02.5b also completes test-only release/cancella
 on the actual controller-owned Xdg fixture.
 The owner approved [the NT03 specification](../docs/NT03-RESTORATION-SPEC.md) on 2026-11-05.
 The owner approved the NT03 implementation sequence on 2026-11-05. NT03.0 is complete;
-NT03.1's exact reservation query and NT03.2's explicit claim are qualified. NT03.3 is next;
-later work remains subject to the per-leaf validation requirements.
+NT03.1's exact reservation query, NT03.2's explicit claim and NT03.3's private request are
+qualified within their scopes. NT03.4 is next; later work retains its per-leaf validation gates.
 The [scope](../docs/NATIVE-TILING-SPEC.md) does not enable the tiler.
 
 ### Compatibility assignment
@@ -223,6 +223,11 @@ provenance. Record the allocated geometry-request generation before callback-pro
 Carry the same authority across each guarded step; never reconstitute it from a callback's
 current state. Stage and Published outcomes are distinguished, and failures after a prefix are
 superseded rather than mutation-free refusals. Ordinary ownership guards remain strict.
+Consume the original claim checkpoint by value. A consumed duplicate refuses without cancelling
+the first request. The lower entry independently requires an active wrapper, an unused native
+generation, exact A and MoveResize mode. Xdg preflight accepts pending admission geometry but
+requires no pending gravity. Verify generation publication in synchronization callbacks as well
+as backend callbacks, and reject reentrant lower-entry reuse while the first wrapper is active.
 The precursor remains private and must not be called safe against delayed configures until
 NT03.4 passes.
 

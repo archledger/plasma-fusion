@@ -253,13 +253,20 @@ Files: `src/window.{h,cpp}`, `autotests/integration/xdgshellwindow_test.cpp`.
   routing has been enabled.
 
 ### NT03.3 — Request exact A through private restoration authority
-- [ ] Add distinct restoration provenance and private normal-mode dispatch; publish allocated
+- [x] Add distinct restoration provenance and private normal-mode dispatch; publish allocated
   geometry-request identity to retained state before callback-producing work.
-- [ ] Revalidate the same claim at every boundary; distinguish Staged, Published and superseded
+- [x] Revalidate the same claim at every boundary; distinguish Staged, Published and superseded
   outcomes, preserving partial writes and the writer barrier without retry or fallback.
-- [ ] Prove A differs from B and mutable restore fields; preserve ordinary ownership guards.
+- [x] Prove A differs from B and mutable restore fields; preserve ordinary ownership guards.
 Verification: profile X and the 18-suite campaign; exact-target, callback supersession, headroom,
 duplicate and lifecycle controls plus scoped memory checks. No delayed-configure safety claim yet.
+Completed: 30 request rows (32 checks), 39 claim checks, 3 private Activities checks, full Xdg
+653 checks and 1,677 checks across the 18-suite campaign passed without failures or skips.
+Three scoped Memcheck profiles (32/39/3) reported no errors, contexts or suppressions under
+the existing QT_HASH_SEED=0, leak-check-disabled profile. Seven compiled mutations were caught,
+including lower-entry reuse during callbacks and generation publication delayed until after
+synchronization. The request remains private; stale-configure safety is NT03.4 and completion
+is NT04. Evidence: shared `2026-11-05-issue115-restore-request` artifacts and `tests.json`.
 Dependencies: NT03.2 and the NT03.0 content-policy decision checkpoint.
 Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
 `autotests/integration/xdgshellwindow_test.cpp` (maximum five).

@@ -731,9 +731,18 @@ Its external result carries Window identity, ownership generation and the releas
 the Window record stores no self-retaining fence. A claim that fails after allocation stays
 consumed. Accepted manual cancellation/commit intent and effective Window membership/output
 changes invalidate it, while native configure commits keep their origin distinction. Stable
-attempt validity is separate from the synchronous continuation. The precursor sends no geometry
+attempt validity is separate from the synchronous continuation. The claim itself sends no geometry
 and is not connected to public actions; global desktop/activity navigation and later asynchronous
 completion are not qualified by it.
+The separate private restore request consumes that original claim checkpoint once. It uses distinct
+restoration provenance, requires ordinary mode and exact feasible A on the recorded output, and
+records the allocated native geometry generation before synchronization callbacks. The lower entry
+also checks the active wrapper, unused generation, exact target and MoveResize mode. A duplicate
+refuses without cancelling the original; a failed consumed request remains superseded with its
+reached generation and dispatch evidence. Pending admission geometry is allowed, but pending
+gravity is not silently cleared. Queued and Published requests remain distinct, and neither clears
+the ownership record or writer barrier. The request is qualified only within this private scope:
+stale-configure placement safety, public action routing and completion are later gates.
 An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
 first callback whether it acts as the owner, from a live ownership-validity predicate (same
 generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live
