@@ -323,6 +323,14 @@ Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
   open. Qualified 1,795 checks across 18 suites with five reentry rows, one memory profile with
   zero reported errors and three compiled controls; on the unmodified bridge three rows kept a
   stale decoration and one crashed. Reviews cleared this scope.
+- [x] Returning-decoration prerequisite: the bridge borrows the decoration plugin's factory
+  (the plugin library's shared Qt root object) instead of deleting it on switch, disable or
+  destruction; a factory destroyed elsewhere reads as no plugin until the next reconfiguration
+  reloads it. Ownership only; null or failed creation, staged publication, Window handoff and
+  restoration enablement stay open. Qualified 1,799 checks across 18 suites with four factory
+  rows, one memory profile with zero reported errors and four compiled controls; on the
+  unmodified bridge one row failed, one crashed on the deleted factory and two failed and then
+  crashed at exit. Reviews cleared this scope.
 - [ ] Qualify maximize/fullscreen normalization under the explicit attempt, preserving immutable
   A through mode writes, prospective decoration changes and actual constraint/scale checks.
 - [ ] Complete obligations for writes already made; stop superseded paths without legacy fallthrough.

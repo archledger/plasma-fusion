@@ -785,6 +785,12 @@ operation has unwound, applies the newest configuration with one queued pass bou
 bridge. Several requests during one operation share that pass, and a change made while the
 bridge is idle still applies at once. Until the follow-up runs, the bridge keeps reporting the
 previous plugin and newly mapped windows still receive it.
+The bridge borrows the decoration plugin's factory instead of owning it. The factory is the
+plugin library's shared Qt root object, so switching or disabling plugins only drops the
+reference and destroying a bridge leaves it alone; loading the same library under another id
+returns the object already held. If something else destroys the factory, the bridge reports no
+plugin and creates no new decorations until the next reconfiguration loads the configured
+plugin again. A factory that is no longer used stays alive until the library is unloaded.
 An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
 first callback whether it acts as the owner, from a live ownership-validity predicate (same
 generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live

@@ -288,6 +288,10 @@ plugin loading, decoration creation or a recreation pass is deferred to one queu
 after the outermost bridge operation unwinds, so the factory and settings in use are never
 replaced on that stack and the newest configuration wins. Idle reconfiguration stays
 synchronous.
+The fourth is factory ownership: the bridge borrows the plugin library's shared factory and
+never deletes it; a factory destroyed elsewhere reads as no plugin until the next
+reconfiguration reloads it. Null or failed creation, staged client publication and Window
+handoff remain the next prerequisite.
 The qualified first slice uses Claimed, Normalizing, Dispatching and Returned stages; Returned
 is a synchronous wrapper state, not client completion. A backend predicate installed before
 release binds requested-mode/output-intent revisions, policy, guarded decoration identity,
