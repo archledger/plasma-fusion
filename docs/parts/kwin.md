@@ -777,7 +777,14 @@ Decoration recreation on a plugin or theme change visits a snapshot of guarded w
 workspace order instead of the live list. A member deleted by an earlier callback is skipped,
 the visited window is retained until its callback returns so that closing itself cannot free
 it while its decoration is being constructed, and windows mapped by a callback wait for a later
-pass. Nested configuration passes and plugin-creation failures remain unguarded.
+pass. Plugin-creation failures remain unguarded.
+A configuration change that a decoration plugin requests while the bridge is loading a
+plugin, creating a decoration or recreating decorations no longer runs nested inside that
+operation. The bridge counts its nested operations, marks the request and, once the outermost
+operation has unwound, applies the newest configuration with one queued pass bound to the
+bridge. Several requests during one operation share that pass, and a change made while the
+bridge is idle still applies at once. Until the follow-up runs, the bridge keeps reporting the
+previous plugin and newly mapped windows still receive it.
 An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
 first callback whether it acts as the owner, from a live ownership-validity predicate (same
 generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live

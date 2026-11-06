@@ -282,7 +282,12 @@ proofs; a bridge token checked only after callbacks is insufficient.
 The second is stable decoration recreation: the bridge visits a callback-free snapshot of
 guarded windows in list order, skips members deleted during the pass, retains the visited
 window through its callback and leaves windows mapped by a callback to a later pass. Plugin
-creation itself, nested configuration passes and factory ownership remain unguarded.
+creation failures and factory ownership remain unguarded.
+The third is configuration reentry: a reconfiguration requested from a plugin callback inside
+plugin loading, decoration creation or a recreation pass is deferred to one queued follow-up
+after the outermost bridge operation unwinds, so the factory and settings in use are never
+replaced on that stack and the newest configuration wins. Idle reconfiguration stays
+synchronous.
 The qualified first slice uses Claimed, Normalizing, Dispatching and Returned stages; Returned
 is a synchronous wrapper state, not client completion. A backend predicate installed before
 release binds requested-mode/output-intent revisions, policy, guarded decoration identity,

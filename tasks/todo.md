@@ -315,6 +315,14 @@ Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
   failures, factory ownership and restoration enablement stay open. Qualified 1,790 checks
   across 18 suites with seven traversal rows, one memory profile with zero reported errors,
   three compiled controls and a per-row legacy probe; reviews cleared this scope.
+- [x] Returning-decoration prerequisite: defer a configuration change that a decoration plugin
+  requests while the bridge loads a plugin, creates a decoration or recreates decorations, and
+  apply the newest configuration with one queued follow-up once the outermost operation has
+  unwound; changes at idle stay synchronous. Configuration reentry only; plugin-creation
+  failures, factory ownership, unpublished decoration handoff and restoration enablement stay
+  open. Qualified 1,795 checks across 18 suites with five reentry rows, one memory profile with
+  zero reported errors and three compiled controls; on the unmodified bridge three rows kept a
+  stale decoration and one crashed. Reviews cleared this scope.
 - [ ] Qualify maximize/fullscreen normalization under the explicit attempt, preserving immutable
   A through mode writes, prospective decoration changes and actual constraint/scale checks.
 - [ ] Complete obligations for writes already made; stop superseded paths without legacy fallthrough.
