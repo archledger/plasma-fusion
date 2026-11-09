@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+cmake_minimum_required(VERSION 3.22)
+project(NavigationInputProbe LANGUAGES CXX)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_CXX_STANDARD 23)
+find_package(Qt6 REQUIRED COMPONENTS Core DBus Gui Qml Quick Widgets)
+find_package(KWin 6.7 REQUIRED COMPONENTS kwin)
+if(NOT EXISTS "${KWIN_TEST_SOURCE}/src/backends/virtual/virtual_egl_backend.h")
+    message(FATAL_ERROR "KWIN_TEST_SOURCE must name the matching KWin source tree")
+endif()
+add_library(navigationprobe MODULE probe.cpp)
+target_include_directories(navigationprobe PRIVATE "${KWIN_TEST_SOURCE}/src")
+target_link_libraries(navigationprobe PRIVATE Qt6::Core Qt6::DBus Qt6::Gui Qt6::Qml Qt6::Quick KWin::kwin)
+configure_file(qmldir qmldir COPYONLY)

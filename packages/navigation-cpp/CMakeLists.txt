@@ -36,6 +36,10 @@ add_definitions(-DTRANSLATION_DOMAIN=\"plasma_fusion_navigation\")
 
 add_subdirectory(src)
 
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
+
 # The versions this build was made against, for plasma-fusion status (a package built against an
 # older KWin or KDecoration than the running one is due for a rebuild).
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/built-against "kwin=${KWin_VERSION}\nqt=${Qt6_VERSION}\n")

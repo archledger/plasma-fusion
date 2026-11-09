@@ -4,6 +4,8 @@
 
 #include "touchborder.h"
 
+#include <core/output.h>
+
 namespace KWin
 {
 
@@ -73,7 +75,6 @@ void FusionTouchBorder::setBorders(const QList<int> &touchActivateBorders)
         effects->registerRealtimeTouchBorder(ElectricBorder(border),
                                              m_state->activateAction(),
                                              [this](ElectricBorder border, const QPointF &deltaProgress, const LogicalOutput *screen) {
-                                                 Q_UNUSED(screen)
                                                  if (!m_gestureActive) {
                                                      // The first motion of a new swipe: let it through, or hold it
                                                      // back while locked unless one was held back just before.
@@ -86,6 +87,8 @@ void FusionTouchBorder::setBorders(const QList<int> &touchActivateBorders)
                                                          Q_EMIT gestureBlocked();
                                                      } else {
                                                          m_lastBlocked.invalidate();
+                                                         // Select the owner before inProgress starts creating scene views.
+                                                         Q_EMIT gestureStarted(screen ? screen->name() : QString());
                                                      }
                                                  }
                                                  if (m_gestureBlocked) {

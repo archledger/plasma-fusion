@@ -18,6 +18,8 @@ copyright lines. Plasma Fusion changes:
 - removed the Plasma Mobile shell dependencies (navigation panel, gesture panel, haptics, shell D-Bus state,
   panel constants);
 - the toggle shortcut has no default key;
+- the gesture's output owns its task switcher; other outputs' windows stay untouched (see
+  `docs/parts/navigation-cpp.md` for the output-lifetime contract and native regression);
 - a short swipe up (16 px or more, below home) over an app shows the dock; the switcher leaves out
   input-method panels, pop-ups, OSDs, zero-size windows and plasmashell's surfaces;
 - gesture numbers (TABLET2 N1, from the maintainer's research): a fast upward flick from an app goes
@@ -28,7 +30,9 @@ copyright lines. Plasma Fusion changes:
 - Fusion look for the cards: previews with radius 18 and a 1 px edge through the window switcher's
   corner shader (`shaders/thumbnail.frag`, a copy; layers only for cards within two of the current
   one), a bold title, 44 px round close buttons, the boards' dark dim (rgb 6, 8, 18);
-- idle under a KWin it was not built for (`KWIN_VERSION_STRING` against the running version).
+- idle under a KWin it was not built for (`KWIN_VERSION_STRING` against the running version), or
+  without the compositor's `plasmaFusionOffscreenOpacityVersion` capability (integer 1 or later).
+  A matching version alone cannot distinguish stock KWin from the patched fork.
 - gesture lock (TABLET2 G1): with `plasmafusionrc [Tablet] GestureLock=true` (quick settings' tablet row,
   followed live through KConfigWatcher) a swipe from the bottom edge is held back unless it follows a
   held-back one within 1.5 s (iOS's deferred system gestures); a held-back swipe shows Plasma's OSD

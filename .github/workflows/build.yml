@@ -75,8 +75,18 @@ jobs:
           python3 -m unittest discover -s tools/tests/perf/tests
           node --test tools/tests/perf/tests/winmon.test.js
 
+      - name: Navigation regression oracles
+        run: |
+          python3 packages/navigation-cpp/tests/test_scenario_outputs.py
+          python3 packages/navigation-cpp/tests/test_first_frame.py
+          python3 packages/navigation-cpp/tests/native-input/test_wait_state.py
+          python3 packages/navigation-cpp/tests/test_runtime.py
+
       - name: Coverage failed-row unit tests
         run: tools/tests/coverage-status-unit.sh
+
+      - name: Performance accounting unit tests
+        run: python3 tools/tests/perf/perf_test.py
 
       - name: Login check unit tests
         run: tools/device/tests/gate-unit.sh build/gate
@@ -242,6 +252,9 @@ jobs:
         run: |
           set -euo pipefail
           QT_QPA_PLATFORM=offscreen python3 packages/plasmoids/org.plasmafusion.dock/tests/menu_test.py
+
+      - name: Launcher opening request cancellation (offscreen Qt)
+        run: python3 packages/plasmoids/org.plasmafusion.launcher/tests/opening_test.py
 
       - name: Launcher views on Kicker's models (activity history, private bus)
         run: |

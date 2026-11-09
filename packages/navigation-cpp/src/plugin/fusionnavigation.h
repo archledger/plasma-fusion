@@ -18,6 +18,7 @@
 #include <QElapsedTimer>
 #include <QKeySequence>
 #include <QPointer>
+#include <QQuickItem>
 #include <QTimer>
 
 #include <KConfigWatcher>
@@ -41,6 +42,7 @@ class FusionNavigationState : public QObject
     Q_PROPERTY(bool gestureEnabled READ gestureEnabled WRITE setGestureEnabled NOTIFY gestureEnabledChanged)
     // Plasma Fusion: KWin's effective tablet mode (TabletModeManager), for the QML to enable the gestures.
     Q_PROPERTY(bool tabletMode READ tabletMode NOTIFY tabletModeChanged)
+    Q_PROPERTY(QString activeOutputName READ activeOutputName NOTIFY activeOutputNameChanged)
 
     Q_PROPERTY(bool wasInActiveTask READ wasInActiveTask WRITE setWasInActiveTask NOTIFY wasInActiveTaskChanged)
     Q_PROPERTY(int currentTaskIndex READ currentTaskIndex WRITE setCurrentTaskIndex NOTIFY currentTaskIndexChanged)
@@ -79,9 +81,11 @@ public:
     FusionNavigationState(QObject *parent = nullptr);
 
     Q_INVOKABLE void init(KWin::QuickSceneEffect *parent);
+    Q_INVOKABLE void updateViewOpacity(QQuickItem *item);
 
     bool gestureEnabled() const;
     bool tabletMode() const;
+    QString activeOutputName() const;
     void setGestureEnabled(bool gestureEnabled);
 
     bool gestureInProgress() const;
@@ -145,6 +149,7 @@ public Q_SLOTS:
 Q_SIGNALS:
     void gestureEnabledChanged();
     void tabletModeChanged();
+    void activeOutputNameChanged();
 
     void activated();
     void deactivated();
@@ -169,6 +174,7 @@ private Q_SLOTS:
     void refreshBorders();
 
 private:
+    void selectOutput(const QString &name);
     void invokeEffect();
     void revealDock();
     void updatePen();
@@ -176,6 +182,7 @@ private:
 
     bool m_gestureEnabled{false};
     bool m_tabletMode{false};
+    QString m_activeOutputName;
     FusionTouchBorderState *m_effectState{nullptr};
     FusionTouchBorder *m_border{nullptr};
     FusionTaskModel *m_taskModel{nullptr};

@@ -54,6 +54,21 @@ The order of a run: backup, "My previous desktop", install, Global Theme, **layo
 **shortcuts**, KWin, shell, lock screen, terminal and editor, **text rendering**, **GTK file
 dialogs**, **power tiers**, **pen**, **screens**, login check, **configuration version**.
 
+Before recording the configuration version, setup/update preserves legacy lock-notification
+opt-outs from the pre-update backup, or the preserved original when it is a symlink. An
+unreadable or dangling source stops the migration. An explicit `false` in the old group wins
+once, even if the real nested setting is `true`; legacy enabled values never enable cards or
+summaries. Unrelated keys and groups are kept. Existing `kscreenlockerrc` and `plasmafusionrc`
+files are not replaced by configuration from an install bundle, preserving choices and the
+completion marker across retries. An inherited `false` is saved as an explicit user preference,
+so later default changes do not lose the opt-out. Stored and effective values are verified before
+writing `plasmafusionrc [Config] LockNotificationGroupsVersion=1`; an immutable policy that
+prevents the opt-out stops the update without marking completion. A settings-write failure
+does the same. Marker write/readback errors also stop the update, after the privacy settings
+have been verified. Later explicit choices are respected. A dry run writes neither settings
+nor the completion marker. Run `plasma-fusion update` after installing the correction;
+installing files alone does not run this per-user migration.
+
 ### Configuration version and the upgrade rule (BACKLOG S11)
 
 `plasmafusionrc [Config] FusionConfigVersion` is `2` after this run. A HOME without the key is
