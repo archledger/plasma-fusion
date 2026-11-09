@@ -298,9 +298,10 @@ env -i "${EXTRA_ENV[@]}" "${OPT_ENV[@]}" HOME="$PFV/home" XDG_RUNTIME_DIR="$PFV/
   XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 \
   XDG_CONFIG_DIRS="$CONFIG_DIRS" QT_FORCE_STDERR_LOGGING=1 \
   QT_QPA_PLATFORM=wayland \
-  timeout "$((TMO + 30))" dbus-run-session -- kwin_wayland --virtual --width "$W" --height "$H" \
+  timeout "$((TMO + 30))" dbus-run-session -- sh -c \
+    'exec kwin_wayland "$@" >"$PFV/out/kwin.log" 2>&1' sh --virtual --width "$W" --height "$H" \
     --output-count "${PFV_OUTPUTS:-1}" \
-    --socket "pfv-$NAME" "${KWIN_OPTS[@]}" --exit-with-session "$PFV/inner.sh" >"$PFV/out/kwin.log" 2>&1
+    --socket "pfv-$NAME" "${KWIN_OPTS[@]}" --exit-with-session "$PFV/inner.sh" >"$PFV/out/dbus.log" 2>&1
 rc=$?
 kill "$WATCHDOG" 2>/dev/null; wait "$WATCHDOG" 2>/dev/null
 if [ -e "$PFV/timed-out" ]; then

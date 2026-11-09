@@ -39,6 +39,19 @@ class RuntimeEvidenceTest(unittest.TestCase):
         (self.root / 'driver.log').write_text('Aborted\n')
         self.assertTrue(failures(self.root))
 
+    def test_requires_bus_log_when_requested(self):
+        self.assertTrue(failures(self.root, require_bus_log=True))
+        (self.root / 'dbus.log').write_text('normal activation\n')
+        self.assertEqual(failures(self.root, require_bus_log=True), [])
+
+    def test_rejects_separate_bus_crash(self):
+        (self.root / 'dbus.log').write_text('Aborted late service\n')
+        self.assertTrue(failures(self.root))
+
+    def test_rejects_unreadable_bus_log(self):
+        (self.root / 'dbus.log').mkdir()
+        self.assertTrue(failures(self.root))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -412,6 +412,15 @@ an exclusive run waits for all slots, builds run one at a time, and an inherited
 detected. Review: single-slot starters probed the exclusive lock with an exclusive `flock`, so two
 starting at the same moment made one wait 10 s; `vslot.sh` now probes with `flock -s -n`.
 
+Session logs (`vsession.sh`). KWin writes `kwin.log`; the session bus and its activated services
+write `dbus.log`. Both files are collected after session cleanup; consumers must inspect both
+for crashes. Separating the writers prevents a partial D-Bus prefix from corrupting a native
+probe record. The shared runtime checker reads either format, and the thumbnail runner requires
+the separate bus log. `python3 tools/tests/lib/test_session_logs.py` checks interleaved output,
+late bus-service output, argument forwarding and successful/failing compositor exit statuses
+without a session. `python3 packages/navigation-cpp/tests/test_runtime.py` checks crash detection
+and missing/unreadable logs.
+
 Teardown (`vsession.sh`). At the end of the scenario, or at its time limit (the scenario shell gets
 SIGTERM; `timeout` stops everything 30 s later), every process of the session except KWin, the
 processes that started it and its children (the bus daemon, Xwayland) gets SIGTERM while KWin
