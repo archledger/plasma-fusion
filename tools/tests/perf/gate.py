@@ -120,9 +120,11 @@ def kwin_gpu_ms_per_frame(S, M, F):
         a, b = S.get("launcher%d-0" % i), S.get("launcher%d-1" % i)
         if not a or not b:
             continue
-        n = analyze_ab.frames_in(F, a["mono"], b["mono"])["n"] if F else 0
         usage = analyze_ab.gpu_pct(a, b, "kwin_wayland")
-        if usage is not None and n:
+        if usage is None:
+            continue
+        n = analyze_ab.frames_in(F, a["mono"], b["mono"])["n"] if F else 0
+        if n:
             v.append(usage / 100 * (b["mono"] - a["mono"]) * 1000 / n)
     return med(v)
 

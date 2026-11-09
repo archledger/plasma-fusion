@@ -262,7 +262,9 @@ Old xe snapshots containing the previous parser's artificial zero values must be
 they do not contain enough information for the analyzer to repair them after the fact.
 
 `python3 tools/tests/perf/perf_test.py` tests i915 and xe fixtures, units, duplicate/device identity,
-partial/missing/malformed counters, true zeros, process/counter resets and table precision. It
+partial/missing/malformed counters, true zeros, process/counter resets, KWin time-per-frame
+conversion, invalid intervals and table precision. KWin intervals are checked before frame rates
+are calculated, so equal timestamps remain unavailable rather than causing division by zero. It
 runs in the `build` workflow. The existing `tools/tests/perf/tests` suite also runs the real
 A/B CLI on two synthetic sessions to check a mean of 0.5 late frames. Fractional counts are
 printed as fractions instead of rounded to zero; the budget and its verdict are unchanged.

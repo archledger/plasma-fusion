@@ -128,6 +128,21 @@ class GpuMeasurementTest(unittest.TestCase):
         samples = {f"launcher{i}-{j}": value for i in (1, 2, 3) for j, value in ((0, a), (1, b))}
         self.assertIsNone(gate.kwin_gpu_ms_per_frame(samples, {}, [(0, 1500000000, 0, 1)]))
 
+    def test_kwin_frame_metric_converts_gpu_time_to_milliseconds_per_frame(self):
+        a, b = self.snapshot(1, gpu_ns=10000000), self.snapshot(3.5, gpu_ns=60000000)
+        a["procs"][0]["comm"] = b["procs"][0]["comm"] = "kwin_wayland"
+        samples = {f"launcher{i}-{j}": value for i in (1, 2, 3) for j, value in ((0, a), (1, b))}
+        frames = [(0, time, 0, 1) for time in (1200000000, 1700000000, 2300000000, 3200000000, 3400000000)]
+        self.assertAlmostEqual(gate.kwin_gpu_ms_per_frame(samples, {}, frames), 10)
+
+    def test_kwin_frame_metric_rejects_invalid_intervals_before_counting_frames(self):
+        for end in (1, 0, float("nan"), float("inf")):
+            with self.subTest(end=end):
+                a, b = self.snapshot(1, gpu_ns=0), self.snapshot(end, gpu_ns=10)
+                a["procs"][0]["comm"] = b["procs"][0]["comm"] = "kwin_wayland"
+                samples = {f"launcher{i}-{j}": value for i in (1, 2, 3) for j, value in ((0, a), (1, b))}
+                self.assertIsNone(gate.kwin_gpu_ms_per_frame(samples, {}, [(0, 1500000000, 0, 1)]))
+
     def test_nonzero_fractional_counts_do_not_print_as_zero(self):
         self.assertEqual(gate.fmt(0.5, ""), "0.5")
         self.assertEqual(gate.fmt(0, ""), "0")
