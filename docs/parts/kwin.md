@@ -520,7 +520,7 @@ rows the workspaces are added and removed in KWin's linear order and the grid re
 
 The following paragraphs retain development checkpoints on their identified source baselines.
 The maintained fork, current milestone boundary and later qualification limits are summarized
-in the [status and source snapshot](../../tasks/todo.md#status-and-source-snapshot).
+in the [status and source snapshot](https://github.com/archledger/plasma-fusion/blob/3e7a775add95c8f6b52dddd6b2956c6dc849b4c5/tasks/todo.md#status-and-source-snapshot).
 
 The isolated native-ownership lane also tests the deprecated `Window.tile` compatibility setter.
 A refused manual destination must leave the previous manual assignment and geometry unchanged.
