@@ -78,6 +78,9 @@ jobs:
       - name: Coverage failed-row unit tests
         run: tools/tests/coverage-status-unit.sh
 
+      - name: Performance accounting unit tests
+        run: python3 tools/tests/perf/perf_test.py
+
       - name: Login check unit tests
         run: tools/device/tests/gate-unit.sh build/gate
 
