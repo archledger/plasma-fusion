@@ -41,6 +41,13 @@ for key, sub in (("XDG_DATA_HOME", ".local/share"), ("XDG_CONFIG_HOME", ".config
 os.environ["HOME"] = str(home)
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+# Plasma 6.8 ignores /tmp/* in activity history by default. This isolated HOME contains
+# the folder fixture, so allow its events before starting the private activity manager.
+(home / ".config/kactivitymanagerd-pluginsrc").write_text(
+    "[Plugin-org.kde.ActivityManager.Resources.Scoring]\n"
+    "url-filters=\n"
+)
+
 import dbus  # noqa: E402
 from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject, QObject, QUrl, Qt, Slot  # noqa: E402
 from PySide6.QtDBus import QDBusConnection  # noqa: E402
