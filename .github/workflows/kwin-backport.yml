@@ -152,6 +152,9 @@ jobs:
       - name: rsync for the session seeds (make_seed)
         run: command -v rsync >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq rsync; }
 
+      - name: The session driver's image-selection tests
+        run: python3 tools/tests/kwin-backport/run_test.py
+
       - name: The HOME tree (tools/build.sh in Fedora 44, with the shared part's build requirements)
         run: |
           podman run --rm -v "$GITHUB_WORKSPACE:/src:Z" -w /src registry.fedoraproject.org/fedora:44 bash -c '

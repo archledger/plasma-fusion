@@ -12,7 +12,8 @@
 #
 #   --rpms DIR     packaging/patches/kwin/build.sh's output (the RPMs and SHA256SUMS)
 #   --stage DIR    built HOME tree (tools/build.sh output; default <repo>/stage/home)
-#   --image IMAGE  the stock test image (default localhost/plasma-fusion-test:f44-6.7.5). When it is
+#   --image IMAGE  the stock test image (default localhost/plasma-fusion-test:f44-VERSION,
+#                  using the KWin version in --rpms). When it is
 #                  missing it is built: the build image IMAGE-build from tools/container/Containerfile
 #                  with the Plasma version of --rpms and Fedora's current Qt, then
 #                  tools/container/test/build.sh. The backport image IMAGE-pf1 is built afresh from it
@@ -42,7 +43,7 @@ SCENARIOS=(
   "pending|packages/kwin/tests/vsession/scenario-placement-pending.sh|1440x900|360|property|"
   "placement|packages/kwin/tests/vsession/scenario-placement.sh|1440x900|420||PFV_XWAYLAND=1"
 )
-RPMS=''; STAGE=$ROOT/stage/home; IMAGE=localhost/plasma-fusion-test:f44-6.7.5
+RPMS=''; STAGE=$ROOT/stage/home; IMAGE=''
 WORK=$ROOT/build/tests/kwin-backport; DRI=1; DUMPS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -69,6 +70,7 @@ mapfile -t built < <(cd "$RPMS" && find . -maxdepth 1 -name 'kwin-[0-9]*.rpm' ! 
 WANT=${built[0]%.rpm}
 [[ $WANT =~ ^kwin-([0-9.]+)-[0-9]+\.fc[0-9]+\.pf1\.[a-z0-9_]+$ ]] || { echo "not a backport build: $WANT" >&2; exit 2; }
 VERSION=${BASH_REMATCH[1]}
+IMAGE=${IMAGE:-localhost/plasma-fusion-test:f44-$VERSION}
 STAGE=$(realpath -m -- "$STAGE")
 [ -d "$STAGE/.local/share/plasma" ] || { echo "no built HOME tree at $STAGE (run tools/build.sh)" >&2; exit 2; }
 BACKPORT=$IMAGE-pf1

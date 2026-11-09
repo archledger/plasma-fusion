@@ -172,6 +172,9 @@ updates). Its first job fails when that is not 6.7.5: the backport then needs a 
   when its session ran to the end, every check passed, no log names a crash, `kwin.log` has no
   error from the script, the session saw its lane's KWin (the property and the package), and no core
   dump reached the runner's journal (`tools/tests/kwin-backport/verdict.py`).
+  The default stock-image name follows the KWin version in `--rpms`; `--image` still selects an
+  explicit image. `python3 tools/tests/kwin-backport/run_test.py` checks both paths without
+  building or starting a container.
 - No GPU: the runners have no render node, so KWin paints with QPainter (`cvsession.sh`
   `PFV_DRI=0`). A screenshot then never returns, so these sessions take none (`PFV_NO_SHOTS`);
   the two scenarios use screenshots only for review. On the ThinkPad without its render node, both
