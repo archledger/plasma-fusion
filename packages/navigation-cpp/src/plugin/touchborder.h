@@ -52,6 +52,7 @@ public:
     bool locked() const;
 
 Q_SIGNALS:
+    void gestureStarted(const QString &outputName);
     void touchPositionChanged(qreal primaryPosition, qreal orthogonalPosition);
     // A swipe was held back by the gesture lock.
     void gestureBlocked();
