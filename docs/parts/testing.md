@@ -255,7 +255,8 @@ Missing counters, changed processes, decreases in a process's summed counter and
 intervals also produce an unavailable time measurement. The snapshots retain process totals,
 not individual client/engine counters: a client reset or disappearance can go undetected if
 another counter's increase masks it. A supported counter explicitly reporting zero remains zero.
-The unitless-zero exception applies only to memory regions; engine time still requires `ns`.
+Memory counters without a unit are bytes, including nonzero values; engine time still requires
+`ns`, as specified by the [DRM client-usage format](https://docs.kernel.org/gpu/drm-usage-stats.html#memory).
 Comparisons must keep unavailable values separate from budget passes.
 Old xe snapshots containing the previous parser's artificial zero values must be recollected;
 they do not contain enough information for the analyzer to repair them after the fact.

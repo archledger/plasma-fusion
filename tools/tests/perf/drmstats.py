@@ -3,11 +3,11 @@
 """DRM fdinfo accounting; unavailable counters are omitted, never replaced with zero."""
 
 
-def _quantity(value, units, *, unitless_zero=False):
+def _quantity(value, units, *, default_unit=None):
     parts = value.split()
-    # xe emits unitless zero for empty memory regions.
-    if unitless_zero and parts == ["0"]:
-        return 0
+    # DRM memory counters default to bytes when the unit is omitted.
+    if len(parts) == 1 and default_unit is not None:
+        parts.append(default_unit)
     if len(parts) != 2 or parts[1] not in units:
         return None
     try:
@@ -41,9 +41,12 @@ def summarize(records):
             ("gem_total_kB", "drm-total-", {"B": 1 / 1024, "KiB": 1, "MiB": 1024, "GiB": 1024**2}),
             ("gem_resident_kB", "drm-resident-", {"B": 1 / 1024, "KiB": 1, "MiB": 1024, "GiB": 1024**2}),
         ):
-            values = [_quantity(value, units, unitless_zero=metric != "gpu_ns") for key, value in fields.items()
-                      if key.startswith(prefix)
-                      and not key.startswith(("drm-engine-capacity-", "drm-total-cycles-"))]
+            values = [
+                _quantity(value, units, default_unit="B" if metric != "gpu_ns" else None)
+                for key, value in fields.items()
+                if key.startswith(prefix)
+                and not key.startswith(("drm-engine-capacity-", "drm-total-cycles-"))
+            ]
             if values and all(value is not None for value in values):
                 sample[metric] = sum(values)
         clients[identity] = sample

@@ -65,6 +65,19 @@ drm-total-cycles-rcs: 2387943753024
             "drm-client-id: 1\ndrm-total-system: 0\ndrm-resident-system: 0\n",
         ]), {"gem_total_kB": 0, "gem_resident_kB": 0})
 
+    def test_unitless_memory_values_are_bytes(self):
+        self.assertEqual(drmstats.summarize([
+            "drm-client-id: 1\ndrm-total-system: 2048\ndrm-total-vram: 1 KiB\n"
+            "drm-resident-system: 512\ndrm-resident-vram: 0\n",
+        ]), {"gem_total_kB": 3, "gem_resident_kB": 0.5})
+
+    def test_malformed_memory_values_are_unavailable(self):
+        for value in ("bad", "-1", "1.5", "", "2 pages"):
+            with self.subTest(value=value):
+                self.assertIsNone(drmstats.summarize([
+                    f"drm-client-id: 1\ndrm-total-system: {value}\n",
+                ]))
+
     def test_partial_client_coverage_does_not_undercount(self):
         self.assertIsNone(drmstats.summarize([
             "drm-client-id: 1\ndrm-engine-render: 100 ns\n",
