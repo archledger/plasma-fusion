@@ -71,6 +71,8 @@ WANT=${built[0]%.rpm}
 [[ $WANT =~ ^kwin-([0-9.]+)-[0-9]+\.fc[0-9]+\.pf1\.[a-z0-9_]+$ ]] || { echo "not a backport build: $WANT" >&2; exit 2; }
 VERSION=${BASH_REMATCH[1]}
 IMAGE=${IMAGE:-localhost/plasma-fusion-test:f44-$VERSION}
+SOFTWARE_DEVICE=0
+[[ $VERSION != 6.8.2 || $DRI != 0 ]] || SOFTWARE_DEVICE=1
 STAGE=$(realpath -m -- "$STAGE")
 [ -d "$STAGE/.local/share/plasma" ] || { echo "no built HOME tree at $STAGE (run tools/build.sh)" >&2; exit 2; }
 BACKPORT=$IMAGE-pf1
@@ -98,6 +100,8 @@ clean_tree() {
 clean_tree "$RES" "$WORK/vsession-out" "$WORK/seed" "$WORK/backport-ctx" || exit 2
 mkdir -p "$RES"
 make_seed "$STAGE" "$ROOT/tools" "$WORK/seed" || { echo "the seed failed" >&2; exit 2; }
+mkdir -p "$WORK/seed/.config"
+printf 'QT_LOGGING_RULES=kwin_core.debug=true\n' > "$WORK/seed/.config/pfv-env"
 
 # ---- the images
 image_ok=1
@@ -151,7 +155,7 @@ for lane in stock backport; do
     fi
     echo "== $lane-$id ($(date +%T)): $scenario"
     ran=0
-    env PFV_IMAGE="$img" PFV_DRI="$DRI" "${session_env[@]}" bash "$ROOT/tools/vsession/cvsession.sh" "$n" \
+    env PFV_IMAGE="$img" PFV_DRI="$DRI" PFV_SOFTWARE_DEVICE="$SOFTWARE_DEVICE" "${session_env[@]}" bash "$ROOT/tools/vsession/cvsession.sh" "$n" \
       "$ROOT/$scenario" "$WORK/seed" "$size" "$tmo" >"$RES/cvsession-$lane-$id.log" 2>&1 || ran=$?
     if [ -d "vsession-out/$n" ]; then
       rm -rf "${RES:?}/$lane-$id"; mv "vsession-out/$n" "$RES/$lane-$id"

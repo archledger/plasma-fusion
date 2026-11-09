@@ -65,6 +65,38 @@ class VerdictTest(unittest.TestCase):
         with open(os.path.join(self.res, "summary.md")) as f:
             self.assertIn("| backport-pending | PASS | 2 | 0 |", f.read())
 
+    def setup_682(self):
+        want = "kwin-6.8.2-3.fc44.pf1.x86_64"
+        stock = "kwin-6.8.2-3.fc44.x86_64"
+        self.write("images.txt", f"stock {stock}\nbackport {want}\n")
+        for lane, package, value in (("stock", stock, "false"), ("backport", want, "true")):
+            self.session(f"{lane}-pending", f"INFO KWin has Window.requestedGeometry: {value} ({package})\n")
+            for scenario in ("pending", "placement"):
+                self.write(f"{lane}-{scenario}/kwin.log",
+                           "kwin_core: OpenGL compositing has been successfully initialized\n")
+        return want
+
+    def test_682_requires_renderer_evidence(self):
+        want = self.setup_682()
+        self.write("backport-placement/kwin.log", "normal-looking but no initialization proof\n")
+        rc, out = self.verdict(want=want)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("no successful compositor initialization", " ".join(self.summary()["backport-placement"]["failed"]))
+
+    def test_682_with_renderer_evidence_passes(self):
+        rc, out = self.verdict(want=self.setup_682())
+        self.assertEqual(rc, 0, out)
+
+    def test_opened_device_does_not_excuse_renderer_failure(self):
+        want = self.setup_682()
+        self.write("backport-placement/render-device.log", "PASS: opened render device /dev/udmabuf\n")
+        self.write("backport-placement/kwin.log",
+                   "kwin_core: OpenGL compositing has been successfully initialized\n"
+                   "kwin_core: The used windowing system requires compositing\n")
+        rc, out = self.verdict(want=want)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("compositor initialization failed", " ".join(self.summary()["backport-placement"]["failed"]))
+
     def test_failed_check(self):
         self.write("backport-placement/checks.txt", "PASS one\nFAIL 2. the memory moved\n")
         self.assertFails("backport-placement", "FAIL 2. the memory moved")

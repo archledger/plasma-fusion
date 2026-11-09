@@ -16,17 +16,28 @@
 # (PFV_NO_SHOTS=1, vsession.sh). PFV_XWAYLAND=1 gets the X11 socket directory the image lacks
 # (/tmp/.X11-unix; without it KWin logs "Failed to establish X11 socket" and runs without
 # Xwayland). See docs/parts/containers.md.
+# PFV_SOFTWARE_DEVICE=1 with PFV_DRI=0 passes udmabuf for software OpenGL on KWin 6.8.
 set -u
 NAME=${1:?name}; SCENARIO=${2:?scenario}; SEED=${3:?seed}; SIZE=${4:-1920x1200}; TMO=${5:-600}
 IMAGE=${PFV_IMAGE:-localhost/plasma-fusion-test:f44-6.7.5}
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 OUTDIR=$(pwd)/vsession-out/$NAME
-podman unshare rm -rf "$OUTDIR"; mkdir -p "$OUTDIR"
 OPTS=()
-if [ "${PFV_DRI:-1}" = 0 ]; then OPTS+=(-e PFV_NO_SHOTS=1); else OPTS+=(--device /dev/dri --group-add keep-groups); fi
+DEVICE=''
+if [ "${PFV_DRI:-1}" = 0 ]; then
+  OPTS+=(-e PFV_NO_SHOTS=1)
+  if [ "${PFV_SOFTWARE_DEVICE:-0}" = 1 ]; then
+    DEVICE=$(bash "$REPO/tools/vsession/render-device.sh" software) || exit 3
+    OPTS+=(--device "$DEVICE:$DEVICE:rw" --group-add keep-groups)
+  fi
+else
+  OPTS+=(--device /dev/dri --group-add keep-groups)
+fi
+OPTS+=(-e "PFV_RENDER_DEVICE=$DEVICE")
 for v in PFV_TABLET PFV_ANIM PFV_FONT_PT PFV_LANGUAGE PFV_SHELL PFV_CWD PFV_KDE_PROFILE PFV_XWAYLAND PFV_LOCK; do
   [ -n "${!v:-}" ] && OPTS+=(-e "$v=${!v}")
 done
+podman unshare rm -rf "$OUTDIR"; mkdir -p "$OUTDIR"
 podman run --rm --name "pfv68-$NAME" --shm-size=1g --cap-add=SYS_NICE -e LANG=C.UTF-8 \
   -e "PFV_SCALE=${PFV_SCALE:-1}" -e "PFV_OUTPUTS=${PFV_OUTPUTS:-1}" "${OPTS[@]}" \
   -v "$REPO/tools/vsession:/pfv:ro,z" -v "$(realpath "$SCENARIO"):/scenario.sh:ro,z" \
@@ -36,6 +47,9 @@ podman run --rm --name "pfv68-$NAME" --shm-size=1g --cap-add=SYS_NICE -e LANG=C.
     set -u
     R=/var/tmp/pfv-'"$NAME"'
     owner=$(stat -c %u:%g /out)
+    if [ -n "${PFV_RENDER_DEVICE:-}" ]; then
+      su test -s /bin/bash -c '\''bash /pfv/render-device.sh --check "$PFV_RENDER_DEVICE"'\'' > /out/render-device.log 2>&1 || exit 3
+    fi
     if [ -d /persist ]; then
       [ -n "$(ls -A /persist)" ] || cp -a /seed/. /persist/
       chown -R test:test /persist; mkdir -p "$(dirname "$R")"; ln -s /persist "$R/home" 2>/dev/null || { mkdir -p "$R"; ln -s /persist "$R/home"; }
@@ -57,4 +71,6 @@ podman run --rm --name "pfv68-$NAME" --shm-size=1g --cap-add=SYS_NICE -e LANG=C.
     chown -R "$owner" /out
     echo "session rc=$rc" >> /out/container.log
     exit $rc'
-echo "results in $OUTDIR (rc $?)"
+rc=$?
+echo "results in $OUTDIR (rc $rc)"
+exit "$rc"
