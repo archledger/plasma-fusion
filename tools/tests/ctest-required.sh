@@ -13,11 +13,11 @@ part=${1:?usage: ctest-required.sh PART_DIR BUILD_DIR}
 build=${2:?usage: ctest-required.sh PART_DIR BUILD_DIR}
 
 case $(basename "$part") in
+  navigation-cpp) required=(navigation-capability) ;;
   decoration-cpp) required=(pfdeco-preview-dark pfdeco-preview-light pfdeco-fuzz) ;;
   kcm-cpp) required=(kcmctl-load kcmctl-fuzz kcmctl-meters kcmctl-panels kcmctl-power kcmctl-reset kcmctl-settingsfile kcmctl-gestures) ;;
   quicklook-cpp) required=(quicklook-model quicklook-viewers) ;;
   copytext-cpp) required=(copytext-core copytext-overlay copytext-capture copytext-flow) ;;
-  # The navigation effect has no tests of its own yet.
   *) required=() ;;
 esac
 

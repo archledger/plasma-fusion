@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "fusionnavigation.h"
+#include "capabilities.h"
 #include "splitside.h"
 
 #include <KSharedConfig>
@@ -51,6 +52,10 @@ void FusionNavigationState::init(KWin::QuickSceneEffect *parent)
     if (QCoreApplication::applicationVersion() != KWIN_VERSION_STRING) {
         qWarning("plasmafusion-navigation: built for KWin %s, running %s: the effect stays idle",
                  KWIN_VERSION_STRING.data(), qPrintable(QCoreApplication::applicationVersion()));
+        return;
+    }
+    if (!fusionSupportsOffscreenOpacity(parent)) {
+        qWarning("plasmafusion-navigation: compositor lacks offscreen opacity capability version 1; the effect stays idle");
         return;
     }
     m_effectState = new FusionTouchBorderState(parent);

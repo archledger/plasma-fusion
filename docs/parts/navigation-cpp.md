@@ -5,7 +5,8 @@
 `packages/navigation-cpp` is the KWin effect behind the bottom-edge home, app-switcher and
 previous/next-app gestures. Its upstream origin, gesture thresholds and split-pair behavior are
 documented in `packages/navigation-cpp/README.md`. It uses KWin's internal APIs and only starts
-when its compiled KWin version matches the running compositor.
+when its compiled KWin version matches the running compositor and the compositor advertises
+the required offscreen-opacity capability.
 
 ## Output ownership
 
@@ -41,8 +42,16 @@ This is separate from QML item opacity because the empty native view has an opaq
 The existing queued owner-focus assignment and non-owner Escape handler are unchanged.
 
 This path requires the KWin `OffscreenQuickView::setOpacity()` correction that propagates
-opacity to the compositor item. The stock 6.7.5 and 6.7.91 implementation only changes the
-internal Qt window. Matching the version string alone does not establish this capability.
+opacity to the compositor item, plus correct opaque-region handling for non-unit opacity.
+Stock 6.7.5, 6.7.91 and 6.8.2 do not provide both semantics. Matching the version string alone
+does not establish this capability.
+
+Before creating touch borders, input spies or task state, initialization reads the constant
+`plasmaFusionOffscreenOpacityVersion` property on `QuickSceneEffect`. An integer value of 1 or
+later promises both behaviors. Missing, non-integer, zero or negative values leave the effect
+idle with a diagnostic; KWin's ordinary edges remain available. The existing version-match
+guard still applies. This is compatibility negotiation, not a substitute for matching builds
+and native qualification.
 
 ## Verification
 
@@ -53,7 +62,13 @@ cmake -S packages/navigation-cpp -B build/navigation -G Ninja \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
 cmake --build build/navigation
 DESTDIR="$PWD/build/navigation-install" cmake --install build/navigation
+ctest --test-dir build/navigation --output-on-failure
 ```
+
+The `navigation-capability` test checks the accepted property values and types without starting
+a compositor. It can also be built independently with `cmake -S packages/navigation-cpp/tests
+-B build/navigation-capability`, then built and run with CTest. The compiled CI lane requires
+this test to be registered. Real startup and missing-capability fallback need the native lane.
 
 `packages/navigation-cpp/tests/vsession/scenario-outputs.sh` is an automated real-KWin regression.
 It requires a private `tools/vsession` session, 1280x800 at scale 1, tablet mode on and a matching
