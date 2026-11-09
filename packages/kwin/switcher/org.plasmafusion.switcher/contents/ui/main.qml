@@ -707,7 +707,7 @@ KWin.TabBoxSwitcher {
                                         height: root.cellHeight
                                         pal: root.pal
                                         metrics: root.metrics
-                                        windowId: model.windowId
+                                        clientWindow: root.windowFor(model.windowId)
                                         icon: model.icon
                                         appName: info.app
                                         title: info.title

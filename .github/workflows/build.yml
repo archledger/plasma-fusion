@@ -181,6 +181,8 @@ jobs:
       - name: Hidden switcher thumbnail lifetime (offscreen Qt)
         run: |
           set -euo pipefail
+          python3 packages/kwin/tests/native-thumbnail/test_check_connections.py
+          python3 packages/kwin/tests/native-thumbnail/test_runner.py
           mkdir -p "$RUNNER_TEMP/thumbnail-packages"
           ln -s "$RUNNER_TEMP/snap-stage/.local/share/kwin/tabbox" "$RUNNER_TEMP/thumbnail-packages/switcher"
           QT_QPA_PLATFORM=offscreen dbus-run-session \

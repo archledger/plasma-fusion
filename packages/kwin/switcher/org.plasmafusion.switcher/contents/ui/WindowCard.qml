@@ -19,7 +19,7 @@ Item {
 
     property FusionPalette pal
     property FusionMetrics metrics
-    property var windowId
+    property var clientWindow
     property var icon
     property string appName
     property string title
@@ -94,10 +94,17 @@ Item {
 
             KWin.WindowThumbnail {
                 id: thumbnail
+                // Cycling clients requires bounded cleanup connections in KWin's weak source cache.
+                readonly property bool supportsClientRelease: {
+                    const version = thumbnail["plasmaFusionThumbnailSourceLifecycleVersion"];
+                    return Number.isInteger(version) && version >= 1;
+                }
                 readonly property real sourceWidth: Math.max(1, thumbnail.implicitWidth)
                 readonly property real sourceHeight: Math.max(1, thumbnail.implicitHeight)
                 readonly property real scale_: Math.max(thumbBox.width / sourceWidth, thumbBox.height / sourceHeight)
-                wId: card.previewActive ? card.windowId : ""
+                // setClient(null) disconnects the old client's geometry signal; setWId(null)
+                // does not on KWin 6.7.5 and accumulates connections when the card is reused.
+                client: card.previewActive || !thumbnail.supportsClientRelease ? card.clientWindow : null
                 width: Math.ceil(thumbnail.sourceWidth * thumbnail.scale_)
                 height: Math.ceil(thumbnail.sourceHeight * thumbnail.scale_)
                 x: Math.round((thumbBox.width - thumbnail.width) / 2)
