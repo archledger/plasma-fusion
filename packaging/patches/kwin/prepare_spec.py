@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Add the optional requestedGeometry backport to Fedora's KWin 6.7.5 spec."""
+"""Add the optional requestedGeometry backport to Fedora's supported KWin specs."""
 
 import datetime
 from pathlib import Path
 import re
 import sys
 
-PATCH = "0001-window-expose-requested-geometry.patch"
+PATCHES = {
+    "6.7.5": "0001-window-expose-requested-geometry.patch",
+    "6.8.2": "0001-window-expose-requested-geometry-6.8.2.patch",
+}
 
 
 def prepare(text, version_release, today):
-    match = re.fullmatch(r"6\.7\.5-([0-9]+)\.fc44", version_release)
+    match = re.fullmatch(r"(6\.7\.5|6\.8\.2)-([0-9]+)\.fc44", version_release)
     if not match:
-        raise ValueError("only Fedora 44 KWin 6.7.5 source builds are supported")
-    release = match[1]
+        raise ValueError("only Fedora 44 KWin 6.7.5 and 6.8.2 source builds are supported")
+    version, release = match.groups()
+    patch = PATCHES[version]
     checks = (
         r"^Name:\s+kwin\s*$",
-        r"^Version:\s+6\.7\.5\s*$",
+        rf"^Version:\s+{re.escape(version)}\s*$",
         rf"^Release:\s+{release}%\{{\?dist\}}\s*$",
         r"^%autosetup -p1\s*$",
         r"^%changelog\s*$",
@@ -26,12 +30,12 @@ def prepare(text, version_release, today):
     for pattern in checks:
         if len(re.findall(pattern, text, re.MULTILINE)) != 1:
             raise ValueError(f"unsupported or mismatched spec: {pattern}")
-    if re.search(r"^Patch0*9001\s*:", text, re.MULTILINE) or PATCH in text:
+    if re.search(r"^Patch0*9001\s*:", text, re.MULTILINE) or any(name in text for name in PATCHES.values()):
         raise ValueError("the backport or its reserved Patch9001 tag is already present")
     # Keep Fedora's other patches and %prep intact; %autosetup applies this patch too.
     text = re.sub(
         r"^(Release:\s+" + release + r"%\{\?dist\})[ \t]*$",
-        rf"\1.pf1\n\n# Plasma Fusion: KDE MR !10225\nPatch9001: {PATCH}",
+        rf"\1.pf1\n\n# Plasma Fusion: KDE MR !10225\nPatch9001: {patch}",
         text,
         count=1,
         flags=re.MULTILINE,

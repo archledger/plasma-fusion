@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Internal entry point: called by build.sh, never against the host's RPM database.
 set -euo pipefail
-[[ $# == 1 && $1 =~ ^6\.7\.5-[0-9]+\.fc44$ ]] || exit 64
+[[ $# == 1 && $1 =~ ^(6\.7\.5|6\.8\.2)-[0-9]+\.fc44$ ]] || exit 64
 vr=$1
 top=/root/rpmbuild
 spec=$top/SPECS/kwin.spec

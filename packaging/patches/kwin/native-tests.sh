@@ -19,8 +19,8 @@ if (( $# < 1 || $# > 2 )); then
     exit 64
 fi
 vr=${2:-$(rpm -q --qf '%{VERSION}-%{RELEASE}' kwin)}
-if [[ ! $vr =~ ^6\.7\.5-[0-9]+\.fc44$ ]]; then
-    echo "unsupported KWin build: $vr (expected 6.7.5-N.fc44)" >&2
+if [[ ! $vr =~ ^(6\.7\.5|6\.8\.2)-[0-9]+\.fc44$ ]]; then
+    echo "unsupported KWin build: $vr (expected 6.7.5-N.fc44 or 6.8.2-N.fc44)" >&2
     exit 64
 fi
 mkdir -p "$1"

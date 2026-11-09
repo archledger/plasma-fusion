@@ -5,7 +5,7 @@
 # Usage: native-tests-in-container.sh VERSION-RELEASE backport|stock
 # Exit status: 0 every suite passed, 1 a suite failed in all its attempts, 3 setup or build failed.
 set -euo pipefail
-[[ $# == 2 && $1 =~ ^6\.7\.5-[0-9]+\.fc44$ && $2 =~ ^(backport|stock)$ ]] || exit 64
+[[ $# == 2 && $1 =~ ^(6\.7\.5|6\.8\.2)-[0-9]+\.fc44$ && $2 =~ ^(backport|stock)$ ]] || exit 64
 vr=$1
 variant=$2
 trap 'echo "setup or build failed (line $LINENO)" >&2; exit 3' ERR
