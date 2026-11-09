@@ -36,11 +36,11 @@ Path(HOME, ".config", APP + "rc").write_text(
 Path(HOME, ".config", "klipperrc").write_text("[General]\nIgnoreImages=false\n")
 
 from PySide6.QtCore import QMetaObject, QMimeData, QObject, QPointF, QSortFilterProxyModel, Q_ARG, Q_RETURN_ARG, Qt, QUrl, Slot  # noqa: E402
-from PySide6.QtGui import QColor, QCursor, QImage  # noqa: E402
+from PySide6.QtGui import QColor, QCursor, QIcon, QImage  # noqa: E402
 from PySide6.QtQml import QQmlComponent  # noqa: E402
 from PySide6.QtQuick import QQuickItem, QQuickView  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QPushButton  # noqa: E402
 import shiboken6  # noqa: E402
 
 
@@ -70,6 +70,8 @@ class Context(QObject):
 
 app = QApplication(sys.argv[:1])
 app.setApplicationName(APP)
+# Offscreen Qt has no desktop icon theme; Klipper needs one for its file-preview fallback.
+QIcon.setThemeName("breeze")
 stage = Path(sys.argv[1]).resolve() / ".local/share/plasma/plasmoids/org.plasmafusion.quicksettings/contents/ui"
 if not (stage / "ClipboardPage.qml").exists():
     raise SystemExit(f"no staged quick settings with the clipboard sheet in {stage}")
@@ -287,6 +289,16 @@ check(new != "" and rows()[0] == "alpha edited" and app.clipboard().text() == "a
 count = filtered.rowCount()
 call(service, "remove", uuid(filtered.rowCount() - 1))
 QTest.qWait(100)
+# Plasma 6.8.2 still asks for starred entries despite the remembered answer. Exercise
+# that confirmation when shown, without accepting any unrelated dialog or skipping removal.
+confirmation = app.activeModalWidget()
+if confirmation is not None:
+    check(confirmation.windowTitle() == "Remove Starred Item", "removal asks to delete a starred item")
+    delete_buttons = [button for button in confirmation.findChildren(QPushButton)
+                      if button.text().replace("&", "") == "Delete"]
+    check(len(delete_buttons) == 1, "the confirmation has one Delete button")
+    QTest.mouseClick(delete_buttons[0], Qt.LeftButton)
+    QTest.qWait(100)
 check(filtered.rowCount() == count - 1, "remove takes one entry out")
 
 # The hint after choosing: Plasma's on-screen display, here a stand-in on the private bus that

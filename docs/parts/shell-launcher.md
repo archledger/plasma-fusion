@@ -176,6 +176,9 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   the events Kicker sends when it starts an app; the "Recent" chip and its two lists in order, and
   Down / Up through them; the Places chip with the places (Home first, no "Show KRunner" row) and a
   folder opened in the file manager, Down from the places into the folders, Home shown as "~".
+  The temporary HOME explicitly allows the fixture's activity-history URLs before starting its
+  private activity manager: Plasma 6.8 otherwise ignores `/tmp/*`, including the test folder.
+  This configuration is confined to the fixture and removed with it.
 - `tests/places.test.js` (node, in the build step): the place kinds from the URL and the path line.
 - `tests/views_test.py` also searches with Kicker's real RunnerModel: Down past the last result to
   the KRunner row, Up back, Enter hands the query over and closes; with no results Down from the
