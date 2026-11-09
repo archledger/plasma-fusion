@@ -10,6 +10,8 @@ Planning baseline: `1262b4478a476da76c71ef9b62c2e64c06d324a4`.
 
 This refines [the ownership contract](NATIVE-TILING-CONTRACT.md) and the NT03/NT04 boundary in
 [the roadmap](../tasks/todo.md). It does not mark either milestone complete or enable tiling.
+Source observations and build recipes below belong to the pinned planning baseline. Use the
+[status and source snapshot](../tasks/todo.md#status-and-source-snapshot) for current progress.
 
 ## Objective and approved decisions
 
@@ -30,7 +32,7 @@ Approved decisions:
 5. The old four-file NT03 scope is revised explicitly. Implementation groups must still be small,
    independently tested and reviewed; this draft does not approve one large combined patch.
 
-## What the current source establishes
+## Source observations at the planning baseline
 
 - `Workspace::performWindowOperation`, `useractions.cpp`: UntileOrRestore recognizes Owned only.
   A Restoring record can otherwise fall through to ordinary fullscreen/tile/maximize behavior.
@@ -123,7 +125,8 @@ Do not reject valid surface content wholesale to solve a placement problem. Befo
 the configure guard, characterize an old-sized buffer committed while a newer resize is pending.
 Specify separately which client content/size updates remain valid and which compositor-controlled
 position/requested-state changes are obsolete. The characterization and selected policy are now
-recorded in [NT03.0](../tasks/nt03-old-buffer-characterization.md); the guard is not implemented.
+recorded in [NT03.0](../tasks/nt03-old-buffer-characterization.md); the guard was not implemented
+at that characterization baseline.
 Any dependency on serial selection must also be tested at wrap; the
 existing unsigned comparison is not assumed to provide the required ordering proof.
 
@@ -222,6 +225,6 @@ const auto lifetime = qScopeGuard([window]() {
 ## Approval and characterization status
 
 The owner approved the five decisions above and the implementation plan. NT03.0's bounded
-characterization and narrow policy passed review; R3/R4 still need their own guarded implementation
-and discriminating tests, including serial wrap. The observations are not permission to drop
+characterization and narrow policy passed review; R3/R4 were subsequent implementation gates,
+whose results are recorded in the roadmap. The observations are not permission to drop
 content, guess at serial ordering, relax stale-placement safety or claim restoration completed.

@@ -3,6 +3,10 @@
 
 # NT01 baseline
 
+Historical capture from 2026-11-02. The identities and receipts below are preserved as the
+starting baseline; see the [status and source snapshot](todo.md#status-and-source-snapshot)
+for the maintained fork and current milestones.
+
 ## Source and runtime
 
 | Input | Exact identity |
@@ -23,8 +27,8 @@ All 3,248 tracked baseline files match the source used to build the installed `.
 Later implementation commits are recorded in `todo.md`; compare against this sealed baseline,
 not an assumed current HEAD. The older private ownership experiments are not in this baseline.
 
-The active desktop remains the installed `.pf2` build. Neither this source worktree nor the
-new `build/` directory replaces its files or attaches to its session bus.
+At capture, the active desktop remained the installed `.pf2` build. Neither this source worktree
+nor the new `build/` directory replaced its files or attached to its session bus.
 
 ## Build profile
 

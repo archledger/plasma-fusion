@@ -3,6 +3,35 @@
 
 # One-window native ownership proof
 
+## Status and source snapshot
+
+This status was checked on 2026-11-09 against the maintained
+[`archledger/kwin` branch `plasma-fusion`](https://github.com/archledger/kwin/tree/plasma-fusion),
+at [`a0635787`](https://github.com/archledger/kwin/commit/a0635787ff19cec11f411f7f0049d3b3f77f1041).
+That source is based on KWin 6.8.2. The 6.7.5/6.7.91 commits, image identifiers and test counts
+below remain historical evidence for their own baselines, not new results for this source.
+
+- Private ownership, exact-A requests, configure provenance and the maximize-only NT03.5a
+  precursor are present. The four recorded decoration prerequisites are also present: guarded
+  settings reads, guarded window traversal, deferred reconfiguration and borrowed factory lifetime.
+- Fullscreen/returning-decoration restoration, explicit restore-action routing, NT04 completion,
+  the production placement-provider bridge and the complete tiling policy remain open. Private
+  request helpers do not expose a usable production tiler; the existing release action is not
+  the planned exact-A restoration route.
+- The original startup-initializer correction is integrated as
+  [`9c6fb381`](https://github.com/archledger/kwin/commit/9c6fb38101e03606ee0024aab7c4df6edbdb5dce).
+  The earlier notes that describe it as a separate unmerged branch refer to that earlier state.
+- The later [floating-client-size correction](https://github.com/archledger/kwin/pull/1) preserves
+  client size on same-output decoration-border changes. It does not complete returning-decoration
+  restoration. Its qualification retains a baseline-reproducible startup Memcheck read with an
+  unresolved cause; the historical fixed-hash profiles below do not establish a globally clean run.
+
+This snapshot describes source and recorded qualification, not the current installation on a
+particular device. Continue from the unchecked milestones below. The earlier design sections
+describe the approved contract; they are not evidence that every proposed interface exists.
+
+## Earlier NT02 progress notes
+
 NT01 through NT02.4b2b, NT02.5a1, NT02.5a2a and NT02.5a2b1 are complete.
 NT02.5a2b2a (the immutable fence) and NT02.5a2b2b1 (guarded commit) are also complete.
 NT02.5a2b2b2a (restore field) is complete. The guarded committed-geometry prerequisite
@@ -210,8 +239,9 @@ selected implementation needs more files than a leaf permits, split that leaf be
 
 ## NT03 — Preserve floating state on explicit release
 Approved specification: [NT03-RESTORATION-SPEC.md](../docs/NT03-RESTORATION-SPEC.md).
-Implementation plan and this breakdown were approved on 2026-11-05. NT03.0 is complete;
-NT03.1 and NT03.2 are complete; NT03.3 is next and has not started.
+Implementation plan and this breakdown were approved on 2026-11-05. NT03.0 through NT03.4
+and the private maximize-only NT03.5a precursor are complete within the scopes recorded below.
+The remaining NT03.5 mode work and NT03.6 action routing are not complete.
 The old four-file allocation is replaced by these bounded leaves. Detailed dependency rationale
 and verification profiles W/X are in [the plan](plan.md#nt03-implementation-sequence).
 

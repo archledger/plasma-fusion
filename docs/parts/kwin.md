@@ -518,6 +518,10 @@ rows the workspaces are added and removed in KWin's linear order and the grid re
 
 ## Dynamic-tiling feasibility (2026-10-23)
 
+The following paragraphs retain development checkpoints on their identified source baselines.
+The maintained fork, current milestone boundary and later qualification limits are summarized
+in the [status and source snapshot](../../tasks/todo.md#status-and-source-snapshot).
+
 The isolated native-ownership lane also tests the deprecated `Window.tile` compatibility setter.
 A refused manual destination must leave the previous manual assignment and geometry unchanged.
 Direct and Qt-property calls are covered with Wayland and X11 clients, alongside successful
@@ -848,9 +852,10 @@ ordinary randomized functional runs stay as they are, and a clean Memcheck resul
 profile qualifies neither the AES path nor other Qt startup code. Qt's `QT_NO_CPU_FEATURE` switch
 cannot serve instead: from 6.8 to 6.11 its feature-name table carries leading spaces that its
 parser does not skip. The two startup initializer defects the lane found (an `Options` boolean
-and the test fixture's relative-tablet flag) are fixed with their regressions on the private
-branch `fix/startup-initialization` (`136c04f435704ce5d9d1593ea35913862f2572bb`), not in the
-native commits, and are not merged or installed.
+and the test fixture's relative-tablet flag) were first fixed with their regressions on the
+private branch `fix/startup-initialization` (`136c04f435704ce5d9d1593ea35913862f2572bb`), separately
+from those native checkpoints. The maintained fork now includes that correction as `9c6fb381`;
+the source snapshot above distinguishes this from later unresolved startup diagnostics.
 
 Dynamic tiling is not implemented or installed. Its approved plan starts with a native ownership
 gate. The test-only `tests/vsession/auto_tiling_probe.py` and `scenario-auto-tiling.sh` characterize

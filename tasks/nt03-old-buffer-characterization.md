@@ -3,6 +3,9 @@
 
 # NT03.0: content and placement decision
 
+Historical characterization from 2026-11-05. Its conclusions apply to the pinned baseline;
+current implementation progress is in the [status and source snapshot](todo.md#status-and-source-snapshot).
+
 Status: characterization completed; the narrow policy below passed independent review.
 Native baseline: `0eb27d9eb6b8ad0feb8554b5c763c488f7a67c7b`. No native implementation changed.
 

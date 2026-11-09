@@ -3,8 +3,9 @@
 
 # One-window native ownership contract
 
-Status: reviewed NT01 contract for isolated implementation, not an implemented API.
-Names below are proposed additions.
+Status: reviewed NT01 design contract, not a public API reference. Some private primitives are
+implemented; the public interface and production admission remain unimplemented.
+See the [status and source snapshot](../tasks/todo.md#status-and-source-snapshot) for progress.
 Baseline: [NT01 source and runtime](../tasks/nt01-baseline.md).
 This document narrows the approved [scope](NATIVE-TILING-SPEC.md); it does not enable tiling.
 
@@ -44,7 +45,7 @@ All such paths empty memberships before the `Tile` base destructor runs. The tra
 branch never falls back to assigning a manual tile. Session shutdown cancels native ownership
 without sending new requests through a half-destroyed workspace; the persisted A remains intact.
 
-Implementation status at NT02.4b1: Workspace creates only the idle controller. There is no
+Historical implementation status at NT02.4b1: Workspace creates only the idle controller. There is no
 production writer/provider or admission entry point. Shutdown ordering and nullable manager
 consumers are qualified; the output-removal transaction above remains NT02.4b2. Missing non-None
 tiling requests are refused, not interpreted as untile. A callback's newer geometry wins over

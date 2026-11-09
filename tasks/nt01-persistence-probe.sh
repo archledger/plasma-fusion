@@ -1,7 +1,8 @@
 #!/bin/bash
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
-# ThinkPad-only evidence recipe; never connects to the logged-in desktop bus.
+# Historical NT01 evidence recipe (2026-11-02), pinned to the original ThinkPad paths and image.
+# It runs an isolated GPU-backed session; it is not a generic current-source validation command.
 set -euo pipefail
 root=/home/test/Projects/plasma-fusion-kwin-issue115
 package=/home/test/Projects/plasma-fusion-kwin-personal/package-20261102

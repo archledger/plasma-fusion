@@ -4,6 +4,9 @@
 # Native ownership proof for custom KWin
 
 Status: the owner approved continuation of this first-milestone plan on 2026-11-02.
+The detailed sections retain the approved design and its historical refinements. Use the
+[status and source snapshot](todo.md#status-and-source-snapshot) for the maintained fork,
+implemented milestones and remaining work; future-tense steps below are not a current task queue.
 NT01 through NT02.4b2b and NT02.5a are complete, including the transient admission's consumption
 of the qualified continuation. NT02.5b also completes test-only release/cancellation qualification
 on the actual controller-owned Xdg fixture.

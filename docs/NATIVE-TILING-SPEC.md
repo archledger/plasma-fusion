@@ -6,6 +6,10 @@
 Status: scope and first-milestone plan approved by the owner on 2026-11-02. Tracks
 [#115](https://github.com/archledger/plasma-fusion/issues/115).
 
+The baseline below is the historical starting point. The maintained fork and implemented
+milestones are listed in the [status and source snapshot](../tasks/todo.md#status-and-source-snapshot).
+This specification still defines the required outcome, not a completed tiling feature.
+
 ## Objective
 
 Provide optional, per-workspace master-and-stack tiling through an explicitly selected custom
