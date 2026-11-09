@@ -57,6 +57,7 @@ class PrepareSpecTest(unittest.TestCase):
         self.assertIn("Release: 3%{?dist}.pf1\n", result)
         self.assertIn("Patch0: fedora.patch\n", result)
         self.assertIn("Patch9001: 0001-window-expose-requested-geometry-6.8.2.patch\n", result)
+        self.assertIn("Patch9002: 0002-initialize-startup-flags-6.8.2.patch\n", result)
         self.assertIn("%prep\n%autosetup -p1\n", result)
         self.assertIn("- 6.8.2-3.fc44.pf1\n", result)
         self.assertTrue(result.endswith(original[original.index("* Sat"):]))
@@ -79,6 +80,23 @@ class PrepareSpecTest(unittest.TestCase):
             "Release: 1%{?dist}", "Release: 3%{?dist}")
         with self.assertRaises(ValueError):
             prepare(matching, "6.8.2-3.fc45", datetime.date(2026, 11, 9))
+
+    def test_682_rejects_reserved_second_patch(self):
+        original = SPEC.replace("Version: 6.7.5", "Version: 6.8.2")
+        for tag in ("Patch9002", "Patch09002"):
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                prepare(original.replace("Source0:", f"{tag}: existing.patch\nSource0:"),
+                        "6.8.2-1.fc44", datetime.date(2026, 11, 9))
+
+    def test_675_preserves_unreserved_second_patch(self):
+        original = SPEC.replace("Source0:", "Patch9002: existing.patch\nSource0:")
+        self.assertIn("Patch9002: existing.patch\n", self.prepare(original))
+
+    def test_rejects_existing_startup_patch(self):
+        original = SPEC.replace("Version: 6.7.5", "Version: 6.8.2").replace(
+            "Source0:", "Patch7: 0002-initialize-startup-flags-6.8.2.patch\nSource0:")
+        with self.assertRaises(ValueError):
+            prepare(original, "6.8.2-1.fc44", datetime.date(2026, 11, 9))
 
     def test_rejects_incompatible_specs(self):
         for old, new in (

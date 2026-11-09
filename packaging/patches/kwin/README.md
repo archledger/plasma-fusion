@@ -19,6 +19,10 @@ The spec preparer selects `0001-window-expose-requested-geometry.patch` for 6.7.
 `0001-window-expose-requested-geometry-6.8.2.patch` for 6.8.2. They provide the same API and
 are alternatives, never stacked. The 6.8.2 patch refreshes the source context and documents
 that version's synchronization rules; it retains the five regression tests and layout safeguard.
+The 6.8.2 stack also includes `0002-initialize-startup-flags-6.8.2.patch`: it initializes the
+existing screen-corner option before configuration loading, and the virtual test device's
+relative-tablet flag before input setup. These two indeterminate reads were reproduced in both
+stock and backport Memcheck runs. The fixes add no members and do not change configured values.
 
 This adds an observable property; it does not change how KWin configures or tiles windows. It does
 not enable automatic tiling or solve its remaining lifecycle requirements. Its consumer is the
@@ -71,7 +75,8 @@ four CPUs and an 8 GiB memory limit. The builder:
 
 1. Runs the offline packaging checks, then downloads Fedora's exact source RPM and retains it as
    `fedora-kwin-*.src.rpm`.
-2. Adds `Patch9001`, preserving Fedora's existing patches and `%autosetup -p1`.
+2. Adds `Patch9001` (and the initializer prerequisite as `Patch9002` on 6.8.2), preserving Fedora's
+   existing patches and `%autosetup -p1`.
 3. Appends `.pf1` to `Release`, adds a changelog entry, installs build dependencies inside the
    container and runs `rpmbuild -ba` without disabling Fedora's checks.
 4. Copies the binary RPMs, rebuilt source RPM, prepared spec and logs to the output directory.
@@ -143,7 +148,7 @@ QtTest pass alone does not detect a read from the already-freed window when no s
 
 For the same-version backport, compare debug builds of stock and patched KWin made with matching
 architecture, configuration and dependencies. `check-abi.sh` requires GDB and checks the size and
-member offsets of six window classes; it does not claim to check the whole KWin ABI:
+member offsets of six window classes and `Options`; it does not claim to check the whole KWin ABI:
 
 ```sh
 packaging/patches/kwin/check-abi.sh STOCK_BUILD/bin/libkwin.so PATCHED_BUILD/bin/libkwin.so

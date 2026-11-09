@@ -1,0 +1,43 @@
+From: Wisbendji Fimerlus <archledger236@gmail.com>
+Subject: [PATCH] Initialize KWin 6.8.2 startup flags before their first read
+
+SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+SPDX-License-Identifier: GPL-2.0-or-later
+
+The Options constructor loads configuration through setters that compare
+the previous value. Initialize its screen-corner flag before that read.
+Also initialize the virtual input device's relative-tablet flag before
+TabletInputRedirection integrates the test device.
+
+These are the two initializer corrections from the maintained fork's
+9c6fb38101e03606ee0024aab7c4df6edbdb5dce, independently reproduced with
+Memcheck on stock and backported Fedora 6.8.2 builds. No member layout or
+configured value changes.
+
+---
+
+diff --git a/autotests/integration/kwin_wayland_test.h b/autotests/integration/kwin_wayland_test.h
+index 23ffda5..53944f2 100644
+--- a/autotests/integration/kwin_wayland_test.h
++++ b/autotests/integration/kwin_wayland_test.h
+@@ -904,7 +904,7 @@ private:
+     bool m_lidSwitch = false;
+     bool m_tabletPad = false;
+     bool m_tabletTool = false;
+-    bool m_tabletToolIsRelative;
++    bool m_tabletToolIsRelative = false;
+ };
+
+ class ColorManagerV1 : public QtWayland::wp_color_manager_v1
+diff --git a/src/options.cpp b/src/options.cpp
+index 9024359..b97c1cb 100644
+--- a/src/options.cpp
++++ b/src/options.cpp
+@@ -78,6 +78,7 @@ Options::Options(QObject *parent)
+     , CmdAllModKey(Options::defaultKeyCmdAllModKey())
+     , electric_border_maximize(false)
+     , electric_border_tiling(false)
++    , electric_border_all_screen_corner(false)
+     , electric_border_corner_ratio(0.0)
+     , borderless_maximized_windows(false)
+     , condensed_title(false)

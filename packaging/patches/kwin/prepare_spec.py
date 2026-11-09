@@ -9,8 +9,11 @@ import re
 import sys
 
 PATCHES = {
-    "6.7.5": "0001-window-expose-requested-geometry.patch",
-    "6.8.2": "0001-window-expose-requested-geometry-6.8.2.patch",
+    "6.7.5": ("0001-window-expose-requested-geometry.patch",),
+    "6.8.2": (
+        "0001-window-expose-requested-geometry-6.8.2.patch",
+        "0002-initialize-startup-flags-6.8.2.patch",
+    ),
 }
 
 
@@ -19,7 +22,7 @@ def prepare(text, version_release, today):
     if not match:
         raise ValueError("only Fedora 44 KWin 6.7.5 and 6.8.2 source builds are supported")
     version, release = match.groups()
-    patch = PATCHES[version]
+    patches = PATCHES[version]
     checks = (
         r"^Name:\s+kwin\s*$",
         rf"^Version:\s+{re.escape(version)}\s*$",
@@ -30,12 +33,15 @@ def prepare(text, version_release, today):
     for pattern in checks:
         if len(re.findall(pattern, text, re.MULTILINE)) != 1:
             raise ValueError(f"unsupported or mismatched spec: {pattern}")
-    if re.search(r"^Patch0*9001\s*:", text, re.MULTILINE) or any(name in text for name in PATCHES.values()):
-        raise ValueError("the backport or its reserved Patch9001 tag is already present")
+    reserved = any(re.search(rf"^Patch0*{number}\s*:", text, re.MULTILINE)
+                   for number in range(9001, 9001 + len(patches)))
+    if reserved or any(name in text for names in PATCHES.values() for name in names):
+        raise ValueError("the backport or one of its reserved patch tags is already present")
+    patch_tags = "\n".join(f"Patch{number}: {name}" for number, name in enumerate(patches, 9001))
     # Keep Fedora's other patches and %prep intact; %autosetup applies this patch too.
     text = re.sub(
         r"^(Release:\s+" + release + r"%\{\?dist\})[ \t]*$",
-        rf"\1.pf1\n\n# Plasma Fusion: KDE MR !10225\nPatch9001: {patch}",
+        rf"\1.pf1\n\n# Plasma Fusion optional KWin patches\n{patch_tags}",
         text,
         count=1,
         flags=re.MULTILINE,
@@ -48,6 +54,8 @@ def prepare(text, version_release, today):
         f"* {date} Wisbendji Fimerlus <archledger236@gmail.com> - {version_release}.pf1\n"
         "- Expose requestedGeometry to scripts (KDE MR !10225)\n"
     )
+    if version == "6.8.2":
+        entry += "- Initialize startup flags before their first read\n"
     return text.replace("%changelog\n", "%changelog\n" + entry + "\n", 1)
 
 
