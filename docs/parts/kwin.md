@@ -1156,7 +1156,15 @@ The runtime manifest contains the resolved image id in `image`, and a `files` ma
 `kwin_wayland` and the versioned `libkwin.so` filename to their SHA256 hashes. It must describe
 the actual provider build. Use `--retain-hidden` to check the baseline assignment policy on a
 compositor without the capability. The runner records seed hashes, checks loaded binary
-provenance, and rejects compositor or shell crashes. It quits the private shell before bus teardown.
+provenance, and rejects compositor, shell or bus-service crashes. It requires the separate
+`dbus.log` alongside the compositor log and quits the private shell before bus teardown.
+Use `--filter-target` to place the target on another private workspace and toggle All workspaces
+and This workspace during each cycle. Its 48 snapshots must show the target assigned only in
+All workspaces when release is supported, or assigned throughout for `--retain-hidden`.
+The other fixture window is explicitly focused before measurement: KWin's input method otherwise
+adds two unrelated geometry listeners when the measured target regains focus after closing.
+After the filtering measurements, the target returns to the current workspace for the resize
+check; an off-workspace Qt client can suspend rendering instead of committing a resized buffer.
 The runner requires exactly one successful scenario status and actual compositor-session status
 in `scenario.log`, plus a successful wrapper status. It rejects inherited `PFV_HOME_DIR` and
 `PFV_PRE` overrides so the recorded seed cannot be replaced or modified before startup.
@@ -1165,11 +1173,10 @@ Use a new run name and the matching image for each case. The probe adds instrume
 only to its copied seed, dumps the test window's native geometry connections through public Qt
 APIs, and checks 12 open/close cycles followed by resizing. Connection totals must remain stable
 within each state and decrease on close in the release-enabled profile. It counts all geometry
-connections, not GPU resources
-or individual callback invocations. Each snapshot must also show exactly one assigned preview
-for the target while open, and none while closed unless `--retain-hidden` selects the fallback.
-Do not run the scenario against a logged-in
-compositor.
+connections, not GPU resources or individual callback invocations. Assignment checks follow the
+selected profile: one assigned preview for a shown target, none for a hidden or closed target
+when release is supported, and one throughout the retained fallback. Do not run the scenario
+against a logged-in compositor.
 The parser's offline checks run with `python3 packages/kwin/tests/native-thumbnail/test_check_connections.py`.
 The session-status and fresh-seed guards run with
 `python3 packages/kwin/tests/native-thumbnail/test_runner.py`.

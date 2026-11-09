@@ -42,12 +42,59 @@ QML
 qml "$HOME/target.qml" >"$OUT/target.log" 2>&1 &
 qml "$HOME/other.qml" >"$OUT/other.log" 2>&1 &
 sleep 2
+mode=normal
+if [[ -f "$HOME/thumbnail-case" ]]; then
+    read -r mode <"$HOME/thumbnail-case"
+fi
+case "$mode" in
+    normal) ;;
+    filtered)
+        python3 "$HOME/pf-tools/tests/lib/pfkwin.py" run '
+var w=workspace.stackingOrder.find(w=>w.caption==="Thumbnail target");
+var other=workspace.stackingOrder.find(w=>w.caption==="Thumbnail other");
+if (!w || !other) throw new Error("filter windows missing");
+if (workspace.desktops.length < 2) workspace.createDesktop(1,"Thumbnail second");
+workspace.currentDesktop=workspace.desktops[0];
+w.desktops=[workspace.desktops[1]];
+other.desktops=[workspace.desktops[0]];
+report({otherWorkspace:w.desktops.length===1 && w.desktops[0]!==workspace.currentDesktop});' >"$OUT/filter-setup.json"
+        python3 - "$OUT/filter-setup.json" <<'PY'
+import json,sys
+assert json.load(open(sys.argv[1]))['otherWorkspace'], 'target was not moved off the current workspace'
+PY
+        ;;
+    *) echo 'unknown thumbnail case' >&2; exit 1 ;;
+esac
+# InputMethod adds two geometry listeners to the focused window. Keep them off the measured target.
+python3 "$HOME/pf-tools/tests/lib/pfkwin.py" run '
+var other=workspace.stackingOrder.find(w=>w.caption==="Thumbnail other");
+if (!other) throw new Error("focus control window missing");
+workspace.activeWindow=other;
+if (workspace.activeWindow!==other) throw new Error("focus control not applied");
+report({caption:other.caption,id:String(other.internalId)});' >"$OUT/focus-setup.json"
+sleep 0.2
 commands=()
 for ((i=0; i<12; i++)); do
-    commands+=('keydown alt' 'key tab' 'sleep 0.25' 'key esc' 'keyup alt' 'sleep 0.25')
+    commands+=('keydown alt' 'key tab' 'sleep 0.25')
+    if [[ "$mode" == filtered ]]; then
+        commands+=('key a' 'sleep 0.25' 'key a' 'sleep 0.25')
+    fi
+    commands+=('key esc' 'keyup alt' 'sleep 0.25')
 done
 pfinput "${commands[@]}"
 sleep 1
+if [[ "$mode" == filtered ]]; then
+    # A suspended off-workspace Qt client need not render a resized buffer. Expose it first.
+    python3 "$HOME/pf-tools/tests/lib/pfkwin.py" run '
+var w=workspace.stackingOrder.find(w=>w.caption==="Thumbnail target");
+if (!w) throw new Error("target missing before resize");
+w.desktops=[workspace.currentDesktop];
+if (w.desktops.length!==1 || w.desktops[0]!==workspace.currentDesktop) {
+    throw new Error("target not on current workspace before resize");
+}
+report({id:String(w.internalId),currentWorkspace:true});' >"$OUT/resize-setup.json"
+    sleep 0.3
+fi
 python3 "$HOME/pf-tools/tests/lib/pfkwin.py" run '
 var w=workspace.stackingOrder.find(w=>w.caption==="Thumbnail target");
 if (!w) throw new Error("target missing");
@@ -56,7 +103,7 @@ sleep 0.3
 python3 "$HOME/pf-tools/tests/lib/pfkwin.py" run '
 var w=workspace.stackingOrder.find(w=>w.caption==="Thumbnail target");
 if (!w || w.frameGeometry.width !== 600 || w.frameGeometry.height !== 420) {
-    throw new Error("target did not resize");
+    throw new Error("target did not resize: " + JSON.stringify(w && w.frameGeometry));
 }
 report({id:String(w.internalId),width:w.frameGeometry.width,height:w.frameGeometry.height});' >"$OUT/resized.json"
 shot resized

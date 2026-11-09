@@ -5,15 +5,19 @@ import unittest
 from check_connections import check
 
 
-def records(growing=False, closed=8, release_hidden=True):
+def records(growing=False, closed=8, release_hidden=True, filter_target=False, filtered=None):
     parts = []
+    filtered = closed if filtered is None else filtered
+    states = ((("open", closed), ("all", 10), ("filtered", filtered), ("closed", closed))
+              if filter_target else (("open", 10), ("closed", closed)))
     for cycle in range(12):
-        for state, count in (("open", 10), ("closed", closed)):
+        for state, count in states:
             count += cycle if growing else 0
+            assigned = not release_hidden or state == "all" or (state == "open" and not filter_target)
             parts.append(f"PFTHUMB BEGIN {state}\nOBJECT target\n"
                           "signal: frameGeometryChanged(KWin::RectF)\n"
                           + "  <functor or function pointer>\n" * count
-                          + f"signal: other()\nPFTHUMB CLIENTS {1 if state == 'open' or not release_hidden else 0}\n"
+                          + f"signal: other()\nPFTHUMB CLIENTS {int(assigned)}\n"
                           + f"PFTHUMB END {state}\n")
     return "".join(parts)
 
@@ -70,6 +74,36 @@ class ConnectionTests(unittest.TestCase):
     def test_fallback_still_rejects_geometry_growth(self):
         with self.assertRaisesRegex(AssertionError, "accumulated"):
             check(records(growing=True, closed=10, release_hidden=False), release_hidden=False)
+
+    def test_workspace_filter_releases_client(self):
+        self.assertEqual(check(records(filter_target=True), filter_target=True),
+                         {"open": [8] * 12, "all": [10] * 12,
+                          "filtered": [8] * 12, "closed": [8] * 12})
+
+    def test_workspace_filter_fallback_retains_client(self):
+        self.assertEqual(check(records(closed=10, release_hidden=False, filter_target=True),
+                               release_hidden=False, filter_target=True),
+                         {state: [10] * 12 for state in ("open", "all", "filtered", "closed")})
+
+    def test_missing_workspace_transition_fails(self):
+        with self.assertRaisesRegex(AssertionError, "48 snapshots"):
+            check(records(), filter_target=True)
+
+    def test_filtered_assignment_is_checked(self):
+        text = records(filter_target=True).replace(
+            "PFTHUMB CLIENTS 0\nPFTHUMB END filtered", "PFTHUMB CLIENTS 1\nPFTHUMB END filtered", 1)
+        with self.assertRaisesRegex(AssertionError, "wrong filtered preview assignment"):
+            check(text, filter_target=True)
+
+    def test_filtered_fallback_assignment_is_checked(self):
+        text = records(release_hidden=False, filter_target=True).replace(
+            "PFTHUMB CLIENTS 1\nPFTHUMB END filtered", "PFTHUMB CLIENTS 0\nPFTHUMB END filtered", 1)
+        with self.assertRaisesRegex(AssertionError, "wrong filtered preview assignment"):
+            check(text, release_hidden=False, filter_target=True)
+
+    def test_filtering_must_release_geometry_connection(self):
+        with self.assertRaisesRegex(AssertionError, "filtering did not release"):
+            check(records(filter_target=True, filtered=10), filter_target=True)
 
 
 if __name__ == "__main__":

@@ -47,6 +47,7 @@ def main():
     parser.add_argument("image")
     parser.add_argument("--runtime-manifest", type=Path, required=True)
     parser.add_argument("--retain-hidden", action="store_true")
+    parser.add_argument("--filter-target", action="store_true")
     args = parser.parse_args()
     environment = fresh_session_environment(os.environ)
     stage, build, output = (value.resolve() for value in (args.stage, args.build, args.output))
@@ -74,6 +75,7 @@ def main():
     shutil.copy2(build / "libthumbnailprobe.so", module / "libthumbnailprobe.so")
     probe_hash = hashlib.sha256((module / "libthumbnailprobe.so").read_bytes()).hexdigest()
     (seed / "expected-native.json").write_text(json.dumps({"files": files, "probe": probe_hash}) + "\n")
+    (seed / "thumbnail-case").write_text("filtered\n" if args.filter_target else "normal\n")
     shutil.copy2(here / "finish-session.sh", seed / "finish-session.sh")
     (seed / ".config/pfv-env").write_text(
         f"QML_IMPORT_PATH=/var/tmp/pfv-{name}/home/probe-qml\n")
@@ -94,8 +96,24 @@ def main():
             }
         }
 '''
+    if args.filter_target:
+        observer += '''        Connections {
+            target: root
+            function onShowAllChanged() {
+                if (!tabBox.visible) {
+                    return;
+                }
+                const label = root.showAll ? "all" : "filtered";
+                Qt.callLater(function() {
+                    const w = KWin.Workspace.windows.find(w => w.caption === "Thumbnail target");
+                    connectionProbe.dump(w, tabBox, label);
+                });
+            }
+        }
+'''
     qml.write_text(text.replace("        id: root\n", "        id: root\n" + observer, 1))
     inputs = {"runtime": runtime, "image": image, "release_hidden": not args.retain_hidden,
+              "filter_target": args.filter_target,
               "seed_sha256": {str(p.relative_to(seed)): hashlib.sha256(p.read_bytes()).hexdigest()
                               for p in seed.rglob("*") if p.is_file()}}
     (output / f"{name}-inputs.json").write_text(json.dumps(inputs, indent=2) + "\n")
@@ -109,9 +127,10 @@ def main():
     check_session_logs(scenario, (result_dir / "container.log").read_text())
     assert "PASS: private plasmashell exited before bus teardown" in scenario
     shutil.copy2(output / f"{name}.log", result_dir / "driver.log")
-    errors = failures(result_dir)
+    errors = failures(result_dir, require_bus_log=True)
     assert not errors, errors
-    counts = check((result_dir / "kwin.log").read_text(), release_hidden=not args.retain_hidden)
+    counts = check((result_dir / "kwin.log").read_text(), release_hidden=not args.retain_hidden,
+                   filter_target=args.filter_target)
     (result_dir / "connections.json").write_text(json.dumps(counts, indent=2) + "\n")
     print(json.dumps(counts, indent=2))
 
