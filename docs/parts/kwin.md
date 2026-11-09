@@ -518,6 +518,345 @@ rows the workspaces are added and removed in KWin's linear order and the grid re
 
 ## Dynamic-tiling feasibility (2026-10-23)
 
+The following paragraphs retain development checkpoints on their identified source baselines.
+The maintained fork, current milestone boundary and later qualification limits are summarized
+in the [status and source snapshot](https://github.com/archledger/plasma-fusion/blob/3e7a775add95c8f6b52dddd6b2956c6dc849b4c5/tasks/todo.md#status-and-source-snapshot).
+
+The isolated native-ownership lane also tests the deprecated `Window.tile` compatibility setter.
+A refused manual destination must leave the previous manual assignment and geometry unchanged.
+Direct and Qt-property calls are covered with Wayland and X11 clients, alongside successful
+cross-desktop and explicit-null controls. The cancellation continuation retains the Window and
+guards the destination against destruction, newer cancellation/geometry intent and committed-only
+changes. Pending/committed owner tests cover these checks; cancellation does not mean restoration
+has completed. Post-management cleanup and broader owned-state validation remain separate NT02.5
+leaves; the public state/completion API remains NT04 work.
+The previous manual Tile is tracked with a guarded pointer across destination management, so its
+destruction prevents a later cleanup call on the freed object. This is lifetime protection only;
+it does not establish that a newer assignment may safely be cleared. The private native-operation
+receipt and newer-intent-safe cleanup remain planned work.
+The internal prerequisites now include an immutable Window-bound assignment fence. It observes
+versioned Window state and retains its lifetime, but grants no mutation authority and has no
+scripting entry point. Owned native-step receipts are still separate work; the fence is not
+connected to the compatibility setter.
+The fence also observes a per-window membership revision. Every actual tile membership change of
+a window, ordinary or transient, advances it before the corresponding notification, and the
+otherwise-valid public membership no-ops (managing an existing member, unmanaging or forgetting a
+non-member of an ordinary tile) record the same intent under a conservative same-window rule;
+refusals and the internal misses of an evacuation record nothing. Saturation counts as exhausted.
+The transient admission snapshots the revision after its membership add and treats a change
+across its publication as supersession. Public membership paths keep their bodies; a stale public
+continuation resuming after a nested public re-management remains an explicit exclusion until the
+guarded ingress.
+A guarded maximize normalization serves ordinary assignment: it makes its own recorded writes and
+guarded child calls instead of the public unmaximize, refuses without effect where the backend
+would refuse (an owner or active request, an unresizable window, a rule-forced maximize, an
+interactive or electric-border operation, the recursion guard, missing headroom, a backend
+without guarded requests), captures the restore with the exact legacy formula, and returns a
+receipt carried as an operation provenance (the requested-mode revision and the frozen size
+limits) that every child boundary and later step evaluates; after its mode write every stop is a
+supersession. X11 keeps its legacy path.
+The public cancellation boundary has a qualified variant for a guarded ingress: its checkpoint is
+taken after the cancellation's own callback-free writes (the placement stamp and, for an owner,
+the release's transient membership removal and association detachment) and validated once after
+the release's notifications and finalization, threaded through the controller's release and the
+window's own revoke path without counting increments; exhaustion known before the stamp is
+refused, a foreign change or a deleted window makes the continuation stale, and a current
+continuation is reported even when the release cannot finalize, leaving the owner for a
+consumer's entry refusal. The release and the legacy helper are unchanged.
+A guarded requested-association step serves ordinary assignment: a read-only preflight (never a
+grant) refuses before any mutation a transient tile, a backend without guarded requests, an owner
+or active request, a transient marker no ordinary step may consume, an interactive operation, the
+normalization's own refusals when tiling a maximized window, and the whole path's conservative
+headroom; an equal association is an operation-owned no-op; otherwise the step takes its own
+snapshot, runs the guarded normalization when needed and carries its receipt, captures the restore
+through the guarded writer, writes the association under its own checkpoint, requests the geometry
+through the guarded request, and discharges the association write's obligation (the backend's
+quick-tile protocol state and the notification behind a recheck of the live window, the unchanged
+association revision, the destination's identity with its original presence and the marker)
+before the result is finalized; callbacks that invalidate the operation make it superseded although
+the write stands. The public entry points establish their own operation: the qualified
+cancellation is their single stamp, a refusal without effect selects the legacy body after the
+cancellation, and a supersession stops; X11, interactive operations and the exhaustion edge stay
+on the legacy path.
+The Tile membership ingress has guarded steps of the same shape: refusals before any mutation (the
+backend first, a transient tile, an unresizable or applet window, a window not on the destination's
+desktop, a destination that is not live, the follow-up's read-only preflight, membership headroom),
+operation-owned no-ops, the evacuation over a worklist collected without callbacks with the Window
+retained and the destination's context frozen and validated after every notification, each
+membership write sealed by its own checkpoint with its notifications as that write's obligation,
+then the association step chaining the last checkpoint; a refusal after the first mutation is a
+supersession and a destroyed destination is never read as explicit null. The public manage,
+unmanage and forget establish their own operation after the mutation-free rejections (the qualified
+cancellation first, so a valid manual intent revokes automatic ownership before any new membership
+is published; a refusal without effect selects the legacy remainder; a supersession stops with
+false), misses and deleted members keep the legacy membership-only paths (the workspace's removal
+notification relies on the release of a dead member), and the outer quick-tile boundary verifies
+its qualified preparation's currentness before the public management runs.
+The compatibility setter (the deprecated window.tile property) consumes the guarded ingress with
+its own continuation: the destination's context and the original membership captured before the
+first callback, the complete path preflighted before any guarded mutation (the original's cleanup
+reserved in the ingress's headroom, its null association preflighted), the ingress and the
+cleanup of the captured original consumed on currentness with no retry, fallback or refreshed
+checkpoint after the ingress applied; legacy only for a backend without guarded requests, at the
+exhaustion edge and on an ingress refused without effect.
+The X11 backend now takes the guarded paths for windows that need no unmaximize: its guarded
+geometry request publishes synchronously as the request's own write (sealed before any callback,
+with every X11 notification still announced), its immediate tile commit is the association
+write's own publication through a carrier the step passes (a superseded request still publishes
+the still-current association without being resurrected), and both committed changes are
+budgeted before any mutation; an unmanaged window and blocked geometry updates are refused
+before any mutation and keep the legacy remainder.
+The X11 backend normalizes a maximized undecorated window for assignment as its own recorded
+operation: the mode is written through one saturating writer the legacy maximize uses too, the
+receipt pins that revision with the complete geometry constraints by value (the rule-checked
+limits, the resize increments, the base size and aspect with their presence, the strict-geometry
+rule, the decoration state and policy, the client frame extents and the Xwayland scale), the
+restore is captured by the legacy formula through the guarded restore writer, the final rectangle
+is requested through the guarded request, and the mode write's publication is its own obligation
+gated by the live window and the revision alone, completed before the outcome is decided. A
+decorated window and the borderless-maximized policy (the decoration transition writes geometry
+through public paths on X11 and is routed through the operation in a later part), a fullscreen
+window and an invalid prospective restore rectangle are refused before any mutation and keep the
+legacy remainder.
+The decoration transition is now the operation's own. A recorder, passed explicitly through
+private variants of the policy setter, the decoration update, the creation and the destruction,
+records the identified internal reactions instead of writing them (the border hook's workspace
+check on a planned rectangle through the read-only decision, the creation's gravitated frame, the
+update's own check, the frame-extents update), bound to the decoration incarnation it records for
+before that decoration's initial state is applied; the public entry points keep their behaviour,
+so a foreign call from a handler still writes and the fence detects it. The owned path takes no
+geometry-update block, revalidates after every callback-producing step against the incarnation
+and the policy revision it recorded for (the base window's installation reports the installed
+incarnation's generation at its commit and withholds its final notification once that incarnation
+is gone; each helper's own obligations follow its own write's currentness), bounds the supported
+reaction sequences, ends the recorder's scope before the geometry request, validates the
+authorized changes after the transition (the decoration
+identity, the generation, the policy and its revision) and establishes the receipt against the
+post-transition constraints, the border metrics included; the single guarded request commits the
+client and buffer rectangles under the new borders, and the frame extents are an obligation of
+the incarnation recorded for. A decorated window with a requested quick tile stays refused before
+any mutation. The intermediate rectangles the legacy path installed and announced per write are
+not installed and not announced; the committed result is announced accurately.
+Two prerequisites for routing that decoration transition through the operation are in place.
+The workspace-position computation of `checkWorkspacePosition` is a read-only decision (nothing
+for a deleted, dock, desktop or unplaceable window; the legacy special-state branch for a
+fullscreen, maximized or quick-tiled request with the rectangle it starts from and both screen
+areas; otherwise the rectangle after the strut, edge, offscreen, size-constraint and rule checks),
+and the wrapper keeps the legacy writes and their order, requesting an ordinary rectangle publicly
+even when it equals the current one. A saturating decoration generation versions every
+installation, removal and replacement of the decoration, advanced with the new pointer before any
+observer runs while the displaced decoration is held; the X11 decoration policy is written through
+one saturating writer that versions every change, installed before the decoration update.
+A private native commit step validates that checkpoint and the current requested association,
+then captures its own result before notifications. Superseded callbacks discard the result
+without rollback; ordinary commit paths keep their existing behavior. This covers committed
+association state only, not membership, geometry completion or eligibility, and is not yet
+connected to the compatibility setter.
+Saved restore-geometry field changes also advance the private continuation revision before
+notification. The guarded field writer returns a checked checkpoint without cancelling ownership
+or requesting geometry. Equal field writes remain no-ops, and empty/invalid restore sentinels
+remain supported. The fullscreen restore field has the same guarded, versioned writer, and its
+legacy setter advances the same revision on change. This does not yet guard keyboard restore
+storage or backend geometry completion.
+The private Wayland publication step handles synchronous committed client/frame/buffer/output
+updates, not geometry requests or client configure completion. Actual geometry and legacy output
+changes advance the continuation revision before callbacks. Interrupted notifications remain
+pending for an explicitly invoked guarded drain; a pending-only drain takes a new publication
+generation without changing placement. The helper rejects stale callbacks without refreshing
+their checkpoint. Full Window/Xdg request orchestration and maximize normalization remain later
+work; none of these private helpers enables production tiling.
+The private requested-state synchronizer freezes the target output properties and versions
+requested rectangle/output, property and pending-synchronization changes before callbacks.
+It can finish an interrupted same-output synchronization without allocating a geometry-request
+generation or emitting requestedGeometryChanged. Existing transient ownership is refused without
+release. Property hooks may schedule configures; backend dispatch and client completion remain
+separate from this storage step.
+The private backend geometry request builds on that synchronizer. It reserves the request
+generation, the exact synchronization writes, one committed-geometry change and one publication
+generation before mutating anything, then allocates its generation and only afterwards takes the
+checkpoint it validates at every callback boundary. Immediate updates consume the publication
+helper's result; a resize that needs the client is staged as a queued configure and reported as
+such, and the client's later acknowledgement completes it through the ordinary commit path. A
+superseded request keeps the state it already applied and returns no authority. Only xdg toplevels
+take these requests; everything else is refused before any effect. Callers pass a complete frame
+rectangle with Move, Resize or MoveResize, as the legacy path does; a Move during an unsubmitted
+resize is promoted to MoveResize. The step does not route transient-tile requests, normalize
+maximize state or admit controller membership.
+The private transient request now runs on those guarded steps. Its restore write goes through
+the guarded restore writer, the requested association is installed between a validated fence and
+an immediate checkpoint, and its geometry goes through an owned form of the guarded geometry
+request that takes the exact active request, derives the target from it and always dispatches a
+full move-resize; ordinary callers still refuse active ownership and active requests. Each step
+result carries the borrowed request, because its external authority can lapse without any Window
+counter changing, and the restore writer, the synchronized output-property writes, the Xdg
+dispatcher and the Wayland publication helper validate it next to their checkpoint. The carrier
+joins the result right after the callback-free rectangle write, since the request's own predicate
+cannot hold between generation allocation and that write. Progress becomes Requested at
+allocation and stays so. The geometry result's checkpoint then validates the quick-tile update and
+the final requested-tile notification, so a handler that changes fenced state with the authority
+intact supersedes the attempt as well. Known headroom and a backend without a guarded dispatcher
+are rejected in preflight; a restore-writer refusal is rejected without effects, and a later child
+refusal supersedes and removes only this attempt's association. The transient commit on client
+completion stays gated on the ownership record.
+The application of an ownership can now return, alongside that receipt, a qualified continuation
+for a caller that goes on after it. The step result the request validated itself against borrows
+the request, which the application consumes and destroys, so the continuation is translated while
+the request still exists: the same checkpoint, preserved, with an ownership provenance bound to the
+generation and, by value, to this attempt's native sequence, progress, request generation and
+target, chained with the caller's own admission constraint. It is validated after the request's
+destruction and the end of the execution, where current success is exported from only; an
+attempt that ended without a current application is concluded, an application that did not start
+is refused, and nothing is ever refreshed. The ownership, the receipt, the callers and the release
+policy are unchanged by that translation. The controller's admission now consumes the continuation:
+it preflights eligibility and headroom for the complete synchronous path, including failure cleanup,
+before reserving or publishing membership. An ordinary membership on any desktop or output remains
+ineligible, and X11 is refused before reservation. After its callback-free membership writes, the
+admission seals a checkpoint with its controller, tree, window, generation, writer/provider and
+context validity as provenance. Both membership notifications validate it. Acceptance requires
+the native receipt and its current continuation after the request has been destroyed; a later
+failure releases only this generation's transient membership and associations. A Requested attempt
+keeps its restoration barrier, and loss of the writer leaves the unavailable record rather than
+allowing another writer to reuse the window. These are private native paths; production tiling and
+the public completion API remain disabled.
+The controller-owned release tests observe every notification in both pending and committed
+admission: the generation and floating frame are retained, transient membership and matching
+associations are already detached, and the writer barrier remains. A current cancellation
+continuation does not mean restoration completed. Its checkpoint can retain a logically closed
+Window; the reservation and any deferred same-key manual update remain blocked until actual
+destruction. Selective Qt-property rows exercise the same cancellation supersession checks as the
+direct compatibility setter. These are native tests, not public completion APIs or provider
+integration.
+The internal placement writer can inspect an exact Restoring reservation by owner UUID and
+generation without changing it. This predicate is distinct from its Owned-phase query. It does
+not flush the map, consume deferred intent, prove provider freshness or authorize restoration;
+native attempt and context validation remain separate.
+The private explicit-restore precursor claims one Window-local sequence before release callbacks.
+Its external result carries Window identity, ownership generation and the release checkpoint;
+the Window record stores no self-retaining fence. A claim that fails after allocation stays
+consumed. Accepted manual cancellation/commit intent and effective Window membership/output
+changes invalidate it, while native configure commits keep their origin distinction. Stable
+attempt validity is separate from the synchronous continuation. The claim itself sends no geometry
+and is not connected to public actions; global desktop/activity navigation and later asynchronous
+completion are not qualified by it.
+The separate private restore request consumes that original claim checkpoint once. It uses distinct
+restoration provenance, requires ordinary mode and exact feasible A on the recorded output, and
+records the allocated native geometry generation before synchronization callbacks. The lower entry
+also checks the active wrapper, unused generation, exact target and MoveResize mode. A duplicate
+refuses without cancelling the original; a failed consumed request remains superseded with its
+reached generation and dispatch evidence. Pending admission geometry is allowed, but pending
+gravity is not silently cleared. Queued and Published requests remain distinct, and neither clears
+the ownership record or writer barrier. The request and configure-placement protection are
+qualified only within the private normal-mode/fixed-context scope; public action routing and
+completion are later gates.
+Configure acknowledgements now select one exact uint32 serial in queue order, preserving later
+events across serial wrap. Unknown or ambiguous matches select nothing. The selected prefix is
+detached before old configure objects are destroyed, because releasing a decoration can close
+the window or reenter commit handling. A per-dispatch generation and consumed ACK prevent the
+outer invocation from continuing after that reentry; selected-object tail disposal is guarded
+as well.
+Each geometry allocation also records a value-only origin, copied into native configures before
+it can be confused with later manual intent. During explicit restoration, obsolete or unknown
+content is accepted at the current committed position without synchronizing requested A. Current
+restoration may place content but cannot replace A with client-selected dimensions; a genuinely
+new ordinary request retains ordinary behavior. No-ACK content retains its origin, not old bounds.
+A separate pending snapshot carries unfinished decoration, scale and committed-mode work across
+nested dispatch. Pending content blocks new admission and supplies fullscreen interpretation for
+interactive positioning. Guarded native synchronization preserves newer claims, and association
+commit checks preserve newer manual placement. The writer reservation still waits for NT04.
+A separate private maximize-capable claim can normalize horizontal, vertical or full maximize,
+including a pending committed mode, before requesting the immutable floating frame. It supports
+CSD and a surviving same-identity SSD; fullscreen, borderless-maximized policy and returning or
+replacement decorations remain refused. Explicit stages prevent geometry dispatch during mode
+notifications. Revision-bound backend state prevents later mode/output-intent writes from
+reviving an old request. Existing SSD borders are checked exactly after their normal-mode
+response, and a failed consumed attempt preserves its mode-publication obligation without
+falling back. The normal-only claim and public owned toggles keep their separate behavior.
+The returning-decoration work also guards reads of one decoration settings instance. It
+snapshots values before notifications, stops after a nested read or destruction, and emits
+stable local payloads rather than references to members a callback can replace. An older
+read cannot re-enable the application-menu view service or announce completion after a newer
+read took over. This does not yet guard the bridge's complete configuration operation,
+cross-generation settings, factory lifetime or decoration publication.
+Decoration recreation on a plugin or theme change visits a snapshot of guarded windows in
+workspace order instead of the live list. A member deleted by an earlier callback is skipped,
+the visited window is retained until its callback returns so that closing itself cannot free
+it while its decoration is being constructed, and windows mapped by a callback wait for a later
+pass. Plugin-creation failures remain unguarded.
+A configuration change that a decoration plugin requests while the bridge is loading a
+plugin, creating a decoration or recreating decorations no longer runs nested inside that
+operation. The bridge counts its nested operations, marks the request and, once the outermost
+operation has unwound, applies the newest configuration with one queued pass bound to the
+bridge. Several requests during one operation share that pass, and a change made while the
+bridge is idle still applies at once. Until the follow-up runs, the bridge keeps reporting the
+previous plugin and newly mapped windows still receive it.
+The bridge borrows the decoration plugin's factory instead of owning it. The factory is the
+plugin library's shared Qt root object, so switching or disabling plugins only drops the
+reference and destroying a bridge leaves it alone; loading the same library under another id
+returns the object already held. If something else destroys the factory, the bridge reports no
+plugin and creates no new decorations until the next reconfiguration loads the configured
+plugin again. A factory that is no longer used stays alive until the library is unloaded.
+An owned window's ordinary maximize toggle keeps its ownership. The toplevel decides before the
+first callback whether it acts as the owner, from a live ownership-validity predicate (same
+generation, Owned phase, nothing executing or releasing, valid writer/provider/reservation, live
+tile holding the window in a current context, the window's own single desktop and move-resize
+output equal to the recorded ones, association unchanged) that is separate from admission
+feasibility, and from a mode-aware plan: every axis the toggle releases must be able to return to
+the managed extent under the client's size limits. An interactive or electric-border operation, a
+caller-supplied restore rectangle, a record whose tile or context is unusable or a managed extent
+the client cannot honour selects the legacy path, which releases as before; an owner is never
+silently enlarged or recentred. The owned path emits the about-to-change signal, revalidates the
+fence, the ownership, that feasibility and a requested-mode revision that every requested-mode
+write advances, writes the mode, treats each decoration signal as its own callback boundary
+(guarded pointer, scoped recursion flag, revalidation after every emission), and passes the
+feasibility to the owned geometry entry as the operation's own constraint, which the
+ownership-kind provenance evaluates at every child boundary; it never touches the restore field
+or the tile. It requests maximized axes from the maximize area and released axes exactly from the
+managed rectangle frozen beforehand through that owned geometry entry keyed by the ownership
+generation; the step-result carrier is a tagged provenance validated by every child step.
+Publishing the mode to the client is the mode write's own guarded obligation and reports no
+success; after supersession nothing falls through to the legacy path. The acknowledgement of the
+maximize configure still commits a kept association. X11 remains separate.
+An owned window's ordinary fullscreen toggle keeps its ownership as well. The toplevel decides
+before the first callback, from the same ownership-validity predicate, whether it acts as the
+owner; an interactive operation, a client-requested output other than the one the ownership
+lives on, or any lapse of the record selects the legacy path, which moves and releases as before.
+The owned path writes the requested state, configures the decoration as a callback boundary
+(plugin code creates it), revalidates the fence, the ownership, the separately versioned state and
+output intent (a nested output-only request publishes nothing, so it must not suppress the state's
+publication), the frozen requested-output identity and the maximize revision. Entering, it stores
+the rectangle an owned exit returns to, the managed rectangle or the maximize-area extents on the
+maximized axes of a retained requested mode, through the guarded fullscreen-restore writer, and
+requests the fullscreen area through the owned geometry entry with the intent and feasibility as
+its constraint. Exiting, every non-maximized axis must be able to return to the managed extent
+under the client's size limits: the plan checks this with the undecorated conversion, exact when
+no server decoration returns and with that decoration's enforced minimum as a necessary condition
+otherwise, and the exact check runs once the restored decoration is configured, a prefix the
+legacy path shares; an extent the restored decoration cannot return to, with the client's size
+hints unchanged, hands the exit to the legacy path (a predictable effect, not a supersession),
+while changed hints end the operation where it stands, and a superseded owned operation never
+reaches the legacy tail. The exit returns to the frozen rectangle, never to the stored field.
+Publishing the state is the state write's own guarded obligation. The explicit untile-or-restore
+action releases an owned fullscreen window on its first press: the dispatch routes an owned window
+to the owning layer, which leaves a requested fullscreen state, acknowledged or still pending, as
+the owner and releases only if that exit completed as the current intent (a nested round trip
+ending not fullscreen holds the newer intent and survives; a pending entry's stale configure commits
+no association); the window's lifetime is retained, and windows without ownership keep the one-step
+semantics. The acknowledgement path is unchanged.
+The lane's Memcheck runs use a labelled profile: `QT_HASH_SEED=0` in the Valgrind environment
+only. Qt 6.11.2's AES short-string hash deliberately loads 16 bytes for keys shorter than that
+and masks the surplus; Memcheck reports it whenever that window leaves the key's heap block, which
+made startup results address-dependent without pointing at KWin code. With a zero global seed Qt
+uses its non-AES hash, so the profile avoids the path rather than suppressing the function. It
+changes the hash algorithm, container iteration order and performance of the test process, so the
+ordinary randomized functional runs stay as they are, and a clean Memcheck result under this
+profile qualifies neither the AES path nor other Qt startup code. Qt's `QT_NO_CPU_FEATURE` switch
+cannot serve instead: from 6.8 to 6.11 its feature-name table carries leading spaces that its
+parser does not skip. The two startup initializer defects the lane found (an `Options` boolean
+and the test fixture's relative-tablet flag) were first fixed with their regressions on the
+private branch `fix/startup-initialization` (`136c04f435704ce5d9d1593ea35913862f2572bb`), separately
+from those native checkpoints. The maintained fork now includes that correction as `9c6fb381`;
+the source snapshot above distinguishes this from later unresolved startup diagnostics.
+
 Dynamic tiling is not implemented or installed. Its approved plan starts with a native ownership
 gate. The test-only `tests/vsession/auto_tiling_probe.py` and `scenario-auto-tiling.sh` characterize
 one candidate: temporarily replace the custom tree and rebuild the saved layout when finished.
