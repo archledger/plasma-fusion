@@ -1422,7 +1422,8 @@ Show notifications off, the bell's empty list, the clipboard page).
   `/dev/uinput`. Klipper's model has no paste either. Revisit when Plasma itself offers paste on
   selection.
 - Tests: `tests/clipboard.test.js` (search, previews, file names, arrow-key steps, type to search)
-  and `tests/clipboard_sheet_test.py` (57 checks: the service on Klipper's model, newest first,
+  and `tests/clipboard_sheet_test.py` (57 checks, plus 2 when Klipper prompts: the service on
+  Klipper's model, newest first,
   search, image entries with their pictures, stars shared with a second view and kept in Klipper's
   storage across processes, choose, the on-screen hint, edit, remove, Clear all keeping the stars;
   the page: focus, arrows, type to search, Enter, Escape, Space, Delete, Tab, the action row by
@@ -1432,6 +1433,11 @@ Show notifications off, the bell's empty list, the clipboard page).
   non-empty preview, the entry's action buttons at 44 px with touch input). Both
   fail without the sheet (the files do not exist on 0.4.1); the file preview check fails on 2a872e3
   (0x0 picture).
+  The test confirms the specific "Remove Starred Item" dialog when Klipper shows it despite
+  the fixture's remembered answer (Plasma 6.8.2). It still checks the real model's removal;
+  no production confirmation setting is changed. Offscreen Qt uses an explicit Breeze icon
+  theme so Klipper can display its MIME-icon fallback when a file preview is unavailable.
+  The picture-size check covers both preview and fallback; it does not prove thumbnail generation.
 
 ## The sheet's window and its content (0.5.0)
 

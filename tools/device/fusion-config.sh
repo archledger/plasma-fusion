@@ -682,6 +682,38 @@ set_key() {
   [ "$DRY" = 1 ] || kwriteconfig6 --file "$1" "${groups[@]}" --key "$3" --notify -- "$4"
 }
 
+# Older settings modules wrote one literal group instead of three nested groups.
+# Honor stored opt-outs once; never enable notifications from those legacy values.
+migrate_lock_notifications() {
+  local marker=$CONFIG/plasmafusionrc lock=$CONFIG/kscreenlockerrc current legacy key
+  local previous=${1:-$lock}
+  if { [ -e "$marker" ] || [ -L "$marker" ]; } && [ ! -r "$marker" ]; then
+    return 1
+  fi
+  current=$(kreadconfig6 --file "$marker" --group Config --key LockNotificationGroupsVersion --default 0) || return 1
+  [ "$current" != 1 ] || return 0
+  if { [ -e "$previous" ] || [ -L "$previous" ]; } && [ ! -r "$previous" ]; then
+    return 1
+  fi
+  for key in showNotifications showNotificationSummaries; do
+    legacy=$(kreadconfig6 --file "$previous" --group 'Greeter][LnF][General' --key "$key" --default "$UNSET") || return 1
+    [ "$legacy" = false ] || continue
+    # Persist the user's choice even when an inherited default is already false.
+    set_key "$lock" Greeter/LnF/General "$key" false || return 1
+    if [ "$DRY" = 0 ]; then
+      current=$(kreadconfig6 --file "$lock" --group Greeter --group LnF --group General --key "$key") || return 1
+      [ "$current" = false ] || return 1
+      current=$(kreadconfig6 --file kscreenlockerrc --group Greeter --group LnF --group General --key "$key") || return 1
+      [ "$current" = false ] || return 1
+    fi
+  done
+  set_key "$marker" Config LockNotificationGroupsVersion 1 || return 1
+  if [ "$DRY" = 0 ]; then
+    current=$(kreadconfig6 --file "$marker" --group Config --key LockNotificationGroupsVersion) || return 1
+    [ "$current" = 1 ] || return 1
+  fi
+}
+
 # A setting under the upgrade rule (BACKLOG S11): set on a first run; on a HOME an earlier Plasma
 # Fusion configured, only while it is unset or still holds a value an earlier release wrote
 # (PREVIOUS); a value the user chose is kept. Upgrades list both in config-changes.
@@ -1497,6 +1529,15 @@ install_config() {
     f=${f#"$src/"}
     case $f in systemd/user/*.service) continue ;; esac
     dest=$CONFIG/$f
+    # Keep privacy choices and the completed-migration marker across installs and retries.
+    case $f in
+      kscreenlockerrc|plasmafusionrc)
+        if [ -e "$dest" ] || [ -L "$dest" ]; then
+          note "$dest (kept: existing preferences)"
+          continue
+        fi
+        ;;
+    esac
     if [ -e "$dest" ] && cmp -s "$src/$f" "$dest"; then
       note "$dest (unchanged)"
       continue
@@ -2977,6 +3018,14 @@ else
 fi
 
 # ---------- 9. configuration version ----------
+
+# Read the pre-update choices from the backup, after any installed configuration was copied.
+previous_lock=$CONFIG/kscreenlockerrc
+# A relocated relative symlink may not resolve; its original configuration is preserved.
+if [ "$DRY" = 0 ] && [ ! -L "$previous_lock" ] && [ ! -L "$BACKUP/config/kscreenlockerrc" ]; then
+  previous_lock=$BACKUP/config/kscreenlockerrc
+fi
+migrate_lock_notifications "$previous_lock" || die "Could not preserve the previous lock-screen notification choices."
 
 say "Configuration version"
 set_key plasmafusionrc Config FusionConfigVersion "$CONFIG_VERSION"
