@@ -1,3 +1,16 @@
+plasma-fusion (0.7.0-1) unstable; urgency=medium
+
+  * Saved app pairs, the free-half app picker and drag-to-side in tablet
+    posture.
+  * Directional window keys, secured Wi-Fi joining and the SDDM login
+    screen.
+  * Boot splash on Arch, Debian, Ubuntu and KDE neon, with a working
+    uninstall.
+  * Window placement fixes, the privacy hover width and copy text no
+    longer stuck.
+
+ -- Wisbendji Fimerlus <archledger236@gmail.com>  Tue, 10 Nov 2026 20:00:00 +0000
+
 plasma-fusion (0.6.0-1) unstable; urgency=medium
 
   * Copy text from the screen in one step with its own instant selection,

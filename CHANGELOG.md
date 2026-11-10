@@ -7,7 +7,17 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
-## Unreleased
+## 0.7.0 (2026-11-10)
+
+Tested with Plasma 6.7 and 6.8. Fedora 44, the ThinkPad X13 Yoga Gen 4 and the ASUS Zenbook run
+Plasma 6.8.2; the release test matrix covers Arch, Ubuntu 26.10, Debian testing, KDE neon and
+NixOS. Packaged as before for Fedora 44 and 45 (Copr), Arch (AUR), Ubuntu 26.10 (PPA), Debian
+testing and KDE neon (.deb) and NixOS (flake), as six packages: Quick Look and copy text's
+selection are packages of their own, which the main package recommends and the installer installs.
+On an untested Plasma series the parts that depend on Plasma internals stay off until an update.
+Known: on Plasma 6.8.0 with KDE Frameworks 6.31 (Arch, KDE neon), KDE's file indexer can crash over
+and over once a file is added to the home folder, with or without Plasma Fusion (KDE bug 524392);
+the bug's workaround is a `kde-baloo.service` override with `QT_QPA_PLATFORM=offscreen`.
 
 - **Window placement memory and maximized windows:** a window maximized and then closed keeps its
   floating place. The memory used to record the maximized frame: the commit with which a Wayland
