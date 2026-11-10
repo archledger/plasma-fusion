@@ -194,7 +194,7 @@ bus to QML, so the container lane has no logind diagnostic line and does not req
 
 Not verified: the camera in a session (that would turn on the test laptop's own camera; the
 monitor is Plasma's own and `pw-dump`'s parsing has its tests), a real portal session and a real
-Spectacle recording (stand-ins with the same properties), Plasma 6.8, other text scales.
+Spectacle recording (stand-ins with the same properties), other text scales.
 
 ## The island (2026-10-17)
 

@@ -3,11 +3,11 @@
 #
 # A Plasma test host for tools/vsession/cvsession.sh: the Plasma of the BASE build image (the
 # device's 6.7.5 from tools/container, or a pre-release from tools/container/beta), the apps and
-# services the scenarios use (the depth features' too: Kate, Okular and KCharSelect for snap groups, Tesseract
-# for copy text, wl-clipboard for Quick Look, dbus-python and a PipeWire with its Pulse server and
-# tools for live chips; tools/tests/depth/run.sh), pywayland for the placement memory's held
-# client (tools/tests/lib/heldclient.py), and Plasma Fusion's compiled parts built against that
-# Plasma.
+# services the scenarios use (the depth features' too: Kate, Okular and KCharSelect for snap
+# groups, Tesseract for copy text, wl-clipboard for Quick Look, dbus-python and a PipeWire with
+# its Pulse server and tools for live chips; tools/tests/depth/run.sh), pywayland for the
+# placement memory's held client (tools/tests/lib/heldclient.py), and Plasma Fusion's compiled
+# parts built against that Plasma.
 # Build context: a directory holding packages/{common,decoration-cpp,kcm-cpp,navigation-cpp} and
 # tools/container/test/install-parts.sh (tools/container/test/build.sh assembles it), e.g.
 #   tools/container/test/build.sh localhost/plasma-fusion-build:f44-6.8beta localhost/plasma-fusion-test:f44-6.8beta

@@ -7,8 +7,8 @@
 # and tools/ in ~/pf-tools, and the chips' test tool in ~/pf-chips. The Fusion setup runs (it puts
 # the chips before the tray and hides the tray items they replace), then:
 #   1. nothing in use but this run's own SSH login (the harness reaches the host over SSH): the
-#      SSH chip; in a test container (cvsession.sh) there is no logind and so no login: the widget
-#      says it has no logind, and no SSH chip;
+#      SSH chip; in a test container (cvsession.sh) there is no system bus and so no login: the
+#      lane has no system bus, and the widget shows no SSH chip;
 #   2. a timed Keep awake (quick settings' debugAction keepawake:SECONDS): its chip with the time
 #      left; a click opens quick settings;
 #   3. a screen recording (Spectacle's item, fake_status_items.py recording): the time runs, the
