@@ -10,7 +10,7 @@ patched=$(realpath "$2")
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 export LC_ALL=C
-for type in Window XdgSurfaceWindow XdgToplevelWindow X11Window InternalWindow XXPipV1Window; do
+for type in Window XdgSurfaceWindow XdgToplevelWindow X11Window InternalWindow XXPipV1Window Options; do
     for side in stock patched; do
         lib=$stock
         [[ $side == stock ]] || lib=$patched

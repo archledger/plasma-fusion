@@ -13,7 +13,7 @@
 #   placement memory's session scenarios on stock KWin and on the rebuilt packages
 #   (tools/tests/kwin-backport/run.sh; the runners have no GPU, so the sessions paint in software
 #   and take no screenshots).
-# A Fedora KWin other than 6.7.5 fails the run: the backport then needs a reviewed update. The
+# A Fedora KWin other than 6.7.5 or 6.8.2 fails the run: the backport then needs a reviewed update. The
 # rebuilt packages never leave the runner: only logs and results are uploaded.
 
 name: kwin-backport
@@ -69,8 +69,8 @@ jobs:
           set -euo pipefail
           vr=$(dnf repoquery -q --arch x86_64 --qf '%{version}-%{release}\n' kwin | sort -V | tail -n 1)
           echo "Fedora 44's KWin: ${vr:-none found}" | tee -a "$GITHUB_STEP_SUMMARY"
-          if [[ ! $vr =~ ^6\.7\.5-[0-9]+\.fc44$ ]]; then
-            echo "::error::The backport is for KWin 6.7.5; Fedora 44 ships ${vr:-no KWin}. Update the backport first (packaging/patches/kwin/README.md)."
+          if [[ ! $vr =~ ^(6\.7\.5|6\.8\.2)-[0-9]+\.fc44$ ]]; then
+            echo "::error::The backport is for KWin 6.7.5 or 6.8.2; Fedora 44 ships ${vr:-no KWin}. Update the backport first (packaging/patches/kwin/README.md)."
             exit 1
           fi
           echo "vr=$vr" >>"$GITHUB_OUTPUT"
@@ -89,10 +89,23 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Render-device selection and failure checks
+        run: python3 tools/tests/lib/test_render_device.py
+
+      - name: Software render device for KWin 6.8
+        if: startsWith(needs.source.outputs.vr, '6.8.2-')
+        run: |
+          set -euo pipefail
+          [ -c /dev/udmabuf ] || sudo modprobe udmabuf
+          # This is a disposable CI VM; rootless test containers must open the device.
+          sudo chmod 0666 /dev/udmabuf
+          ls -l /dev/udmabuf
+
       - name: Build and run the suites
         env:
           VR: ${{ needs.source.outputs.vr }}
           VARIANT: ${{ matrix.variant }}
+          PFV_DRI: "0"
         # A failed suite (exit 1) is for native-compare to judge; a setup or build failure fails here.
         run: |
           rc=0
@@ -151,6 +164,18 @@ jobs:
 
       - name: rsync for the session seeds (make_seed)
         run: command -v rsync >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq rsync; }
+
+      - name: The session driver's image-selection tests
+        run: python3 tools/tests/kwin-backport/run_test.py
+
+      - name: Software render device for KWin 6.8
+        if: startsWith(needs.source.outputs.vr, '6.8.2-')
+        run: |
+          set -euo pipefail
+          [ -c /dev/udmabuf ] || sudo modprobe udmabuf
+          # This is a disposable CI VM; the session's test user must open the device.
+          sudo chmod 0666 /dev/udmabuf
+          ls -l /dev/udmabuf
 
       - name: The HOME tree (tools/build.sh in Fedora 44, with the shared part's build requirements)
         run: |

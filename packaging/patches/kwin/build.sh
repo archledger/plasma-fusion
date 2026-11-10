@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Rebuild Fedora 44 KWin 6.7.5 with the optional requestedGeometry backport.
+# Rebuild supported Fedora 44 KWin versions with the optional requestedGeometry backport.
 # Usage: build.sh OUT_DIR [VERSION-RELEASE]
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
@@ -10,8 +10,8 @@ if (( $# < 1 || $# > 2 )); then
     exit 64
 fi
 vr=${2:-$(rpm -q --qf '%{VERSION}-%{RELEASE}' kwin)}
-if [[ ! $vr =~ ^6\.7\.5-[0-9]+\.fc44$ ]]; then
-    echo "unsupported KWin build: $vr (expected 6.7.5-N.fc44)" >&2
+if [[ ! $vr =~ ^(6\.7\.5|6\.8\.2)-[0-9]+\.fc44$ ]]; then
+    echo "unsupported KWin build: $vr (expected 6.7.5-N.fc44 or 6.8.2-N.fc44)" >&2
     exit 64
 fi
 mkdir -p "$1"

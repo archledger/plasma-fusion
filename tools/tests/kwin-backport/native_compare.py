@@ -11,6 +11,7 @@ SUITE.exit and SUITE.attempts: up to three attempts on the backport (until one p
 stock. Upstream tests can fail in this configuration without the backport (on 2026-10-26
 testX11Window's stacking tests failed in 15 and in 6 of 20 runs of either build), so the question
 is only whether the backport adds a failure. A suite fails here when:
+  - any attempt lacks successful compositor initialization or reports an initialization failure;
   - it did not run on the backport, or its stock comparison is missing;
   - a test function fails in every backport attempt that ran it and in no stock attempt;
   - a backported test (a function the stock build does not have) fails in any attempt: those must
@@ -31,6 +32,13 @@ import sys
 
 LINE = re.compile(r"^(PASS|FAIL!|XPASS|XFAIL|SKIP|BPASS|BFAIL|BXPASS|BXFAIL|QFATAL)\s*:\s+([A-Za-z_][\w:]*::\w+)")
 FAILED = {"FAIL!", "XPASS", "QFATAL"}
+RENDERER_READY = re.compile(
+    r"^QDEBUG\s*:\s+[\w:]+::initTestCase\(\).*"
+    r"(?:OpenGL|QPainter) compositing has been successfully initialized", re.MULTILINE)
+RENDERER_FAILED = re.compile(
+    r"^QCRITICAL\s*:\s+[\w:]+::initTestCase\(\).*"
+    r"(?:The used windowing system requires compositing|We are going to quit KWin now as it is broken)",
+    re.MULTILINE)
 
 
 def read(path):
@@ -50,7 +58,9 @@ def attempt(text):
             ran.add(m.group(2))
             if m.group(1) in FAILED:
                 failed.add(m.group(2))
-    return {"ran": ran, "failed": failed, "complete": any(line.startswith("Totals:") for line in text.splitlines())}
+    return {"ran": ran, "failed": failed, "complete": any(line.startswith("Totals:") for line in text.splitlines()),
+            "renderer_ready": bool(RENDERER_READY.search(text)),
+            "renderer_failed": bool(RENDERER_FAILED.search(text))}
 
 
 def suites(directory):
@@ -77,6 +87,12 @@ def judge(suite, backport, stock):
     if stock is None or not stock["attempts"] or stock["exit"] is None:
         return {"suite": suite, "result": "FAIL", "failed": ["no stock run to compare with"], "tolerated": []}
     b, s = backport["attempts"], stock["attempts"]
+    for variant, attempts in (("backport", b), ("stock", s)):
+        for index, item in enumerate(attempts, 1):
+            if item["renderer_failed"]:
+                failed.append(f"{variant} attempt {index}: compositor initialization failed")
+            elif not item["renderer_ready"]:
+                failed.append(f"{variant} attempt {index}: no successful compositor initialization")
     stock_ran = set().union(*(a["ran"] for a in s))
     stock_failed = {}
     for a in s:

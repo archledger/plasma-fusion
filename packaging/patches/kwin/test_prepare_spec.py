@@ -48,6 +48,56 @@ class PrepareSpecTest(unittest.TestCase):
         self.assertIn("Patch1: fedora.patch\n", result)
         self.assertIn("Patch9001:", result)
 
+    def test_supports_fedora_682_without_changing_existing_spec_sections(self):
+        original = SPEC.replace("Version: 6.7.5", "Version: 6.8.2").replace(
+            "Release: 1%{?dist}", "Release: 3%{?dist}")
+        original = original.replace("Source0:", "Patch0: fedora.patch\nSource0:")
+        result = prepare(original, "6.8.2-3.fc44", datetime.date(2026, 11, 9))
+        self.assertIn("Version: 6.8.2\n", result)
+        self.assertIn("Release: 3%{?dist}.pf1\n", result)
+        self.assertIn("Patch0: fedora.patch\n", result)
+        self.assertIn("Patch9001: 0001-window-expose-requested-geometry-6.8.2.patch\n", result)
+        self.assertIn("Patch9002: 0002-initialize-startup-flags-6.8.2.patch\n", result)
+        self.assertIn("%prep\n%autosetup -p1\n", result)
+        self.assertIn("- 6.8.2-3.fc44.pf1\n", result)
+        self.assertTrue(result.endswith(original[original.index("* Sat"):]))
+
+    def test_682_target_requires_matching_spec_version(self):
+        with self.assertRaises(ValueError):
+            prepare(SPEC.replace("Release: 1%{?dist}", "Release: 3%{?dist}"),
+                    "6.8.2-3.fc44", datetime.date(2026, 11, 9))
+
+    def test_rejects_unqualified_68_targets(self):
+        for version, release in (("6.8.1", "3"), ("6.8.3", "1")):
+            vr = f"{version}-{release}.fc44"
+            matching = SPEC.replace("Version: 6.7.5", f"Version: {version}").replace(
+                "Release: 1%{?dist}", f"Release: {release}%{{?dist}}")
+            with self.subTest(vr=vr), self.assertRaises(ValueError):
+                prepare(matching, vr, datetime.date(2026, 11, 9))
+
+    def test_rejects_other_distribution_for_682(self):
+        matching = SPEC.replace("Version: 6.7.5", "Version: 6.8.2").replace(
+            "Release: 1%{?dist}", "Release: 3%{?dist}")
+        with self.assertRaises(ValueError):
+            prepare(matching, "6.8.2-3.fc45", datetime.date(2026, 11, 9))
+
+    def test_682_rejects_reserved_second_patch(self):
+        original = SPEC.replace("Version: 6.7.5", "Version: 6.8.2")
+        for tag in ("Patch9002", "Patch09002"):
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                prepare(original.replace("Source0:", f"{tag}: existing.patch\nSource0:"),
+                        "6.8.2-1.fc44", datetime.date(2026, 11, 9))
+
+    def test_675_preserves_unreserved_second_patch(self):
+        original = SPEC.replace("Source0:", "Patch9002: existing.patch\nSource0:")
+        self.assertIn("Patch9002: existing.patch\n", self.prepare(original))
+
+    def test_rejects_existing_startup_patch(self):
+        original = SPEC.replace("Version: 6.7.5", "Version: 6.8.2").replace(
+            "Source0:", "Patch7: 0002-initialize-startup-flags-6.8.2.patch\nSource0:")
+        with self.assertRaises(ValueError):
+            prepare(original, "6.8.2-1.fc44", datetime.date(2026, 11, 9))
+
     def test_rejects_incompatible_specs(self):
         for old, new in (
             ("Name:    kwin", "Name:    plasma-workspace"),
@@ -91,6 +141,19 @@ class PrepareSpecTest(unittest.TestCase):
                     capture_output=True, text=True, check=False,
                 )
                 self.assertEqual(result.returncode, 64, result.stderr)
+                self.assertEqual(sentinel.read_text(), "preserve this")
+
+    def test_682_builders_reach_output_preservation_check(self):
+        for builder, flags in (("build.sh", []), ("native-tests.sh", []), ("native-tests.sh", ["--stock"])):
+            with self.subTest(builder=builder, flags=flags), tempfile.TemporaryDirectory() as temporary:
+                sentinel = Path(temporary) / ".existing-evidence"
+                sentinel.write_text("preserve this")
+                result = subprocess.run(
+                    ["bash", str(Path(__file__).with_name(builder)), *flags, temporary, "6.8.2-3.fc44"],
+                    capture_output=True, text=True, check=False, timeout=10,
+                )
+                self.assertEqual(result.returncode, 64, result.stderr)
+                self.assertIn("output directory must be empty", result.stderr)
                 self.assertEqual(sentinel.read_text(), "preserve this")
 
     def test_stock_tests_reject_other_target_before_creating_output(self):

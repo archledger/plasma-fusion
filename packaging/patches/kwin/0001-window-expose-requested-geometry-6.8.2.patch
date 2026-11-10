@@ -1,0 +1,475 @@
+From: Wisbendji Fimerlus <archledger236@gmail.com>
+Subject: [PATCH] window: Expose requested geometry on KWin 6.8.2
+
+SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+SPDX-License-Identifier: GPL-2.0-or-later
+
+Adapt the optional requestedGeometry API and its five regression tests
+to KWin 6.8.2. The original proposal was KDE MR !10225 (not merged):
+https://invent.kde.org/plasma/kwin/-/merge_requests/10225
+
+Keep the last-notified rectangle outside Window to preserve its binary
+layout. Notify after the operation, with the guarded post-mapping path
+shared by xdg-shell roles. KWin 6.8.2 synchronizes toplevel and PiP
+geometry only when no configure is queued or scheduled; document that
+stricter rule without changing upstream geometry synchronization.
+
+---
+
+diff --git a/autotests/integration/tiles_test.cpp b/autotests/integration/tiles_test.cpp
+index 1c4d673..f8e089f 100644
+--- a/autotests/integration/tiles_test.cpp
++++ b/autotests/integration/tiles_test.cpp
+@@ -78,6 +78,8 @@ private Q_SLOTS:
+     void tileAndMaximize();
+     void evacuateFromRemovedDesktop();
+     void splitFromSingleTileBelowRoot();
++    void requestedGeometryAfterUntileBeforeCommit();
++    void requestedGeometryChangedAfterX11Tile();
+
+ private:
+     void createSimpleLayout();
+@@ -915,6 +917,114 @@ void TilesTest::splitFromSingleTileBelowRoot()
+     QCOMPARE(topLevelTiles[0]->childCount(), 2);
+ }
+
++void TilesTest::requestedGeometryAfterUntileBeforeCommit()
++{
++    // A client may acknowledge a tile configure and commit the matching buffer only after the
++    // window has been untiled. The committed frame then has the tile's size while the floating
++    // geometry has already been requested again. requestedGeometry tells the two apart until
++    // the client has answered the restore configure.
++    std::unique_ptr<KWayland::Client::Surface> surface(Test::createSurface());
++    std::unique_ptr<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.get()));
++    QSignalSpy surfaceConfigureRequestedSpy(shellSurface->xdgSurface(), &Test::XdgSurface::configureRequested);
++    QSignalSpy toplevelConfigureRequestedSpy(shellSurface.get(), &Test::XdgToplevel::configureRequested);
++
++    auto window = Test::renderAndWaitForShown(surface.get(), QSize(100, 100), Qt::cyan);
++    QVERIFY(window);
++    QSignalSpy frameGeometryChangedSpy(window, &Window::frameGeometryChanged);
++    QSignalSpy requestedGeometryChangedSpy(window, &Window::requestedGeometryChanged);
++    QVERIFY(surfaceConfigureRequestedSpy.wait());
++    QCOMPARE(surfaceConfigureRequestedSpy.count(), 1);
++    shellSurface->xdgSurface()->ack_configure(surfaceConfigureRequestedSpy.last().at(0).value<quint32>());
++    Test::render(surface.get(), QSize(100, 100), Qt::cyan);
++    QVERIFY(Test::waylandSync());
++
++    const RectF floatingGeometry = window->frameGeometry();
++    QCOMPARE(window->property("requestedGeometry").value<RectF>(), floatingGeometry);
++    requestedGeometryChangedSpy.clear();
++
++    // Tile the window: the tile's geometry is requested at once, the frame follows on commit.
++    auto tile = qobject_cast<CustomTile *>(m_rootTile->childTiles().first());
++    QVERIFY(tile);
++    const RectF tileGeometry = tile->windowGeometry();
++    QVERIFY(tileGeometry.size() != floatingGeometry.size());
++    QVERIFY(tile->manage(window));
++    QVERIFY(surfaceConfigureRequestedSpy.wait());
++    QCOMPARE(surfaceConfigureRequestedSpy.count(), 2);
++    const quint32 tileSerial = surfaceConfigureRequestedSpy.last().at(0).value<quint32>();
++    const QSize tileSize = toplevelConfigureRequestedSpy.last().first().value<QSize>();
++    QCOMPARE(tileSize, tileGeometry.size().toSize());
++    QCOMPARE(window->property("requestedGeometry").value<RectF>(), tileGeometry);
++    QCOMPARE(requestedGeometryChangedSpy.count(), 1);
++    QCOMPARE(window->frameGeometry(), floatingGeometry);
++
++    // The client acknowledges the tile configure, but the window is untiled before it commits.
++    shellSurface->xdgSurface()->ack_configure(tileSerial);
++    requestedGeometryChangedSpy.clear();
++    QVERIFY(tile->unmanage(window));
++    QVERIFY(surfaceConfigureRequestedSpy.wait());
++    QCOMPARE(surfaceConfigureRequestedSpy.count(), 3);
++    const quint32 restoreSerial = surfaceConfigureRequestedSpy.last().at(0).value<quint32>();
++    QCOMPARE(toplevelConfigureRequestedSpy.last().first().value<QSize>(), floatingGeometry.size().toSize());
++    QCOMPARE(window->requestedTile(), nullptr);
++    QCOMPARE(window->property("requestedGeometry").value<RectF>(), floatingGeometry);
++    QCOMPARE(requestedGeometryChangedSpy.count(), 1);
++
++    // The late commit of the acknowledged tile configure gives the frame the tile's size, but
++    // the requested geometry stays the floating one.
++    frameGeometryChangedSpy.clear();
++    Test::render(surface.get(), tileSize, Qt::blue);
++    QVERIFY(frameGeometryChangedSpy.wait());
++    QCOMPARE(window->frameGeometry().size(), tileGeometry.size());
++    QCOMPARE(window->tile(), tile);
++    QCOMPARE(window->requestedTile(), nullptr);
++    QCOMPARE(window->property("requestedGeometry").value<RectF>(), floatingGeometry);
++    QVERIFY(window->frameGeometry() != window->property("requestedGeometry").value<RectF>());
++
++    // Once the client answers the restore configure, the two are equal again, and the
++    // requested geometry has not changed on the way.
++    requestedGeometryChangedSpy.clear();
++    shellSurface->xdgSurface()->ack_configure(restoreSerial);
++    Test::render(surface.get(), floatingGeometry.size().toSize(), Qt::cyan);
++    QVERIFY(frameGeometryChangedSpy.wait());
++    QCOMPARE(window->frameGeometry(), floatingGeometry);
++    QCOMPARE(window->property("requestedGeometry").value<RectF>(), floatingGeometry);
++    QVERIFY(requestedGeometryChangedSpy.isEmpty());
++}
++
++void TilesTest::requestedGeometryChangedAfterX11Tile()
++{
++#if KWIN_BUILD_X11
++    // An X11 window's frame follows a tile at once. requestedGeometryChanged comes after the
++    // change has been applied, so a handler already sees the new frame geometry.
++    Test::XcbConnectionPtr c = Test::createX11Connection();
++    QVERIFY(!xcb_connection_has_error(c.get()));
++    X11Window *window = createWindow(c.get(), Rect(0, 0, 100, 200));
++    QVERIFY(window);
++    const RectF originalGeometry = window->frameGeometry();
++
++    auto tile = qobject_cast<CustomTile *>(m_rootTile->childTiles().first());
++    QVERIFY(tile);
++    int notifications = 0;
++    RectF frameGeometryAtNotification;
++    RectF requestedGeometryAtNotification;
++    QObject context;
++    connect(window, &Window::requestedGeometryChanged, &context, [&] {
++        ++notifications;
++        frameGeometryAtNotification = window->frameGeometry();
++        requestedGeometryAtNotification = window->property("requestedGeometry").value<RectF>();
++    });
++
++    QVERIFY(tile->manage(window));
++    QCOMPARE(notifications, 1);
++    QCOMPARE(window->frameGeometry(), tile->windowGeometry());
++    QVERIFY(window->frameGeometry() != originalGeometry);
++    QCOMPARE(frameGeometryAtNotification, window->frameGeometry());
++    QCOMPARE(requestedGeometryAtNotification, tile->windowGeometry());
++#else
++    QSKIP("KWin was built without X11 support");
++#endif
++}
++
+ }
+
+ WAYLANDTEST_MAIN(KWin::TilesTest)
+diff --git a/autotests/integration/xdgshellwindow_test.cpp b/autotests/integration/xdgshellwindow_test.cpp
+index e17b362..8b02390 100644
+--- a/autotests/integration/xdgshellwindow_test.cpp
++++ b/autotests/integration/xdgshellwindow_test.cpp
+@@ -36,6 +36,7 @@
+ #include <KWayland/Client/surface.h>
+
+ #include <QDBusConnection>
++#include <QPointer>
+
+ // system
+ #include <sys/socket.h>
+@@ -127,6 +128,9 @@ private Q_SLOTS:
+     void testRemoveActiveDesktopBeforeMap();
+     void testRemoveActiveOutputBeforeInitialCommit();
+     void testRemoveActiveOutputBeforeMap();
++    void testRequestedGeometrySettlesOnCommit();
++    void testRequestedGeometryAfterMappingDestroysWindow();
++    void testRequestedGeometryReentrantMove();
+ };
+
+ void TestXdgShellWindow::testXdgPopupReactive_data()
+@@ -2994,5 +2998,115 @@ void TestXdgShellWindow::testRemoveActiveOutputBeforeMap()
+     QCOMPARE(window->moveResizeOutput(), outputs[0]);
+ }
+
++void TestXdgShellWindow::testRequestedGeometrySettlesOnCommit()
++{
++    // This test verifies that the requested geometry stays ahead of the frame geometry while a
++    // configure event is outstanding, and that it is reset to the frame geometry on a commit with
++    // nothing outstanding, even if the client chose a smaller size than requested.
++
++    std::unique_ptr<KWayland::Client::Surface> surface(Test::createSurface());
++    std::unique_ptr<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.get()));
++    QSignalSpy toplevelConfigureRequestedSpy(shellSurface.get(), &Test::XdgToplevel::configureRequested);
++    QSignalSpy surfaceConfigureRequestedSpy(shellSurface->xdgSurface(), &Test::XdgSurface::configureRequested);
++    Window *window = Test::renderAndWaitForShown(surface.get(), QSize(200, 100), Qt::red);
++    QVERIFY(window);
++    QVERIFY(surfaceConfigureRequestedSpy.wait());
++    QCOMPARE(surfaceConfigureRequestedSpy.count(), 1);
++    shellSurface->xdgSurface()->ack_configure(surfaceConfigureRequestedSpy.last().at(0).value<quint32>());
++    Test::render(surface.get(), QSize(200, 100), Qt::red);
++    QVERIFY(Test::waylandSync());
++
++    const QPointF position = window->pos();
++    QCOMPARE(window->property("requestedGeometry").value<RectF>(), window->frameGeometry());
++    QSignalSpy frameGeometryChangedSpy(window, &Window::frameGeometryChanged);
++    QSignalSpy requestedGeometryChangedSpy(window, &Window::requestedGeometryChanged);
++
++    // Request two sizes, one configure event each.
++    const RectF first(position, QSizeF(300, 200));
++    window->moveResize(first);
++    QVERIFY(surfaceConfigureRequestedSpy.wait());
++    QCOMPARE(surfaceConfigureRequestedSpy.count(), 2);
++    QCOMPARE(toplevelConfigureRequestedSpy.last().at(0).toSize(), QSize(300, 200));
++    const quint32 firstSerial = surfaceConfigureRequestedSpy.last().at(0).value<quint32>();
++
++    const RectF second(position, QSizeF(400, 300));
++    window->moveResize(second);
++    QVERIFY(surfaceConfigureRequestedSpy.wait());
++    QCOMPARE(surfaceConfigureRequestedSpy.count(), 3);
++    QCOMPARE(toplevelConfigureRequestedSpy.last().at(0).toSize(), QSize(400, 300));
++    const quint32 secondSerial = surfaceConfigureRequestedSpy.last().at(0).value<quint32>();
++    QCOMPARE(window->property("requestedGeometry").value<RectF>(), second);
++    QCOMPARE(requestedGeometryChangedSpy.count(), 2);
++    QCOMPARE(window->frameGeometry().size(), QSizeF(200, 100));
++
++    // The client answers the first configure event; the second one is still outstanding.
++    requestedGeometryChangedSpy.clear();
++    shellSurface->xdgSurface()->ack_configure(firstSerial);
++    Test::render(surface.get(), QSize(300, 200), Qt::blue);
++    QVERIFY(frameGeometryChangedSpy.wait());
++    QCOMPARE(window->frameGeometry(), first);
++    QCOMPARE(window->property("requestedGeometry").value<RectF>(), second);
++    QVERIFY(requestedGeometryChangedSpy.isEmpty());
++
++    // The client answers the second configure event with a smaller size than requested.
++    shellSurface->xdgSurface()->ack_configure(secondSerial);
++    Test::render(surface.get(), QSize(350, 250), Qt::blue);
++    QVERIFY(frameGeometryChangedSpy.wait());
++    QCOMPARE(window->frameGeometry(), RectF(position, QSizeF(350, 250)));
++    QCOMPARE(window->property("requestedGeometry").value<RectF>(), window->frameGeometry());
++    QCOMPARE(requestedGeometryChangedSpy.count(), 1);
++}
++
++void TestXdgShellWindow::testRequestedGeometryAfterMappingDestroysWindow()
++{
++    // A native mapping handler may destroy a window synchronously. The commit handler must not
++    // access it afterward, including reading the cached requested geometry without emitting.
++    std::unique_ptr<KWayland::Client::Surface> surface(Test::createSurface());
++    std::unique_ptr<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.get()));
++    QPointer<Window> mappedWindow;
++    bool destroyedDuringMap = false;
++    QObject context;
++    connect(workspace(), &Workspace::windowAdded, &context, [&](Window *window) {
++        mappedWindow = window;
++        window->setSkipCloseAnimation(true);
++        window->destroyWindow();
++        destroyedDuringMap = true;
++    });
++
++    Test::render(surface.get(), QSize(200, 100), Qt::red);
++    QTRY_VERIFY(destroyedDuringMap);
++    QVERIFY(mappedWindow.isNull());
++}
++
++void TestXdgShellWindow::testRequestedGeometryReentrantMove()
++{
++    std::unique_ptr<KWayland::Client::Surface> surface(Test::createSurface());
++    std::unique_ptr<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.get()));
++    QSignalSpy configureRequestedSpy(shellSurface->xdgSurface(), &Test::XdgSurface::configureRequested);
++    Window *window = Test::renderAndWaitForShown(surface.get(), QSize(200, 100), Qt::red);
++    QVERIFY(window);
++    QVERIFY(configureRequestedSpy.wait());
++    shellSurface->xdgSurface()->ack_configure(configureRequestedSpy.last().at(0).value<quint32>());
++    Test::render(surface.get(), QSize(200, 100), Qt::red);
++    QVERIFY(Test::waylandSync());
++
++    const QPointF first = window->pos() + QPointF(10, 10);
++    const QPointF second = first + QPointF(20, 20);
++    int notifications = 0;
++    QObject context;
++    connect(window, &Window::requestedGeometryChanged, &context, [&] {
++        if (++notifications == 1) {
++            window->move(second);
++        }
++    });
++
++    window->move(first);
++    QCOMPARE(notifications, 2);
++    QCOMPARE(window->frameGeometry().topLeft(), second);
++    QCOMPARE(window->property("requestedGeometry").value<RectF>().topLeft(), second);
++    window->move(second);
++    QCOMPARE(notifications, 2);
++}
++
+ WAYLANDTEST_MAIN(TestXdgShellWindow)
+ #include "xdgshellwindow_test.moc"
+diff --git a/src/internalwindow.cpp b/src/internalwindow.cpp
+index a71f14d..dc6a774 100644
+--- a/src/internalwindow.cpp
++++ b/src/internalwindow.cpp
+@@ -47,6 +47,7 @@ InternalWindow::InternalWindow(QWindow *handle)
+     updateShadow();
+
+     setMoveResizeGeometry(m_handle->geometry());
++    notifyRequestedGeometryChanged();
+     commitGeometry(m_handle->geometry());
+
+     updateDecoration(true);
+diff --git a/src/window.cpp b/src/window.cpp
+index 1eb0453..55db602 100644
+--- a/src/window.cpp
++++ b/src/window.cpp
+@@ -44,6 +44,7 @@
+
+ #include <QDebug>
+ #include <QDir>
++#include <QHash>
+ #include <QJSEngine>
+ #include <QMouseEvent>
+ #include <QStyleHints>
+@@ -51,6 +52,14 @@
+ namespace KWin
+ {
+
++namespace
++{
++
++// Keep the same-version backport ABI-compatible with consumers built against stock headers.
++QHash<const Window *, RectF> s_notifiedRequestedGeometry;
++
++}
++
+ QHash<QString, std::weak_ptr<Decoration::DecorationPalette>> Window::s_palettes;
+ std::shared_ptr<Decoration::DecorationPalette> Window::s_defaultPalette;
+
+@@ -98,6 +107,7 @@ Window::Window()
+
+ Window::~Window()
+ {
++    s_notifiedRequestedGeometry.remove(this);
+ }
+
+ void Window::ref()
+@@ -3440,6 +3450,16 @@ void Window::setMoveResizeGeometry(const RectF &geo)
+     setMoveResizeOutput(workspace()->outputAt(geo.center()));
+ }
+
++void Window::notifyRequestedGeometryChanged()
++{
++    const RectF previous = s_notifiedRequestedGeometry.value(this);
++    if (m_moveResizeGeometry == previous) {
++        return;
++    }
++    s_notifiedRequestedGeometry.insert(this, m_moveResizeGeometry);
++    Q_EMIT requestedGeometryChanged();
++}
++
+ LogicalOutput *Window::moveResizeOutput() const
+ {
+     return m_moveResizeOutput;
+@@ -3479,6 +3499,7 @@ void Window::move(const QPointF &point)
+
+     setMoveResizeGeometry(rect);
+     moveResizeInternal(rect, MoveResizeMode::Move);
++    notifyRequestedGeometryChanged();
+ }
+
+ void Window::resize(const QSizeF &size)
+@@ -3491,6 +3512,7 @@ void Window::resize(const QSizeF &size)
+
+     setMoveResizeGeometry(rect);
+     moveResizeInternal(rect, MoveResizeMode::Resize);
++    notifyRequestedGeometryChanged();
+ }
+
+ void Window::moveResize(const RectF &rect)
+@@ -3501,6 +3523,7 @@ void Window::moveResize(const RectF &rect)
+
+     setMoveResizeGeometry(rect);
+     moveResizeInternal(rect, MoveResizeMode::MoveResize);
++    notifyRequestedGeometryChanged();
+ }
+
+ bool Window::isPlaced() const
+diff --git a/src/window.h b/src/window.h
+index 2924a77..a5c03c7 100644
+--- a/src/window.h
++++ b/src/window.h
+@@ -608,6 +608,8 @@ class KWIN_EXPORT Window : public QObject
+      *
+      * The geometry of this Window. Be aware that depending on resize mode the frameGeometryChanged
+      * signal might be emitted at each resize step or only at the end of the resize operation.
++     *
++     * \sa requestedGeometry
+      */
+     Q_PROPERTY(KWin::RectF frameGeometry READ frameGeometry WRITE moveResize NOTIFY frameGeometryChanged)
+
+@@ -766,6 +768,25 @@ class KWIN_EXPORT Window : public QObject
+      */
+     Q_PROPERTY(KWin::Tile *tile READ requestedTile WRITE setTileCompatibility NOTIFY tileChanged)
+
++    /*!
++     * \qmlproperty RectF Window::requestedGeometry
++     *
++     * The geometry KWin most recently asked this Window to take, whereas frameGeometry is the
++     * geometry it currently has. They differ while a Wayland client has not yet committed in
++     * response to a geometry-changing configure event, and on X11 while a synchronized resize is
++     * in progress. An empty size means that the client has been asked to choose its own size.
++     *
++     * On xdg-toplevel and picture-in-picture windows, KWin synchronizes this with frameGeometry
++     * on a commit when no configure is queued or scheduled, including state-only configures.
++     * Other window types, including popups, do not promise this synchronization. Pixel rounding
++     * can also leave the rectangles different. It is not meaningful for unmanaged X11 windows.
++     *
++     * Compare rectangles by their x, y, width and height.
++     *
++     * \sa frameGeometry
++     */
++    Q_PROPERTY(KWin::RectF requestedGeometry READ moveResizeGeometry NOTIFY requestedGeometryChanged)
++
+     /*!
+      * \qmlproperty bool Window::inputMethod
+      *
+@@ -1654,6 +1675,12 @@ Q_SIGNALS:
+      */
+     void tileChanged(KWin::Tile *tile);
+     void requestedTileChanged();
++    /**
++     * This signal is emitted when the requested geometry (moveResizeGeometry()) differs from the
++     * value it was last emitted for, after KWin has processed the move, resize or commit that
++     * changed it.
++     */
++    void requestedGeometryChanged();
+
+     void fullScreenChanged();
+     void skipTaskbarChanged();
+@@ -1882,6 +1909,13 @@ protected:
+         return m_interactiveMoveResize.initialGeometry;
+     }
+     void setMoveResizeGeometry(const RectF &geo);
++    /**
++     * Emits requestedGeometryChanged() if moveResizeGeometry() differs from the value it was last
++     * emitted for. Call it once the operation that may have changed the requested geometry is
++     * complete, not from setMoveResizeGeometry(): a handler that moves the window would otherwise
++     * be overridden by the rest of the operation.
++     */
++    void notifyRequestedGeometryChanged();
+     void setInteractiveMoveResizeGravity(Gravity gravity)
+     {
+         m_interactiveMoveResize.gravity = gravity;
+diff --git a/src/x11window.cpp b/src/x11window.cpp
+index 50e3d0c..6386bcb 100644
+--- a/src/x11window.cpp
++++ b/src/x11window.cpp
+@@ -3815,6 +3815,7 @@ void X11Window::doInteractiveResizeSync(const RectF &rect)
+         setMoveResizeGeometry(moveResizeFrameGeometry);
+         sendSyncRequest();
+         configure(nativeBufferGeometry);
++        notifyRequestedGeometryChanged();
+     }
+ }
+
+diff --git a/src/xdgshellwindow.cpp b/src/xdgshellwindow.cpp
+index e477dc6..eba46d3 100644
+--- a/src/xdgshellwindow.cpp
++++ b/src/xdgshellwindow.cpp
+@@ -40,6 +40,8 @@
+ #include <KDecoration3/DecoratedWindow>
+ #include <KDecoration3/Decoration>
+
++#include <QPointer>
++
+ namespace KWin
+ {
+
+@@ -126,7 +128,11 @@ void XdgSurfaceWindow::handleCommit()
+     m_lastAcknowledgedConfigure.reset();
+     m_lastAcknowledgedConfigureSerial.reset();
+
++    QPointer<XdgSurfaceWindow> guard(this);
+     markAsMapped();
++    if (guard && !guard->isDeleted()) {
++        guard->notifyRequestedGeometryChanged();
++    }
+ }
+
+ void XdgSurfaceWindow::handleRoleCommit()
