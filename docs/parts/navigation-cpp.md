@@ -105,6 +105,10 @@ python3 packages/navigation-cpp/tests/native-input/test_wait_state.py
 python3 packages/navigation-cpp/tests/test_runtime.py
 ```
 
+The runtime checker inspects a separate `dbus.log` when present and rejects unreadable bus logs.
+Callers using the split-log session runner can require it with `require_bus_log=True`; older
+evidence with bus diagnostics in `kwin.log` remains readable by default.
+
 `tests/native-input` is an optional private-session probe, not part of the installed module.
 It requires the matching KWin source tree for test-only rendering headers. It checks native
 view initialization, the first matching framebuffer and the actual Qt focus object. A separate

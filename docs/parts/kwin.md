@@ -1121,6 +1121,72 @@ tools/vsession/remote.sh kw-3 packages/kwin/tests/vsession/scenario-evidence.sh 
 
 ## Test tooling (not installed)
 
+When KWin advertises integer `plasmaFusionThumbnailSourceLifecycleVersion` 1 or later on
+`WindowThumbnail`, the switcher clears its client assignment while the card is filtered out
+or the switcher is closed. Missing, zero, negative, non-integer and non-numeric values keep
+the baseline client assignment, including while hidden. The switcher remains usable.
+The card and thumbnail objects remain reusable; reopening restores the visible assignments.
+Version 1 promises bounded cache-cleanup connections per live view/client pair, removal of
+the pair's entry and remaining callback when either endpoint is destroyed, and weak ownership
+that does not extend either endpoint's lifetime.
+It binds the native `client` property, not `wId`: on KWin 6.7.5,
+`setClient(null)` disconnects the previous client's geometry signal, whereas clearing `wId`
+does not. The client comes from the switcher's existing window lookup. Clearing the assignment
+does not establish GPU texture reclamation:
+KWin may retain its texture provider and previous paint node.
+`packages/kwin/tests/offscreen/thumbnail_lifetime_test.py` checks assignment and object identity
+with the staged switcher on a private bus. It runs in the build workflow after the KWin stage
+is created; eleven capability cases cover supported/future versions and malformed or absent
+values. The test's KWin stub checks assignment and object lifecycle, not real compositor
+GPU memory usage. No memory saving is claimed without a native measurement.
+
+The native lifecycle regression lives in `packages/kwin/tests/native-thumbnail`. Build its
+test-only QML probe with Qt Core/QML development files, then run it in each existing test image:
+
+```sh
+cmake -S packages/kwin/tests/native-thumbnail -B build/thumbnail-probe -G Ninja
+cmake --build build/thumbnail-probe
+STAGE="$PWD/build/thumbnail-stage" tools/build.sh kwin
+python3 packages/kwin/tests/native-thumbnail/run.py \
+  build/thumbnail-stage build/thumbnail-probe build/thumbnail-native \
+  thumbnail-case "$IMAGE" --runtime-manifest runtime.json
+```
+
+The runtime manifest contains the resolved image id in `image`, and a `files` mapping from
+`kwin_wayland` and the versioned `libkwin.so` filename to their SHA256 hashes. It must describe
+the actual provider build. Use `--retain-hidden` to check the baseline assignment policy on a
+compositor without the capability. The runner records seed hashes, checks loaded binary
+provenance, and rejects compositor, shell or bus-service crashes. It requires the separate
+`dbus.log` alongside the compositor log and quits the private shell before bus teardown.
+Use `--filter-target` to place the target on another private workspace and toggle All workspaces
+and This workspace during each cycle. Its 48 snapshots must show the target assigned only in
+All workspaces when release is supported, or assigned throughout for `--retain-hidden`.
+The other fixture window is explicitly focused before measurement: KWin's input method otherwise
+adds two unrelated geometry listeners when the measured target regains focus after closing.
+After the filtering measurements, the target returns to the current workspace for the resize
+check; an off-workspace Qt client can suspend rendering instead of committing a resized buffer.
+The runner requires exactly one successful scenario status and actual compositor-session status
+in `scenario.log`, plus a successful wrapper status. It rejects inherited `PFV_HOME_DIR` and
+`PFV_PRE` overrides so the recorded seed cannot be replaced or modified before startup.
+
+Use a new run name and the matching image for each case. The probe adds instrumentation
+only to its copied seed, dumps the test window's native geometry connections through public Qt
+APIs, and checks 12 open/close cycles followed by resizing. Connection totals must remain stable
+within each state and decrease on close in the release-enabled profile. It counts all geometry
+connections, not GPU resources or individual callback invocations. Assignment checks follow the
+selected profile: one assigned preview for a shown target, none for a hidden or closed target
+when release is supported, and one throughout the retained fallback. Do not run the scenario
+against a logged-in compositor.
+The parser's offline checks run with `python3 packages/kwin/tests/native-thumbnail/test_check_connections.py`.
+The session-status and fresh-seed guards run with
+`python3 packages/kwin/tests/native-thumbnail/test_runner.py`.
+
+This draft is still blocked on the native source-cache lifecycle. On the tested KWin 6.7.5
+and 6.7.91 builds, recreating a `WindowThumbnailSource` adds destruction callbacks whose
+connections outlive that source. Geometry-connection stability alone does not establish
+bounded connection lifetime; the retained native dumps expose the additional growth.
+Qualify the source-cache cleanup before merging or claiming this optimization is complete.
+
 | Path | Use |
 |---|---|
 | `packages/kwin/tests/offscreen/run.sh`, `render.py`, `switcher-harness.qml`, `snap-harness.qml`, `stubs/org/kde/kwin/`, `session-bus.conf` | offscreen renders with a stand-in KWin module, on a private session bus that activates nothing; `PFK_PACKAGES=DIR` renders the built packages (`DIR/switcher/<id>`, `DIR/scripts/<id>`) |
