@@ -33,6 +33,9 @@ LANES = ("stock", "backport")
 CRASH = re.compile(r"KCrash: |Segmentation fault|\(core dumped\)")
 SCRIPT_ERROR = re.compile(r"plasmafusion-placement.*(TypeError|ReferenceError|Error:|error:)")
 PROPERTY = re.compile(r"^INFO KWin has Window\.requestedGeometry: (\S+) \((.*)\)$")
+RENDERER_READY = "OpenGL compositing has been successfully initialized"
+RENDERER_FAILED = ("The used windowing system requires compositing",
+                   "We are going to quit KWin now as it is broken")
 
 
 def read(path):
@@ -78,7 +81,12 @@ def judge(results, want, lane, scenario, needs_property, wrong_images):
             match = CRASH.search(text or "")
             if match:
                 failed.append(f"FAIL {name} names a crash: {match.group(0).strip()}")
-    errors = [line for line in (read(os.path.join(d, "kwin.log")) or "").splitlines() if SCRIPT_ERROR.search(line)]
+    kwin_log = read(os.path.join(d, "kwin.log")) or ""
+    if any(message in kwin_log for message in RENDERER_FAILED):
+        failed.append("FAIL compositor initialization failed")
+    elif want.startswith("kwin-6.8.2-") and RENDERER_READY not in kwin_log:
+        failed.append("FAIL no successful compositor initialization")
+    errors = [line for line in kwin_log.splitlines() if SCRIPT_ERROR.search(line)]
     if errors:
         failed.append(f"FAIL kwin.log has {len(errors)} placement script error(s): {errors[0][:160]}")
     if lane in wrong_images:

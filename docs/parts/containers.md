@@ -21,17 +21,24 @@ usual (`make_seed`). Options: `PFV_IMAGE` (default the 6.7.5 test image), all `P
 and `PFV_PRE` (a command run in that HOME before the session: the login check, as startplasma does).
 Container-owned files are removed with `podman unshare rm -rf`.
 
-Needed: `--device /dev/dri` (without a GPU KWin paints in software and its screenshot plugin
-crashes), `--cap-add SYS_NICE` (kwin_wayland carries cap_sys_nice; a rootless container cannot exec
+Normal runs pass `--device /dev/dri` for rendering and `--cap-add SYS_NICE`
+(kwin_wayland carries cap_sys_nice; a rootless container cannot exec
 it otherwise). Not in the images: KDE Connect and Milou (their QML modules show as missing), a web
 browser (`preferred://browser` pins nothing), PAM for unlocking (lock tests stop at the prompt).
 
 `PFV_DRI=0` runs without the render node, as on a machine without a GPU (GitHub's runners: the
-`kwin-backport` workflow, docs/parts/ci.md). KWin then composites with QPainter. On 6.7.5
+`kwin-backport` workflow, docs/parts/ci.md). KWin 6.7.5 then composites with QPainter. On 6.7.5
 (2026-10-26) a screenshot did not crash but never returned: Spectacle waited until the session's
 time limit. So these sessions take no screenshots: `shot` only lists the name in
 `shots-skipped.log` (`PFV_NO_SHOTS=1`, which `cvsession.sh` sets). Only scenarios that use
 screenshots for review alone fit this mode.
+
+KWin 6.8 requires a render device even without a physical GPU. Set `PFV_SOFTWARE_DEVICE=1`
+alongside `PFV_DRI=0` to pass `/dev/udmabuf` for software OpenGL. The runner opens the device
+as the image's test user before starting the session; an absent or inaccessible device is a
+setup failure. Host path existence alone does not establish access inside a container. The
+runner does not load kernel modules or change host permissions. The shared selection/open
+helper is checked by `python3 tools/tests/lib/test_render_device.py`.
 
 `PFV_XWAYLAND=1` also creates `/tmp/.X11-unix` in the container (mode 1777): the test image has
 no X11 socket directory, and without it KWin logs `kwin_xwl: Failed to establish X11 socket` and
@@ -40,6 +47,7 @@ runs without Xwayland, so `DISPLAY` stays empty for the scenario (found 2026-10-
 The results belong to the user who ran `cvsession.sh`: the container hands them back to the
 owner of the output directory after copying them out. Before 2026-10-26 they kept the session
 user's subordinate ids, which only `podman unshare` could move or remove.
+The wrapper preserves a failed container command's exit status.
 
 ## PLASMA-68 results (6.7.5 vs 6.7.91, 2026-10-01)
 

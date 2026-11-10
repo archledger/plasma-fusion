@@ -13,9 +13,11 @@ import unittest
 COMPARE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "native_compare.py")
 
 
-def log(cls, results, complete=True):
+def log(cls, results, complete=True, renderer=True):
     """QtTest text output: results is [(function, tag, outcome), ...]."""
     lines = [f"********* Start testing of {cls} *********"]
+    if renderer:
+        lines.append(f"QDEBUG : {cls}::initTestCase() kwin_core: OpenGL compositing has been successfully initialized")
     for function, tag, outcome in results:
         label = {"pass": "PASS   ", "fail": "FAIL!  ", "skip": "SKIP   ", "xfail": "XFAIL  ", "xpass": "XPASS  ",
                  "fatal": "QFATAL "}[outcome]
@@ -73,6 +75,46 @@ class CompareTest(unittest.TestCase):
         self.assertEqual(rows["testX"]["result"], "PASS")
         with open(os.path.join(self.out, "native-summary.md")) as f:
             self.assertIn("| testX | PASS | 1 |", f.read())
+
+    def test_missing_renderer_evidence_fails(self):
+        self.suite(self.stock, "testX", [log("T", OK)])
+        self.suite(self.backport, "testX", [log("T", OK, renderer=False)])
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("backport attempt 1: no successful compositor initialization", rows["testX"]["failed"])
+
+    def test_missing_stock_renderer_evidence_fails(self):
+        self.suite(self.stock, "testX", [log("T", OK, renderer=False)])
+        self.suite(self.backport, "testX", [log("T", OK)])
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("stock attempt 1: no successful compositor initialization", rows["testX"]["failed"])
+
+    def test_renderer_failure_is_not_a_tolerated_baseline_failure(self):
+        failed = log("T", OK) + "QCRITICAL: T::initTestCase() kwin_core: The used windowing system requires compositing\n"
+        self.suite(self.stock, "testX", [failed])
+        self.suite(self.backport, "testX", [failed])
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("backport attempt 1: compositor initialization failed", rows["testX"]["failed"])
+        self.assertIn("stock attempt 1: compositor initialization failed", rows["testX"]["failed"])
+
+    def test_legacy_qpainter_initialization_is_valid(self):
+        painter = log("T", OK).replace("OpenGL compositing", "QPainter compositing")
+        self.suite(self.stock, "testX", [painter])
+        self.suite(self.backport, "testX", [painter])
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 0, out)
+
+    def test_healthy_retry_does_not_erase_an_unhealthy_attempt(self):
+        attempts = [log("T", OK, renderer=False), log("T", OK)]
+        self.suite(self.stock, "testX", attempts)
+        self.suite(self.backport, "testX", attempts)
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+        for side in ("stock", "backport"):
+            self.assertIn(f"{side} attempt 1: no successful compositor initialization",
+                          rows["testX"]["failed"])
 
     def test_regression_fails(self):
         bad = log("T", OK[:2] + [("testA", "scaled2x", "fail")] + OK[3:])

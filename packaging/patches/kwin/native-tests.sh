@@ -4,6 +4,7 @@
 # Build the backported KWin tests from the same prepared source as build.sh, with Fedora's own
 # configuration and compiler flags plus BUILD_TESTING=ON, and run the backport's suites.
 # --stock builds Fedora's source package without the backport, for comparison.
+# KWin 6.8 needs a render device. PFV_DRI=0 selects only the software udmabuf device.
 # Usage: native-tests.sh [--stock] OUT_DIR [VERSION-RELEASE]
 # Exit status: 0 every suite passed, 1 a suite failed in all its attempts, 3 setup or build failed,
 # 64 usage.
@@ -19,8 +20,8 @@ if (( $# < 1 || $# > 2 )); then
     exit 64
 fi
 vr=${2:-$(rpm -q --qf '%{VERSION}-%{RELEASE}' kwin)}
-if [[ ! $vr =~ ^6\.7\.5-[0-9]+\.fc44$ ]]; then
-    echo "unsupported KWin build: $vr (expected 6.7.5-N.fc44)" >&2
+if [[ ! $vr =~ ^(6\.7\.5|6\.8\.2)-[0-9]+\.fc44$ ]]; then
+    echo "unsupported KWin build: $vr (expected 6.7.5-N.fc44 or 6.8.2-N.fc44)" >&2
     exit 64
 fi
 mkdir -p "$1"
@@ -29,6 +30,17 @@ if [[ -n $(find "$out" -mindepth 1 -maxdepth 1 -print -quit) ]]; then
     echo "output directory must be empty: $out" >&2
     exit 64
 fi
+root=$(cd "$here/../../.." && pwd)
+device=''
+devices=()
+if [[ $vr == 6.8.2-* ]]; then
+    mode=auto
+    [[ ${PFV_DRI:-1} != 0 ]] || mode=software
+    device=$(bash "$root/tools/vsession/render-device.sh" "$mode") || exit 3
+    devices=(--device "$device:$device:rw" --group-add keep-groups)
+fi
 podman run --rm --init --cpus=4 --memory=8g \
+    "${devices[@]}" -e "PFV_RENDER_DEVICE=$device" \
+    -v "$root/tools/vsession/render-device.sh":/render-device.sh:ro,z \
     -v "$here":/patches:ro,z -v "$out":/out:Z \
     registry.fedoraproject.org/fedora:44 bash /patches/native-tests-in-container.sh "$vr" "$variant"
