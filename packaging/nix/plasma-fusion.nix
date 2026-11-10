@@ -37,7 +37,7 @@ rec {
   plasma-fusion = stdenvNoCC.mkDerivation {
     pname = "plasma-fusion";
     inherit version src;
-    nativeBuildInputs = [ python pkgs.librsvg kdePackages.qtshadertools pkgs.libxml2 pkgs.desktop-file-utils pkgs.makeWrapper ];
+    nativeBuildInputs = [ python pkgs.librsvg kdePackages.qtshadertools kdePackages.qtdeclarative pkgs.libxml2 pkgs.desktop-file-utils pkgs.makeWrapper ];
     # patchShebangs gives the Python scripts of $out (#!/usr/bin/python3) this interpreter.
     buildInputs = [ pythonRuntime ];
     dontConfigure = true;
@@ -47,6 +47,8 @@ rec {
       runHook preBuild
       export HOME=$TMPDIR QT_QPA_PLATFORM=offscreen
       export QT_PLUGIN_PATH=${kdePackages.qtbase}/${kdePackages.qtbase.qtPluginPrefix}:${kdePackages.qtsvg}/${kdePackages.qtbase.qtPluginPrefix}
+      export QML2_IMPORT_PATH=${lib.makeSearchPathOutput "out" "${kdePackages.qtbase.qtQmlPrefix}" [ kdePackages.qtbase kdePackages.qtdeclarative ]}
+      export QML_IMPORT_PATH=$QML2_IMPORT_PATH
       export FONTCONFIG_FILE=${pkgs.makeFontsConf { fontDirectories = [ ]; }}
       patchShebangs tools generators packages
       STAGE=$PWD/_stage bash tools/build.sh
