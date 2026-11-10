@@ -8,14 +8,14 @@ are welcome in GitHub Discussions; the way decisions are made is in
 ## Where the project stands
 
 - Experimental. Built for and tested on Fedora 44 KDE with Plasma 6.8.2, KDE Frameworks 6.31 and
-  Qt 6.11, on two machines: a convertible (ThinkPad X13 Yoga Gen 4, on 6.8.2) and a laptop (ASUS
-  Zenbook, on 6.7.5 until its hold is lifted);
+  Qt 6.11, on two machines: a convertible (ThinkPad X13 Yoga Gen 4) and a laptop (ASUS Zenbook),
+  both on 6.8.2;
   each release also in virtual machines of Arch, Ubuntu 26.10, Debian testing, KDE neon and NixOS
   ([`parts/release-tests.md`](parts/release-tests.md)), Plasma 6.8.0 among them since 0.6.0.
 - Released since 0.2.0 (2026-10-03); 0.4.0 on 2026-10-10, 0.5.0 on 2026-10-13, 0.6.0 on
-  2026-10-18 ([`CHANGELOG.md`](../CHANGELOG.md), [`RELEASING.md`](RELEASING.md)). This plan was
-  written before the first release; the items below keep their wording of 2026-10-02 with what has
-  happened since noted.
+  2026-10-18 and 0.7.0 on 2026-11-10 ([`CHANGELOG.md`](../CHANGELOG.md),
+  [`RELEASING.md`](RELEASING.md)). This plan was written before the first release; the items
+  below keep their wording of 2026-10-02 with what has happened since noted.
 - One maintainer.
 
 ## Planned
@@ -30,12 +30,13 @@ are welcome in GitHub Discussions; the way decisions are made is in
    [`packaging/tested-versions.txt`](../packaging/tested-versions.txt) and lift the hold. Since
    then: 0.5.0 was tested with the 6.8 beta and 0.6.0 (2026-10-18) with Plasma 6.8.0 on Arch and
    KDE neon. Fedora 44 has since moved to 6.8.2; the compiled parts and depth features pass on it,
-   `tested-versions.txt` is raised, and the ThinkPad runs 6.8.2. The laptop's hold lifts with an
-   approved install (#142).
+   `tested-versions.txt` is raised, and the ThinkPad runs 6.8.2. Since then: the laptop was updated
+   to 6.8.2 on 2026-11-10 with the rebuilt parts and a clean login check (#142); both machines run
+   6.8.2.
 2. **Split screen in tablet posture.** A split pair shown as one card in the app switcher (in
    navigation 0.1-7 since 2026-10-02; a touch check on the tablet is next) and an app picker in the
-   free half after one app is tiled (2026-10-18, board TabletSplit). Then saved app pairs (one icon
-   that opens both apps side by side).
+   free half after one app is tiled (2026-10-18, board TabletSplit). Saved app pairs (one icon that
+   opens both apps side by side) are in 0.7.0; the touch check on the tablet remains next.
 3. **Other distributions.** The login check and the installer read pacman, dpkg and Nix next to rpm
    and find helpers and data outside Fedora's paths (done 2026-10-02, tested in Arch and Debian
    containers and with a NixOS package list; not yet on a real Arch, Debian or NixOS desktop). Then

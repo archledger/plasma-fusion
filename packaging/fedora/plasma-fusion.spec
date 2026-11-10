@@ -18,7 +18,7 @@
 %endif
 
 Name:           plasma-fusion
-Version:        0.6.0
+Version:        0.7.0
 Release:        1%{?dist}
 Summary:        Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
 
@@ -537,6 +537,12 @@ grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
 %endif
 
 %changelog
+* Tue Nov 10 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.7.0-1
+- Saved app pairs, the free-half app picker and drag-to-side in tablet posture
+- Directional window keys, secured Wi-Fi joining and the SDDM login screen
+- Boot splash on Arch, Debian, Ubuntu and KDE neon, with a working uninstall
+- Window placement fixes, the privacy hover width and copy text no longer stuck
+
 * Sun Oct 18 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.6.0-1
 - Copy text from the screen in one step with its own instant selection,
   Quick Look in Dolphin, live chips, snap groups, snap sizes from the

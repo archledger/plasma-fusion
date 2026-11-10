@@ -5,10 +5,10 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 # Saved app pairs
 
-Status: new in the release after 0.6.0 (ROADMAP item 2's last part, SPLIT.md item 5; owner decision
+Status: new in 0.7.0 (ROADMAP item 2's last part, SPLIT.md item 5; owner decision
 2026-10-19: saved from the app switcher, the icon "two tiles on a plate", the details below). Board
 `design/boards/TabletPairs.dc.html` (34). Keep in Dock came a pull request later (2026-10-19).
-Last edited 2026-10-19.
+Last edited 2026-11-10.
 
 ## What it is
 
