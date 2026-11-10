@@ -1181,11 +1181,19 @@ The parser's offline checks run with `python3 packages/kwin/tests/native-thumbna
 The session-status and fresh-seed guards run with
 `python3 packages/kwin/tests/native-thumbnail/test_runner.py`.
 
-This draft is still blocked on the native source-cache lifecycle. On the tested KWin 6.7.5
-and 6.7.91 builds, recreating a `WindowThumbnailSource` adds destruction callbacks whose
-connections outlive that source. Geometry-connection stability alone does not establish
-bounded connection lifetime; the retained native dumps expose the additional growth.
-Qualify the source-cache cleanup before merging or claiming this optimization is complete.
+On unpatched KWin builds, recreating a `WindowThumbnailSource` registers cache-cleanup
+callbacks whose connections can outlive that source. Geometry-connection stability alone does
+not establish bounded lifetime, which is why the switcher releases its client assignment only
+when the compositor advertises the lifecycle capability; every other build keeps the baseline
+assignment while hidden.
+
+The maintained provider (`archledger/kwin#5`, runtime `3a4a942`) supplies version 1 and bounds
+cleanup connections per live view/client pair, removes the pair and its remaining callback when
+either endpoint is destroyed, and keeps weak ownership. Its native suite covers twenty
+recreations, independent views and clients, and both destruction orders; restoring the old
+cleanup while keeping the capability fails four of its eight results. The switcher's enabled
+and fallback native matrix passes enabled release and retained-client behavior over 144
+observations. Neither result claims GPU texture or memory reclamation.
 
 | Path | Use |
 |---|---|
