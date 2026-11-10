@@ -91,7 +91,9 @@ esac
 
 # ---- 1. this run's own SSH login. On the test host (remote.sh) the harness's SSH login is one,
 # which logind lists. A test container (cvsession.sh; podman writes /run/.containerenv into every
-# container) has no system bus, so no logind and no login.
+# container) has no system bus, so no logind and no login. Qt's D-Bus helper completes no error
+# callback for a missing system bus, so that lane asserts the absent bus and the chips' state,
+# not a logind diagnostic line.
 if [ -f /run/.containerenv ]; then ssh_login=0; else ssh_login=1; fi
 sleep 3
 info "logins: $(last 'remote logins')"
@@ -101,10 +103,13 @@ if [ "$ssh_login" = 1 ]; then
     *) fail "1: no SSH chip ($(last 'state'))" ;;
   esac
 else
-  case "$(last 'no systemd-logind')|$(last 'state')" in
-    '|'* | *'"ssh"'*) fail "1: a test container: logind '$(last 'no systemd-logind')', state $(last 'state')" ;;
-    *) pass "1: a test container has no logind (the widget says so) and no SSH chip ($(last 'no systemd-logind'))" ;;
-  esac
+  if [ -S /run/dbus/system_bus_socket ]; then
+    fail "1: a test container unexpectedly has a system bus"
+  elif [[ "$(last 'state')" == *'"ssh"'* ]]; then
+    fail "1: a test container shows an SSH chip without logind ($(last 'state'))"
+  else
+    pass "1: a test container has no system bus and no SSH chip ($(last 'state'))"
+  fi
 fi
 shot 10-ssh
 

@@ -468,10 +468,10 @@ Checked on 2026-10-02 in Fedora 44 containers.
   `Signed-off-by`: reword the commit (a plain message saying what moved and why, one trailer),
   force-push the pull request branch, merge when green.
 - **A `plasma-update` issue**: Fedora 44 has a newer Plasma or Qt than Plasma Fusion is tested on.
-  The test machines hold Plasma at 6.7.x (`/etc/dnf/libdnf5.conf.d/90-plasma-fusion-hold-plasma-6.8.conf`).
-  Build the compiled parts against it (the `compiled` beta job shows the first breakage), test a
-  private session (docs/parts/testing.md), fix, then raise the lines in
-  `packaging/tested-versions.txt` and lift the hold. The issue is closed by hand.
+  The laptop still holds Plasma at 6.7.x (`/etc/dnf/libdnf5.conf.d/90-plasma-fusion-hold-plasma-6.8.conf`);
+  the ThinkPad runs 6.8.2. Build the compiled parts against the new version, run the depth features
+  (docs/parts/testing.md), fix, then raise the lines in `packaging/tested-versions.txt` and lift
+  each machine's hold with an approved install. The issue is closed by hand.
 - **The `compiled` beta job fails**: the next Plasma release breaks a compiled part. Not urgent
   while the hold is in place; the log names the API.
 - **`style` fails**: for Python the log names file, line and rule; fix it, or, where the form is

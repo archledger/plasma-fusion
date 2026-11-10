@@ -8,7 +8,7 @@ current state. Phases 1 and 2 and round 2 are built and installed on the ThinkPa
 
 | Topic | Decision | Source |
 |---|---|---|
-| Test device | ThinkPad X13 Yoga Gen 4, `ssh thinkpad-fedora`, user `test`, Fedora 44, Plasma 6.7.5, KF 6.30, Qt 6.11.2 | user |
+| Test device | ThinkPad X13 Yoga Gen 4, `ssh thinkpad-fedora`, user `test`, Fedora 44, Plasma 6.8.2, KF 6.31, Qt 6.11.2 | user |
 | Root on the ThinkPad | Allowed (passwordless sudo is intended). Back up first, record rollback. Never touch PAM (`/etc/pam.d`) or irlume. | user |
 | Display scale | Exactly 4/3 on the ThinkPad panel (stored 1.3333333, ±1e-6; logical 1440x900), so board pixels map 1:1 to logical pixels. Design values are used as logical px. Set from inside the session (`kscreen-doctor output.eDP-1.scale.1.3333333333`) and checked in `kwinoutputconfig.json` and KWin `supportInformation`. Proven to stick in a private session (stored 1.3333333333333333, survives a KWin restart, the Display page shows 133.333 % and opening it changes nothing). The live session still runs 1.325 (origin unexplained) until DEPLOY-1 sets 4/3. | user ("adjust it so it matches the ThinkPad screen"); owner decision 1, 2026-09-30 |
 | Compiled code | Phase 3, after the no-code desktop works: C++ KDecoration3 decoration and a Fusion KCM, built on the laptop in a Fedora 44 container. | user |

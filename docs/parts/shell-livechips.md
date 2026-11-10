@@ -187,9 +187,10 @@ reaches no journal.
   now leaves the bar before the mark.
 
 In a test container (`tools/vsession/cvsession.sh`, the depth suite's beta lane) there is no
-system bus and so no logind: the first check there is that the widget says it has no logind and
-shows no SSH chip, and step 4's capsule and panel come without the login (the scenario knows the
-lane from podman's `/run/.containerenv`).
+system bus and so no logind: the first check there is that the lane has no system bus and the
+widget shows no SSH chip; step 4's capsule and panel come without the login (the scenario knows
+the lane from podman's `/run/.containerenv`). Qt's D-Bus helper does not report a missing system
+bus to QML, so the container lane has no logind diagnostic line and does not require one.
 
 Not verified: the camera in a session (that would turn on the test laptop's own camera; the
 monitor is Plasma's own and `pw-dump`'s parsing has its tests), a real portal session and a real

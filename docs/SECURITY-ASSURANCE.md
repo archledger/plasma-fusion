@@ -26,7 +26,7 @@ the session or run before the desktop starts; those are what this case is about.
   `packaging/debian/`; the Arch package adds a pacman hook that only prints).
 - **The lock screen does not decide who gets in.** The Plasma Fusion lock screen is QML that
   kscreenlocker's greeter loads; the password is checked by kscreenlocker and PAM, unchanged from
-  Plasma 6.7.5. If the QML fails to load, kscreenlocker's built-in lock screen is used
+  Plasma 6.8.2. If the QML fails to load, kscreenlocker's built-in lock screen is used
   ([`parts/lockscreen.md`](parts/lockscreen.md), "Authentication contract").
 - **Notifications stay private on the lock screen.** By default the lock screen shows one card per
   app with a count, no titles and never message text (`showNotificationSummaries` defaults to
@@ -63,7 +63,7 @@ the session or run before the desktop starts; those are what this case is about.
 - **Review by more than one person.** One maintainer writes and reviews every change
   ([`GOVERNANCE.md`](../GOVERNANCE.md)). There has been no outside security audit.
 - **Support outside the tested platform.** Plasma Fusion is experimental and tested on Fedora 44
-  with Plasma 6.7.5 only ([`README.md`](../README.md), "Status").
+  with Plasma 6.8.2 only ([`README.md`](../README.md), "Status").
 - **Fixes for KDE's own code.** Security problems in Plasma, KWin, kscreenlocker, PAM or Plymouth
   belong to their projects ([`SECURITY.md`](../SECURITY.md)).
 
