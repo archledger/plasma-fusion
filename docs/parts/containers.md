@@ -1,7 +1,8 @@
 # Plasma test containers (PLASMA-68, 2026-10-01)
 
 Private test sessions (`tools/vsession`) normally run on the ThinkPad. These containers run the same
-sessions on the laptop, against any Plasma release Fedora packages: the device's Plasma 6.7.5, or a
+sessions on the laptop, against any Plasma release Fedora packages: the ThinkPad's Plasma 6.8.2
+(or the laptop's 6.7.5 until its hold is lifted), or a
 pre-release from the Fedora KDE SIG's `@kdesig/kde-beta` COPR. Same scenarios, same helpers, so a
 scenario can run on two Plasma versions side by side and the results compared line by line.
 

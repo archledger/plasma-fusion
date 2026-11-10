@@ -7,8 +7,8 @@
 # and tools/ in ~/pf-tools, and the chips' test tool in ~/pf-chips. The Fusion setup runs (it puts
 # the chips before the tray and hides the tray items they replace), then:
 #   1. nothing in use but this run's own SSH login (the harness reaches the host over SSH): the
-#      SSH chip; in a test container (cvsession.sh) there is no logind and so no login: the widget
-#      says it has no logind, and no SSH chip;
+#      SSH chip; in a test container (cvsession.sh) there is no system bus and so no login: the
+#      lane has no system bus, and the widget shows no SSH chip;
 #   2. a timed Keep awake (quick settings' debugAction keepawake:SECONDS): its chip with the time
 #      left; a click opens quick settings;
 #   3. a screen recording (Spectacle's item, fake_status_items.py recording): the time runs, the
@@ -91,7 +91,9 @@ esac
 
 # ---- 1. this run's own SSH login. On the test host (remote.sh) the harness's SSH login is one,
 # which logind lists. A test container (cvsession.sh; podman writes /run/.containerenv into every
-# container) has no system bus, so no logind and no login.
+# container) has no system bus, so no logind and no login. Qt's D-Bus helper completes no error
+# callback for a missing system bus, so that lane asserts the absent bus and the chips' state,
+# not a logind diagnostic line.
 if [ -f /run/.containerenv ]; then ssh_login=0; else ssh_login=1; fi
 sleep 3
 info "logins: $(last 'remote logins')"
@@ -101,10 +103,13 @@ if [ "$ssh_login" = 1 ]; then
     *) fail "1: no SSH chip ($(last 'state'))" ;;
   esac
 else
-  case "$(last 'no systemd-logind')|$(last 'state')" in
-    '|'* | *'"ssh"'*) fail "1: a test container: logind '$(last 'no systemd-logind')', state $(last 'state')" ;;
-    *) pass "1: a test container has no logind (the widget says so) and no SSH chip ($(last 'no systemd-logind'))" ;;
-  esac
+  if [ -S /run/dbus/system_bus_socket ]; then
+    fail "1: a test container unexpectedly has a system bus"
+  elif [[ "$(last 'state')" == *'"ssh"'* ]]; then
+    fail "1: a test container shows an SSH chip without logind ($(last 'state'))"
+  else
+    pass "1: a test container has no system bus and no SSH chip ($(last 'state'))"
+  fi
 fi
 shot 10-ssh
 

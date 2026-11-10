@@ -315,8 +315,10 @@ runs them together against one built HOME tree, with one summary:
   compiled part; for the beta lane, Quick Look built in the beta build image).
 - The live chips' first check depends on the lane: on the test host the harness's own SSH login
   shows the SSH chip; a test container has no system bus and so no logind (podman's
-  `/run/.containerenv` tells the scenario it is in one), where the widget must say it has no logind
-  and show no SSH chip, and the capsule and panel of step 4 come without the login.
+  `/run/.containerenv` tells the scenario it is in one), where the widget shows no SSH chip. Qt's
+  D-Bus helper reports no missing-bus error to QML, so that lane asserts the absent bus and the
+  chip state rather than a logind diagnostic line, and the capsule and panel of step 4 come
+  without the login.
 - One run per work tree (a lock on it): a second run on the same tree is refused (exit 2), as it
   would delete or mix the first one's results; a container run also refuses while a container
   session of the same name (`pfv68-NAME-<feature>`) is running. Results a rootless container left
@@ -324,9 +326,9 @@ runs them together against one built HOME tree, with one summary:
   user namespace (`podman unshare rm`) when a plain `rm` cannot.
 - The two lanes keep their own results: `build/tests/depth/host` and
   `build/tests/depth/container-<image>` unless `--work` says otherwise. The test image
-  (`tools/container/test/Containerfile`) has what the six scenarios run besides Plasma: Kate and
-  Okular, Tesseract with its English data, wl-clipboard, dbus-python, and PipeWire with its Pulse
-  server and tools.
+  (`tools/container/test/Containerfile`) has what the six scenarios run besides Plasma: Kate,
+  Okular and KCharSelect, Tesseract with its English data, wl-clipboard, dbus-python, and PipeWire
+  with its Pulse server and tools.
 - Results: `build/tests/depth/results/<feature>/` (checks, `scenario.log`, screenshots, logs,
   core dumps) and `summary.md` / `summary.json`. A feature passes only when its session ran to the
   end (`scenario rc=0` and `session rc=0` in `scenario.log`, so not stopped at its time limit, and
