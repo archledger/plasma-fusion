@@ -138,6 +138,7 @@ problems go privately, as [`SECURITY.md`](SECURITY.md) explains.
 | [`GOVERNANCE.md`](GOVERNANCE.md) | how decisions are made, roles, continuity |
 | [`SECURITY.md`](SECURITY.md) | how to report a vulnerability and how reports are handled |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | what the next year is meant to bring, and what is left out |
+| [`docs/adr/`](docs/adr/) | architecture decision records: the choices that outlive the plans |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | the parts, how they are built and installed, where state lives |
 | [`docs/SECURITY-ASSURANCE.md`](docs/SECURITY-ASSURANCE.md) | what you can and cannot expect in security, and why |
 | [`docs/PLAN.md`](docs/PLAN.md), [`docs/parts/`](docs/parts/) | the build plan, decisions and one page per part |
