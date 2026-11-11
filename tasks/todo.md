@@ -424,6 +424,28 @@ Files: `src/window.{h,cpp}`, `src/xdgshellwindow.cpp`, `src/useractions.cpp`,
 - [ ] Required source groups are privately signed and archived; NT04 finalization remains separate.
 
 ## NT04 — Resolve asynchronous restoration
+- [x] NT04a: the completion boundary (fork PR #11, squash e32f77f946; proof arms PR #12, squash
+  8fffbae906). The acknowledged configure of the live restoration, committed by the client, is
+  the only completion - the origin's kind, geometry generation, ownership generation and restore
+  sequence must all be current, exactly mirroring the placement-authority policy. A cancelled
+  attempt, a superseded request or an older configure's late acknowledgement never finalizes
+  anything; the boundary clears the restoring record with its attempt, completes the writer's
+  reservation (deferred record applied, restore watermark installed at the newest tracked
+  sequence, per-key barrier released) and keeps the close cleanup connected so the watermark
+  suppresses stale provider events until the window is destroyed. A configure-less (published,
+  position-only) restoration records its shape at dispatch and settles on the client's next
+  commit. Qualified by fail-first rows (the reservation-survives flip across four suites), the
+  new completion suite (qualifying commit, never-ack, superseded, cancelled, barrier released,
+  published position-only, controller destroyed before the acknowledgement, key released for a
+  second window), two green campaigns per head, an independent no-blocker review with every
+  finding fixed (the watermark-keep correction among them), a Codex finding fixed with its
+  configure-less gap closed, and clean per-leaf Memcheck profiles for the three touched suites
+  (artifacts/plasma-fusion/2026-11-11-nt035-nt036-memcheck-profiles, runs nt04-v1-*). The
+  wrap-composition row is deferred with rationale: the in-order matching is proven at the wrap
+  boundary and the boundary consumes the matched event's origin, never the serial value.
+- [ ] Export the reviewed read-only state/completion contract; no raw protocol logger or timeout
+  substitutes for native state. The record survives root/policy-module unload; reload cannot
+  supersede it and an unresponsive client remains suppressed until completion or close.
 - [ ] Keep restoration pending across old tile commits, superseded configures and serial wrap.
 - [ ] Clear only on the native completion boundary associated with the current restore generation.
 - [ ] Export the reviewed read-only state/completion contract; no raw protocol logger or timeout
