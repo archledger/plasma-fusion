@@ -17,6 +17,12 @@
 %global debug_package %{nil}
 %endif
 
+# The full profile's pinned KWin fork (ADR 0001, docs/adr/0001, docs/full-profile.md). A release
+# pair sets this to the fork tag's exact EVR - for example 6.8.2-3.fc44.pf2 - and the
+# plasma-fusion-full metapackage is built with it; empty means the pin is not set and the
+# metapackage is not built. The pin moves only through a release, never in place.
+%global kwin_full_pin %{nil}
+
 Name:           plasma-fusion
 Version:        0.7.0
 Release:        1%{?dist}
@@ -140,6 +146,31 @@ The package installs these for every user. Each user then runs
 and the settings a Global Theme cannot carry, and "plasma-fusion update" after
 later updates. As root, /usr/share/plasma-fusion/tools/system/greeter-apply.sh
 styles the login screen (plasma-login-manager or SDDM).
+
+%if "%{kwin_full_pin}" != ""
+%package full
+Summary:        The Plasma Fusion full profile: the six packages with the pinned KWin fork
+License:        GPL-2.0-or-later
+# The exact-EVR requires are the pin (ADR 0001): KWin, the fork packages and Plasma Fusion
+# move together in one transaction or not at all. The fork ships in its own Copr project;
+# enabling this repository never offers a KWin replacement on its own.
+Requires:       plasma-fusion = %{version}-%{release}
+Requires:       plasma-fusion-decoration = %{version}-%{release}
+Requires:       plasma-fusion-settings = %{version}-%{release}
+Requires:       plasma-fusion-navigation = %{version}-%{release}
+Requires:       plasma-fusion-quicklook = %{version}-%{release}
+Requires:       plasma-fusion-copytext = %{version}-%{release}
+Requires:       kwin = %{kwin_full_pin}
+Requires:       kwin-common = %{kwin_full_pin}
+Requires:       kwin-libs = %{kwin_full_pin}
+
+%description full
+The full profile of Plasma Fusion (ADR 0001): the complete desktop with the
+maintained KWin fork pinned at one exact version, unlocking the compositor-side
+guarantees the stock profile degrades gracefully without. The fork lags
+distribution security updates by its weekly integration cadence; users who
+cannot accept that use the stock profile.
+%endif
 
 %if %{with compiled}
 %package decoration
@@ -529,6 +560,12 @@ grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
 %{_datadir}/plasma-fusion/built-against/quicklook
 
 %files copytext
+
+%if "%{kwin_full_pin}" != ""
+%files full
+%license LICENSES/GPL-2.0-or-later.txt
+%endif
+
 %license LICENSES/GPL-2.0-or-later.txt
 %{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay
 %{_kf6_datadir}/applications/org.plasmafusion.copytextoverlay.desktop
