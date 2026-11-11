@@ -737,7 +737,12 @@ consumed. Accepted manual cancellation/commit intent and effective Window member
 changes invalidate it, while native configure commits keep their origin distinction. Stable
 attempt validity is separate from the synchronous continuation. The claim itself sends no geometry
 and is not connected to public actions; global desktop/activity navigation and later asynchronous
-completion are not qualified by it.
+completion are not qualified by it. The explicit untile-or-restore action is now routed through
+this machinery (fork PR #10): a record-holding window consumes the action as one qualified
+restoration attempt — a five-value consumption separates started, stopped, in-flight and no-start
+from not-owned — with the ordinary ladder kept for windows without a record. The action's
+duplicate and no-start arms are consumed without legacy fallthrough; the close and newer-intent
+arms ride the claim and request contracts.
 The separate private restore request consumes that original claim checkpoint once. It uses distinct
 restoration provenance, requires ordinary mode and exact feasible A on the recorded output, and
 records the allocated native geometry generation before synchronization callbacks. The lower entry
@@ -746,8 +751,13 @@ refuses without cancelling the original; a failed consumed request remains super
 reached generation and dispatch evidence. Pending admission geometry is allowed, but pending
 gravity is not silently cleared. Queued and Published requests remain distinct, and neither clears
 the ownership record or writer barrier. The request and configure-placement protection are
-qualified only within the private normal-mode/fixed-context scope; public action routing and
-completion are later gates.
+qualified only within the private normal-mode/fixed-context scope. A dispatched restoration now
+completes on its own boundary (fork PR #11): the acknowledged configure of the live restoration,
+committed by the client, clears the restoring record with its reservation and installs the
+writer's restore watermark; a configure-less (published) restoration settles on the client's next
+commit; a cancelled attempt, a superseded request or an older configure's late acknowledgement
+never completes anything. The read-only state/completion export and the unload/serial-wrap rows
+remain later gates.
 Configure acknowledgements now select one exact uint32 serial in queue order, preserving later
 events across serial wrap. Unknown or ambiguous matches select nothing. The selected prefix is
 detached before old configure objects are destroyed, because releasing a decoration can close
