@@ -17,12 +17,13 @@ check packaging/arch/PKGBUILD "$(sed -n 's/^pkgver=//p' "$ROOT/packaging/arch/PK
 check packaging/debian/changelog "$(sed -n '1s/^plasma-fusion (\([^-)]*\)-[^)]*).*/\1/p' "$ROOT/packaging/debian/changelog")"
 tag=$(git -C "$ROOT" describe --exact-match --tags --match 'v[0-9]*' HEAD 2>/dev/null || true)
 [ -z "$tag" ] || check "tag $tag" "${tag#v}"
-# The full profile's KWin pin (ADR 0001): empty is valid (the metapackage is not built); when a
-# release sets it, it must be an exact fork EVR (version-release dist pfN), never a range.
-pin=$(sed -n 's/^%global kwin_full_pin *//p' "$ROOT/packaging/fedora/plasma-fusion.spec" | tr -d '[:space:]' | sed 's/%{nil}//')
+# The full profile's KWin pin (ADR 0001): unset is valid (the metapackage is not built); when a
+# release sets it, it must be an exact fork EVR (version-release dist pfN) with nothing after
+# the pf number - never a range and never a suffixed EVR the exact Requires cannot satisfy.
+pin=$(sed -n 's/^%global kwin_full_pin *//p' "$ROOT/packaging/fedora/plasma-fusion.spec" | tr -d '[:space:]')
 if [ -n "$pin" ]; then
   case "$pin" in
-    [0-9]*.[0-9]*.[0-9]*-*.pf[0-9]*) echo "ok   kwin pin: $pin" ;;
+    [0-9]*.[0-9]*.[0-9]*-*.pf[0-9]) echo "ok   kwin pin: $pin" ;;
     *) echo "FAIL kwin pin: '$pin' is not an exact fork EVR (version-release dist pfN)"; rc=1 ;;
   esac
 else

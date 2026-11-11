@@ -15,16 +15,19 @@ enabling the stock repository never offers a KWin replacement.
 
 ## The pin
 
-The pin lives in the Fedora spec (`%global kwin_full_pin`): empty means the metapackage is not
+The pin lives in the Fedora spec (`%global kwin_full_pin`): unset means the metapackage is not
 built; a release pair sets it to the fork tag's exact EVR (for example `6.8.2-3.fc44.pf2`) in
 the same release PR that bumps the version, and `packaging/check-version.sh` validates its
-shape. The pin moves only through a release, never in place.
+shape. The pin moves only through a release, never in place. The metapackage builds only when
+three conditions meet: the full profile's own project builds the spec `--with full`, the target
+is the Fedora release the pin carries, and the pin is set — so the stock repository's builds
+never emit it, even with the pin present in the spec.
 
 ## What is built and what is not
 
 | Piece | State |
 |---|---|
-| `plasma-fusion-full` subpackage (spec) | built with the pin; not built without it |
+| `plasma-fusion-full` subpackage (spec) | built only `--with full`, on the pin's Fedora release, with the pin set; never in the stock repository's builds |
 | The fork's RPMs (from `archledger/kwin` tags, distag `.pfN`) | the fork repository's packaging; not yet produced |
 | The full Copr project (`archledger/plasma-fusion-full`) | not yet created; an owner account action |
 | Installer `--full` / `--full-restore` | designed in ADR 0001; follows the channel, not before |

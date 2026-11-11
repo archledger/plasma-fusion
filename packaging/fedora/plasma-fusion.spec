@@ -17,11 +17,18 @@
 %global debug_package %{nil}
 %endif
 
-# The full profile's pinned KWin fork (ADR 0001, docs/adr/0001, docs/full-profile.md). A release
-# pair sets this to the fork tag's exact EVR - for example 6.8.2-3.fc44.pf2 - and the
-# plasma-fusion-full metapackage is built with it; empty means the pin is not set and the
-# metapackage is not built. The pin moves only through a release, never in place.
-%global kwin_full_pin %{nil}
+# The full profile (ADR 0001, docs/adr/0001, docs/full-profile.md). The metapackage builds only
+# in the full profile's own Copr project - which passes "--with full" - for the Fedora release
+# the pin targets, and only when a release pair has set the pin to the fork tag's exact EVR
+# (%%global kwin_full_pin 6.8.2-3.fc44.pf2, for example). The stock repository's builds never
+# pass the bcond, so enabling the stock repository never offers a KWin replacement (the stock
+# Copr project and the full project are separate). The pin moves only through a release.
+%bcond full 0
+%if %{with full} && "%{?fedora}" == "44" && "%{?kwin_full_pin}" != ""
+%global build_full 1
+%else
+%global build_full 0
+%endif
 
 Name:           plasma-fusion
 Version:        0.7.0
@@ -147,7 +154,7 @@ and the settings a Global Theme cannot carry, and "plasma-fusion update" after
 later updates. As root, /usr/share/plasma-fusion/tools/system/greeter-apply.sh
 styles the login screen (plasma-login-manager or SDDM).
 
-%if "%{kwin_full_pin}" != ""
+%if %{build_full}
 %package full
 Summary:        The Plasma Fusion full profile: the six packages with the pinned KWin fork
 License:        GPL-2.0-or-later
@@ -560,17 +567,17 @@ grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
 %{_datadir}/plasma-fusion/built-against/quicklook
 
 %files copytext
-
-%if "%{kwin_full_pin}" != ""
-%files full
-%license LICENSES/GPL-2.0-or-later.txt
-%endif
-
 %license LICENSES/GPL-2.0-or-later.txt
 %{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay
 %{_kf6_datadir}/applications/org.plasmafusion.copytextoverlay.desktop
 %{_datadir}/dbus-1/services/org.plasmafusion.CopyTextOverlay.service
 %{_datadir}/plasma-fusion/built-against/copytext
+
+# A metapackage: the license only; the exact-EVR requires are its whole content.
+%if %{build_full}
+%files full
+%license LICENSES/GPL-2.0-or-later.txt
+%endif
 %endif
 
 %changelog
