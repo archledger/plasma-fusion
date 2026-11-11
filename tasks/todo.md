@@ -361,8 +361,24 @@ Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
   rows, one memory profile with zero reported errors and four compiled controls; on the
   unmodified bridge one row failed, one crashed on the deleted factory and two failed and then
   crashed at exit. Reviews cleared this scope.
-- [ ] Qualify maximize/fullscreen normalization under the explicit attempt, preserving immutable
-  A through mode writes, prospective decoration changes and actual constraint/scale checks.
+- [x] NT03.5b: fullscreen and returning-decoration normalization under the explicit attempt
+  (fork PR #8, squash 83ff56225f). An owned fullscreen window — pending, committed, combined with
+  a maximize, or with a returning server or shadow decoration — restores to the captured floating
+  frame A: the exit writes the requested state with its own publication obligation, clears the
+  requested output as the owned and legacy exits do, re-seals the captured state around the
+  decoration boundary, and routes a returning bordered decoration to the necessary extent checks,
+  sealing the exact frame once configured. Movability and resizability are judged for the state
+  after the mode write (the plain predicates refuse while fullscreen is merely requested); the
+  dispatch gate refuses the requested state only, the committed state following the client's
+  acknowledgement. Rules keeping fullscreen, an unfullscreenable window, or exhausted writers
+  refuse the claim mutation-free. Qualified by a four-run chain on the fork (the intended-RED
+  receipt, the implementation, the combined-mode and old-content rows, and the review-fix run;
+  each of the last three an 18-suite campaign), an independent no-blocker review with all six
+  findings fixed and re-verified, and new rows for pending/committed/SSD-returning/constraint
+  refusals, the combined mode, the old-fullscreen-content replay and the named-output clear.
+- [ ] Fullscreen supersession rows during the exit (a newer intent at each boundary of the
+  fullscreen block specifically) and the later coverage rows: rules-driven refusal, a shadow
+  fixture, an SSD combined mode, a client-named other output (two-output fixture).
 - [ ] Complete obligations for writes already made; stop superseded paths without legacy fallthrough.
 - [ ] Keep current owned mode and unowned controls passing; split mode-specific work if needed.
 Verification: profile X and the 18-suite campaign; pending/committed mode, decoration, constraint,
