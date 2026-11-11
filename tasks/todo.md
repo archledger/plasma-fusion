@@ -388,12 +388,28 @@ Files: `src/window.{h,cpp}`, `src/xdgshellwindow.{h,cpp}`,
 `autotests/integration/xdgshellwindow_test.cpp` (maximum five).
 
 ### NT03.6 — Consume explicit restore actions safely
-- [ ] Route the qualified restore from explicit action dispatch with handled separate from
-  no-start/staged/published/superseded; preserve the Owned-only query and unowned behavior.
-- [ ] Consume in-flight/Restoring duplicate actions without another generation or ordinary
-  fullscreen/tile/maximize fallthrough; keep generic manual revocation and teardown detach-only.
-- [ ] Verify real action dispatch and newer manual intent; do not enable a provider, QML state API
-  or production admission path.
+- [x] Route the qualified restore from explicit action dispatch (fork PR #10, squash 67adca155e):
+  the untile-or-restore action on a record-holding window consumes as one qualified restoration
+  attempt through the mode-capable claim, with a five-value consumption — not-owned keeps the
+  ordinary ladder, started dispatches the captured floating frame, stopped retains the writes of
+  a superseded prefix, in-flight consumes a duplicate without another attempt or legacy
+  fallthrough, and no-start consumes an unsupported state with the ownership, geometry and modes
+  unchanged. The orphaned release virtual the dispatcher replaced (no remaining caller) is
+  deleted; the addressed window stays raised and focused as before. Qualified by two green fork
+  campaigns (implementation head 2313ed948c, review-fix head 7d3fae3b5f), an independent
+  approve-with-required-changes review fully addressed, and locally green XdgShellWindow,
+  QuickTiling, Maximized and Tiles suites — the unowned ladder is unchanged text.
+- [x] Consume in-flight/Restoring duplicates without another generation or ordinary fallthrough
+  (the duplicate row pins the attempt sequence, the request generation and the absence of any
+  new configure); generic manual revocation and teardown stay detach-only (the consumption fires
+  only from the explicit action).
+- [ ] Verify real action dispatch and newer manual intent — the dispatch rows cover the real
+  `UntileOrRestoreOp`, duplicates, the unowned ladder, close (testOwnedFullScreen scenario 9,
+  unchanged and green) and newer fullscreen intents at the dispatch boundaries; a dispatch-level
+  manual-move row and the four later coverage rows remain, and the per-leaf Memcheck profiles
+  for this and the NT03.5 slice are owed (the fork's weekly Memcheck on merged main covers the
+  merged code in the interim). No provider, QML state API or production admission path is
+  enabled.
 Verification: profile X and the 18-suite campaign; real `UntileOrRestoreOp`, duplicate/reentrant,
 unowned control, mode/close and stale callback cases; dispatch controls and scoped memory checks.
 Dependencies: NT03.5.
