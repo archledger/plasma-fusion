@@ -10,7 +10,7 @@ them.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0001](0001-two-profile-distribution.md) | Two distribution profiles: stock and full | Proposed |
+| [0001](0001-two-profile-distribution.md) | Two distribution profiles: stock and full | Accepted |
 
 A new ADR is a pull request against `main`:
 

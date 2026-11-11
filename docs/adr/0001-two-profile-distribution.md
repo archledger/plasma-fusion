@@ -3,7 +3,7 @@
 
 # ADR 0001: Two distribution profiles — stock and full
 
-Status: Proposed.
+Status: Accepted 2026-11-11.
 
 ## Context
 
