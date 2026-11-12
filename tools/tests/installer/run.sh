@@ -332,6 +332,17 @@ for SHNAME in "${shells[@]}"; do
   EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" LOCKS='Package name: kw*\nevra = 6.7.4-1.fc44\n' \
     VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" run "$sh" $FED -- --full --yes
   expect "a wider glob that covers kwin refuses too" [ "$RC" = 3 ]
+  # the pattern must reach the match as a pattern: a file shaped like the glob in the working
+  # directory (kwin-foo.rpm next to a kwin* lock) must not take its place through pathname
+  # expansion of the for-list
+  (
+    cd "$CASE" && : >kwin-trap.rpm
+    EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" LOCKS='Package name: kwin*\nevra = 6.7.4-1.fc44\n' \
+      VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" run "$sh" $FED -- --full --yes
+    expect "a lock pattern survives a matching filename in the working directory" [ "$RC" = 3 ]
+    expect "  and still names the pattern" has_out "versionlock already holds kwin*"
+    rm -f kwin-trap.rpm
+  )
   EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" LOCKS='Package name: konsole*\nevra = 6.9.0-1.fc44\n' \
     VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" run "$sh" $FED -- --full --yes
   expect "a lock that covers none of the set does not refuse" has_log "dnf -y install plasma-fusion-full"
