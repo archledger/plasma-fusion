@@ -11,6 +11,9 @@ curl -fsSL .../install.sh | sh -s -- uninstall     # plasma-fusion restore, the 
                                                    # boot splash looks, then remove the packages
 curl -fsSL .../install.sh | sh -s -- status
 curl -fsSL .../install.sh | sh -s -- --dry-run     # every check and the plan; nothing changes
+curl -fsSL .../install.sh | sh -s -- --full        # Fedora: the full profile (the pinned KWin
+                                                   # fork, ADR 0001) — see "The full profile"
+curl -fsSL .../install.sh | sh -s -- --full-restore # back to stock KWin; the six packages stay
 ```
 
 Reading it first, with its signature:
@@ -49,9 +52,62 @@ installed, and apt's `--only-upgrade` skips it, so on Copr and the PPA the new o
 apart; the AUR and the release `.deb`s install the whole set either way.
 
 The release stamps the lists: `PF_COPR_FEDORA` (Fedora releases), `PF_PPA_SERIES`, `PF_DEB_TARGETS`
-(`neon testing`) and `PF_PLASMA_SERIES` (`packaging/tested-plasma.txt`), with
-`packaging/stamp-installer.sh`. An unstamped copy (the repository's) refuses to run outside test
-mode.
+(`neon testing`), `PF_PLASMA_SERIES` (`packaging/tested-plasma.txt`) and `PF_FULL_FEDORA` (the
+Fedora releases the full profile builds; empty until the full Copr project goes live, and then
+`--full` refuses), with `packaging/stamp-installer.sh` (`--full-fedora`). An unstamped copy (the
+repository's) refuses to run outside test mode.
+
+## The full profile (`--full`, `--full-restore`)
+
+[ADR 0001](../adr/0001-two-profile-distribution.md): the full profile replaces the stock KWin with
+the maintained fork through a **separate Copr repository** (`archledger/plasma-fusion-full`), so a
+stock user can never be offered a KWin replacement. It is Fedora's Copr channel only, and only on a
+release that stamps `PF_FULL_FEDORA` for that Fedora release; anything else is refused with exit 3
+before anything changes (the other channels and Fedora Atomic keep the stock profile). The plan
+states the fork's honest limit: KWin security fixes arrive on the fork's weekly integration
+cadence, which can lag Fedora by days.
+
+`--full` (an install choice; a plain stock install never gets near the fork):
+
+1. refuses to take over a KWin the user already pins themselves (`dnf versionlock` holding
+   `kwin`, `kwin-common` or `kwin-libs`): dnf's `versionlock delete` works by name only, so a
+   pre-existing entry could not be given back at restore time — nothing has changed at that
+   point;
+2. records the installed stock KWin EVRs (`kwin`, `kwin-common`, `kwin-libs`) to
+   `/var/lib/plasma-fusion/full-restore.txt`;
+3. enables `archledger/plasma-fusion-full` and installs `plasma-fusion-full` — the metapackage
+   whose exact-EVR requires pull the six packages and the pinned fork in one transaction;
+4. locks the KWin set (`dnf versionlock add kwin kwin-common kwin-libs`; dnf5 pins each package at
+   its just-installed version), so a distribution update can never half-upgrade the set;
+5. runs the unchanged per-user setup. On a stock install it switches only the compositor: no setup
+   rerun (a `plasma-fusion update` runs only if the transaction moved the packages).
+
+Already on the full profile, `--full` says so and does nothing. A fork KWin without the metapackage
+(an unsupported manual state) is refused with the way back to stock.
+
+`update` on a full system moves the pin with the metapackage in one transaction (ADR 0001's
+within-series path): the version lock goes first — it would hold KWin at the old fork while the
+new metapackage requires the new one — the upgrade takes the six with `plasma-fusion-full`, and
+the lock comes back at the newly installed fork.
+
+`--full-restore` (no stamp needed — a system on the full profile must always get back, including
+on a Fedora release the release's stamp does not carry, where the stock lanes stay refused):
+removes the version lock, the metapackage (with `--no-autoremove`: on a fresh `--full` the six
+came in as its dependencies, and dnf's `clean_requirements_on_remove` default would take them
+with it — the restore promises they stay) and the repository, then `dnf distro-sync`s the KWin
+set **to the recorded EVRs** — the machine returns to the stock KWin it had, not to whatever the
+repositories offer now. Fedora keeps only a package's newest build, so a stock that advanced
+while the machine was on the fork can no longer be reinstalled: the fallback says so out loud
+and takes the current stock — but only after verifying the recorded EVRs are really gone
+(`dnf -q repoquery`); a transient repository or solver failure stops instead of quietly
+becoming that fallback. The restore then **verifies the distag is gone** — a repository
+left enabled would win the sync, so the check catches it and says what to do. The six Plasma
+Fusion packages stay installed; they run on stock KWin. `uninstall` on a full system (also
+usable outside the stamp and through the Plasma-version gate, for the same reason: its job is
+to return KWin to stock) runs the same restore first, then the normal uninstall.
+The installer's `status` reports the profile (`full` with the pinned
+KWin, or `stock`); the packaged
+`plasma-fusion status` learns the profile with the capability reporting that follows the channel.
 
 ## Checks before anything changes
 
@@ -67,6 +123,9 @@ All of them read only, and all come before the question:
   installed one, otherwise "log out and in first";
 - install: Plasma Fusion not installed yet (else "use update"); update: installed; no setup options
   with update (it keeps the user's choices);
+- `--full`: Fedora's Copr channel, a release that stamps the full build (`PF_FULL_FEDORA`), not
+  already on the full profile, and no fork KWin without the metapackage; `--full-restore` needs no
+  session (it runs no per-user step) and is nothing to do without the full profile;
 - the `.deb` channel: the release's `SHA256SUMS` and its signature, then its `.deb` files
   (downloaded into a temporary directory, each against its sum), no downgrade, and apt's dry run of
   their install (below), all before the plan is shown, so `--dry-run` runs them too.
@@ -103,6 +162,8 @@ so it is tried three times, 15 s apart. The boot splash tools wait for dpkg's lo
 | Option | Effect |
 |---|---|
 | `install` (default), `update`, `uninstall`, `status` | mode |
+| `--full` | with install: the full profile (Fedora only, stamped per release; above) |
+| `--full-restore` | back to stock KWin; the six packages stay (Fedora; above) |
 | `--yes` | no question |
 | `--dry-run` | checks and plan only |
 | `--package-only` | packages only, no session needed; prints `plasma-fusion setup` for each user |

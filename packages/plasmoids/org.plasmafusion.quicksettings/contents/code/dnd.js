@@ -68,28 +68,43 @@ function valid(date) {
     return !!date && typeof date.getTime === "function" && !isNaN(date.getTime());
 }
 
+// The same clock time `days` calendar days before `until` (a Date), as a time in ms. The label's
+// "a day" and "a week" before the end are the end's own clock time, and a span with a daylight
+// saving change in it is an hour longer or shorter than that many 24-hour days (the week before
+// 2026-10-25 in Central Europe is 169 hours), so stepping back elapsed hours lands an hour off.
+function daysBefore(until, days) {
+    var before = new Date(until.getTime());
+    before.setDate(before.getDate() - days);
+    return before.getTime();
+}
+
 // How the end of a Do Not Disturb running until `until` reads at `now` (a time in ms), and when
 // that changes: {kind, refreshAt}. kind: "none" (no end to show: none set, passed, or "until turned
-// off"), "time" (within 24 hours: "Until 18:00"), "day" (within a week: "Until Mon 06:00") or
-// "date". refreshAt is the time in ms when the kind changes next (the end itself for "time"), or
-// -1 when nothing changes ahead (no end, or "until turned off").
+// off"), "time" (within the end's last calendar day: "Until 18:00"), "day" (within its last
+// calendar week: "Until Mon 06:00") or "date". refreshAt is the time in ms when the kind changes
+// next (the end itself for "time", the same clock time a day or a week before for "day" and
+// "date"), or -1 when nothing changes ahead (no end, or "until turned off"). The kinds change at
+// those same clock times: elapsed-hour boundaries would sit an hour off them across a daylight
+// saving change (the label would still read the old kind an hour after its advertised change on
+// the long days and weeks, and switch an hour early on the short ones).
 function untilLabel(until, now) {
     if (!valid(until)) {
         return { kind: "none", refreshAt: -1 };
     }
     var end = until.getTime();
-    var left = end - now;
-    if (left <= 0) {
+    if (end <= now) {
         return { kind: "none", refreshAt: -1 };
     }
-    if (left <= DAY) {
+    var dayBefore = daysBefore(until, 1);
+    if (now >= dayBefore) {
         return { kind: "time", refreshAt: end };
     }
-    if (left <= 7 * DAY) {
-        return { kind: "day", refreshAt: end - DAY };
+    var weekBefore = daysBefore(until, 7);
+    if (now >= weekBefore) {
+        return { kind: "day", refreshAt: dayBefore };
     }
-    if (left <= FAR) {
-        return { kind: "date", refreshAt: end - 7 * DAY };
+    if (end - now <= FAR) {
+        return { kind: "date", refreshAt: weekBefore };
     }
     // "Until turned off": nothing to show, and nothing to look at again for it (the sheet reads the
     // label again whenever Do Not Disturb or its end changes).
