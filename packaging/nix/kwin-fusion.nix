@@ -18,7 +18,7 @@ let
     kglobalaccel ki18n kidletime kio knewstuff knotifications kpackage
     kservice ktextwidgets kwidgetsaddons kwindowsystem kxmlgui solid sonnet
     libplasma kdecoration plasma-workspace libkscreen
-    kactivities;
+    plasma-activities;
 in
 stdenv.mkDerivation {
   pname = "kwin-fusion";
@@ -65,12 +65,14 @@ stdenv.mkDerivation {
     kdecoration
     plasma-workspace
     libkscreen
-    kactivities
+    plasma-activities
     pkgs.libxcvt
     pkgs.libxkbcommon
     pkgs.libXi
     pkgs.libX11
+    pkgs.libxcb
     pkgs.libxcb-cursor
+    pkgs.libxcb-keysyms
     pkgs.libepoxy
     pkgs.mesa
     pkgs.libGL
@@ -82,7 +84,7 @@ stdenv.mkDerivation {
     pkgs.wayland-protocols
     pkgs.libinput
     pkgs.libevdev
-    pkgs.libudev
+    pkgs.udev
     pkgs.systemd
   ];
 
@@ -91,12 +93,6 @@ stdenv.mkDerivation {
     "-DBUILD_TESTING=OFF"
     "-DKDE_INSTALL_USE_QT_SYS_PATHS=ON"
   ];
-
-  # The fork's QML facade (TransientTilingApi) registers in the org.kde.kwin module;
-  # the QML import path must be present.
-  postInstall = ''
-    mkdir -p $out/${pkgs.qtbase.qtQmlPrefix}
-  '';
 
   meta = with lib; {
     description = "KDE Window Manager — the Plasma Fusion fork (the full profile's compositor)";
