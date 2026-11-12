@@ -34,6 +34,7 @@ Item {
     property var winA: null
     property var winB: null
     property var winD: null
+    property var firstDesktop: null
 
     // The workspace view the stub provides: activeScreen Virtual-1 at (0,0 1440x900), the
     // stub's maximizeArea (0,34 1440x866) is the tiler's area; the facade's master rect puts
@@ -54,6 +55,10 @@ Item {
     }
     function rectIs(r, x, y, width, height) {
         return r.x === x && r.y === y && r.width === width && r.height === height;
+    }
+
+    function mk(over) {
+        return fakeWindow.createObject(harness, over);
     }
 
     // The mock facade: every method the script can call, each one recorded in facadeCalls.
@@ -180,6 +185,7 @@ Item {
         const ws = KWinStubs.Workspace;
         // The view: desktop {id: 11}, activity "a", the stub's single screen.
         const desktop = { id: 11 };
+        firstDesktop = desktop;
         ws.desktops = [desktop];
         ws.currentDesktop = desktop;
         ws.currentActivity = "a";
@@ -187,7 +193,6 @@ Item {
 
         // The windows, floats first (stacking order bottom first, like KWin): the master plus
         // two stack members-to-be.
-        const mk = (over) => fakeWindow.createObject(harness, over);
         master = mk({ internalId: "master", resourceClass: "org.fusion.terminal",
                       desktopFileName: "org.fusion.terminal.desktop",
                       frameGeometry: Qt.rect(40, 80, 620, 420) });
@@ -434,8 +439,45 @@ Item {
             fail("the ignored member's manual move stands after the relayout (got "
                  + JSON.stringify(winB.frameGeometry) + ")");
         }
-        // the settle pass (a second after the opens) records the joined window's float, not
-        // its cell - the python driver asserts the recorded rectangles after it fires
+
+        // ---- an ignored app that joins live records nothing, settle pass included ----
+        // org.fusion.files is in IgnoreApps: opening another of its windows during the
+        // session joins the stack (the tiler ignores the memory's list) and is settle
+        // pushed like any join - but its float must not reach the memory; the policy that
+        // nothing of an ignored app is recorded survives the tiler.
+        const winE = mk({ internalId: "e", resourceClass: "org.fusion.files",
+                          desktopFileName: "org.fusion.files.desktop",
+                          frameGeometry: Qt.rect(320, 560, 220, 220) });
+        winE.desktops = [firstDesktop];
+        winE.output = ws.activeScreen;
+        stackWindows = stackWindows.concat(winE);
+        ws.windows = [winE, winD, winB, winA, master];
+        ws.windowAdded(winE);
+
+        // ---- a reflow's float restore quiets the starved member's late cell commit ----
+        // A third join shrinks the placed cells below winA's minimum height: its saved
+        // float goes back and it leaves the session. The client's late commit of the old
+        // cell (a window without requestedGeometry support) must not then record the cell
+        // as the window's floating placement - the restore quiets it, like the untoggle's.
+        winA.minSize = { width: 1, height: 400 };
+        const winG = mk({ internalId: "g", resourceClass: "org.fusion.chat",
+                          desktopFileName: "org.fusion.chat.desktop",
+                          frameGeometry: Qt.rect(430, 150, 260, 300) });
+        winG.desktops = [firstDesktop];
+        winG.output = ws.activeScreen;
+        stackWindows = stackWindows.concat(winG);
+        ws.windows = [winG, winE, winD, winB, winA, master];
+        // a plain copy: a value-type property read through a QObject reference aliases the
+        // window's live geometry, and the reflow's own write would mutate the capture
+        const winACell = { x: winA.frameGeometry.x, y: winA.frameGeometry.y,
+                           width: winA.frameGeometry.width, height: winA.frameGeometry.height };
+        ws.windowAdded(winG);
+        if (rectIs(winA.frameGeometry, winACell.x, winACell.y, winACell.width, winACell.height)) {
+            fail("the starved member returned to its float (it kept its cell)");
+        }
+        winA.frameGeometry = Qt.rect(winACell.x, winACell.y, winACell.width, winACell.height); // the late commit
+        // the python driver asserts, after the settle pass, that no record carries winA's
+        // cell or anything of the ignored app's second window
 
         // the snapshot the python driver counts from: everything the run itself caused
         snapshot = ({ createTile: calls("createTile").length,

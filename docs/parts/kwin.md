@@ -1017,8 +1017,9 @@ Offline (laptop):
    windows' saved floats - never a cell - are what the memory recorded (invariant 7), and
    the shortcut invoked on another desktop while a session lives tiles the invoked view even
    though the untoggle's activation carried the current desktop back (the stub emulates that
-   in its restore hook). Mutation-checked: skipping `admitTile`, skipping the untoggle's
-   `releaseTile` and ignoring the teardown each fail it.
+   in its restore hook), an ignored app's live join records nothing, and a reflow-starved
+   member's late cell commit is quieted by the float restore. Mutation-checked: skipping
+   `admitTile`, skipping the untoggle's `releaseTile` and ignoring the teardown each fail it.
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
 bus, 1440x900). Seeds: `packages/kwin/tests/vsession/make-seed.sh STAGE_HOME SEED dark|light`
@@ -1625,7 +1626,9 @@ deliberately defers.
   one rejoining on restore with its pre-tiling float kept; a window that joins live keeps
   the settle pass: one second after it opens, the memory records its saved float (never the
   cell it sits at - invariant 7 keeps automatic rectangles out), so its next open has a
-  placement even if the user never moves it; the provider's `record()` skips
+  placement even if the user never moves it, and the memory's ignore policy still decides
+  whether anything is recorded (an ignored app's joined window records nothing, settle pass
+  included); the provider's `record()` skips
   managed windows and the close of a managed window records nothing (invariant 7: automatic
   rectangles never enter placement memory), and the tiler's own float restores quiet the
   window for the restore's settling second, so a client's late commit of a cell cannot
@@ -1688,7 +1691,10 @@ deliberately defers.
   too wide for the column is never feasible at any count. The same holds when a later
   addition shrinks the column below a placed member's minimum: the member's saved float goes
   back before the detach (`Tiling.floatRestores` - it sat at a cell no untoggle could undo),
-  where a window the layout never placed already sits at its own float.
+  where a window the layout never placed already sits at its own float. That reflow restore
+  quiets the window for the restore's settling second, like the untoggle's: a late commit of
+  the starved cell arriving after the member left the session must not record the cell as
+  its floating placement.
 - **Restored floats stay on a live screen**: an output that goes away takes its coordinates
   with it, and KWin has already evacuated such windows - the untoggle and the teardown
   restore a saved float only while it still lands on a screen the session has, so a stale

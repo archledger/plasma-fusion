@@ -113,16 +113,17 @@ check(counts.get("registerProvider") == 1, "registerProvider once")
 check(counts.get("createTile") == 7, "createTile seven times (6 sessions + 1 refused), got %s" % counts.get("createTile"))
 check(counts.get("admitTile") == 6, "admitTile six times, got %s" % counts.get("admitTile"))
 check(counts.get("releaseTile") == 4, "releaseTile four times, got %s" % counts.get("releaseTile"))
-check(counts.get("trackWindow") == 5, "trackWindow for the five windows, got %s" % counts.get("trackWindow"))
+check(counts.get("trackWindow") == 7, "trackWindow for the seven windows, got %s" % counts.get("trackWindow"))
 
-# Invariant 7 and the float record, after the settling pass fired: the only records are the
-# live-joined windows' saved floats (c at its open geometry, d at its open geometry) - never a
-# cell rectangle, and nothing for the adopted windows or the ignored app.
+# Invariant 7, the ignore policy and the float record, after the settling pass fired: the only
+# records are the live-joined windows' saved floats (c, d and g at their open geometries) -
+# never a cell rectangle, nothing for the adopted windows, and nothing at all for the ignored
+# app's second window (e) or the reflow-starved member's late cell commit (a).
 recorded = [c for c in facade_calls if c["op"] == "record"]
-expected_floats = {("c", 300, 500, 260, 260), ("d", 200, 300, 240, 200)}
+expected_floats = {("c", 300, 500, 260, 260), ("d", 200, 300, 240, 200), ("g", 430, 150, 260, 300)}
 got_floats = {(c["window"], c["x"], c["y"], c["width"], c["height"]) for c in recorded}
 check(got_floats == expected_floats,
-      "only the joined windows' floats were recorded (a cell never was): got %s" % sorted(got_floats))
+      "only the joined windows' floats were recorded (a cell, an ignored app and a late commit never were): got %s" % sorted(got_floats))
 
 if failures:
     for failure in failures:

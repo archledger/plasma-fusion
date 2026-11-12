@@ -502,8 +502,14 @@ Item {
         // A settle pass remembering a managed window's float: the rectangle is the saved
         // float, not the cell the window sits at (invariant 7 keeps the cell out of the
         // memory), and it is not a live frame a pending configure could still change - the
-        // settled() question does not apply to it.
+        // settled() question does not apply to it. The memory's ignore policy still decides
+        // whether anything is recorded at all: an ignored app's window joins the stack like
+        // any other (the tiler ignores the list), but its float must not reach the memory
+        // either - the policy that nothing of an ignored app is recorded survives the tiler.
         if (floatRect) {
+            if (ignoredWindow(w)) {
+                return;
+            }
             if (Placement.eligible(stateOf(w, watched[String(w.internalId)]))) {
                 if (Placement.remember(apps, id, floatRect)) {
                     changed();
@@ -1046,6 +1052,16 @@ Item {
                 if (!restores[i].window.deleted) {
                     restores[i].window.frameGeometry =
                         Qt.rect(restores[i].rect.x, restores[i].rect.y, restores[i].rect.width, restores[i].rect.height);
+                    // The restore's quiet: the starved member leaves the session right
+                    // after this, and its client may still commit the old cell configure
+                    // (a window without requestedGeometry support shows that commit as a
+                    // settled frame) - unmanaged and unquieted, that late cell would record
+                    // as the window's floating placement. The untoggle's float restores
+                    // quiet the same second for the same reason.
+                    const quietEntry = watched[String(restores[i].window.internalId)];
+                    if (quietEntry) {
+                        quietEntry.quietUntil = Date.now() + quietMillis;
+                    }
                 }
             }
             placing = false;
