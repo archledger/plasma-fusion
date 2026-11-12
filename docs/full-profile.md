@@ -30,7 +30,7 @@ never emit it, even with the pin present in the spec.
 | `plasma-fusion-full` subpackage (spec) | built only `--with full`, on the pin's Fedora release, with the pin set; never in the stock repository's builds |
 | The fork's RPMs (from `archledger/kwin` tags, distag `.pfN`) | the fork repository's packaging; not yet produced |
 | The full Copr project (`archledger/plasma-fusion-full`) | not yet created; an owner account action |
-| Installer `--full` / `--full-restore` | designed in ADR 0001; follows the channel, not before |
+| Installer `--full` / `--full-restore` | implemented (`scripts/install.sh`); goes live when a release stamps `PF_FULL_FEDORA` (`--full-fedora` in `packaging/stamp-installer.sh`), which follows the full Copr project going live |
 
 ## Verification before anything ships (ADR 0001)
 

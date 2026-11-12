@@ -8,6 +8,9 @@
 #   curl -fsSL https://github.com/archledger/plasma-fusion/releases/latest/download/install.sh | sh
 #   ... | sh -s -- update | uninstall | status
 #   ... | sh -s -- --dry-run          check everything, print the plan, change nothing
+#   ... | sh -s -- --full             Fedora: the full profile - the six packages with the pinned
+#                                    KWin fork from its own Copr repository (ADR 0001)
+#   ... | sh -s -- --full-restore     back to stock KWin; the six packages stay (they run on stock)
 #
 # Channels:
 #   Fedora                  the signed Copr repository archledger/plasma-fusion (dnf)
@@ -21,8 +24,10 @@
 #
 # Options: --yes (no question; needed without a terminal), --dry-run, --package-only (packages only,
 # no setup step: SSH, or for other users), --light, --dark, --auto, --keep-layout, --keep-shortcuts
-# (passed to plasma-fusion setup), --insecure-no-sig (release files: HTTPS and SHA256 only).
-# Exit codes: 0 done or nothing to do, 1 error, 2 usage, 3 refused (nothing changed), 4 declined.
+# (passed to plasma-fusion setup), --insecure-no-sig (release files: HTTPS and SHA256 only), --full
+# (Fedora: the full profile, the pinned KWin fork's own repository), --full-restore (back to stock
+# KWin; the six packages stay). Exit codes: 0 done or nothing to do, 1 error, 2 usage, 3 refused
+# (nothing changed), 4 declined.
 #
 # Integrity: dnf and apt check the Copr and PPA signatures; the AUR package builds the signed git tag;
 # release files are checked against SHA256SUMS, whose signature must verify against the pinned key
@@ -38,10 +43,15 @@ PF_PLASMA_SERIES='@PF_PLASMA_SERIES@'
 PF_COPR_FEDORA='@PF_COPR_FEDORA@'
 PF_PPA_SERIES='@PF_PPA_SERIES@'
 PF_DEB_TARGETS='@PF_DEB_TARGETS@'
+# The Fedora releases the full profile builds (empty: this release has none yet; ADR 0001).
+PF_FULL_FEDORA='@PF_FULL_FEDORA@'
 
 REPO=archledger/plasma-fusion
+FULL_REPO=archledger/plasma-fusion-full
 PKGS="plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation"
 PKGS="$PKGS plasma-fusion-quicklook plasma-fusion-copytext"
+# The KWin set the fork replaces (the full profile's metapackage requires and the lock pins).
+FULL_KWIN_PKGS="kwin kwin-common kwin-libs"
 # The release signing key (it also signs the git tags), pinned: the release's SHA256SUMS must carry
 # its signature. Imported into a temporary keyring only; your own keyring is never touched.
 KEY_FP=F35053398E3C80FE20891B82C10B8492BD7F30C6
@@ -109,6 +119,74 @@ pf_installed() {
     ppa | deb) dpkg-query -W -f '${db:Status-Status} ${Version}\n' "$1" 2>/dev/null | awk '$1 == "installed" {print $2}' ;;
     *) : ;;
   esac
+}
+
+# ---------- the full profile (ADR 0001) ----------
+
+# The installed epoch-version-release of a package (the copr lane; empty when not installed).
+pkg_evr() { rpm -q --qf '%{EVR}\n' "$1" 2>/dev/null | grep -E '^[0-9]' | head -n 1; }
+# The fork's KWin alone carries the pf distag (6.8.2-3.fc44.pf3); stock and fork report the same
+# version string, so the distag - not a version comparison - is what tells them apart.
+kwin_is_fork() {
+  case $(pkg_evr kwin) in *.pf[0-9]*) return 0 ;; esac
+  return 1
+}
+full_meta_installed() { [ -n "$(pf_installed plasma-fusion-full)" ]; }
+full_restore_file() { printf '%s/var/lib/plasma-fusion/full-restore.txt' "$TEST_ROOT"; }
+# What --full recorded, for the plan; empty when the record is gone or unreadable.
+full_recorded() { grep -E "^(kwin|kwin-common|kwin-libs)=" "$(full_restore_file)" 2>/dev/null | paste -sd, - ; }
+
+# The full profile's package step: record the stock KWin this system runs, swap in the pinned fork
+# through the full profile's own repository, then lock the set so a distribution update can never
+# half-upgrade it (dnf5's versionlock pins each package at its just-installed version). The
+# per-user setup is unchanged and runs after this.
+full_swap_packages() {
+  evrs=
+  for p in $FULL_KWIN_PKGS; do
+    e=$(pkg_evr "$p")
+    [ -n "$e" ] && evrs="$evrs $p=$e"
+  done
+  say "recording the stock KWin for --full-restore:$evrs"
+  $SUDO mkdir -p "$TEST_ROOT/var/lib/plasma-fusion"
+  {
+    echo "# Plasma Fusion full profile: the stock KWin before install.sh --full (undo: --full-restore)"
+    echo "fedora=$FEDORA"
+    for p in $FULL_KWIN_PKGS; do
+      e=$(pkg_evr "$p")
+      [ -n "$e" ] && echo "$p=$e"
+    done
+  } | $SUDO tee "$(full_restore_file)" >/dev/null || die "could not write the restore record."
+  has dnf && dnf copr --help >/dev/null 2>&1 || $SUDO dnf -y install dnf5-plugins || $SUDO dnf -y install dnf-plugins-core
+  $SUDO dnf -y copr enable "$FULL_REPO" "fedora-$FEDORA-x86_64" ||
+    die "could not enable the full profile's repository ($FULL_REPO); the stock KWin is untouched."
+  $SUDO dnf -y install plasma-fusion-full ||
+    die "dnf could not install the full profile (the metapackage pulls the six packages and the pinned KWin). Fix and run --full again, or take the repository off: sudo dnf -y copr remove $FULL_REPO"
+  # shellcheck disable=SC2086 # one lock per package, right after the transaction
+  $SUDO dnf -y versionlock add $FULL_KWIN_PKGS ||
+    die "the full profile is installed but its version lock failed; run it now: sudo dnf -y versionlock add $FULL_KWIN_PKGS (until then a system update can replace the fork)."
+}
+
+# Undo the full profile's package step: the lock, the metapackage, the repository, then
+# distro-sync the KWin set back to stock and verify it arrived there (a repository left enabled
+# would win the sync, so the check catches it). The six Plasma Fusion packages stay; they run on
+# stock KWin. WHY is "uninstall" when the six go next.
+full_restore_kwin() {
+  # shellcheck disable=SC2086 # one spec per package
+  $SUDO dnf -y versionlock delete $FULL_KWIN_PKGS ||
+    die "could not remove the version lock; run: sudo dnf -y versionlock delete $FULL_KWIN_PKGS"
+  if full_meta_installed; then
+    $SUDO dnf -y remove plasma-fusion-full ||
+      die "could not remove plasma-fusion-full (the lock is already gone); run: sudo dnf -y remove plasma-fusion-full"
+  fi
+  $SUDO dnf -y copr remove "$FULL_REPO" ||
+    say "note: the full profile's repository was not enabled through copr; if it is still on, remove it: sudo dnf -y copr remove $FULL_REPO"
+  # shellcheck disable=SC2086 # one spec per package
+  $SUDO dnf -y distro-sync $FULL_KWIN_PKGS || die "dnf could not return KWin to stock."
+  kwin_is_fork &&
+    die "KWin is still the fork ($(pkg_evr kwin)): a repository still offers it. Check 'dnf repolist | grep $FULL_REPO', remove it, then: sudo dnf -y distro-sync $FULL_KWIN_PKGS"
+  say "KWin is stock again ($(pkg_evr kwin))."
+  $SUDO rm -f "$(full_restore_file)"
+  [ "${1:-}" = uninstall ] || say "The six Plasma Fusion packages stay installed; they run on stock KWin."
 }
 
 # ---------- detection ----------
@@ -277,7 +355,13 @@ plan() {
   [ "$MODE" != update ] || split_installed
   case $LANE in
     copr)
-      if [ "$MODE" = update ]; then
+      if [ "$FULL" = 1 ]; then
+        echo "  sudo tee /var/lib/plasma-fusion/full-restore.txt   (records the stock KWin for --full-restore)"
+        echo "  sudo dnf -y copr enable $FULL_REPO fedora-$FEDORA-x86_64"
+        echo "  sudo dnf -y install plasma-fusion-full   (the six packages + the pinned kwin, kwin-common, kwin-libs; replaces the stock KWin)"
+        echo "  sudo dnf -y versionlock add $FULL_KWIN_PKGS   (the pin: the set moves together or not at all)"
+        echo "  note: the fork takes KWin security fixes on its weekly cadence, which can lag Fedora by days (ADR 0001)."
+      elif [ "$MODE" = update ]; then
         echo "  sudo dnf -y upgrade --refresh $HAVE_PKGS"
         [ -z "$NEW_PKGS" ] || echo "  sudo dnf -y install $NEW_PKGS   (new in this release)"
       elif [ -n "$DEV_DNF_REPO" ]; then
@@ -309,6 +393,8 @@ plan() {
   esac
   if [ "$PACKAGE_ONLY" = 1 ]; then
     echo "  then, as each user in their Plasma session: plasma-fusion setup"
+  elif [ "$FULL" = 1 ] && [ -n "$installed" ]; then
+    echo "  plasma-fusion update   (only if the full profile brings newer packages; your setup otherwise stays)"
   else
     echo "  plasma-fusion $SETUP_CMD$SETUP_FLAGS   (as you, in this session; it backs up first)"
   fi
@@ -527,6 +613,11 @@ splash_flags() {
 
 status() {
   echo "system: $OS_PRETTY_NAME (channel: $LANE)"
+  if [ "$LANE" = copr ] && { full_meta_installed || kwin_is_fork; }; then
+    echo "profile: full (the pinned KWin fork, $(pkg_evr kwin))"
+  else
+    echo "profile: stock"
+  fi
   echo "Plasma: ${PLASMA:-not installed}${KWIN:+, KWin $KWIN}"
   for p in $PKGS; do
     v=$(pf_installed "$p")
@@ -536,21 +627,27 @@ status() {
 }
 
 main() {
-  MODE=install YES=${PLASMA_FUSION_YES:-0} DRY=${PLASMA_FUSION_DRY_RUN:-0}
+  MODE=install YES=${PLASMA_FUSION_YES:-0} DRY=${PLASMA_FUSION_DRY_RUN:-0} FULL=0
   PACKAGE_ONLY=${PLASMA_FUSION_PACKAGE_ONLY:-0} INSECURE=${PLASMA_FUSION_INSECURE_NO_SIG:-0} SETUP_FLAGS=
   while [ $# -gt 0 ]; do
     case $1 in
       install | update | uninstall | status) MODE=$1 ;;
+      --full) FULL=1 ;;
+      --full-restore) MODE=full-restore ;;
       --yes | -y) YES=1 ;;
       --dry-run) DRY=1 ;;
       --package-only) PACKAGE_ONLY=1 ;;
       --insecure-no-sig) INSECURE=1 ;;
       --light | --dark | --auto | --no-auto | --keep-layout | --keep-shortcuts) SETUP_FLAGS="$SETUP_FLAGS $1" ;;
-      -h | --help) sed -n '5,33p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//' >&2 || say "see docs/parts/installer.md"; exit 0 ;;
+      -h | --help) sed -n '5,38p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//' >&2 || say "see docs/parts/installer.md"; exit 0 ;;
       *) say "unknown option: $1 (see --help)"; exit 2 ;;
     esac
     shift
   done
+  if [ "$FULL" = 1 ] && [ "$MODE" != install ]; then
+    say "--full is an install choice (install is the default); --full-restore is its opposite."
+    exit 2
+  fi
 
   # An unstamped copy (the repository's) runs only for tests, with the endpoints they give; a
   # release copy takes none of these from the environment.
@@ -560,7 +657,7 @@ main() {
       [ "${PLASMA_FUSION_DEV:-}" = 1 ] || refuse "this copy of the installer is not from a release: use the release URL (docs/parts/installer.md)."
       PF_VERSION=${PLASMA_FUSION_DEV_VERSION:?} PF_PLASMA_SERIES=${PLASMA_FUSION_DEV_SERIES:-6.7}
       PF_COPR_FEDORA=${PLASMA_FUSION_DEV_COPR_FEDORA:-44} PF_PPA_SERIES=${PLASMA_FUSION_DEV_PPA_SERIES:-stonking}
-      PF_DEB_TARGETS=${PLASMA_FUSION_DEV_DEB_TARGETS:-neon testing}
+      PF_DEB_TARGETS=${PLASMA_FUSION_DEV_DEB_TARGETS:-neon testing} PF_FULL_FEDORA=${PLASMA_FUSION_DEV_FULL_FEDORA:-}
       DEV_DNF_REPO=${PLASMA_FUSION_DEV_DNF_REPO:-} DEV_APT_REPO=${PLASMA_FUSION_DEV_APT_REPO:-}
       DEV_AUR_SRC=${PLASMA_FUSION_DEV_AUR_SRC:-} RELEASE_BASE=${PLASMA_FUSION_DEV_RELEASE_BASE:-}
       TEST_ROOT=${PLASMA_FUSION_DEV_ROOT:-}
@@ -577,17 +674,36 @@ main() {
   detect_lane
   say "Plasma Fusion $PF_VERSION installer on $OS_PRETTY_NAME"
 
+  # The full profile (ADR 0001): Fedora's Copr channel only, and - for --full - only a release
+  # that stamps the full build. --full-restore needs no stamp: a system on the full profile must
+  # always be able to get back.
+  if [ "$FULL" = 1 ] || [ "$MODE" = full-restore ]; then
+    [ "$LANE" = copr ] || refuse "the full profile is Fedora-only for now (ADR 0001): this channel keeps the stock profile."
+    if [ "$FULL" = 1 ]; then
+      [ -n "$PF_FULL_FEDORA" ] || refuse "this Plasma Fusion $PF_VERSION release has no full profile yet; the full Copr project $FULL_REPO follows the pinned fork tag."
+      in_list "$FEDORA" "$PF_FULL_FEDORA" || refuse "the full profile builds Fedora $PF_FULL_FEDORA only (this is Fedora $FEDORA)."
+    fi
+  fi
+
   case $LANE in
     nix) check_plasma; print_nix; exit 0 ;;
     atomic) check_plasma; print_atomic; exit 0 ;;
   esac
-  check_plasma
+  [ "$MODE" = full-restore ] || check_plasma
   if [ "$MODE" = status ]; then status; exit 0; fi
 
   installed=$(pf_installed plasma-fusion)
   case $MODE in
     install)
-      if [ -n "$installed" ]; then
+      if [ "$FULL" = 1 ]; then
+        full_meta_installed && { say "the full profile is already installed (KWin $(pkg_evr kwin)); --full-restore returns to stock KWin."; exit 0; }
+        kwin_is_fork &&
+          refuse "the fork's KWin ($(pkg_evr kwin)) is installed without the full profile's metapackage, an unsupported state (ADR 0001). Return to stock first: sudo dnf -y distro-sync kwin kwin-common kwin-libs, then run --full again."
+        if [ -n "$installed" ]; then
+          [ -z "$SETUP_FLAGS" ] || refuse "switching to the full profile keeps your choices and takes no setup options."
+        fi
+      fi
+      if [ -n "$installed" ] && [ "$FULL" != 1 ]; then
         say "Plasma Fusion $installed is already installed: use 'update' to update it, or 'plasma-fusion setup' for your account."
         exit 0
       fi
@@ -598,8 +714,11 @@ main() {
       SETUP_CMD=update ;;
     uninstall)
       [ -n "$installed" ] || { say "Plasma Fusion is not installed; nothing to do."; exit 0; } ;;
+    full-restore)
+      [ -z "$SETUP_FLAGS" ] || refuse "--full-restore runs no setup and takes no setup options."
+      full_meta_installed || kwin_is_fork || { say "the full profile is not installed (this system runs the stock profile); nothing to do."; exit 0; } ;;
   esac
-  check_session
+  [ "$MODE" = full-restore ] || check_session
 
   TMP=$(mktemp -d) || die "cannot make a temporary directory."
   trap 'rm -rf "$TMP"' EXIT INT TERM
@@ -608,6 +727,12 @@ main() {
 
   if [ "$MODE" = uninstall ]; then
     say "Plan:"
+    if full_meta_installed || kwin_is_fork; then
+      echo "  sudo dnf -y versionlock delete $FULL_KWIN_PKGS   (the full profile's pin goes first)" >&2
+      full_meta_installed && echo "  sudo dnf -y remove plasma-fusion-full   (the metapackage)" >&2
+      echo "  sudo dnf -y copr remove $FULL_REPO   (the full profile's repository)" >&2
+      echo "  sudo dnf -y distro-sync $FULL_KWIN_PKGS   (KWin back to stock)" >&2
+    fi
     [ "$PACKAGE_ONLY" = 1 ] || echo "  plasma-fusion restore   (your desktop as it was before Plasma Fusion)" >&2
     if [ -x "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" ] && greeter_present; then
       echo "  sudo $SYS_TOOLS/greeter-restore.sh   (the login screen, if Plasma Fusion styled it)" >&2
@@ -624,6 +749,9 @@ main() {
       plasma-fusion restore </dev/null || die "restoring your desktop stopped; the packages stay installed."
     fi
     $SUDO -v || die "sudo failed."
+    if full_meta_installed || kwin_is_fork; then
+      full_restore_kwin uninstall
+    fi
     if greeter_styled; then
       # Only plasma-login-manager's runs where SDDM's are on record too; a greeter-restore.sh from
       # before the SDDM mode knows no --greeter and has made no SDDM backup.
@@ -662,6 +790,23 @@ main() {
     exit 0
   fi
 
+  if [ "$MODE" = full-restore ]; then
+    rec=$(full_recorded)
+    [ -n "$rec" ] && rec=" (recorded: $rec)"
+    say "Plan:"
+    echo "  sudo dnf -y versionlock delete $FULL_KWIN_PKGS   (the pin goes)" >&2
+    full_meta_installed && echo "  sudo dnf -y remove plasma-fusion-full   (the metapackage)" >&2
+    echo "  sudo dnf -y copr remove $FULL_REPO   (the full profile's repository)" >&2
+    echo "  sudo dnf -y distro-sync $FULL_KWIN_PKGS   (back to the stock KWin$rec)" >&2
+    echo "  the six Plasma Fusion packages stay installed (they run on stock KWin)" >&2
+    [ "$DRY" = 1 ] && { say "Dry run: nothing was changed."; exit 0; }
+    consent
+    $SUDO -v || die "sudo failed."
+    full_restore_kwin
+    say "Plasma Fusion now runs on stock KWin. Log out and in once."
+    exit 0
+  fi
+
   if [ "$LANE" = aur ] && [ -z "$DEV_AUR_SRC" ] && ! has yay && ! has paru; then
     print_aur_steps
     exit 3
@@ -696,18 +841,36 @@ main() {
       deb) install_packages ;;
     esac
   else
-    say "installing the packages"
-    install_packages
+    if [ "$FULL" = 1 ]; then
+      say "installing the full profile"
+      full_swap_packages
+    else
+      say "installing the packages"
+      install_packages
+    fi
   fi
   has plasma-fusion || die "the packages were installed but the plasma-fusion command is missing."
-  say "installed: Plasma Fusion $(plasma-fusion version)"
+  if [ "$FULL" = 1 ]; then
+    say "installed: Plasma Fusion $(plasma-fusion version) with the pinned KWin fork ($(pkg_evr kwin))"
+  else
+    say "installed: Plasma Fusion $(plasma-fusion version)"
+  fi
   if [ "$PACKAGE_ONLY" = 1 ]; then
     say "Now, as each user in their Plasma session: plasma-fusion setup"
     exit 0
   fi
-  # shellcheck disable=SC2086
-  plasma-fusion "$SETUP_CMD" $SETUP_FLAGS </dev/null ||
-    die "the setup stopped; your previous desktop is in the backup: plasma-fusion restore --latest"
+  if [ "$FULL" = 1 ] && [ -n "$installed" ]; then
+    if [ "$(pf_installed plasma-fusion)" != "$installed" ]; then
+      plasma-fusion update </dev/null ||
+        die "the package update stopped; your previous desktop is in the backup: plasma-fusion restore --latest"
+    else
+      say "your Plasma Fusion setup is unchanged (the same packages on the pinned KWin)."
+    fi
+  else
+    # shellcheck disable=SC2086
+    plasma-fusion "$SETUP_CMD" $SETUP_FLAGS </dev/null ||
+      die "the setup stopped; your previous desktop is in the backup: plasma-fusion restore --latest"
+  fi
   say "Done. Log out and back in once."
   # greeter-apply.sh styles plasma-login-manager and SDDM; plymouth-install.sh works with dracut,
   # mkinitcpio and initramfs-tools (NixOS: the module's option; Fedora Atomic builds its own).
