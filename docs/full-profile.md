@@ -28,9 +28,17 @@ never emit it, even with the pin present in the spec.
 | Piece | State |
 |---|---|
 | `plasma-fusion-full` subpackage (spec) | built only `--with full`, on the pin's Fedora release, with the pin set; never in the stock repository's builds |
-| The fork's RPMs (from `archledger/kwin` tags, distag `.pfN`) | the fork repository's packaging; not yet produced |
+| The fork's RPMs (from `archledger/kwin` tags, distag `.pfN`) | spec + build script committed on the fork's `packaging/fork-rpm` branch |
 | The full Copr project (`archledger/plasma-fusion-full`) | not yet created; an owner account action |
 | Installer `--full` / `--full-restore` | designed in ADR 0001; follows the channel, not before |
+| Arch: `kwin-fusion` PKGBUILD | scaffolded in `packaging/arch/kwin-fusion.PKGBUILD` — builds from the fork's signed tag, conflicts/provides kwin |
+| Arch: `plasma-fusion-full` PKGBUILD | scaffolded in `packaging/arch/plasma-fusion-full.PKGBUILD` — the metapackage with the exact-version pins + IgnorePkg guidance |
+| Debian-family: `kwin-fusion` control | scaffolded in `packaging/debian/control-fusion` — kwin-fusion/kwin-common-fusion/kwin-libs-fusion + plasma-fusion-full |
+| NixOS: `kwin-fusion.nix` | scaffolded in `packaging/nix/kwin-fusion.nix` — the fork's KWin derivation from the nixpkgs dependency set |
+| NixOS: `plasma-fusion-full.nix` | scaffolded in `packaging/nix/plasma-fusion-full.nix` — the metapackage + the systemPackages list |
+
+Each lane's scaffolding is packaging-only: it builds and installs, but the qualification lanes
+(install, restore, login check, no crash) per ADR 0001 must pass per lane before it ships.
 
 ## Verification before anything ships (ADR 0001)
 
