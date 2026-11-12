@@ -17,8 +17,11 @@ That source is based on KWin 6.8.2.
   command-intent matrix pinning ordinary versus explicit transitions (NT05), the ownership-aware
   placement-capture filter (NT06A), and the context-release/transfer-rebase contracts (NT06).
   NT07 (the provider port onto the native writer) is merged as plasma-fusion #163 on the fork's
-  accessors and facade (fork PRs #17-#20). NT08 (unload and restart preservation) is qualified
-  at fork PR #21 with its unsupported session-lane cases recorded in docs/DEFERRED.md.
+  accessors and facade (fork PRs #17-#20). NT08 (unload and restart preservation) is
+  qualified at the writer level at fork PR #21 (the persistence boundary the native side
+  has); its session-lane verification - the isolated-session reload/restart comparison and
+  the facade-level script-teardown release in a live session - remains pending, recorded
+  with its re-entry in docs/DEFERRED.md.
 - What remains open is the complete tiling policy (the Fusion-side feature, PR #164), the
   #115 re-entry tests, and ADR 0001's full-profile packaging.
 - Private request helpers still do not expose a usable production tiler, and the scripting
@@ -513,9 +516,10 @@ Files: KWin `src/window.cpp`, `src/xdgshellwindow.cpp`, `src/useractions.cpp`, `
   stages times four causes) and the release-ordering suites.
 
 The native sequence NT01-NT06 is complete, and NT07 - the production placement-provider
-bridge - is merged as #163 (NT08, unload and restart preservation, is qualified at fork PR
-#21). What remains for #115 is the complete tiling policy (the Fusion-side feature, PR #164),
-the re-entry tests, and ADR 0001's full-profile packaging.
+bridge - is merged as #163. NT08 is qualified at the writer level at fork PR #21; its
+session-lane verification stays pending (docs/DEFERRED.md). What remains for #115 is the
+complete tiling policy (the Fusion-side feature, PR #164), the re-entry tests, and ADR
+0001's full-profile packaging.
 
 ## Checkpoint B
 - [ ] Relevant native suites pass with zero unexpected failures/skips/blacklists.
@@ -582,7 +586,15 @@ Files: Fusion placement `contents/ui/{main.qml,Placement.js}`,
   build and a seeded container), and with it the facade-level script-teardown release in a live
   session. #115 stays open for the remaining tiler work (PR #164), the re-entry tests and the
   full-profile packaging.
-Verification: isolated-session reload/restart comparison, full native/Fusion checks, review.
+- [ ] The isolated-session reload/restart comparison on the fork's KWin, and with it the
+  facade-level script-teardown release in a live session: unsupported until a session lane
+  exists for the fork (the container seeds run stock KWin; the re-entry is the `v6.8.2-pf3`
+  tag, the RPM build and a seeded container, recorded in
+  [docs/DEFERRED.md](../docs/DEFERRED.md)). The rows above are the writer-level
+  qualification - the only persistence boundary the native side has; NT08's session
+  verification stays open on this row.
+Verification: writer-level suites (done - the rows above); isolated-session reload/restart
+comparison and full native/Fusion checks (pending the session lane, docs/DEFERRED.md); review.
 Dependencies: NT07.
 Files: at most three isolated test/evidence files plus `docs/DEFERRED.md` and milestone report.
 
