@@ -16,12 +16,15 @@
 #
 # The Copr, AUR and Nix builds come from the tag itself (.packit.yaml, packaging/arch/PKGBUILD,
 # flake.nix). Environment: PF_COPR_FEDORA (default "44 45"), PF_PPA_SERIES (default "stonking"),
-# PF_DEB_TARGETS (default "neon testing"): stamped into install.sh.
+# PF_DEB_TARGETS (default "neon testing"), PF_FULL_FEDORA (default empty: this release has no
+# full profile; the Fedora releases the full Copr builds when it goes live): stamped into
+# install.sh.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TAG=${1:?usage: release-assets.sh vX.Y.Z OUTDIR}
 OUT=$(mkdir -p "${2:?usage: release-assets.sh vX.Y.Z OUTDIR}" && realpath "$2")
 COPR=${PF_COPR_FEDORA:-44 45} PPA=${PF_PPA_SERIES:-stonking} DEBT=${PF_DEB_TARGETS:-neon testing}
+FULLF=${PF_FULL_FEDORA:-}
 git=(git -C "$ROOT")
 [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a release tag: $TAG" >&2; exit 2; }
 version=${TAG#v}
@@ -34,7 +37,7 @@ version=${TAG#v}
 rm -rf "$OUT/release" "$OUT/ppa" "$OUT/logs" "$OUT/work"
 mkdir -p "$OUT/release" "$OUT/ppa" "$OUT/logs" "$OUT/work"
 tarball=$("$ROOT/packaging/make-source.sh" --ref "$TAG" --output "$OUT/release")
-"$ROOT/packaging/stamp-installer.sh" --copr "$COPR" --ppa "$PPA" --deb "$DEBT" "$OUT/release/install.sh"
+"$ROOT/packaging/stamp-installer.sh" --copr "$COPR" --ppa "$PPA" --deb "$DEBT" --full-fedora "$FULLF" "$OUT/release/install.sh"
 
 # Containers build from a copy of the tree at the tag (the tarball), with the test scripts.
 tar -xzf "$tarball" -C "$OUT/work"

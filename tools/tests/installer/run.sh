@@ -34,7 +34,19 @@ case \$1 in
   -q) fmt=\$3; shift 3
       set -- \"\$1\"; $LOOKUP
       [ -n \"\$v\" ] || { echo \"package \$1 is not installed\"; exit 1; }
-      case \$fmt in *RELEASE*) echo \"\$v-1.fc44\" ;; *) echo \"\$v\" ;; esac ;;
+      # A leading + marks a value that is a whole version already (the fork's kwin
+      # 6.8.2-3.fc44.pf3, in the --full cases); as real rpm does, the pf distag lives in the
+      # release: VERSION answers the part before the first dash, EVR/RELEASE the whole
+      # string, and dnf's distro-sync drops the .pfN distag back.
+      literal=
+      case \$v in
+        +*) literal=1; v=\${v#+}
+            [ -z \"\${FAKE_NO_SYNC:-}\" ] && [ -e \"\$FAKE_BIN/distro-synced\" ] && v=\${v%.pf*} ;;
+      esac
+      if [ -n \"\$literal\" ]; then
+        case \$fmt in *RELEASE* | *EVR*) echo \"\$v\" ;; *) echo \"\${v%%-*}\" ;; esac
+      else case \$fmt in *RELEASE* | *EVR*) echo \"\$v-1.fc44\" ;; *) echo \"\$v\" ;; esac
+      fi ;;
 esac"
 fake pacman "$LOGLINE
 [ \"\$1\" = -Q ] || exit 0
@@ -62,6 +74,14 @@ exec \"\$@\""
 # dnf5 refuses to upgrade a package that is not installed ("Packages for argument 'X' available, but
 # not installed.", exit 1; Fedora 44, 2026-10-18).
 fake dnf "$LOGLINE
+# versionlock answers with the pre-existing entries the test sets (dnf5's list format)
+case \" \$* \" in *' versionlock list '*) printf '%b' \"\${FAKE_LOCKS:-}\"; exit 0 ;; esac
+# repoquery answers whether the recorded EVRs are in the repositories (the restore asks before
+# falling back); FAKE_SYNC_MISSES says they are gone, FAKE_SYNC_FAILS that they are there, and
+# FAKE_REPOQUERY_RC that the query itself failed (a transient error is not an answer)
+case \" \$* \" in *' repoquery '*kwin-*)
+  [ -z \"\${FAKE_SYNC_MISSES:-}\" ] && echo available
+  exit \${FAKE_REPOQUERY_RC:-0} ;; esac
 case \" \$* \" in *' install '*) $INSTALLS ;; esac
 case \" \$* \" in *' upgrade '*)
   for a; do
@@ -69,6 +89,14 @@ case \" \$* \" in *' upgrade '*)
     set -- \"\$a\"; $LOOKUP
     [ -n \"\$v\" ] || { echo \"Packages for argument '\$1' available, but not installed.\" >&2; exit 1; }
   done ;;
+esac
+# distro-sync returns the fork's KWin to stock (the rpm fake reads the marker)
+case \" \$* \" in *' distro-sync '*) [ -z \"\${FAKE_NO_SYNC:-}\" ] && : >\"\$FAKE_BIN/distro-synced\"
+  # a distro-sync that carries version specs fails when the test says those EVRs are gone
+  # (FAKE_SYNC_MISSES) or simply fails while they are still there (FAKE_SYNC_FAILS)
+  if [ -n \"\${FAKE_SYNC_MISSES:-}\" ] || [ -n \"\${FAKE_SYNC_FAILS:-}\" ]; then
+    for a; do case \$a in kwin-*[0-9].*) exit 1 ;; esac; done
+  fi ;;
 esac
 exit \${FAKE_DNF_RC:-0}"
 # apt-get -s prints what FAKE_APT_SIM holds (apt's simulation lines, "Inst NAME [OLD] (NEW ...)");
@@ -155,6 +183,7 @@ run() {
   rm -f "$CASE/log.updates"
   OUT=$(env -i HOME="$CASE/home" PATH="$FB:/usr/bin:/bin" FAKE_BIN="$FB" FAKE_LOG="$CASE/log" \
     FAKE_VERSIONS="${VERSIONS:-}" FAKE_FEDORA="${FEDORA:-}" FAKE_KWIN_RUNNING="${KWIN_RUNNING:-}" FAKE_APT_SIM="${APT_SIM:-}" FAKE_APT_SIM_RC="${APT_SIM_RC:-0}" FAKE_APT_SIM_ERR="${APT_SIM_ERR:-}" \
+    FAKE_LOCKS="${LOCKS:-}" \
     FAKE_APT_UPDATE_FAILS="${APT_UPDATE_FAILS:-0}" \
     FAKE_UID="${UID_FAKE:-1000}" FAKE_PF_VERSION=$V GNUPGHOME="$BASE/no-such-keyring" \
     ${SESSION:+XDG_CURRENT_DESKTOP=KDE XDG_SESSION_TYPE=wayland DBUS_SESSION_BUS_ADDRESS=unix:path=/dev/null XDG_RUNTIME_DIR=$CASE} \
@@ -262,6 +291,181 @@ for SHNAME in "${shells[@]}"; do
   expect "update refuses setup options" [ "$RC" = 3 ]
   VERSIONS="$P675" run "$sh" $FED -- update --yes
   expect "update without an install is refused" [ "$RC" = 3 ]
+  # --full and --full-restore (ADR 0001): the full profile, Fedora only, stamped per release
+  run "$sh" $FED -- --full --dry-run
+  expect "a release without a full profile refuses --full" [ "$RC" = 3 ]
+  expect "  saying there is none yet" has_out "no full profile"
+  expect "  with nothing changed" no_change
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $FED -- --full --dry-run
+  expect "--full dry run plans the full profile's repository" has_out "dnf -y copr enable archledger/plasma-fusion-full fedora-44-x86_64"
+  expect "  the metapackage in one transaction" has_out "dnf -y install plasma-fusion-full"
+  expect "  the version lock" has_out "dnf -y versionlock add kwin kwin-common kwin-libs"
+  expect "  records the stock KWin for --full-restore" has_out "/var/lib/plasma-fusion/full-restore.txt"
+  expect "  states the security-update lag" has_out "can lag Fedora by days"
+  expect "  and changes nothing" no_change
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $FED -- --full update --yes
+  expect "--full is an install choice only" [ "$RC" = 2 ]
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $FED -- --full --full-restore
+  expect "--full and --full-restore do not combine" [ "$RC" = 2 ]
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=45" run "$sh" $FED -- --full --dry-run
+  expect "--full on a Fedora release without a full build is refused" [ "$RC" = 3 ]
+  expect "  naming the Fedora it builds" has_out "Fedora 45"
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" run "$sh" $FED -- --full --yes
+  expect "--full enables the full profile's Copr repository" has_log "sudo dnf -y copr enable archledger/plasma-fusion-full fedora-44-x86_64"
+  expect "  installs the metapackage set" has_log "dnf -y install plasma-fusion-full"
+  expect "  locks the KWin set after the transaction" bash -c 'i=$(grep -n "^dnf -y install plasma-fusion-full" <<<"$0" | cut -d: -f1); l=$(grep -n "^dnf -y versionlock add kwin" <<<"$0" | cut -d: -f1); [ -n "$i" ] && [ -n "$l" ] && [ "$l" -gt "$i" ]' "$LOG"
+  expect "  records the stock KWin EVRs" bash -c 'grep -qx "kwin=6.7.5-1.fc44" "$0" && grep -qx "kwin-common=6.7.5-1.fc44" "$0" && grep -qx "kwin-libs=6.7.5-1.fc44" "$0"' "$CASE/root/var/lib/plasma-fusion/full-restore.txt"
+  expect "  and runs the setup" has_log "plasma-fusion setup"
+  # a KWin the user already pins themselves: the full profile must not take the pin over
+  # (dnf's versionlock delete works by name only, so a pre-existing entry could not be given
+  # back at restore time)
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" LOCKS='Package name: kwin\nevra = 6.7.4-1.fc44\n' \
+    VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" run "$sh" $FED -- --full --yes
+  expect "a pre-existing KWin version lock refuses --full" [ "$RC" = 3 ]
+  expect "  saying whose pin it is" has_out "versionlock already holds"
+  expect "  with nothing changed" bash -c '! grep -qE "^dnf -y (copr enable|install|versionlock add)" <<<"$0"' "$LOG"
+  # dnf5 lock names are shell globs: kwin* pins every KWin build, and so does a wider pattern
+  # that happens to cover the set - each lock is matched as the pattern it is
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" LOCKS='Package name: kwin*\nevra = 6.7.4-1.fc44\n' \
+    VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" run "$sh" $FED -- --full --yes
+  expect "a wildcard KWin lock refuses --full the same way" [ "$RC" = 3 ]
+  expect "  naming the pattern" has_out "versionlock already holds kwin*"
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" LOCKS='Package name: kw*\nevra = 6.7.4-1.fc44\n' \
+    VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" run "$sh" $FED -- --full --yes
+  expect "a wider glob that covers kwin refuses too" [ "$RC" = 3 ]
+  # the pattern must reach the match as a pattern: a file shaped like the glob in the working
+  # directory (kwin-foo.rpm next to a kwin* lock) must not take its place through pathname
+  # expansion of the for-list
+  (
+    cd "$CASE" && : >kwin-trap.rpm
+    EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" LOCKS='Package name: kwin*\nevra = 6.7.4-1.fc44\n' \
+      VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" run "$sh" $FED -- --full --yes
+    expect "a lock pattern survives a matching filename in the working directory" [ "$RC" = 3 ]
+    expect "  and still names the pattern" has_out "versionlock already holds kwin*"
+    rm -f kwin-trap.rpm
+  )
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" LOCKS='Package name: konsole*\nevra = 6.9.0-1.fc44\n' \
+    VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" run "$sh" $FED -- --full --yes
+  expect "a lock that covers none of the set does not refuse" has_log "dnf -y install plasma-fusion-full"
+  VERSIONS="$P675 plasma-fusion=0.2.0" EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $FED -- --full --yes
+  expect "a stock profile switches to full" has_log "dnf -y install plasma-fusion-full"
+  expect "  without a setup rerun" bash -c '! grep -q "^plasma-fusion \(setup\|update\)" <<<"$0"' "$LOG"
+  expect "  and says the setup is unchanged" has_out "unchanged"
+  VERSIONS="$P675 plasma-fusion=0.2.0 plasma-fusion-full=0.2.0 kwin=+6.8.2-3.fc44.pf3" KWIN_RUNNING=6.8.2-3.fc44.pf3 \
+    EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $FED -- --full --yes
+  expect "an installed full profile is left alone" [ "$RC" = 0 ]
+  expect "  pointing at --full-restore" has_out "--full-restore"
+  expect "  without changes" no_change
+  VERSIONS="$P675 kwin=+6.8.2-3.fc44.pf3" KWIN_RUNNING=6.8.2-3.fc44.pf3 \
+    EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $FED -- --full --dry-run
+  expect "a fork KWin without the metapackage is refused" [ "$RC" = 3 ]
+  expect "  as an unsupported state" has_out "without the full profile"
+  osr arch "" "" "" "Arch Linux"
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $AUR -- --full --dry-run
+  expect "--full outside Fedora is refused" [ "$RC" = 3 ]
+  osr fedora "" 44 "" "Fedora Linux 44"
+  # --full-restore
+  run "$sh" $FED -- --full-restore --yes
+  expect "--full-restore without the full profile is nothing to do" [ "$RC" = 0 ]
+  expect "  and says so" has_out "not installed"
+  expect "  changing nothing" no_change
+  # The restore record these tests restore from (the --full tests above prove the writing).
+  plant_record() {
+    mkdir -p "$CASE/root/var/lib/plasma-fusion"
+    printf '# Plasma Fusion full profile: the stock KWin before install.sh --full (undo: --full-restore)\nfedora=44\nkwin=6.7.5-1.fc44\nkwin-common=6.7.5-1.fc44\nkwin-libs=6.7.5-1.fc44\n' \
+      >"$CASE/root/var/lib/plasma-fusion/full-restore.txt"
+  }
+  FULLV="$P675 plasma-fusion=0.2.0 plasma-fusion-full=0.2.0 kwin=+6.8.2-3.fc44.pf3"
+  plant_record
+  VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --dry-run
+  expect "--full-restore plans the lock removal" has_out "dnf -y versionlock delete kwin kwin-common kwin-libs"
+  expect "  the metapackage removal" has_out "dnf -y remove --no-autoremove plasma-fusion-full"
+  expect "  the repository removal" has_out "dnf -y copr remove archledger/plasma-fusion-full"
+  expect "  and the distro-sync back to stock" has_out "dnf -y distro-sync kwin kwin-common kwin-libs"
+  expect "  a dry run changes nothing" no_change
+  VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --yes
+  expect "--full-restore removes the version lock" has_log "sudo dnf -y versionlock delete kwin kwin-common kwin-libs"
+  expect "  then the metapackage" has_log "dnf -y remove --no-autoremove plasma-fusion-full"
+  expect "  then the repository" has_log "dnf -y copr remove archledger/plasma-fusion-full"
+  expect "  then syncs KWin back to the recorded EVRs" has_log "dnf -y distro-sync kwin-6.7.5-1.fc44 kwin-common-6.7.5-1.fc44 kwin-libs-6.7.5-1.fc44"
+  expect "  in that order" bash -c 'v=$(grep -n "^dnf -y versionlock delete" <<<"$0" | cut -d: -f1); m=$(grep -n "^dnf -y remove --no-autoremove plasma-fusion-full" <<<"$0" | cut -d: -f1); s=$(grep -n "^dnf -y distro-sync" <<<"$0" | cut -d: -f1); [ -n "$v" ] && [ "$v" -lt "$m" ] && [ "$m" -lt "$s" ]' "$LOG"
+  expect "  and reports the stock KWin" has_out "stock again (6.8.2-3.fc44)"
+  expect "  the six stay installed" has_out "stay"
+  expect "  exits 0" [ "$RC" = 0 ]
+  # the recorded EVRs are the restore's target (ADR 0001): the machine returns to the stock
+  # KWin it had, not to whatever the repositories offer now - this pair proves the write and
+  # the read together
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" run "$sh" $FED -- --full --yes
+  plant_record
+  VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --yes
+  expect "the restore targets the recorded EVRs" has_log "dnf -y distro-sync kwin-6.7.5-1.fc44 kwin-common-6.7.5-1.fc44 kwin-libs-6.7.5-1.fc44"
+  # Fedora keeps only a package's newest build: a stock that advanced while the machine was on
+  # the fork cannot be reinstalled - the honest fallback says so and takes the current stock
+  plant_record
+  EXTRA_ENV="FAKE_SYNC_MISSES=1" VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --yes
+  expect "a recorded EVR the repositories no longer carry falls back to the current stock" has_out "not in the repositories any more"
+  expect "  and still syncs by name" has_log "dnf -y distro-sync kwin kwin-common kwin-libs"
+  expect "  exiting 0" [ "$RC" = 0 ]
+  # a failure that is not the EVRs being gone (a transient repository or solver failure) must
+  # not quietly become that fallback: the recorded version is verified present first, and a
+  # lookup that itself failed is no verification at all
+  plant_record
+  EXTRA_ENV="FAKE_SYNC_FAILS=1" VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --yes
+  expect "a failed sync with the EVRs still in the repositories stops" [ "$RC" = 1 ]
+  expect "  saying the packages are there" has_out "the packages are in the repositories"
+  expect "  without the by-name fallback" bash -c '! grep -q "^dnf -y distro-sync kwin kwin-common kwin-libs" <<<"$0"' "$LOG"
+  plant_record
+  EXTRA_ENV="FAKE_SYNC_FAILS=1 FAKE_REPOQUERY_RC=1" VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --yes
+  expect "a failed lookup is no proof the EVRs are gone" [ "$RC" = 1 ]
+  expect "  saying the sync may be transient" has_out "the failed sync may be transient"
+  expect "  and taking no fallback" bash -c '! grep -q "^dnf -y distro-sync kwin kwin-common kwin-libs" <<<"$0"' "$LOG"
+  # a full-profile system on a Fedora release the stamp does not carry can always get back
+  # (detect_lane's stock refusal must not gate the recovery paths)
+  plant_record
+  FEDORA=45 VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --yes
+  expect "--full-restore works on a Fedora outside the stamp" has_log "dnf -y distro-sync kwin-6.7.5-1.fc44 kwin-common-6.7.5-1.fc44 kwin-libs-6.7.5-1.fc44"
+  expect "  exiting 0 there too" [ "$RC" = 0 ]
+  plant_record
+  FEDORA=45 VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- uninstall --yes --package-only
+  expect "uninstall works on a Fedora outside the stamp (it restores first)" has_log "dnf -y distro-sync kwin-6.7.5-1.fc44 kwin-common-6.7.5-1.fc44 kwin-libs-6.7.5-1.fc44"
+  # a full-profile uninstall also runs where the Plasma-version gate would refuse (an upgraded
+  # series): its job is to return KWin to stock, not to install anything
+  plant_record
+  FEDORA=45 VERSIONS="plasma-workspace=6.9.0 kwin=+6.8.2-3.fc44.pf3 plasma-fusion=0.2.0 plasma-fusion-full=0.2.0" KWIN_RUNNING=6.8.2 \
+    run "$sh" $FED -- uninstall --yes --package-only
+  expect "a full-profile uninstall works on an untested Plasma series" has_log "dnf -y distro-sync kwin-6.7.5-1.fc44 kwin-common-6.7.5-1.fc44 kwin-libs-6.7.5-1.fc44"
+  expect "  and completes the removal" has_log "dnf -y remove --no-autoremove plasma-fusion-full"
+  FEDORA=45 run "$sh" $FED -- --dry-run
+  expect "a stock install on that Fedora is still refused" [ "$RC" = 3 ]
+  VERSIONS="plasma-workspace=6.9.0 kwin=6.9.0 plasma-fusion=0.2.0" KWIN_RUNNING=6.9.0 run "$sh" $FED -- uninstall --yes --package-only
+  expect "a stock uninstall on an untested Plasma series is still refused" [ "$RC" = 3 ]
+  FEDORA=44
+  # update on a full profile moves the pin with the metapackage: the lock goes first (it
+  # would hold KWin at the old fork while the new metapackage requires the new one), and is
+  # re-applied at the new EVR after the transaction
+  VERSIONS="$P675 plasma-fusion=0.2.0 plasma-fusion-decoration=0.2.0 plasma-fusion-settings=0.2.0 plasma-fusion-navigation=0.2.0 plasma-fusion-full=0.2.0 kwin=+6.8.2-3.fc44.pf3" KWIN_RUNNING=6.8.2-3.fc44.pf3 \
+    run "$sh" $FED -- update --dry-run
+  expect "a full-profile update plans the lock refresh around it" has_out "dnf -y versionlock delete kwin kwin-common kwin-libs"
+  expect "  the metapackage in the upgrade" has_out "dnf -y upgrade --refresh plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation plasma-fusion-full"
+  expect "  and the lock back at the new pin" has_out "dnf -y versionlock add kwin kwin-common kwin-libs"
+  VERSIONS="$P675 plasma-fusion=0.2.0 plasma-fusion-decoration=0.2.0 plasma-fusion-settings=0.2.0 plasma-fusion-navigation=0.2.0 plasma-fusion-full=0.2.0 kwin=+6.8.2-3.fc44.pf3" KWIN_RUNNING=6.8.2-3.fc44.pf3 \
+    run "$sh" $FED -- update --yes
+  expect "a full-profile update deletes the lock first" has_log "dnf -y versionlock delete kwin kwin-common kwin-libs"
+  expect "  upgrades the metapackage with the six" has_log "dnf -y upgrade --refresh plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation plasma-fusion-full"
+  expect "  and re-locks after the transaction" bash -c 'u=$(grep -n "^dnf -y upgrade --refresh plasma-fusion" <<<"$0" | cut -d: -f1); l=$(grep -n "^dnf -y versionlock add kwin" <<<"$0" | cut -d: -f1); [ -n "$u" ] && [ -n "$l" ] && [ "$l" -gt "$u" ]' "$LOG"
+  VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 EXTRA_ENV="FAKE_NO_SYNC=1" run "$sh" $FED -- --full-restore --yes
+  expect "a KWin left on the fork after restore fails honestly" [ "$RC" = 1 ]
+  expect "  naming what to check" has_out "still the fork (6.8.2-3.fc44.pf3)"
+  # uninstall on a full system restores the stock KWin first
+  VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- uninstall --yes --package-only
+  expect "uninstall returns KWin to stock first" has_log "dnf -y distro-sync kwin kwin-common kwin-libs"
+  expect "  removing the metapackage" has_log "dnf -y remove --no-autoremove plasma-fusion-full"
+  expect "  before the six go" bash -c 's=$(grep -n "^dnf -y distro-sync" <<<"$0" | cut -d: -f1); r=$(grep -n "^dnf -y remove plasma-fusion$" <<<"$0" | tail -n1 | cut -d: -f1); [ -n "$s" ] && [ -n "$r" ] && [ "$s" -lt "$r" ]' "$LOG"
+  # status reports the profile
+  VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- status
+  expect "status says the full profile" has_out "profile: full"
+  run "$sh" $FED -- status
+  expect "status says the stock profile" has_out "profile: stock"
   mkdir -p "$CASE/bin"
   VERSIONS="$P675 plasma-fusion=0.2.0 plasma-fusion-decoration=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
   expect "uninstall removes the installed packages only" has_log "dnf -y remove plasma-fusion plasma-fusion-decoration"
@@ -383,6 +587,21 @@ for SHNAME in "${shells[@]}"; do
   DEV='' SCRIPT=$STAMPED EXTRA_ENV="DEV_DNF_REPO=http://evil.invalid RELEASE_BASE=http://evil.invalid PLASMA_FUSION_DEV_DNF_REPO=http://evil.invalid" run "$sh" $FED -- --dry-run
   expect "a stamped copy ignores test endpoints in the environment" bash -c '! grep -q evil <<<"$0$1"' "$OUT" "$LOG"
   expect "  (it runs as a release)" bash -c '! grep -q "test mode" <<<"$0"' "$OUT"
+  # --full on a release copy: a stamp without the full profile never offers the full repository,
+  # on any system the tests run on (a stamped copy reads the real os-release, not the fake root:
+  # the CI runner is Ubuntu, a local run Fedora) - and the test variable does not leak into it.
+  DEV='' SCRIPT=$STAMPED EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $FED -- --full --dry-run
+  expect "a release stamped without a full profile refuses --full" [ "$RC" = 3 ]
+  expect "  and never offers the full profile's repository" bash -c '! grep -q "copr enable archledger/plasma-fusion-full" <<<"$0"' "$OUT"
+  # The stamp itself: --full-fedora writes the list, and its absence leaves the list empty.
+  grep -qx "PF_FULL_FEDORA=''" "$STAMPED" &&
+    ok "$SHNAME: a stamp without --full-fedora leaves the full list empty" ||
+    bad "$SHNAME: a stamp without --full-fedora leaves the full list empty"
+  STAMPED_FULL=$CASE/install-stamped-full.sh
+  "$ROOT/packaging/stamp-installer.sh" --copr "44" --ppa stonking --deb "neon testing" --full-fedora 44 "$STAMPED_FULL" >/dev/null
+  grep -qx "PF_FULL_FEDORA='44'" "$STAMPED_FULL" &&
+    ok "$SHNAME: a stamp with --full-fedora carries the full profile's Fedora list" ||
+    bad "$SHNAME: a stamp with --full-fedora carries the full profile's Fedora list"
   # Arch
   osr arch "" "" "" "Arch Linux"
   run "$sh" $AUR -- --yes
