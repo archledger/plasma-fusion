@@ -107,6 +107,12 @@ assert.strictEqual(untilLabel(monday, monday.getTime()).kind, "none", "at the en
         const springDay = untilLabel(new Date(2026, 2, 29, 6, 0), new Date(2026, 2, 26, 10, 0).getTime());
         assert.strictEqual(springDay.kind, "day", "the change's own morning, three days ahead: the day and time");
         assert.strictEqual(springDay.refreshAt, new Date(2026, 2, 28, 6, 0).getTime(), "a day before it: the same clock time, not an hour off the 23-hour day");
+        // The visible kind changes at those same clock times: at the calendar boundary itself (the
+        // advertised refreshAt), and not already an hour before it on the short days and weeks.
+        assert.strictEqual(untilLabel(at(25, 6, 0), at(18, 6, 0).getTime()).kind, "day", "at the calendar week boundary over the long week: the day, not still the date (169 hours left)");
+        assert.strictEqual(untilLabel(at(25, 6, 0), at(24, 6, 0).getTime()).kind, "time", "at the calendar day boundary over the long day: the time, not still the day (25 hours left)");
+        assert.strictEqual(untilLabel(new Date(2026, 2, 29, 6, 0), new Date(2026, 2, 22, 5, 0).getTime()).kind, "date", "an hour before the calendar week boundary on the short week: still the date, not a day early (168 hours left)");
+        assert.strictEqual(untilLabel(new Date(2026, 2, 29, 6, 0), new Date(2026, 2, 28, 5, 0).getTime()).kind, "day", "an hour before the calendar day boundary on the short day: still the day, not an hour early (24 hours left)");
     } else {
         throw new Error("no time zone data for Europe/Berlin: the daylight saving checks cannot run");
     }

@@ -1131,17 +1131,18 @@ Disturb on with an end already passed, which nothing ended). While they stay ope
 wall clock's minutes (Plasma's `Clock`), so "this evening" goes at 20:00; a choice's end is worked
 out at the click ("For 1 hour" is an hour from then), and the service refuses an end that has
 passed. Tests: `tests/dnd.test.js` (node; ids and ends at given times, month ends,
-Friday/Saturday/Sunday, both daylight saving changes in Europe/Berlin and the change times of the
-"Until" text across them), `tests/tiles_edit_test.py` (the main page on the real backend: the
+Friday/Saturday/Sunday, both daylight saving changes in Europe/Berlin, the change times of the
+"Until" text across them and the visible form's switches at those same calendar
+boundaries), `tests/tiles_edit_test.py` (the main page on the real backend: the
 choices close with the sheet and on another page, follow their clock, and "For 1 hour" counts from
 the click) and `tests/notifications_service_test.py` (an end that has passed leaves Do Not Disturb
 off).
 
 ### The "Until" text
 
-The tile reads `Until 18:00` within 24 hours of the end, `Until Mon 06:00` within a week, the date
-further ahead, and `On` for "until turned off" (more than 100 days ahead, the stock applet's limit
-too). The day is the locale's own short day name (`Qt.locale().dayName()`), before or after the
+The tile reads `Until 18:00` within the end's last calendar day, `Until Mon 06:00` within its
+last calendar week, the date further ahead, and `On` for "until turned off" (more than 100 days
+ahead, the stock applet's limit too). The day is the locale's own short day name (`Qt.locale().dayName()`), before or after the
 time as the translation of `%1 %2` puts it, and the time and the date are the locale's short
 formats (`toLocaleTimeString`, `toLocaleDateString`): a format string's `ddd` gave English day
 names in every language ("Mon 06:00" for a German region, where Plasma says "Mo. 06:00"). It was
@@ -1149,7 +1150,9 @@ read once when Do Not Disturb was turned on (`Date.now()` in a binding is not
 reactive), so a Do Not Disturb until Monday kept saying `On`. `dnd.js` `untilLabel()` says which
 form applies and when it changes next (a day and a week before the end at the end's own clock
 time: calendar days, not elapsed hours — a span with a daylight saving change in it is an hour
-longer or shorter, so the hours landed the change an hour off); while a change is ahead, the service
+longer or shorter, so the hours landed the change an hour off; the visible form changes at that
+same clock time too, not an hour after it on the long days and weeks nor an hour before it on
+the short ones); while a change is ahead, the service
 (`services/Notifications.qml`) moves its clock on the wall clock's minutes with Plasma's `Clock`
 (`org.kde.plasma.clock`, a `CLOCK_REALTIME` timer that also fires right after a resume or a clock
 change, and the one the stock applet's own minute check runs on). Nothing listens for "until
