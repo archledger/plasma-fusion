@@ -470,14 +470,21 @@ for SHNAME in "${shells[@]}"; do
   DEV='' SCRIPT=$STAMPED EXTRA_ENV="DEV_DNF_REPO=http://evil.invalid RELEASE_BASE=http://evil.invalid PLASMA_FUSION_DEV_DNF_REPO=http://evil.invalid" run "$sh" $FED -- --dry-run
   expect "a stamped copy ignores test endpoints in the environment" bash -c '! grep -q evil <<<"$0$1"' "$OUT" "$LOG"
   expect "  (it runs as a release)" bash -c '! grep -q "test mode" <<<"$0"' "$OUT"
-  DEV='' SCRIPT=$STAMPED run "$sh" $FED -- --full --dry-run
+  # --full on a release copy: a stamp without the full profile never offers the full repository,
+  # on any system the tests run on (a stamped copy reads the real os-release, not the fake root:
+  # the CI runner is Ubuntu, a local run Fedora) - and the test variable does not leak into it.
+  DEV='' SCRIPT=$STAMPED EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $FED -- --full --dry-run
   expect "a release stamped without a full profile refuses --full" [ "$RC" = 3 ]
-  expect "  saying it has none" has_out "no full profile"
+  expect "  and never offers the full profile's repository" bash -c '! grep -q "copr enable archledger/plasma-fusion-full" <<<"$0"' "$OUT"
+  # The stamp itself: --full-fedora writes the list, and its absence leaves the list empty.
+  grep -qx "PF_FULL_FEDORA=''" "$STAMPED" &&
+    ok "$SHNAME: a stamp without --full-fedora leaves the full list empty" ||
+    bad "$SHNAME: a stamp without --full-fedora leaves the full list empty"
   STAMPED_FULL=$CASE/install-stamped-full.sh
   "$ROOT/packaging/stamp-installer.sh" --copr "44" --ppa stonking --deb "neon testing" --full-fedora 44 "$STAMPED_FULL" >/dev/null
-  DEV='' SCRIPT=$STAMPED_FULL run "$sh" $FED -- --full --dry-run
-  expect "a release stamped with the full profile plans it" has_out "dnf -y copr enable archledger/plasma-fusion-full fedora-44-x86_64"
-  expect "  and still changes nothing" no_change
+  grep -qx "PF_FULL_FEDORA='44'" "$STAMPED_FULL" &&
+    ok "$SHNAME: a stamp with --full-fedora carries the full profile's Fedora list" ||
+    bad "$SHNAME: a stamp with --full-fedora carries the full profile's Fedora list"
   # Arch
   osr arch "" "" "" "Arch Linux"
   run "$sh" $AUR -- --yes
