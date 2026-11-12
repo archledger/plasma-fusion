@@ -470,13 +470,9 @@ its identity is usable (no desktop file and no class yet) is bound at its first 
 identity that changes after the binding is neither rebound nor recorded natively — those
 records live in the session cache only, until the writer grows a re-binding path. A window an
 earlier incarnation of the script already bound (a reload) keeps that binding; the facade
-cannot ask which key it holds, so the current key is assumed and the first Accepted record
-whose landing the snapshot can show proves or disproves it: the proof needs the key's entry to
-have become the submitted rectangle, not merely to match it - an entry that already held the
-rectangle (the window sits on the new app's remembered spot, or another window of the app
-wrote it) cannot distinguish the binding from a coincidence, and the assumption waits for a
-record that lands observably. A binding disproven that way (the identity changed across the
-reload) is retired, and the window's records stay in the session cache. When the
+cannot ask which key it holds, so the current key is assumed and the first Accepted record is
+proven against the writer's snapshot — a binding disproven that way (the identity changed
+across the reload) is retired, and the window's records stay in the session cache. When the
 writer refuses the provider registration — or the facade exists but answers nothing — the
 memory stays disabled for the session — a native
 session must not bypass the sole native writer. The native lane runs only on the fork's KWin;
@@ -1598,13 +1594,28 @@ deliberately defers.
   session-end — the stack floats restore, the session clears. This covers master close,
   output removal, desktop removal, provider retirement, key conflict, a manual quick-tile or
   move of the master, and output transfer — every native path at once, for free.
-- **Live**: new eligible windows on the tiled desktop join the stack; closed or minimized
-  windows leave the layout and the column refills; the provider's `record()` skips managed
-  windows (invariant 7: automatic rectangles never enter placement memory).
-- **One session at a time**: the controller holds one tree, the TileManager allows one
-  transient root per desktop. This is the contract, not a limitation to hide.
+- **Live**: new eligible windows on the tiled workspace join the stack; a window the stack
+  cannot manage - not resizable, or a minimum size above the cell it would get - is handed
+  back untouched (its remembered placement applies, and its own moves reach the placement
+  memory); closed or minimized windows leave the layout and the column refills, a minimized
+  one rejoining on restore with its pre-tiling float kept; the provider's `record()` skips
+  managed windows and the close of a managed window records nothing (invariant 7: automatic
+  rectangles never enter placement memory). The workspace is the desktop *and* the activity:
+  windows of another activity are not candidates even on a shared desktop.
+- **One session at a time, on the workspace it was invoked on**: the controller holds one
+  tree, the TileManager allows one transient root per desktop - this is the contract, not a
+  limitation to hide. A toggle on another workspace ends the session there (its floats
+  restore on that workspace) and lays out the current one, so the action never untoggles a
+  desktop the user left behind.
+- **The divider follows the master**: the stack column's left edge is the master's placed
+  right edge, read from the facade at every relayout (the tile is relative to the output's
+  root, so the native layer rescales it when the geometry changes; a screens change also
+  forces a relayout). A strut change that does not touch the screens heals at the next
+  membership event.
 - **Infeasible windows float**: a window whose minimum size exceeds its cell is left
-  floating (the defined safe state), not squeezed or dropped.
+  floating (the defined safe state), not squeezed or dropped - and it stops being managed:
+  the tiler never wrote its geometry, its moves are placement memory again, and the untoggle
+  does not drag it back to where it floated before the session.
 
 ### Shortcuts (sequence-less; the user assigns them)
 
@@ -1617,10 +1628,14 @@ deliberately defers.
 
 ### Config (`kwinrc [Script-plasmafusion-placement]`)
 
+The keys are flat (no nested group): `KWin.readConfig` reads the script's own kwinrc group
+and nothing below it, so the KConfigXT group in `main.xml` stays empty and the KCM writes
+where the script reads.
+
 | Key | Type | Range | Default |
 |---|---|---|---|
-| `Tiling.MasterFraction` | Double | 0.25–0.75 | 0.5 |
-| `Tiling.StackGap` | Int | 0–48 | 8 |
+| `MasterFraction` | Double | 0.25–0.75 | 0.5 |
+| `StackGap` | Int | 0–48 | 8 |
 
 ### The pure rules (`Tiling.js`)
 

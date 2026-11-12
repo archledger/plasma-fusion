@@ -58,10 +58,11 @@ function feasibleInCell(minSize, cell) {
 // The tiler's session state (one at a time; the controller holds one tree).
 // { active: bool, generation: int, master: Window, masterKey: string,
 //   stack: [Window], savedFloats: { internalId -> {x,y,width,height} },
-//   dividerX: real, output: Output, desktop: VirtualDesktop }
+//   dividerX: real, output: Output, desktop: VirtualDesktop, activity: string }
 function createSession() {
     return { active: false, generation: 0, master: null, masterKey: "",
-             stack: [], savedFloats: {}, dividerX: 0, output: null, desktop: null };
+             stack: [], savedFloats: {}, dividerX: 0, output: null, desktop: null,
+             activity: "" };
 }
 
 // Toggle on: the eligibility checks, then the layout.
@@ -75,8 +76,11 @@ function eligibleForStack(w) {
     return eligibleForMaster(w);
 }
 
-// The windows on the tiled desktop that are not the master (stacking order, top first).
-function stackCandidates(windows, master, desktop) {
+// The windows on the tiled workspace that are not the master (stacking order, top first).
+// The workspace is the desktop AND the activity: activities are orthogonal to desktops, and a
+// window of another activity is not on this workspace's view even where the desktop number is
+// shared - an empty activity list is a window on all of them.
+function stackCandidates(windows, master, desktop, activity) {
     const out = [];
     for (let i = 0; i < windows.length; ++i) {
         const w = windows[i];
@@ -86,6 +90,12 @@ function stackCandidates(windows, master, desktop) {
         // Same desktop only (the tiler is per-workspace).
         if (w.onAllDesktops || w.desktops.length !== 1
             || String(w.desktops[0]) !== String(desktop)) {
+            continue;
+        }
+        // Same activity only.
+        const activities = w.activities || [];
+        if (activities.length > 0 && activity !== ""
+            && activities.indexOf(activity) < 0) {
             continue;
         }
         out.push(w);
