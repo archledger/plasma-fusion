@@ -16,8 +16,8 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-placement", "contents", "ui", "Tiling.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
 const { masterFraction, masterTileRect, stackRects, feasibleInCell, createSession,
-        eligibleForMaster, stackCandidates, layoutStack, focusOrder, nextInCycle,
-        previousInCycle, saveFloats } = globalThis;
+        eligibleForMaster, stackCandidates, dormantCandidates, layoutStack, focusOrder, nextInCycle,
+        previousInCycle, saveFloats, onWorkspace, floatRestores, isOwnCell } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const windowWith = (over) => Object.assign({
@@ -150,5 +150,63 @@ assert.deepStrictEqual(focusOrder({ master: "M", stack: ["S1", "S2"] }), ["M", "
     assert.strictEqual(floats.a.width, 100);
     assert.strictEqual(floats.b.y, 40);
 }
+
+// ---------------------------------------------------------------- the membership decisions
+
+// The workspace filter: one place decides what "on this session's workspace" means for the
+// candidates, the managed windows and the leavers (a member that moves away is nobody's).
+{
+    const on = (desktops, activities) => ({ onAllDesktops: false, desktops: desktops, activities: activities });
+    assert.ok(onWorkspace(on(["2"], []), "2", ""), "the session's desktop");
+    assert.ok(!onWorkspace(on(["2"], []), "3", ""), "another desktop");
+    assert.ok(onWorkspace(on(["2"], []), 2, ""), "a desktop given as a number still matches its string form");
+    assert.ok(onWorkspace(on(["2"], []), "2", "a"), "an empty activity list is on every activity");
+    assert.ok(onWorkspace(on(["2"], ["a"]), "2", "a"), "the session's activity");
+    assert.ok(!onWorkspace(on(["2"], ["a"]), "2", "b"), "another activity");
+    assert.ok(!onWorkspace({ onAllDesktops: true, desktops: [], activities: [] }, "2", ""), "all desktops is no single desktop");
+    assert.ok(onWorkspace(on(["2"], ["a"]), "2", ""), "a window of every activity is on the session's");
+}
+
+// The dormant candidates: this workspace's minimized windows at session start. They are not
+// stack candidates (they are out of the view), but each rejoins the layout when it is restored
+// during the session - so its float is saved and it is watched from the start, not first when
+// a restore finds no listener (windowAdded does not fire for it: it was there all along).
+{
+    const win = (over) => Object.assign({ internalId: "x", normalWindow: true, transient: false, modal: false,
+        minimized: false, maximizeMode: 0, moveable: true, resizeable: true, onAllDesktops: false,
+        desktops: ["2"], activities: [] }, over);
+    const minimized = win({ internalId: "m1", minimized: true, caption: "m1" });
+    const otherDesk = win({ internalId: "m2", minimized: true, desktops: ["3"] });
+    const visible = win({ internalId: "v1" });
+    const master = win({ internalId: "M" });
+    const dormant = dormantCandidates([minimized, otherDesk, visible, master], master, "2", "");
+    assert.deepStrictEqual(dormant.map(w => w.internalId), ["m1"],
+        "this workspace's minimized windows only: not the visible ones, not the master, not another desktop's");
+}
+
+// What a reflow takes away: a member the layout had placed gets its saved float back before it
+// is detached, because it sits at a cell no untoggle can undo; one the layout never placed
+// already sits at its own float, and restoring it to itself is a no-op either way.
+{
+    const placed = { internalId: "p" };
+    const neverPlaced = { internalId: "n" };
+    const floats = { p: rect(10, 20, 300, 200), n: rect(40, 60, 320, 240) };
+    const cells = { p: rect(600, 0, 400, 300) };
+    const restores = floatRestores([placed, neverPlaced], floats, cells);
+    assert.deepStrictEqual(restores, [{ window: placed, rect: rect(10, 20, 300, 200) }],
+        "the placed member's float, and nothing for the never-placed one");
+    assert.deepStrictEqual(floatRestores([neverPlaced], floats, {}), [],
+        "no cell, no restore: the window keeps its own geometry");
+    assert.deepStrictEqual(floatRestores([placed], {}, cells), [],
+        "no float saved (a window that joined and was never placed is not drifted either)");
+}
+
+// Whether a frame is the tiler's own placement: a member's geometry change that lands exactly
+// on its assigned cell is the tiler's own write arriving (the synchronous one or the client's
+// late commit of it); anything else is the user's hand.
+assert.ok(isOwnCell(rect(600, 0, 400, 300), rect(600, 0, 400, 300)), "the assigned cell");
+assert.ok(!isOwnCell(rect(600, 0, 400, 300), rect(601, 0, 400, 300)), "a moved frame");
+assert.ok(!isOwnCell(rect(600, 0, 400, 300), rect(600, 0, 399, 300)), "a resized frame");
+assert.ok(!isOwnCell(null, rect(600, 0, 400, 300)), "no cell assigned");
 
 console.log("tiling.test.js: ok");

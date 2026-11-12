@@ -87,20 +87,68 @@ function stackCandidates(windows, master, desktop, activity) {
         if (w === master || !eligibleForStack(w)) {
             continue;
         }
-        // Same desktop only (the tiler is per-workspace).
-        if (w.onAllDesktops || w.desktops.length !== 1
-            || String(w.desktops[0]) !== String(desktop)) {
-            continue;
-        }
-        // Same activity only.
-        const activities = w.activities || [];
-        if (activities.length > 0 && activity !== ""
-            && activities.indexOf(activity) < 0) {
+        if (!onWorkspace(w, desktop, activity)) {
             continue;
         }
         out.push(w);
     }
     return out;
+}
+
+// Whether a window is on this session's workspace: its desktop and its activity. Activities
+// are orthogonal to desktops, and a window of another activity is not on this workspace's view
+// even where the desktop number is shared; an empty activity list is a window on all of them.
+// The candidates, the managed windows and the leavers all read the one rule.
+function onWorkspace(w, desktop, activity) {
+    if (!w || w.onAllDesktops || !w.desktops || w.desktops.length !== 1
+            || String(w.desktops[0]) !== String(desktop)) {
+        return false;
+    }
+    const activities = w.activities || [];
+    return activities.length === 0 || activity === "" || activities.indexOf(activity) >= 0;
+}
+
+// The workspace's minimized windows at session start: not stack candidates (they are out of
+// the view), but each is a member-to-be. Its float is saved and it is watched from the start,
+// because restoring it during the session emits no windowAdded - it was there all along.
+// The eligibility is the master's minus the minimized state (that is the point) and the
+// full-screen/tile states, which a minimized window can carry and sheds nothing by restoring.
+function dormantCandidates(windows, master, desktop, activity) {
+    const out = [];
+    for (let i = 0; i < windows.length; ++i) {
+        const w = windows[i];
+        if (w === master || !w || w.deleted || !w.normalWindow || w.transient || w.modal
+                || !w.moveable || !w.resizeable || !w.minimized) {
+            continue;
+        }
+        if (!onWorkspace(w, desktop, activity)) {
+            continue;
+        }
+        out.push(w);
+    }
+    return out;
+}
+
+// What a reflow must restore before it detaches: a member the layout had placed sits at a cell
+// no untoggle can undo, so its saved float goes back; one the layout never placed already sits
+// at its own float. A member with no float saved (or no cell it was placed at) is left alone.
+function floatRestores(floated, savedFloats, cellRects) {
+    const out = [];
+    for (let i = 0; i < floated.length; ++i) {
+        const id = String(floated[i].internalId);
+        if (cellRects[id] && savedFloats[id]) {
+            out.push({ window: floated[i], rect: savedFloats[id] });
+        }
+    }
+    return out;
+}
+
+// Whether a frame is the tiler's own placement landing on the cell it assigned: the
+// synchronous write or the client's late commit of it. Anything else is the user's hand.
+function isOwnCell(cell, frame) {
+    return !!cell && !!frame
+        && frame.x === cell.x && frame.y === cell.y
+        && frame.width === cell.width && frame.height === cell.height;
 }
 
 // Layout the stack: feasible windows get cells; infeasible windows float (the safe state).

@@ -486,6 +486,18 @@ Item {
         if (!loaded || !w || ignoredWindow(w)) {
             return;
         }
+        // The tiler's managed windows are not the user's floating placement (invariant 7) - but
+        // a stack window the user moved or resized by hand has just left the session (the master
+        // has its own native teardown for that): the tiler never fights the user for a cell, the
+        // move is the window's new floating placement, and the untoggle cannot write the saved
+        // float over it. The tiler's own writes never read as this hand: they run under placing,
+        // and they land exactly on the cell the layout assigned (the synchronous write and the
+        // client's late commit of it alike).
+        if (tiler.session.active && tiler.manages(w) && !tiler.placing
+                && !Tiling.isOwnCell(tiler.cellRects[String(w.internalId)], frameRect(w))) {
+            tiler.detachManual(w);
+            log("tiling: a member was moved by hand; it floats");
+        }
         // The tiler's managed windows are not the user's floating placement (invariant 7).
         if (tiler.session.active && (w === tiler.session.master || tiler.manages(w))) {
             return;
@@ -720,6 +732,13 @@ Item {
         // session member. The set doubles as the live membership list: floated and closed
         // windows are unwatched, minimized ones stay watched for the rejoin.
         property var minimizeHandlers: ({})
+        // window internalId -> the cell the last layout assigned (the frame the tiler wrote):
+        // a geometry change landing exactly there is the tiler's own write arriving, anything
+        // else is the user's hand moving a stack window.
+        property var cellRects: ({})
+        // True while the tiler writes its own placements (the relayout, the float restores):
+        // those writes must not read as the user's manual moves.
+        property bool placing: false
 
         function detectApi() {
             try {
@@ -749,6 +768,7 @@ Item {
                 restoreStackFloats();
                 disconnectMinimizeHandlers();
                 session = Tiling.createSession();
+                cellRects = {};
                 log("tiling: off (native teardown)");
             }
         }
@@ -764,21 +784,10 @@ Item {
             return session.stack.indexOf(w) >= 0;
         }
 
-        // Whether a window is on the session's workspace: its desktop and its activity.
-        // Activities are orthogonal to desktops, and a window of another activity is not on
-        // this workspace's view even where the desktop number is shared; an empty activity
-        // list is a window on all of them.
+        // Whether a window is on the session's workspace: the one rule (Tiling.onWorkspace)
+        // the candidates, the managed windows and the leavers read.
         function managesDesktop(w) {
-            if (!session.active || !w || !session.desktop) {
-                return false;
-            }
-            if (w.onAllDesktops || !w.desktops || w.desktops.length !== 1
-                    || String(w.desktops[0]) !== String(session.desktop)) {
-                return false;
-            }
-            const activities = w.activities || [];
-            return activities.length === 0 || session.activity === ""
-                    || activities.indexOf(session.activity) >= 0;
+            return session.active && Tiling.onWorkspace(w, session.desktop, session.activity);
         }
 
         // Toggle the tiling on or off. The one-tree contract allows one session at a time, so
@@ -874,6 +883,17 @@ Item {
             for (let i = 0; i < session.stack.length; ++i) {
                 watchMinimize(session.stack[i]);
             }
+            // The workspace's minimized windows are members-to-be: their floats are saved and
+            // they are watched now, because restoring one during the session emits no
+            // windowAdded - it was there all along - and without a watch it would float over
+            // the managed layout until the next relayout never comes for it.
+            const dormant = Tiling.dormantCandidates(Workspace.stackingOrder, w, desktop, activity);
+            for (let i = 0; i < dormant.length; ++i) {
+                const g = dormant[i].frameGeometry;
+                session.savedFloats[String(dormant[i].internalId)] =
+                    { x: g.x, y: g.y, width: g.width, height: g.height };
+                watchMinimize(dormant[i]);
+            }
             relayout();
             log("tiling: on (" + session.stack.length + " stack window(s))");
         }
@@ -882,6 +902,7 @@ Item {
         // membership: minimized members are out of the layout but keep their floats, while
         // floated and closed windows were unwatched and their floats dropped with them.
         function restoreStackFloats() {
+            placing = true;
             for (const id in minimizeHandlers) {
                 const w = minimizeHandlers[id].w;
                 const saved = session.savedFloats[id];
@@ -889,6 +910,7 @@ Item {
                     w.frameGeometry = Qt.rect(saved.x, saved.y, saved.width, saved.height);
                 }
             }
+            placing = false;
         }
 
         function untoggle() {
@@ -907,6 +929,7 @@ Item {
             }
             disconnectMinimizeHandlers();
             session = Tiling.createSession();
+            cellRects = {};
             log("tiling: off");
         }
 
@@ -918,17 +941,33 @@ Item {
             session.dividerX = masterRightEdge(area);
             const gap = tilingStackGap();
             const result = Tiling.layoutStack(session.stack, area, session.dividerX, gap);
-            // Place the feasible windows.
+            // The tiler's own writes: while these run, a geometry change is not the user's
+            // hand (the manual-move detach reads this).
+            placing = true;
+            // Place the feasible windows and remember each cell: a later change landing
+            // exactly there is this write arriving (the synchronous one or the client's late
+            // commit of it), not a manual move.
             for (let i = 0; i < result.placed.length; ++i) {
                 const p = result.placed[i];
                 if (!p.window.deleted) {
                     p.window.frameGeometry = Qt.rect(p.rect.x, p.rect.y, p.rect.width, p.rect.height);
                 }
+                cellRects[String(p.window.internalId)] = p.rect;
             }
-            // A window whose minimum size does not fit its cell stops being managed: the
-            // tiler never wrote its geometry (the float it keeps is its own), its moves
-            // reach the placement memory again, and the untoggle does not drag it back to
-            // a rectangle it left before the session.
+            // A window whose minimum size does not fit its cell stops being managed. One the
+            // layout had placed sits at a cell no untoggle can undo, so its saved float goes
+            // back first; one the layout never placed already sits at its own float (the
+            // geometry it keeps is its own). Either way the tiler never wrote anything it
+            // owns, its moves reach the placement memory again, and the untoggle does not
+            // drag it back to a rectangle it left before the session.
+            const restores = Tiling.floatRestores(result.floated, session.savedFloats, cellRects);
+            for (let i = 0; i < restores.length; ++i) {
+                if (!restores[i].window.deleted) {
+                    restores[i].window.frameGeometry =
+                        Qt.rect(restores[i].rect.x, restores[i].rect.y, restores[i].rect.width, restores[i].rect.height);
+                }
+            }
+            placing = false;
             for (let i = 0; i < result.floated.length; ++i) {
                 detachWindow(result.floated[i], false);
             }
@@ -945,6 +984,7 @@ Item {
             }
             if (!keepFloat) {
                 delete session.savedFloats[String(w.internalId)];
+                delete cellRects[String(w.internalId)];
                 unwatchMinimize(w);
             }
         }
@@ -967,6 +1007,14 @@ Item {
             return session.stack.indexOf(w) >= 0;
         }
 
+        // The user's manual move or resize of a stack member: it leaves the session (the
+        // cell refills) and the move stands - the caller records it as the floating
+        // placement the window now is.
+        function detachManual(w) {
+            detachWindow(w, false);
+            relayout();
+        }
+
         // A closed window leaves the session for good.
         function removeWindow(w) {
             if (!session.active || !w) {
@@ -976,8 +1024,13 @@ Item {
             relayout();
         }
 
-        // A managed window that minimizes leaves the layout (its cell refills) and rejoins
-        // on restore: the saved float survives both, so the untoggle still restores it.
+        // The membership watch on every session member (and every dormant one): a window
+        // that minimizes leaves the layout (its cell refills) and rejoins on restore - the
+        // saved float survives both, so the untoggle still restores it - and a window that
+        // moves to another desktop or activity during the session stops being managed:
+        // the session is per-workspace, its cell belongs to the workspace it left, and the
+        // move itself is the user's (the geometry it carries over stays its own; the float
+        // is dropped so the untoggle cannot drag it back).
         function watchMinimize(w) {
             const id = String(w.internalId);
             if (!w || minimizeHandlers[id] || !w.minimizedChanged) {
@@ -1000,15 +1053,41 @@ Item {
                     relayout();
                 }
             };
-            minimizeHandlers[id] = { w: w, handler: handler };
+            const workspaceLeft = function () {
+                if (!session.active || session.stack.indexOf(w) < 0) {
+                    return;
+                }
+                if (!managesDesktop(w)) {
+                    detachWindow(w, false);
+                    relayout();
+                    log("tiling: a member left the workspace");
+                }
+            };
+            minimizeHandlers[id] = { w: w, handler: handler, onWorkspace: workspaceLeft };
             w.minimizedChanged.connect(handler);
+            if (w.desktopsChanged) {
+                w.desktopsChanged.connect(workspaceLeft);
+            }
+            if (w.activitiesChanged) {
+                w.activitiesChanged.connect(workspaceLeft);
+            }
         }
 
         function unwatchMinimize(w) {
             const id = String(w.internalId);
             const entry = minimizeHandlers[id];
-            if (entry && entry.w && entry.w.minimizedChanged) {
-                entry.w.minimizedChanged.disconnect(entry.handler);
+            if (entry && entry.w) {
+                if (entry.w.minimizedChanged) {
+                    entry.w.minimizedChanged.disconnect(entry.handler);
+                }
+                if (entry.onWorkspace) {
+                    if (entry.w.desktopsChanged) {
+                        entry.w.desktopsChanged.disconnect(entry.onWorkspace);
+                    }
+                    if (entry.w.activitiesChanged) {
+                        entry.w.activitiesChanged.disconnect(entry.onWorkspace);
+                    }
+                }
             }
             delete minimizeHandlers[id];
         }

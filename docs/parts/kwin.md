@@ -1608,6 +1608,21 @@ deliberately defers.
   managed windows and the close of a managed window records nothing (invariant 7: automatic
   rectangles never enter placement memory). The workspace is the desktop *and* the activity:
   windows of another activity are not candidates even on a shared desktop.
+- **Minimized-before members**: the workspace's minimized windows at toggle-on are
+  members-to-be, not strangers: their floats are saved and they are watched from the start
+  (restoring one during the session emits no `windowAdded` - it was there all along), so a
+  restore rejoins the layout instead of floating over it (`Tiling.dormantCandidates`).
+- **Leavers stop being managed**: a member that moves to another desktop or activity during
+  the session is detached (its `desktopsChanged`/`activitiesChanged` ends it): the session is
+  per-workspace, its cell belongs to the workspace it left, and the float is dropped so the
+  untoggle cannot drag it back - the geometry it carries over is the user's own.
+- **A manual move of a stack window floats it**: the tiler never fights the user for a cell.
+  The tiler's own writes are excluded twice - they run under a `placing` guard, and they land
+  exactly on the cell the layout assigned (`Tiling.isOwnCell`: the synchronous write and the
+  client's late commit of it alike) - so anything else is the user's hand: the member is
+  detached, the move is recorded as its floating placement, and the untoggle cannot write the
+  saved float over it. The master needs none of this: a manual move of the master ends the
+  tree natively.
 - **One session at a time, on the workspace it was invoked on**: the controller holds one
   tree, the TileManager allows one transient root per desktop - this is the contract, not a
   limitation to hide. A toggle on another workspace ends the session there (its floats
@@ -1621,7 +1636,10 @@ deliberately defers.
 - **Infeasible windows float**: a window whose minimum size exceeds its cell is left
   floating (the defined safe state), not squeezed or dropped - and it stops being managed:
   the tiler never wrote its geometry, its moves are placement memory again, and the untoggle
-  does not drag it back to where it floated before the session.
+  does not drag it back to where it floated before the session. The same holds when a later
+  addition shrinks the column below a placed member's minimum: the member's saved float goes
+  back before the detach (`Tiling.floatRestores` - it sat at a cell no untoggle could undo),
+  where a window the layout never placed already sits at its own float.
 
 ### Shortcuts (sequence-less; the user assigns them)
 
@@ -1648,8 +1666,11 @@ where the script reads.
 The layout math lives in a `.pragma library` with node tests (`tiling.test.js`): the fraction
 clamp, the endpoint-rounded stack column, the per-window feasibility check, the layout
 separation (feasible placed, infeasible floated, the column re-filled between just the
-feasible), the session structure, the focus cycle, the float save. The eligibility predicates
-(`eligibleForMaster`, `eligibleForStack`) mirror the snap script's `usable()` guards.
+feasible), the session structure, the focus cycle, the float save, the one workspace rule
+(`onWorkspace` - the candidates, the managed windows and the leavers read it), the
+minimized-before members (`dormantCandidates`), the reflow float restores (`floatRestores`)
+and the own-cell test (`isOwnCell`). The eligibility predicates (`eligibleForMaster`,
+`eligibleForStack`) mirror the snap script's `usable()` guards.
 
 ### What it rides
 

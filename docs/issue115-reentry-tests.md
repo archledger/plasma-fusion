@@ -44,6 +44,31 @@ active.
 - **Expect**: the second toggle uses the same floating A (the memory holds the true float from
   the first untoggle), not the tile rectangle from the first session.
 
+### 2d. A window minimized before the toggle rejoins on restore
+- Minimize a workspace window; toggle on; restore the minimized window from the taskbar
+- **Expect**: the restored window joins the stack (a cell, placed by the tiler), it does not
+  float over the managed layout, and its pre-session float is kept for the untoggle.
+
+### 2e. A member moved to another workspace stops being managed
+- Toggle on; move a stack window to another desktop (or another activity)
+- **Expect**: the member leaves the session (the column refills without it), its moves on the
+  other workspace are recorded as ordinary floating placements, and the untoggle does not
+  drag it back to the first workspace's saved float.
+
+### 2f. A manual move of a stack window floats it
+- Toggle on; move (or resize) a stack window by hand to a new spot; toggle off
+- **Expect**: the moved window does not snap back to its cell, the untoggle leaves it at the
+  user's spot (not the saved float), and the move is recorded as the app's floating
+  placement. The tiler's own placements are not mistaken for this (they land exactly on the
+  assigned cell, including a client's late commit of one).
+
+### 2g. A reflow that starves a placed member restores its float
+- Toggle on with two stack windows; open windows until a placed member's minimum size no
+  longer fits its shrunk cell
+- **Expect**: the starved member returns to its saved float (not stuck at its last cell, which
+  no untoggle could undo), it stops being managed, and its later moves are placement memory
+  again.
+
 ## 3. Saved-tree cases
 
 ### 3a. The user's manual tile layout is untouched
