@@ -305,6 +305,23 @@ function nextEventSequence(sequences, key) {
     return (sequences[key] || 0) + 1;
 }
 
+// The next sequence to try after the writer answered OutdatedEvent: the script was reloaded
+// while the writer (which outlives provider incarnations) kept the key's watermark, and the
+// watermark is not readable through the facade. Sequences only have to be strictly increasing,
+// so the catch-up strides exponentially instead of losing one record per number.
+function caughtUpSequence(sequence) {
+    return sequence + Math.max(1, sequence);
+}
+
+// Whether the writer's snapshot entry proves an assumed binding: an Accepted record applied the
+// submitted rectangle under the key the binding holds, so that key's entry carries exactly the
+// rectangle. An entry that did not take it - or no entry at all - means the record was filed
+// under the window's earlier identity.
+function bindingConfirmed(entry, frame) {
+    return !!entry && entry.x === frame.x && entry.y === frame.y
+        && entry.width === frame.width && entry.height === frame.height;
+}
+
 // The cache after re-reading the writer's entry for key: the writer's rectangle is the
 // authority. A suppressed or deferred submission leaves the entry at the writer's decision, and
 // a deferred update only becomes visible in the snapshot after its barrier ended - both later

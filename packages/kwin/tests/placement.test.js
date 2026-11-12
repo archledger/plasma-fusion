@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-placement", "contents", "ui", "Placement.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { appId, identities, valid, parse, serialize, floating, maximized, requestedMode, settled, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreSize, restoreRect, restoreFor, remember, teardownWrite, providerRefused, trackingDecision, nextEventSequence, reconciled } = globalThis;
+const { appId, identities, valid, parse, serialize, floating, maximized, requestedMode, settled, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreSize, restoreRect, restoreFor, remember, teardownWrite, providerRefused, trackingDecision, nextEventSequence, caughtUpSequence, bindingConfirmed, reconciled } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const desktop = () => ({ normal: true, transient: false, modal: false, fullScreen: false, tiled: false, minimized: false, maximizeMode: 0 });
@@ -225,6 +225,20 @@ sequences.konsole = 2; // the first window records again
 assert.strictEqual(nextEventSequence(sequences, "konsole"), 3,
     "a second window of the app draws from the same counter");
 assert.strictEqual(nextEventSequence({}, "kate"), 1, "each key has its own counter");
+// a reload behind the writer's watermark: the catch-up strides exponentially (the writer keeps
+// its per-key watermarks across provider incarnations, and they are not readable)
+assert.strictEqual(caughtUpSequence(1), 2);
+assert.strictEqual(caughtUpSequence(2), 4);
+assert.strictEqual(caughtUpSequence(5), 10);
+
+// ---- an assumed binding (a trackWindow the writer refused on reload) is proven by the entry
+assert.ok(bindingConfirmed(rect(10, 10, 640, 480), rect(10, 10, 640, 480)),
+    "the key's entry took the submitted rectangle");
+assert.ok(!bindingConfirmed(undefined, rect(10, 10, 640, 480)), "no entry for the key at all");
+assert.ok(!bindingConfirmed(rect(40, 40, 800, 500), rect(10, 10, 640, 480)),
+    "the record was filed under the window's earlier identity");
+// the false mark a disproven binding leaves: never tracked, never recorded natively again
+assert.strictEqual(trackingDecision(false, "konsole"), "refuse");
 
 // ---- the cache after a submission: the writer's entry is the authority
 const cache = { konsole: rect(100, 100, 640, 480) };

@@ -98,12 +98,19 @@ Item {
     // globally, so every window of one app draws from the same counter.
     property var eventSequences: ({})
     // window internalId -> the app id the writer holds the window under (one key per window
-    // for the window's whole lifetime; the writer refuses a second trackWindow).
+    // for the window's whole lifetime; the writer refuses a second trackWindow). false marks a
+    // disproven binding: the window is never recorded natively again.
     property var trackedKeys: ({})
+    // window internalId -> true while the binding is assumed, not proven: a trackWindow the
+    // writer refused (the window was bound by an earlier incarnation of this script) until the
+    // first Accepted record is checked against the writer's own snapshot.
+    property var unconfirmedBindings: ({})
 
     // TransientPlacementWriter::Result, in its enum order (the type itself is not a QML enum):
-    // the three outcomes that are the writer's own policy decisions, not contract violations.
-    readonly property var writerResult: ({ "Accepted": 0, "Deferred": 10, "Suppressed": 11 })
+    // OutdatedEvent is not a policy decision but the reload signal the sequence catch-up
+    // handles; the three outcomes that are the writer's own policy decisions follow.
+    readonly property var writerResult: ({ "Accepted": 0, "OutdatedEvent": 5,
+                                            "Deferred": 10, "Suppressed": 11 })
 
     function detectNativeWriter() {
         try {
@@ -123,7 +130,12 @@ Item {
         }
         api = Workspace.transientTiling();
         if (!api) {
+            // The facade exists (the detection saw the function) but answers nothing: a broken
+            // compositor side. The retired legacy transport must not write behind the sole
+            // native writer, so the session runs without the memory, like a refused provider.
+            log("the native facade did not answer; the memory stays disabled this session");
             nativeWriter = false;
+            nativeRefused = true;
             return;
         }
         providerToken = String(api.registerProvider(root));
@@ -151,10 +163,17 @@ Item {
         const key = appIdOf(w);
         const decision = Placement.trackingDecision(trackedKeys[id], key);
         if (decision === "track") {
-            // A window an earlier incarnation of this script already bound (a reload in the
-            // session) answers false: the binding it left is the one the record goes through.
-            api.trackWindow(w, key);
-            trackedKeys[id] = key;
+            if (api.trackWindow(w, key)) {
+                trackedKeys[id] = key;
+            } else {
+                // The refusal cannot be told apart: the window is already bound by an earlier
+                // incarnation of this script (a reload in the session - the binding it left is
+                // the one the record goes through) or the writer is momentarily busy, and the
+                // facade has no way to ask which key a binding holds. The key is assumed, and
+                // the first Accepted record proves it against the writer's own snapshot.
+                trackedKeys[id] = key;
+                unconfirmedBindings[id] = true;
+            }
         }
     }
 
@@ -170,23 +189,55 @@ Item {
             // session cache only.
             return;
         }
-        const seq = Placement.nextEventSequence(eventSequences, key);
+        const rect = Qt.rect(frame.x, frame.y, frame.width, frame.height);
+        let seq = Placement.nextEventSequence(eventSequences, key);
         // The facade call: the provider incarnation token first (the writer rejects submissions
         // from retired incarnations), then the revision, the window, the already rounded
         // rectangle, the key's event sequence and the origin (0 = Manual).
-        const result = api.record(providerToken, ++writerRevision, w,
-                                  Qt.rect(frame.x, frame.y, frame.width, frame.height), seq, 0);
-        eventSequences[key] = seq;
+        let result = api.record(providerToken, ++writerRevision, w, rect, seq, 0);
+        // A reload left the writer holding this key's watermark (the writer outlives provider
+        // incarnations, and its watermarks are not readable through the facade), so the
+        // submission is rejected as outdated until the counter passes it. The same rectangle is
+        // resubmitted with exponentially increasing sequences - they only have to be strictly
+        // increasing - so the record that finally passes carries today's frame, not a lost one;
+        // the bound keeps the sequence inside the facade's int and the loop short.
+        while (result === writerResult.OutdatedEvent && seq < 0x40000000) {
+            seq = Placement.caughtUpSequence(seq);
+            result = api.record(providerToken, ++writerRevision, w, rect, seq, 0);
+        }        eventSequences[key] = seq;
         // Accepted, Deferred (an active reservation) and Suppressed (a restore watermark) are
         // the writer's decisions; anything else is a contract violation worth a line.
         if (result !== writerResult.Accepted && result !== writerResult.Deferred
                 && result !== writerResult.Suppressed) {
             log("the writer refused a record for " + key + " (result " + result + ")");
         }
+        // An assumed binding (a refused trackWindow) is settled by the first Accepted record:
+        // only an applied one proves which key the binding holds. Deferred and Suppressed
+        // submissions leave the assumption standing until a later record applies.
+        if (unconfirmedBindings[String(w.internalId)] && result === writerResult.Accepted) {
+            verifyBindingWithWriter(w, key, frame);
+        }
         // Reconcile the cache with the writer's decision: when the submission was suppressed or
         // deferred, the writer's entry for this key is the authority, not the in-memory cache
         // the policy just wrote.
         reconcileKeyWithWriter(key);
+    }
+
+    // The proof an assumed binding waited for: the writer's own snapshot after an Accepted
+    // record. A confirmed binding drops the assumption; a disproven one marks the window so
+    // trackingDecision refuses it from here on - the wrong-key record already made is the one
+    // the old identity's own next record overwrites, and later records stay in the session
+    // cache, exactly like an identity that changed after the binding.
+    function verifyBindingWithWriter(w, key, frame) {
+        const id = String(w.internalId);
+        delete unconfirmedBindings[id];
+        const snap = api.snapshot();
+        const entry = snap && snap.entries ? snap.entries[key] : undefined;
+        if (Placement.bindingConfirmed(entry, frame)) {
+            return;
+        }
+        trackedKeys[id] = false;
+        log("the writer holds this window of " + key + " under an earlier key; it is not recorded natively");
     }
 
     function reconcileKeyWithWriter(key) {

@@ -457,7 +457,10 @@ binds each watched window to the writer under its app id and submits every recor
 native call: the provider incarnation token first, then the revision, the window, an already
 rounded rectangle (the writer rejects fractional frames outright), the key's next event
 sequence (the writer orders a key's events globally, so all windows of one app share the
-counter) and the origin. The writer owns the file and its flush discipline, and the script's
+counter) and the origin. The writer keeps a key's event watermark across provider incarnations:
+a reloaded script (a reconfigure) that answers OutdatedEvent resubmits the same rectangle with
+exponentially increasing sequences until it passes the watermark, so the first move after a
+reload is not lost. The writer owns the file and its flush discipline, and the script's
 in-memory cache is a read-through from the writer's `snapshot()`, re-read for a key before each
 restore: a deferred same-key update (an active reservation held the key) only becomes visible
 in the snapshot after its barrier ended, later than the cache's own write. A submission the
@@ -465,8 +468,13 @@ writer suppresses (a restore watermark) or defers reconciles the cache from the 
 entry. The writer binds a window to one key for its whole lifetime: a window that opens before
 its identity is usable (no desktop file and no class yet) is bound at its first record, and an
 identity that changes after the binding is neither rebound nor recorded natively — those
-records live in the session cache only, until the writer grows a re-binding path. When the
-writer refuses the provider registration the memory stays disabled for the session — a native
+records live in the session cache only, until the writer grows a re-binding path. A window an
+earlier incarnation of the script already bound (a reload) keeps that binding; the facade
+cannot ask which key it holds, so the current key is assumed and the first Accepted record is
+proven against the writer's snapshot — a binding disproven that way (the identity changed
+across the reload) is retired, and the window's records stay in the session cache. When the
+writer refuses the provider registration — or the facade exists but answers nothing — the
+memory stays disabled for the session — a native
 session must not bypass the sole native writer. The native lane runs only on the fork's KWin;
 the session scenarios in CI exercise the stock and backport lanes, which take the legacy
 transport, and the node suite drives the registration, identity-binding, event-sequence and
