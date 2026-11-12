@@ -89,6 +89,14 @@ active.
 - **Expect**: the window stays where it was moved - its dormant float belonged to the view it
   left and is not applied. Restoring it on the session's output does not rejoin it either.
 
+### 2k. A window opened minimized during the session rejoins on restore
+- Toggle on; start an app that opens already minimized (or restore one from the session
+  manager minimized) on the tiled workspace; restore it from the taskbar
+- **Expect**: the restored window joins the stack (a cell, placed by the tiler), it does not
+  float over the managed column - for it, the restore emits no `windowAdded`, so the watch it
+  needed went on at arrival. A full-screen or manually tiled window opened minimized stays a
+  stranger; its state survives the restore.
+
 ## 3. Saved-tree cases
 
 ### 3a. The user's manual tile layout is untouched

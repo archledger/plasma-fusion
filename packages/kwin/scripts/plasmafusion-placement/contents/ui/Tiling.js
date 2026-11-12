@@ -133,18 +133,24 @@ function desktopMatches(a, b) {
     return String(a) === String(b);
 }
 
+// A dormant window: minimized, but otherwise a stack candidate - a member-to-be. This is the
+// one rule both dormant paths read: the toggle-on scan below, and the live add (a window can
+// first appear while the session is up, already minimized - for it too, a later restore emits
+// no windowAdded). A window that is full-screen or manually tiled keeps that state through a
+// restore, and a relayout must never overwrite it, so those are strangers too.
+function eligibleDormant(w) {
+    return w && !w.deleted && w.normalWindow && !w.transient && !w.modal && w.moveable
+        && w.resizeable && w.minimized && !w.fullScreen && !w.tile;
+}
+
 // The workspace's minimized windows at session start: not stack candidates (they are out of
 // the view), but each is a member-to-be. Its float is saved and it is watched from the start,
 // because restoring it during the session emits no windowAdded - it was there all along.
-// The eligibility is the master's minus the minimized state (that is the point); a window
-// that is full-screen or manually tiled keeps that state through a restore, and a relayout
-// must never overwrite it, so those are strangers too.
 function dormantCandidates(windows, master, desktop, activity, output) {
     const out = [];
     for (let i = 0; i < windows.length; ++i) {
         const w = windows[i];
-        if (w === master || !w || w.deleted || !w.normalWindow || w.transient || w.modal
-                || !w.moveable || !w.resizeable || !w.minimized || w.fullScreen || w.tile) {
+        if (w === master || !eligibleDormant(w)) {
             continue;
         }
         if (!onWorkspace(w, desktop, activity, output)) {

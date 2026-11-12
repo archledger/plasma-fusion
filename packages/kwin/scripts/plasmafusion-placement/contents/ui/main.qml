@@ -1018,17 +1018,33 @@ Item {
             }
         }
 
-        // A new window joins the stack; true when it did. False leaves the window to the
-        // ordinary paths (restore, settle): the stack only keeps what it can manage, and a
-        // candidate the first layout floats is handed back untouched. The saved float is the
-        // remembered placement when the memory has one (the untoggle returns the app to its
-        // remembered spot, as the memory would have placed it), else the window's current
-        // geometry.
+        // A new window joins the stack; true when it did. True also for a window that arrives
+        // already minimized: it is enrolled as a member-to-be (watched, not stacked - its
+        // restore enrolls it). False leaves the window to the ordinary paths (restore,
+        // settle): the stack only keeps what it can manage, and a candidate the first layout
+        // floats is handed back untouched. The saved float is the remembered placement when
+        // the memory has one (the untoggle returns the app to its remembered spot, as the
+        // memory would have placed it), else the window's current geometry.
         function addWindow(w, remembered) {
             if (!session.active || !w || manages(w)) {
                 return false;
             }
-            if (!managesDesktop(w) || !Tiling.eligibleForStack(w)) {
+            if (!managesDesktop(w)) {
+                return false;
+            }
+            // A window that arrives minimized is the same member-to-be the toggle-on scan
+            // watches (Tiling.eligibleDormant, the one rule): for it too, a later restore
+            // emits no windowAdded - it was there all along - so the watch must go on now or
+            // its restore floats over the managed column. The watch's restore path enrolls
+            // it, with the eligibility recheck, and the float is the remembered placement
+            // when the memory has one, as for every new member.
+            if (Tiling.eligibleDormant(w)) {
+                const g = remembered || w.frameGeometry;
+                session.savedFloats[String(w.internalId)] = { x: g.x, y: g.y, width: g.width, height: g.height };
+                watchMinimize(w);
+                return true;
+            }
+            if (!Tiling.eligibleForStack(w)) {
                 return false;
             }
             const g = remembered || w.frameGeometry;

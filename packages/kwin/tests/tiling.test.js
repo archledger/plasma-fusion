@@ -16,8 +16,9 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-placement", "contents", "ui", "Tiling.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
 const { masterFraction, masterTileRect, stackRects, feasibleInCell, createSession,
-        eligibleForMaster, stackCandidates, dormantCandidates, layoutStack, focusOrder, nextInCycle,
-        previousInCycle, saveFloats, onWorkspace, desktopMatches, floatRestores, isOwnCell } = globalThis;
+        eligibleForMaster, stackCandidates, dormantCandidates, eligibleDormant, layoutStack,
+        focusOrder, nextInCycle, previousInCycle, saveFloats, onWorkspace, desktopMatches,
+        floatRestores, isOwnCell } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const windowWith = (over) => Object.assign({
@@ -249,6 +250,39 @@ assert.deepStrictEqual(focusOrder({ master: "M", stack: ["S1", "S2"] }), ["M", "
     const tiled = win({ internalId: "tiled", minimized: true, tile: {} });
     assert.deepStrictEqual(dormantCandidates([fullscreen, tiled, minimized], master, "2", "").map(w => w.internalId),
         ["m1"], "full-screen and manually tiled minimized windows are strangers");
+}
+
+// A window that arrives already minimized while the session is live is the same member-to-be
+// the toggle-on scan watches: for it too, a later restore emits no windowAdded (it was there
+// all along), so the live add path must recognize it by the same rule and watch it on arrival
+// - or its restore floats over the managed column with no relayout ever coming for it.
+{
+    assert.ok(eligibleDormant(windowWith({ minimized: true })),
+        "a minimized normal window is a member-to-be");
+    assert.ok(!eligibleDormant(windowWith({})),
+        "a visible window is a stack candidate, not a dormant one");
+    assert.ok(!eligibleDormant(windowWith({ minimized: true, fullScreen: true })),
+        "full-screen keeps its state through a restore: a relayout must never overwrite it");
+    assert.ok(!eligibleDormant(windowWith({ minimized: true, tile: {} })),
+        "a manual tile keeps its state through a restore too");
+    assert.ok(!eligibleDormant(windowWith({ minimized: true, transient: true })),
+        "a transient is a stranger");
+    assert.ok(!eligibleDormant(windowWith({ minimized: true, resizeable: false })),
+        "not resizable: no cell could hold it");
+    assert.ok(!eligibleDormant(windowWith({ minimized: true, deleted: true })),
+        "a deleted window is not admitted");
+    // the toggle-on scan and the live add read one rule: with the workspace matched, the
+    // scan admits a window exactly when the predicate says member-to-be (the workspace
+    // filter itself is the scan's own, on top of the shared rule)
+    const ref = (over) => windowWith(Object.assign({ desktops: ["2"] }, over));
+    const refs = [ref({ internalId: "r1", minimized: true }),
+                  ref({ internalId: "r2", minimized: true, desktops: ["3"] }),
+                  ref({ internalId: "r3" })];
+    for (const w of refs) {
+        assert.strictEqual(eligibleDormant(w),
+            dormantCandidates([w], null, w.desktops[0], "").length === 1,
+            "dormantCandidates and eligibleDormant agree on " + w.internalId);
+    }
 }
 
 // What a reflow takes away: a member the layout had placed gets its saved float back before it

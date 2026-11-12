@@ -1621,7 +1621,10 @@ deliberately defers.
   restore rejoins the layout instead of floating over it (`Tiling.dormantCandidates`) - but
   a minimized window that is full-screen or manually tiled keeps that state through the
   restore, and a relayout never overwrites it, so those are strangers; the rejoin rechecks
-  the eligibility for the same reason.
+  the eligibility for the same reason. A window that *arrives* already minimized while the
+  session is live is the same member-to-be (`Tiling.eligibleDormant`, the one rule both
+  paths read): it is watched on arrival - for it too, a later restore emits no
+  `windowAdded` - with the remembered placement as its saved float, as for every new member.
 - **Leavers stop being managed**: a member that moves to another desktop, activity or output
   during the session is detached (its `desktopsChanged`/`activitiesChanged`/`outputChanged`
   ends it): the session is per-workspace and per-screen, its cell belongs to the view it
@@ -1690,9 +1693,10 @@ clamp, the endpoint-rounded stack column, the per-window feasibility check, the 
 separation (feasible placed, infeasible floated, the column re-filled between just the
 feasible), the session structure, the focus cycle, the float save, the one workspace rule
 (`onWorkspace` - the candidates, the managed windows and the leavers read it), the
-minimized-before members (`dormantCandidates`), the reflow float restores (`floatRestores`)
-and the own-cell test (`isOwnCell`). The eligibility predicates (`eligibleForMaster`,
-`eligibleForStack`) mirror the snap script's `usable()` guards.
+minimized-before members (`dormantCandidates`, and `eligibleDormant` - the one rule the
+toggle-on scan and the live add of an already-minimized window read), the reflow float
+restores (`floatRestores`) and the own-cell test (`isOwnCell`). The eligibility predicates
+(`eligibleForMaster`, `eligibleForStack`) mirror the snap script's `usable()` guards.
 
 ### What it rides
 
