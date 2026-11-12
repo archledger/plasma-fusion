@@ -69,24 +69,39 @@ cadence, which can lag Fedora by days.
 
 `--full` (an install choice; a plain stock install never gets near the fork):
 
-1. records the installed stock KWin EVRs (`kwin`, `kwin-common`, `kwin-libs`) to
+1. refuses to take over a KWin the user already pins themselves (`dnf versionlock` holding
+   `kwin`, `kwin-common` or `kwin-libs`): dnf's `versionlock delete` works by name only, so a
+   pre-existing entry could not be given back at restore time — nothing has changed at that
+   point;
+2. records the installed stock KWin EVRs (`kwin`, `kwin-common`, `kwin-libs`) to
    `/var/lib/plasma-fusion/full-restore.txt`;
-2. enables `archledger/plasma-fusion-full` and installs `plasma-fusion-full` — the metapackage
+3. enables `archledger/plasma-fusion-full` and installs `plasma-fusion-full` — the metapackage
    whose exact-EVR requires pull the six packages and the pinned fork in one transaction;
-3. locks the KWin set (`dnf versionlock add kwin kwin-common kwin-libs`; dnf5 pins each package at
+4. locks the KWin set (`dnf versionlock add kwin kwin-common kwin-libs`; dnf5 pins each package at
    its just-installed version), so a distribution update can never half-upgrade the set;
-4. runs the unchanged per-user setup. On a stock install it switches only the compositor: no setup
+5. runs the unchanged per-user setup. On a stock install it switches only the compositor: no setup
    rerun (a `plasma-fusion update` runs only if the transaction moved the packages).
 
 Already on the full profile, `--full` says so and does nothing. A fork KWin without the metapackage
 (an unsupported manual state) is refused with the way back to stock.
 
-`--full-restore` (no stamp needed — a system on the full profile must always get back): removes the
-version lock, the metapackage and the repository, `dnf distro-sync`s the KWin set back to stock,
-and **verifies the distag is gone** — a repository left enabled would win the sync, so the check
-catches it and says what to do. The six Plasma Fusion packages stay installed; they run on stock
-KWin. `uninstall` on a full system runs the same restore first, then the normal uninstall. The
-installer's `status` reports the profile (`full` with the pinned KWin, or `stock`); the packaged
+`update` on a full system moves the pin with the metapackage in one transaction (ADR 0001's
+within-series path): the version lock goes first — it would hold KWin at the old fork while the
+new metapackage requires the new one — the upgrade takes the six with `plasma-fusion-full`, and
+the lock comes back at the newly installed fork.
+
+`--full-restore` (no stamp needed — a system on the full profile must always get back, including
+on a Fedora release the release's stamp does not carry, where the stock lanes stay refused):
+removes the version lock, the metapackage and the repository, then `dnf distro-sync`s the KWin
+set **to the recorded EVRs** — the machine returns to the stock KWin it had, not to whatever the
+repositories offer now. Fedora keeps only a package's newest build, so a stock that advanced
+while the machine was on the fork can no longer be reinstalled: the fallback says so out loud
+and takes the current stock. The restore then **verifies the distag is gone** — a repository
+left enabled would win the sync, so the check catches it and says what to do. The six Plasma
+Fusion packages stay installed; they run on stock KWin. `uninstall` on a full system (also
+usable outside the stamp) runs the same restore first, then the normal uninstall.
+The installer's `status` reports the profile (`full` with the pinned
+KWin, or `stock`); the packaged
 `plasma-fusion status` learns the profile with the capability reporting that follows the channel.
 
 ## Checks before anything changes

@@ -135,12 +135,22 @@ full_meta_installed() { [ -n "$(pf_installed plasma-fusion-full)" ]; }
 full_restore_file() { printf '%s/var/lib/plasma-fusion/full-restore.txt' "$TEST_ROOT"; }
 # What --full recorded, for the plan; empty when the record is gone or unreadable.
 full_recorded() { grep -E "^(kwin|kwin-common|kwin-libs)=" "$(full_restore_file)" 2>/dev/null | paste -sd, - ; }
+# The recorded EVRs as dnf specs (kwin-6.7.5-1.fc44): the restore's target, per the contract -
+# the machine returns to the stock KWin it had, not to whatever the repositories offer now.
+full_recorded_specs() { sed -n 's/^\([a-z-]*\)=\([0-9][0-9.]*-[0-9][^ ]*\)$/\1-\2/p' "$(full_restore_file)" 2>/dev/null | paste -sd' ' -; }
 
 # The full profile's package step: record the stock KWin this system runs, swap in the pinned fork
 # through the full profile's own repository, then lock the set so a distribution update can never
 # half-upgrade it (dnf5's versionlock pins each package at its just-installed version). The
 # per-user setup is unchanged and runs after this.
 full_swap_packages() {
+  # A KWin the user already pins themselves is not taken over: dnf's versionlock delete works by
+  # name only, so a pre-existing entry could not be given back at restore time, and a user who
+  # holds KWin's version is deliberately pinning it. Nothing has changed yet at this point.
+  if $SUDO dnf versionlock list 2>/dev/null |
+      grep -qE '^(Package name: )?kwin(-common|-libs)?([ .,-]|$)'; then
+    refuse "versionlock already holds kwin, kwin-common or kwin-libs; remove those entries first (dnf versionlock delete <name>) so the full profile can own the pin."
+  fi
   evrs=
   for p in $FULL_KWIN_PKGS; do
     e=$(pkg_evr "$p")
@@ -180,8 +190,23 @@ full_restore_kwin() {
   fi
   $SUDO dnf -y copr remove "$FULL_REPO" ||
     say "note: the full profile's repository was not enabled through copr; if it is still on, remove it: sudo dnf -y copr remove $FULL_REPO"
-  # shellcheck disable=SC2086 # one spec per package
-  $SUDO dnf -y distro-sync $FULL_KWIN_PKGS || die "dnf could not return KWin to stock."
+  # The recorded EVRs are the target (ADR 0001): the machine returns to the stock KWin it had.
+  # Fedora keeps only a package's newest build, so a stock that advanced while the machine was
+  # on the fork can no longer be reinstalled - then the honest fallback is the current stock,
+  # said out loud, because the alternative (a KWin the repositories do not carry) helps nobody.
+  recs=$(full_recorded_specs)
+  if [ -n "$recs" ]; then
+    # shellcheck disable=SC2086 # one spec per package
+    if ! $SUDO dnf -y distro-sync $recs; then
+      say "the recorded stock KWin ($recs) is not in the repositories any more; syncing to the current stock."
+      # shellcheck disable=SC2086 # one spec per package
+      $SUDO dnf -y distro-sync $FULL_KWIN_PKGS || die "dnf could not return KWin to stock."
+    fi
+  else
+    # No record (a --full from before the record, or the file was removed): the names alone.
+    # shellcheck disable=SC2086 # one spec per package
+    $SUDO dnf -y distro-sync $FULL_KWIN_PKGS || die "dnf could not return KWin to stock."
+  fi
   kwin_is_fork &&
     die "KWin is still the fork ($(pkg_evr kwin)): a repository still offers it. Check 'dnf repolist | grep $FULL_REPO', remove it, then: sudo dnf -y distro-sync $FULL_KWIN_PKGS"
   say "KWin is stock again ($(pkg_evr kwin))."
@@ -215,8 +240,12 @@ detect_lane() {
     else
       FEDORA=$(rpm -E %fedora 2>/dev/null || true)
       case $FEDORA in '' | *[!0-9]*) refuse "$OS_PRETTY_NAME: only Fedora itself has a Plasma Fusion repository (Copr)." ;; esac
+      # A full-profile system must always be able to get back, also from a Fedora release this
+      # release's stamp does not carry (an upgraded system, a newer installer that dropped the
+      # old series): the stock refusal gates installs and updates, not the recovery paths.
       in_list "$FEDORA" "$PF_COPR_FEDORA" ||
-        refuse "Fedora $FEDORA has no Plasma Fusion build (the Copr repository builds Fedora $PF_COPR_FEDORA)."
+        { case $MODE in full-restore | uninstall) ;; *)
+          refuse "Fedora $FEDORA has no Plasma Fusion build (the Copr repository builds Fedora $PF_COPR_FEDORA)." ;; esac }
       LANE=copr
     fi
   elif [ "$OS_ID" = steamos ]; then
@@ -361,6 +390,11 @@ plan() {
         echo "  sudo dnf -y install plasma-fusion-full   (the six packages + the pinned kwin, kwin-common, kwin-libs; replaces the stock KWin)"
         echo "  sudo dnf -y versionlock add $FULL_KWIN_PKGS   (the pin: the set moves together or not at all)"
         echo "  note: the fork takes KWin security fixes on its weekly cadence, which can lag Fedora by days (ADR 0001)."
+      elif [ "$MODE" = update ] && full_meta_installed; then
+        echo "  sudo dnf -y versionlock delete $FULL_KWIN_PKGS   (the pin goes first: it would hold KWin at the old fork)"
+        echo "  sudo dnf -y upgrade --refresh $HAVE_PKGS plasma-fusion-full   (the metapackage pulls the new pin)"
+        [ -z "$NEW_PKGS" ] || echo "  sudo dnf -y install $NEW_PKGS   (new in this release)"
+        echo "  sudo dnf -y versionlock add $FULL_KWIN_PKGS   (the pin again, at the new fork)"
       elif [ "$MODE" = update ]; then
         echo "  sudo dnf -y upgrade --refresh $HAVE_PKGS"
         [ -z "$NEW_PKGS" ] || echo "  sudo dnf -y install $NEW_PKGS   (new in this release)"
@@ -826,8 +860,23 @@ main() {
     split_installed
     case $LANE in
       copr)
-        { $SUDO dnf -y upgrade --refresh $HAVE_PKGS && { [ -z "$NEW_PKGS" ] || $SUDO dnf -y install $NEW_PKGS; }; } ||
-          die "dnf could not update Plasma Fusion." ;;
+        if full_meta_installed; then
+          # The pin moves with the metapackage (ADR 0001's one-transaction update): the lock
+          # goes first - it would hold KWin at the old fork while the new metapackage requires
+          # the new one - and comes back at the newly installed EVR after the transaction.
+          say "updating the full profile (the pin moves with the metapackage)"
+          # shellcheck disable=SC2086 # one spec per package
+          $SUDO dnf -y versionlock delete $FULL_KWIN_PKGS ||
+            die "could not remove the version lock; run: sudo dnf -y versionlock delete $FULL_KWIN_PKGS"
+          { $SUDO dnf -y upgrade --refresh $HAVE_PKGS plasma-fusion-full && { [ -z "$NEW_PKGS" ] || $SUDO dnf -y install $NEW_PKGS; }; } ||
+            die "dnf could not update the full profile (the lock is already gone; re-apply it or restore: sudo dnf -y versionlock add $FULL_KWIN_PKGS)."
+          # shellcheck disable=SC2086 # one lock per package, right after the transaction
+          $SUDO dnf -y versionlock add $FULL_KWIN_PKGS ||
+            die "the full profile is updated but its version lock failed; run it now: sudo dnf -y versionlock add $FULL_KWIN_PKGS (until then a system update can replace the fork)."
+        else
+          { $SUDO dnf -y upgrade --refresh $HAVE_PKGS && { [ -z "$NEW_PKGS" ] || $SUDO dnf -y install $NEW_PKGS; }; } ||
+            die "dnf could not update Plasma Fusion."
+        fi ;;
       aur) install_packages ;;
       ppa)
         apt_update || die "apt-get update failed."
