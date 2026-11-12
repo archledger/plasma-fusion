@@ -5,30 +5,24 @@
 
 ## Status and source snapshot
 
-This status was checked on 2026-11-09 against the maintained
+This status was refreshed on 2026-11-12 against the maintained
 [`archledger/kwin` branch `plasma-fusion`](https://github.com/archledger/kwin/tree/plasma-fusion),
-at [`a0635787`](https://github.com/archledger/kwin/commit/a0635787ff19cec11f411f7f0049d3b3f77f1041).
-That source is based on KWin 6.8.2. The 6.7.5/6.7.91 commits, image identifiers and test counts
-below remain historical evidence for their own baselines, not new results for this source.
+at [`dede6787`](https://github.com/archledger/kwin/commit/dede6787aeba42dd06d2969c9b189ffad200b913).
+That source is based on KWin 6.8.2.
 
-- Private ownership, exact-A requests, configure provenance and the maximize-only NT03.5a
-  precursor are present. The four recorded decoration prerequisites are also present: guarded
-  settings reads, guarded window traversal, deferred reconfiguration and borrowed factory lifetime.
-- Fullscreen/returning-decoration restoration, explicit restore-action routing, NT04 completion,
-  the production placement-provider bridge and the complete tiling policy remain open. Private
-  request helpers do not expose a usable production tiler; the existing release action is not
-  the planned exact-A restoration route.
-- The original startup-initializer correction is integrated as
-  [`9c6fb381`](https://github.com/archledger/kwin/commit/9c6fb38101e03606ee0024aab7c4df6edbdb5dce).
-  The earlier notes that describe it as a separate unmerged branch refer to that earlier state.
-- The later [floating-client-size correction](https://github.com/archledger/kwin/pull/1) preserves
-  client size on same-output decoration-border changes. It does not complete returning-decoration
-  restoration. Its qualification retains a baseline-reproducible startup Memcheck read with an
-  unresolved cause; the historical fixed-hash profiles below do not establish a globally clean run.
+- The native sequence NT01 through NT06 is complete (fork PRs #8-#16): private ownership with
+  exact-A restoration, fullscreen and returning-decoration mode normalization (NT03.5), the
+  explicit restore-action routing through the qualified restoration consumption (NT03.6), the
+  asynchronous completion boundary with the read-only state/completion export (NT04), the
+  command-intent matrix pinning ordinary versus explicit transitions (NT05), the ownership-aware
+  placement-capture filter (NT06A), and the context-release/transfer-rebase contracts (NT06).
+- What remains open is the production placement-provider bridge and the complete tiling policy
+  (the Fusion-side feature), the #115 re-entry tests, and ADR 0001's full-profile packaging.
+- Private request helpers still do not expose a usable production tiler; the controller and
+  writer have no scripting API and no production instance — the bridge is the next work.
 
-This snapshot describes source and recorded qualification, not the current installation on a
-particular device. Continue from the unchecked milestones below. The earlier design sections
-describe the approved contract; they are not evidence that every proposed interface exists.
+The 6.7.5/6.7.91 commits, image identifiers and test counts in the design sections below remain
+historical evidence for their own baselines, not new results for this source.
 
 ## Earlier NT02 progress notes
 
@@ -481,18 +475,22 @@ Files: KWin `src/window.cpp`, `src/xdgshellwindow.cpp`, `src/useractions.cpp`, `
   - the replayed frame lands behind that queue. Stock away-and-back rows unchanged.
 
 ## NT06 — Release before context destruction — complete
-- [x] NT06 complete (fork PR #16, squash dede6787ae). Removing the desktop or output a settled
-  owner's tree lives on releases the record while its context dies: the floating frame and the
-  writer reservation survive as the restoration barrier (rows: desktop-removal and
-  output-removal on the settled owner). An output transfer releases exactly once through the
-  custom-tile forget, translates the saved floating frame by the same area translation the
-  window gets (`rebaseTransientFloatingOnOutputTransfer` in `sendToOutput`'s custom branch), and
-  the destination adopts nothing; the row pins the translated floating position with per-output
+- [x] NT06 complete (fork PR #16, squash dede6787ae). Desktop removal releases the settled
+  owner while its context dies: the floating frame and the writer reservation survive as the
+  restoration barrier (the desktop-removal row pins the settled path; the pending-owner stages
+  were already covered by testControllerOwnedDestruction's before-request and during-request
+  destruction stages). Output removal releases the settled owner with the same contract
+  (the output-removal row; the pending path was already covered by testOutputRemovalDrain's
+  drain-before-notification row, which disables the output while the admission configure is
+  still pending). An output transfer releases exactly once through the custom-tile forget,
+  translates the saved floating frame by the same area translation the window gets
+  (`rebaseTransientFloatingOnOutputTransfer` in `sendToOutput`'s custom branch), and the
+  destination adopts nothing; the row pins the translated floating position with per-output
   current desktops differing, and the refusal of a later claim under the stale record.
   Desktop/Activity membership changes keep the NT02 lane's deliberate lazy invalidation - a
   moved window is never adopted on the destination. Window/owner destruction during callbacks
-  and related-window closure were already covered by testControllerOwnedDestruction and the
-  release-ordering suites.
+  and related-window closure are covered by testControllerOwnedDestruction (12 rows: three
+  stages times four causes) and the release-ordering suites.
 
 The native sequence NT01-NT06 is complete. What remains for #115 is the production
 placement-provider bridge and the complete tiling policy (the Fusion-side feature), the
