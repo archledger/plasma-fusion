@@ -1538,3 +1538,73 @@ and down to the script.
   quick settings `toggle:<nonce>` twice, spread out `notifications:<nonce>`; up (Nothing) did
   nothing; down (Snap layouts) found no window to place. The machine was left as found (the
   script's keys deleted, the installed script loaded again, the first desktop current).
+
+## Dynamic tiling (2026-11-12)
+
+The per-workspace master-and-stack tiler (issue #115) lives inside `plasmafusion-placement`:
+the writer takes exactly one provider, and the tiler IS that provider's policy consumer —
+a separate package would need a fork-side per-window suppression seam the first slice
+deliberately defers.
+
+### How it works (Option A, the anchor approach)
+
+- **Toggle on** ("Plasma Fusion: Tile Workspace"): the active window becomes the master —
+  admitted into the transient tile through `Workspace.transientTiling().createTile()` +
+  `admitTile()` with the provider token; the workspace's other eligible windows become the
+  stack, their pre-tiling floats saved, placed by direct `frameGeometry` writes in the
+  endpoint-rounded column (the snap script's discipline: `Tiling.stackRects`).
+- **Toggle off**: the stack windows return to their saved floats; the master restores through
+  the native explicit restore (`Workspace.slotWindowRestore()` — Meta+Backspace's path);
+  the tree releases (`releaseTile`). The completion is asynchronous: the
+  `transientRestorationCompleted` signal marks the boundary.
+- **Native teardown**: the facade forwards `treeChanged`; a change with no live tree is
+  session-end — the stack floats restore, the session clears. This covers master close,
+  output removal, desktop removal, provider retirement, key conflict, a manual quick-tile or
+  move of the master, and output transfer — every native path at once, for free.
+- **Live**: new eligible windows on the tiled desktop join the stack; closed or minimized
+  windows leave the layout and the column refills; the provider's `record()` skips managed
+  windows (invariant 7: automatic rectangles never enter placement memory).
+- **One session at a time**: the controller holds one tree, the TileManager allows one
+  transient root per desktop. This is the contract, not a limitation to hide.
+- **Infeasible windows float**: a window whose minimum size exceeds its cell is left
+  floating (the defined safe state), not squeezed or dropped.
+
+### Shortcuts (sequence-less; the user assigns them)
+
+| Name | Action |
+|---|---|
+| Plasma Fusion: Tile Workspace | toggle on/off |
+| Plasma Fusion: Tile Focus Master | focus the master |
+| Plasma Fusion: Tile Focus Next | next in the cycle (master → stack → master) |
+| Plasma Fusion: Tile Focus Previous | previous in the cycle |
+
+### Config (`kwinrc [Script-plasmafusion-placement]`)
+
+| Key | Type | Range | Default |
+|---|---|---|---|
+| `Tiling.MasterFraction` | Double | 0.25–0.75 | 0.5 |
+| `Tiling.StackGap` | Int | 0–48 | 8 |
+
+### The pure rules (`Tiling.js`)
+
+The layout math lives in a `.pragma library` with node tests (`tiling.test.js`): the fraction
+clamp, the endpoint-rounded stack column, the per-window feasibility check, the layout
+separation (feasible placed, infeasible floated, the column re-filled between just the
+feasible), the session structure, the focus cycle, the float save. The eligibility predicates
+(`eligibleForMaster`, `eligibleForStack`) mirror the snap script's `usable()` guards.
+
+### What it rides
+
+Every native contract: the transient ownership (the master's floating-A guarantee), the
+placement-memory suppression (invariant 7), the explicit restore (NT03.6), the completion
+boundary (NT04), the command-intent matrix (NT05), the capture/replay filter (NT06A), the
+context-release and transfer rebase (NT06). The tiler is the policy consumer the contract
+names — it creates no geometry loops, writes no tree into kwinrc, and defers to native
+quick-tile/manual precedence.
+
+### Deliberately deferred
+
+Runtime master-width adjust and full-width-master (the re-admission dance); swap
+(release → settle → re-admit); multiple masters; simultaneous per-workspace sessions;
+divider dragging; session memory across toggle/restart; X11 (the native layer refuses
+admission); settings UI; auto-tiling rules; a separate tiler package.

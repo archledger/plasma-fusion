@@ -625,8 +625,33 @@ Item {
             }
             if (apiAvailable) {
                 api = Workspace.transientTiling();
+                // The native teardown: the facade forwards the controller's treeChanged; a
+                // change with no live tree is session-end (master close, output removal,
+                // desktop removal, provider retirement, key conflict, a manual quick-tile
+                // or move of the master, an output transfer — every native path at once).
+                api.treeChanged.connect(tiler.onTreeChanged);
             }
             return apiAvailable;
+        }
+
+        function onTreeChanged() {
+            if (!session.active || !apiAvailable || !api) {
+                return;
+            }
+            if (!api.hasTree()) {
+                // The tree is gone: restore the stack floats (the master's own restore
+                // already ran through the native layer — this is its aftermath).
+                log("tiling: the tree ended natively; restoring the stack");
+                for (let i = 0; i < session.stack.length; ++i) {
+                    const w = session.stack[i];
+                    const saved = session.savedFloats[String(w.internalId)];
+                    if (saved && !w.deleted) {
+                        w.frameGeometry = Qt.rect(saved.x, saved.y, saved.width, saved.height);
+                    }
+                }
+                session = Tiling.createSession();
+                log("tiling: off (native teardown)");
+            }
         }
 
         // Whether a window is one of this session's managed windows.

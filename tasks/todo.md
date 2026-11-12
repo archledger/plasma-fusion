@@ -507,9 +507,22 @@ Files: KWin `src/window.cpp`, `src/xdgshellwindow.cpp`, `src/useractions.cpp`, `
   and related-window closure are covered by testControllerOwnedDestruction (12 rows: three
   stages times four causes) and the release-ordering suites.
 
-The native sequence NT01-NT06 is complete. What remains for #115 is the production
-placement-provider bridge and the complete tiling policy (the Fusion-side feature), the
-re-entry tests, and ADR 0001's full-profile packaging.
+The native sequence NT01-NT06 is complete. The production placement-provider bridge is
+complete (the workspace-owned writer, the QML facade, the provider port). The first tiling
+slice (the master-and-stack tiler inside plasmafusion-placement) is the feature itself:
+
+## Tiling policy (the tiler) — first slice complete, in review
+
+- [x] The master-and-stack layout (Tiling.js + the main.qml integration, PR #164): the
+  master rides the native transient ownership; the stack windows are script-placed with
+  saved floats; the toggle, the native teardown (treeChanged), the focus cycle, the
+  provider's managed-window suppression (invariant 7), the part page and the config.
+- [ ] The re-entry tests (from DEFERRED: the removal-release and placement-memory matrices,
+  the saved-tree and native Restore/fullscreen cases) once #164 merges.
+- [ ] ADR 0001's full-profile packaging completion (the fork RPMs, the full Copr project,
+  the installer --full/--full-restore).
+- [ ] Deferred tiler features: swap, runtime width adjust, multiple masters, per-workspace
+  sessions, divider dragging, auto-tiling rules, settings UI.
 
 ## Checkpoint B
 - [ ] Relevant native suites pass with zero unexpected failures/skips/blacklists.
