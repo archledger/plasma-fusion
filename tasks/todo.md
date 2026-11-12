@@ -458,9 +458,24 @@ Files: KWin `src/xdgshellwindow.{h,cpp}`, `src/window.{h,cpp}`,
 `autotests/integration/xdgshellwindow_test.cpp` (maximum five).
 
 ## NT05 — Respect native and manual transitions
-- [ ] Maximize/fullscreen returns to the managed rectangle while owned; explicit Restore releases.
-- [ ] Manual move/resize and quick tiling take precedence, with no later stale restoration.
-- [ ] Wayland and X11 controls preserve ordinary behavior and existing shortcut bindings.
+- [x] NT05 complete as a pinning leaf (fork PR #14, squash 5158985542): a coverage map against
+  the landed suites found every NT05 behaviour already implemented; the command-intent matrix
+  (testOwnedCommandIntentMatrix, 8 rows) pins the distinctions on identical owned state - the
+  ordinary maximize command through the dispatch, the shortcut slot and the SSD titlebar button
+  toggles on the managed placement and keeps the ownership, while the explicit restore command
+  on the same state restores the captured floating frame and completes (the ordinary fullscreen
+  and partial-maximize toggles were already pinned by testOwnedMaximize/testOwnedMaximizeDecorated
+  and testOwnedFullScreen's ordinary rows); a plain manual move revokes detach-only with no
+  implicit restoration and the placement record keeps A; a quick tile takes precedence and the
+  un-quick-tile returns to the saved floating size, never the automatic rectangle; a constraint
+  the managed extents cannot honour wins through the safe release.
+- [x] Manual move/resize and quick tiling take precedence with no later stale restoration (the
+  manual-move and quick-tile rows above; the NT02 cancellation rows cover the boundaries).
+- [x] Wayland and X11 controls keep ordinary behaviour and the existing shortcut bindings: the
+  unowned ladder is unchanged text (QuickTiling/Maximized suites green through every slice),
+  the quick-tile shortcut bindings are covered by the stock shortcut rows, and X11 is
+  control-by-construction (no X11 path creates ownership). Qualified by the four-suite local
+  lane and one green fork campaign.
 Verification: command-intent matrix distinguishing `UntileOrRestoreOp` from ordinary
 maximize/fullscreen toggles, decoration/menu/shortcut paths and internal state changes; full/partial
 maximize, quick-tile and manual geometry cases. Changed constraints win through safe release.
