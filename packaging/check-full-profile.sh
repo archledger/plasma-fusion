@@ -5,7 +5,8 @@
 # The full-profile spec branch's automated checks (docs/full-profile.md): the stock default
 # never emits plasma-fusion-full; a full build with a matching exact pin emits it once; a full
 # build with a wrong-series pin fails; a full build without a pin fails. Keeps the %{with full}
-# gate exercised in CI without building the fork's RPMs.
+# gate exercised in CI without building the fork's RPMs. The pin's pf suffix carries any number
+# of digits (check-version.sh accepts pf10), so the two-digit gates mirror the one-digit ones.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 spec="$ROOT/packaging/fedora/plasma-fusion.spec"
@@ -25,7 +26,9 @@ query() { # DESC EXPECTED_COUNT ARGS...
 query "stock default never emits the metapackage" 0
 query "a pin alone (no --with full) never emits it" 0 --define 'kwin_full_pin 6.8.2-3.fc44.pf2'
 query "full + matching fc44 pin emits it once" 1 --with full --define 'kwin_full_pin 6.8.2-3.fc44.pf2'
+query "full + matching fc44 pin with a two-digit pf suffix emits it once" 1 --with full --define 'kwin_full_pin 6.8.2-3.fc44.pf10'
 query "full + fc45 pin is refused" 0 --with full --define 'kwin_full_pin 6.8.2-3.fc45.pf2'
+query "full + fc45 pin with a two-digit pf suffix is refused" 0 --with full --define 'kwin_full_pin 6.8.2-3.fc45.pf10'
 # the refused cases must be hard errors, not silent skips
 if rpmspec --define 'fedora 44' --with full --define 'kwin_full_pin 6.8.2-3.fc45.pf2' -q "$spec" >/dev/null 2>&1; then
   echo "FAIL full + fc45 pin: expected a hard error"

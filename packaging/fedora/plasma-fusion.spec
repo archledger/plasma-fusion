@@ -32,7 +32,7 @@
 %if "%{?kwin_full_pin}" == ""
 %{error:the full profile build needs the kwin pin set (%%global kwin_full_pin <exact fork EVR>)}
 %endif
-%if "%(echo '%{kwin_full_pin}' | grep -oE "\.fc%{?fedora}\.pf[0-9]$" || echo mismatch)" == "mismatch"
+%if "%(echo '%{kwin_full_pin}' | grep -oE "\.fc%{?fedora}\.pf[0-9]+$" || echo mismatch)" == "mismatch"
 %{error:the kwin pin '%{kwin_full_pin}' targets another Fedora release; this build is fc%{?fedora}}
 %endif
 %global build_full 1
