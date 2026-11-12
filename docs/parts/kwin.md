@@ -451,7 +451,7 @@ are not recorded either, while the user's later moves are.
 
 The memory file is `~/.config/plasmafusion-placementrc`, one JSON text under `[Windows] windows`
 (`{"v":1,"apps":{"<app id>":{"x":…,"y":…,"width":…,"height":…}}}`). On a KWin with the native
-placement writer (the fork's `Workspace.transientTiling()` facade, fork PRs #17-#19 — the
+placement writer (the fork's `Workspace.transientTiling()` facade, fork PRs #17-#20 — the
 writer's own C++ methods are not callable from QML), the script registers as the provider,
 binds each watched window to the writer under its app id and submits every record as a typed
 native call: the provider incarnation token first, then the revision, the window, an already
@@ -469,16 +469,22 @@ entry. The writer binds a window to one key for its whole lifetime: a window tha
 its identity is usable (no desktop file and no class yet) is bound at its first record, and an
 identity that changes after the binding is neither rebound nor recorded natively — those
 records live in the session cache only, until the writer grows a re-binding path. A window an
-earlier incarnation of the script already bound (a reload) keeps that binding; the facade
-cannot ask which key it holds, so the current key is assumed and the first Accepted record is
-proven against the writer's snapshot — a binding disproven that way (the identity changed
-across the reload) is retired, and the window's records stay in the session cache. When the
+earlier incarnation of the script already bound (a reload) keeps that binding, and the script
+asks the writer which key that is (`windowBinding`, fork PR #20): the record files under the
+binding's key, never under a key the caller passes, so a refused track settled by assuming the
+key would overwrite another app's saved entry when the identity changed across the reload,
+where no comparison could detect or undo it. The same key confirms the binding (the reload's
+binding is the one to keep writing through); another key retires it — the same
+never-rebound policy as an identity that changed after the binding — and an empty answer (the
+writer was busy and holds nothing) retries the track on the next record, the session cache
+holding the record until then. A facade without the question (an older fork) never assumes
+either: those windows keep their records in the session cache. When the
 writer refuses the provider registration — or the facade exists but answers nothing — the
 memory stays disabled for the session — a native
 session must not bypass the sole native writer. The native lane runs only on the fork's KWin;
 the session scenarios in CI exercise the stock and backport lanes, which take the legacy
-transport, and the node suite drives the registration, identity-binding, event-sequence and
-reconciliation rules (`packages/kwin/tests/placement.test.js`). On stock KWin or older forks
+transport, and the node suite drives the registration, identity-binding, refused-binding,
+event-sequence and reconciliation rules (`packages/kwin/tests/placement.test.js`). On stock KWin or older forks
 without the facade, both directions run through plasmashell's desktop scripting (`ConfigFile`,
 the same bridge the tablet script's panel policy uses): the KWin scripting API has `readConfig`
 and no file write at all, and plasmashell's `evaluateScript` answers with what the script
