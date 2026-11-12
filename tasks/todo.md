@@ -468,29 +468,35 @@ Dependencies: NT04.
 Files: KWin `src/window.cpp`, `src/xdgshellwindow.cpp`, `src/useractions.cpp`, `tiles_test.cpp`,
 `xdgshellwindow_test.cpp` (maximum five; split if other files are needed).
 
-## NT06A — Qualify native placement capture and replay
-- [ ] Determine whether existing `PlacementTracker` filtering preserves the original floating
-  snapshot during ownership/restoration; change it only if a discriminating regression fails.
-- [ ] Output-layout-away-and-back never replays an automatic frame over the restored floating
-  frame, whether the client is settled or restoration-pending.
-- [ ] Ordinary native layout restoration and manual changes remain unchanged in matched controls.
-Verification: capture/replay source audit, owned/restoring layout round trips and stock controls.
-Dependencies: NT05.
-Files: KWin `src/placementtracker.{h,cpp}`, `autotests/integration/outputchanges_test.cpp`
-(maximum three; refine the test location against actual registration in NT01).
+## NT06A — Qualify native placement capture and replay — complete
+- [x] NT06A complete (fork PR #15, squash d33c701794). The audit found the tracker blind to
+  transient ownership: it recorded the tile rectangle as the user's placement, and a layout flip
+  replayed it over the floating frame while the replay's own moveResize cancelled any live
+  ownership. The fix is an ownership-aware capture filter - `Window::hasTransientOwnershipRecord()`
+  gating the geometry/maximize/quick-tile/fullscreen savers and both seedings (the restore-field
+  savers stay: the ownership writes the floating frame there deliberately; the interaction
+  counter needs no filter because user intent revokes ownership first). The discriminating
+  away-and-back rows (settled-owned and restoration-pending) were RED before the filter and green
+  after, with the settled row's client acknowledging the migration's coalesced configures first
+  - the replayed frame lands behind that queue. Stock away-and-back rows unchanged.
 
-## NT06 — Release before context destruction
-- [ ] Source-output/desktop removal releases while required context is alive, for pending and
-  settled clients; missing/stale contexts fail safely.
-- [ ] Output transfers preserve translated floating state; desktop/Activity membership changes
-  revoke ownership without automatic adoption on the destination.
-- [ ] Window/owner destruction during callbacks and related-window closure are lifetime-safe.
-Verification: existing removal/transfer controls plus context-generation and closure tests;
-matched memory-check baseline with no new error contexts. Include a transfer between outputs
-whose current desktops differ; transform the saved floating frame and release ownership once.
-Dependencies: NT06A.
-Files: KWin `src/tiles/tilemanager.cpp`, `src/workspace.cpp`, `src/virtualdesktops.cpp`,
-`tiles_test.cpp`, `outputchanges_test.cpp` (maximum five; split if required).
+## NT06 — Release before context destruction — complete
+- [x] NT06 complete (fork PR #16, squash dede6787ae). Removing the desktop or output a settled
+  owner's tree lives on releases the record while its context dies: the floating frame and the
+  writer reservation survive as the restoration barrier (rows: desktop-removal and
+  output-removal on the settled owner). An output transfer releases exactly once through the
+  custom-tile forget, translates the saved floating frame by the same area translation the
+  window gets (`rebaseTransientFloatingOnOutputTransfer` in `sendToOutput`'s custom branch), and
+  the destination adopts nothing; the row pins the translated floating position with per-output
+  current desktops differing, and the refusal of a later claim under the stale record.
+  Desktop/Activity membership changes keep the NT02 lane's deliberate lazy invalidation - a
+  moved window is never adopted on the destination. Window/owner destruction during callbacks
+  and related-window closure were already covered by testControllerOwnedDestruction and the
+  release-ordering suites.
+
+The native sequence NT01-NT06 is complete. What remains for #115 is the production
+placement-provider bridge and the complete tiling policy (the Fusion-side feature), the
+re-entry tests, and ADR 0001's full-profile packaging.
 
 ## Checkpoint B
 - [ ] Relevant native suites pass with zero unexpected failures/skips/blacklists.
