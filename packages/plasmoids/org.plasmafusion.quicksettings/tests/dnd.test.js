@@ -88,6 +88,35 @@ assert.strictEqual(first.kind, "day", "Friday: Monday's end shows the day");
 assert.strictEqual(untilLabel(monday, first.refreshAt).kind, "time", "a day before the end: the time");
 assert.strictEqual(untilLabel(monday, monday.getTime()).kind, "none", "at the end: nothing");
 
+// The change times step back calendar days, to the end's own clock time: a day or a week with a
+// daylight saving change in it is an hour longer or shorter than 24 or 168 hours, so elapsed time
+// lands the change an hour off (Berlin leaves summer time on 2026-10-25, enters it on 2026-03-29).
+{
+    const zone = process.env.TZ;
+    process.env.TZ = "Europe/Berlin";
+    if (new Date(2026, 9, 25, 12, 0).getTimezoneOffset() === -60 && new Date(2026, 9, 24, 12, 0).getTimezoneOffset() === -120) {
+        const week = untilLabel(at(25, 6, 0), at(14, 10, 0).getTime());
+        assert.strictEqual(week.kind, "date", "over the change to winter time, eleven days ahead: the date");
+        assert.strictEqual(week.refreshAt, at(18, 6, 0).getTime(), "a week before it: the same clock time, not an hour off the 169-hour week");
+        const day = untilLabel(at(25, 6, 0), at(21, 10, 0).getTime());
+        assert.strictEqual(day.kind, "day", "the change's own morning, four days ahead: the day and time");
+        assert.strictEqual(day.refreshAt, at(24, 6, 0).getTime(), "a day before it: the same clock time, not an hour off the 25-hour day");
+        const springWeek = untilLabel(new Date(2026, 2, 29, 6, 0), new Date(2026, 2, 20, 10, 0).getTime());
+        assert.strictEqual(springWeek.kind, "date", "over the change to summer time: the date");
+        assert.strictEqual(springWeek.refreshAt, new Date(2026, 2, 22, 6, 0).getTime(), "a week before it: the same clock time, not an hour off the 167-hour week");
+        const springDay = untilLabel(new Date(2026, 2, 29, 6, 0), new Date(2026, 2, 26, 10, 0).getTime());
+        assert.strictEqual(springDay.kind, "day", "the change's own morning, three days ahead: the day and time");
+        assert.strictEqual(springDay.refreshAt, new Date(2026, 2, 28, 6, 0).getTime(), "a day before it: the same clock time, not an hour off the 23-hour day");
+    } else {
+        throw new Error("no time zone data for Europe/Berlin: the daylight saving checks cannot run");
+    }
+    if (zone === undefined) {
+        delete process.env.TZ;
+    } else {
+        process.env.TZ = zone;
+    }
+}
+
 // Who or what holds Do Not Disturb.
 assert.deepStrictEqual(reasons({ byApp: false, names: ["Firefox"], reasons: ["Video"] }), [], "not held by an app: names ignored");
 assert.deepStrictEqual(reasons({ byApp: true, names: ["Firefox", "Zoom"], reasons: ["Playing video"] }),

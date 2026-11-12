@@ -1131,7 +1131,8 @@ Disturb on with an end already passed, which nothing ended). While they stay ope
 wall clock's minutes (Plasma's `Clock`), so "this evening" goes at 20:00; a choice's end is worked
 out at the click ("For 1 hour" is an hour from then), and the service refuses an end that has
 passed. Tests: `tests/dnd.test.js` (node; ids and ends at given times, month ends,
-Friday/Saturday/Sunday, both daylight saving changes in Europe/Berlin), `tests/tiles_edit_test.py` (the main page on the real backend: the
+Friday/Saturday/Sunday, both daylight saving changes in Europe/Berlin and the change times of the
+"Until" text across them), `tests/tiles_edit_test.py` (the main page on the real backend: the
 choices close with the sheet and on another page, follow their clock, and "For 1 hour" counts from
 the click) and `tests/notifications_service_test.py` (an end that has passed leaves Do Not Disturb
 off).
@@ -1146,7 +1147,9 @@ formats (`toLocaleTimeString`, `toLocaleDateString`): a format string's `ddd` ga
 names in every language ("Mon 06:00" for a German region, where Plasma says "Mo. 06:00"). It was
 read once when Do Not Disturb was turned on (`Date.now()` in a binding is not
 reactive), so a Do Not Disturb until Monday kept saying `On`. `dnd.js` `untilLabel()` says which
-form applies and when it changes next; while a change is ahead, the service
+form applies and when it changes next (a day and a week before the end at the end's own clock
+time: calendar days, not elapsed hours — a span with a daylight saving change in it is an hour
+longer or shorter, so the hours landed the change an hour off); while a change is ahead, the service
 (`services/Notifications.qml`) moves its clock on the wall clock's minutes with Plasma's `Clock`
 (`org.kde.plasma.clock`, a `CLOCK_REALTIME` timer that also fires right after a resume or a clock
 change, and the one the stock applet's own minute check runs on). Nothing listens for "until

@@ -68,11 +68,22 @@ function valid(date) {
     return !!date && typeof date.getTime === "function" && !isNaN(date.getTime());
 }
 
+// The same clock time `days` calendar days before `until` (a Date), as a time in ms. The label's
+// "a day" and "a week" before the end are the end's own clock time, and a span with a daylight
+// saving change in it is an hour longer or shorter than that many 24-hour days (the week before
+// 2026-10-25 in Central Europe is 169 hours), so stepping back elapsed hours lands an hour off.
+function daysBefore(until, days) {
+    var before = new Date(until.getTime());
+    before.setDate(before.getDate() - days);
+    return before.getTime();
+}
+
 // How the end of a Do Not Disturb running until `until` reads at `now` (a time in ms), and when
 // that changes: {kind, refreshAt}. kind: "none" (no end to show: none set, passed, or "until turned
 // off"), "time" (within 24 hours: "Until 18:00"), "day" (within a week: "Until Mon 06:00") or
-// "date". refreshAt is the time in ms when the kind changes next (the end itself for "time"), or
-// -1 when nothing changes ahead (no end, or "until turned off").
+// "date". refreshAt is the time in ms when the kind changes next (the end itself for "time", the
+// same clock time a day or a week before for "day" and "date"), or -1 when nothing changes ahead
+// (no end, or "until turned off").
 function untilLabel(until, now) {
     if (!valid(until)) {
         return { kind: "none", refreshAt: -1 };
@@ -86,10 +97,10 @@ function untilLabel(until, now) {
         return { kind: "time", refreshAt: end };
     }
     if (left <= 7 * DAY) {
-        return { kind: "day", refreshAt: end - DAY };
+        return { kind: "day", refreshAt: daysBefore(until, 1) };
     }
     if (left <= FAR) {
-        return { kind: "date", refreshAt: end - 7 * DAY };
+        return { kind: "date", refreshAt: daysBefore(until, 7) };
     }
     // "Until turned off": nothing to show, and nothing to look at again for it (the sheet reads the
     // label again whenever Do Not Disturb or its end changes).
