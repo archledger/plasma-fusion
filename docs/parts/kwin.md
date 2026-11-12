@@ -465,7 +465,13 @@ in-memory cache is a read-through from the writer's `snapshot()`, re-read for a 
 restore: a deferred same-key update (an active reservation held the key) only becomes visible
 in the snapshot after its barrier ended, later than the cache's own write. A submission the
 writer suppresses (a restore watermark) or defers reconciles the cache from the writer's own
-entry. The writer binds a window to one key for its whole lifetime: a window that opens before
+entry. An orderly compositor teardown keeps the pending map: the writer persists an accepted
+record no flush attempt has covered yet once, best effort, at its own destruction (fork PR #21)
+— a flush that already failed is not retried there, and an interrupted compositor (or a file
+the teardown write cannot reach) leaves the last flushed state, which the restarted writer
+serves while accepting new records normally. Owner state never crosses a restart: the automatic
+rectangle never entered the file, and the reservations, watermarks and window bindings die with
+the writer, so a newly mapped client starts from the ordinary record alone. The writer binds a window to one key for its whole lifetime: a window that opens before
 its identity is usable (no desktop file and no class yet) is bound at its first record, and an
 identity that changes after the binding is neither rebound nor recorded natively — those
 records live in the session cache only, until the writer grows a re-binding path. A window an
