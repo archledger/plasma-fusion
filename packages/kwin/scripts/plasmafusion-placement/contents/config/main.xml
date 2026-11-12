@@ -18,4 +18,16 @@
       <default></default>
     </entry>
   </group>
+  <group name="Tiling">
+    <entry name="MasterFraction" type="Double">
+      <default>0.5</default>
+      <min>0.25</min>
+      <max>0.75</max>
+    </entry>
+    <entry name="StackGap" type="Int">
+      <default>8</default>
+      <min>0</min>
+      <max>48</max>
+    </entry>
+  </group>
 </kcfg>

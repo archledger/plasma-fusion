@@ -6,6 +6,7 @@
 import QtQuick
 import org.kde.kwin
 import "Placement.js" as Placement
+import "Tiling.js" as Tiling
 
 // Plasma Fusion window placement memory (bug 15329 - the desktop's most-duplicated open wish):
 // each app's window is remembered where and how big it was left, and given back when the app
@@ -30,13 +31,17 @@ import "Placement.js" as Placement
 // - On a KWin with Window.requestedGeometry (the optional backport, packaging/patches/kwin), a
 //   frame the client has not yet brought up to KWin's request is not recorded: after an untile it
 //   can still have the tile's size (KDE bug 527821). Without the property every frame counts.
-// - The memory lives in ~/.config/plasmafusion-placementrc [Windows] and is written and read
-//   through plasmashell's desktop scripting: the KWin scripting API has no file write (only
-//   readConfig). The file is read once at start (with a few retries while plasmashell comes up);
-//   windows opened before that answer keep KWin's placement.
-// - Settings (kwinrc [Script-plasmafusion-placement], contents/config/main.xml): RememberSize and
-//   IgnoreApps (app ids or window classes). The KWin Scripts KCM writes them; KWin's reconfigure
-//   reloads them in place.
+// - On a KWin with the native placement writer (the fork's Workspace.placementWriter()), the
+//   script registers as the provider and submits typed records; on stock KWin it falls back to
+//   the legacy D-Bus file transport.
+//
+// Dynamic tiling (issue #115, Option A): the master window rides the native transient
+// ownership; the stack windows are placed by direct frameGeometry writes with their
+// pre-tiling floats saved for the untoggle. The tiler lives inside this package because
+// the writer takes exactly one provider and the tiler IS that provider's policy consumer.
+//
+// Settings (kwinrc [Script-plasmafusion-placement], contents/config/main.xml): RememberSize,
+// IgnoreApps, Tiling.MasterFraction, Tiling.StackGap.
 //
 // No timer runs while idle: one shot per window open, one for a pending memory write.
 Item {
@@ -79,11 +84,135 @@ Item {
     function ignoreList() {
         return setting("IgnoreApps", "");
     }
+    function tilingMasterFraction() {
+        return parseFloat(setting("Tiling.MasterFraction", 0.5));
+    }
+    function tilingStackGap() {
+        return parseInt(setting("Tiling.StackGap", 8));
+    }
 
-    // ---------------------------------------------------------------- the memory file
-    // Both directions run through plasmashell's desktop scripting: evaluateScript answers with
-    // what the script printed, and a ConfigFile write is synced when the scripting engine drops
-    // the object at the end of the call.
+    // ---------------------------------------------------------------- the memory writer
+    // The compositor's placement writer (docs/NATIVE-TILING-CONTRACT.md): typed native calls
+    // replace the legacy plasmashell D-Bus file transport. The token is opaque text to QML; the
+    // writer validates every submission natively. On a KWin without Workspace.placementWriter
+    // (stock or older forks) the script falls back to the legacy transport below.
+
+    property bool nativeWriter: false
+    property bool nativeRefused: false // registration refused: no legacy fallback
+    property var writer: null
+    property string providerToken: ""
+    property int writerRevision: 0
+    property var eventSequences: ({})
+
+    function detectNativeWriter() {
+        try {
+            nativeWriter = typeof Workspace.placementWriter === "function";
+        } catch (e) {
+            nativeWriter = false;
+        }
+        if (!nativeWriter) {
+            log("no native placement writer; using the legacy transport");
+        }
+        return nativeWriter;
+    }
+
+    function registerWithWriter() {
+        if (!nativeWriter || writer) {
+            return;
+        }
+        writer = Workspace.placementWriter();
+        if (!writer) {
+            nativeWriter = false;
+            return;
+        }
+        providerToken = String(writer.registerProvider(root));
+        if (providerToken === "" || providerToken === "undefined") {
+            // A native session must not bypass the sole native writer: the memory stays
+            // disabled rather than falling back to a transport the contract retires.
+            log("the writer refused the provider registration; the memory stays disabled this session");
+            nativeWriter = false;
+            writer = null;
+            nativeRefused = true;
+            return;
+        }
+        log("registered as the placement provider");
+    }
+
+    function trackWithWriter(w) {
+        if (!nativeWriter || !writer || !w) {
+            return;
+        }
+        const key = appIdOf(w);
+        if (key === "") {
+            return;
+        }
+        writer.trackWindow(w.internalId, key);
+        if (!eventSequences[String(w.internalId)]) {
+            eventSequences[String(w.internalId)] = 0;
+        }
+    }
+
+    function recordWithWriter(w, frame) {
+        if (!nativeWriter || !writer || !w || providerToken === "") {
+            return;
+        }
+        const id = String(w.internalId);
+        const seq = (eventSequences[id] || 0) + 1;
+        // The first argument is the provider incarnation token (the opaque text from
+        // registerProvider); the writer rejects submissions from retired incarnations.
+        writer.record(providerToken, ++writerRevision, w.internalId,
+                      Qt.rect(Math.round(frame.x), Math.round(frame.y),
+                              Math.round(frame.width), Math.round(frame.height)),
+                      seq, 0); // Origin.Manual
+        eventSequences[id] = seq;
+        // Reconcile the cache with the writer's decision: when the submission was suppressed
+        // (a restore watermark) or deferred (an active reservation), the writer's entry for
+        // this key is the authority, not the in-memory cache the policy just wrote.
+        reconcileKeyWithWriter(appIdOf(w));
+    }
+
+    function reconcileKeyWithWriter(key) {
+        if (!nativeWriter || !writer || key === "") {
+            return;
+        }
+        const snap = writer.snapshot();
+        if (!snap || !snap.entries) {
+            return;
+        }
+        const entry = snap.entries[key];
+        if (entry !== undefined) {
+            apps[key] = { x: entry.x, y: entry.y, width: entry.width, height: entry.height };
+        }
+    }
+
+    function readFromWriter() {
+        if (!nativeWriter || !writer || loaded) {
+            return;
+        }
+        const snap = writer.snapshot();
+        if (!snap) {
+            // The writer may not be ready at script-load time; retry like the legacy path.
+            if (readTries < 10) {
+                readTries++;
+                readRetry.start();
+            } else {
+                log("the native writer did not answer; this session runs without the window memory");
+            }
+            return;
+        }
+        const entries = snap.entries;
+        const out = {};
+        for (const key in entries) {
+            const r = entries[key];
+            out[key] = { x: r.x, y: r.y, width: r.width, height: r.height };
+        }
+        apps = out;
+        loaded = true;
+        log("memory loaded from the native writer: " + Object.keys(apps).length + " app(s)");
+    }
+
+    // ---------------------------------------------------------------- the legacy transport
+    // Used when the session's KWin does not expose the placement writer (stock or older forks).
 
     function readScript() {
         return "var out = '';\n"
@@ -101,7 +230,11 @@ Item {
     }
 
     function read() {
-        if (loaded) {
+        if (loaded || nativeRefused) {
+            return;
+        }
+        if (nativeWriter) {
+            readFromWriter();
             return;
         }
         readTries++;
@@ -144,6 +277,10 @@ Item {
         if (!loaded || sending || sentRevision === revision) {
             return;
         }
+        if (nativeWriter) {
+            sentRevision = revision;
+            return;
+        }
         sending = true;
         sendingRevision = revision;
         writeCall.arguments = [writeScript(Placement.serialize(apps))];
@@ -180,7 +317,7 @@ Item {
 
     function changed() {
         revision++;
-        if (!sending) {
+        if (!nativeWriter && !sending) {
             flush.interval = 2000;
             flush.restart();
         }
@@ -273,6 +410,10 @@ Item {
         if (!loaded || !w || ignoredWindow(w)) {
             return;
         }
+        // The tiler's managed windows are not the user's floating placement (invariant 7).
+        if (tiler.session.active && (w === tiler.session.master || tiler.manages(w))) {
+            return;
+        }
         if (!Placement.eligible(stateOf(w, watched[String(w.internalId)]))) {
             return;
         }
@@ -284,6 +425,7 @@ Item {
         if (Placement.remember(apps, id, frameRect(w))) {
             changed();
         }
+        recordWithWriter(w, frameRect(w));
     }
 
     // A geometry change the memory was told about (never during the quiet window after a restore;
@@ -344,8 +486,15 @@ Item {
             entry.onRequested = true;
         }
         watched[key] = entry;
+        trackWithWriter(w);
 
         const state = stateOf(w, entry);
+        // The tiler's managed windows: a new window on the tiled desktop joins the stack, not
+        // the placement memory's restore.
+        if (tiler.session.active && tiler.managesDesktop(w)) {
+            tiler.addWindow(w);
+            return;
+        }
         if (restoreAllowed && loaded && id !== "" && !ignoredWindow(w) && Placement.eligible(state)) {
             const saved = apps[id];
             const current = frameRect(w);
@@ -404,6 +553,10 @@ Item {
         if (!entry) {
             return;
         }
+        // The tiler: a closed managed window leaves the layout.
+        if (tiler.session.active) {
+            tiler.removeWindow(w);
+        }
         // The last place before the window went. KWin marks a closing window deleted before
         // windowRemoved (Wayland and X11), so the window is read as it is: its frame geometry,
         // maximize mode and tile stay as they were (requestTile is a no-op once deleted).
@@ -451,10 +604,255 @@ Item {
         }
     }
 
+    // ---------------------------------------------------------------- dynamic tiling (issue #115)
+
+    // The tiler's session state. One session at a time: the controller holds one tree, the
+    // TileManager allows one transient root per desktop. The master window rides the native
+    // transient ownership; the stack windows are script-placed with saved floats.
+    QtObject {
+        id: tiler
+
+        property var session: Tiling.createSession()
+        // The facade (present only on the fork with TransientTilingApi).
+        property var api: null
+        property bool apiAvailable: false
+
+        function detectApi() {
+            try {
+                apiAvailable = typeof Workspace.transientTiling === "function";
+            } catch (e) {
+                apiAvailable = false;
+            }
+            if (apiAvailable) {
+                api = Workspace.transientTiling();
+            }
+            return apiAvailable;
+        }
+
+        // Whether a window is one of this session's managed windows.
+        function manages(w) {
+            if (!session.active || !w) {
+                return false;
+            }
+            if (w === session.master) {
+                return true;
+            }
+            return session.stack.indexOf(w) >= 0;
+        }
+
+        // Whether a window is on the session's desktop.
+        function managesDesktop(w) {
+            if (!session.active || !w || !session.desktop) {
+                return false;
+            }
+            return !w.onAllDesktops && w.desktops && w.desktops.length === 1
+                && String(w.desktops[0]) === String(session.desktop);
+        }
+
+        // Toggle the tiling on or off.
+        function toggle() {
+            if (session.active) {
+                untoggle();
+            } else {
+                start();
+            }
+        }
+
+        function start() {
+            if (session.active || !loaded) {
+                return;
+            }
+            const w = Workspace.activeWindow;
+            if (!Tiling.eligibleForMaster(w)) {
+                log("tiling: the active window is not eligible");
+                return;
+            }
+            const output = Workspace.activeScreen;
+            const desktop = Workspace.currentDesktop;
+            if (!output || !desktop) {
+                return;
+            }
+
+            // The stack candidates (before the master is admitted).
+            const candidates = Tiling.stackCandidates(Workspace.stackingOrder, w, desktop);
+
+            // The native admission first (invariant 8: before any stack write).
+            if (apiAvailable && api) {
+                const fraction = Tiling.masterFraction({ masterFraction: tilingMasterFraction() });
+                const tileRect = Tiling.masterTileRect(fraction);
+                const result = api.createTile(output, desktop, Qt.rect(tileRect.x, tileRect.y, tileRect.width, tileRect.height));
+                if (!result || result.result !== 0) { // 0 = Accepted
+                    log("tiling: the tree was refused");
+                    return;
+                }
+                const gen = result.generation;
+                const key = appIdOf(w);
+                const admitResult = api.admitTile(gen, w, key, providerToken);
+                if (admitResult !== 0) { // 0 = Accepted
+                    log("tiling: the admission was refused (" + admitResult + ")");
+                    api.releaseTile(gen);
+                    return;
+                }
+                session.generation = gen;
+            } else {
+                log("tiling: the native facade is not available; the tiler needs the fork");
+                return;
+            }
+
+            session.active = true;
+            session.master = w;
+            session.masterKey = appIdOf(w);
+            session.output = output;
+            session.desktop = desktop;
+            session.stack = [];
+            session.savedFloats = {};
+
+            // The work area and the divider.
+            const area = Workspace.clientArea(Workspace.MaximizeArea, output, desktop);
+            session.dividerX = area.x + Math.round(area.width * Tiling.masterFraction({ masterFraction: tilingMasterFraction() }));
+
+            // Save every candidate's float, then layout.
+            const eligible = [];
+            for (let i = 0; i < candidates.length; ++i) {
+                if (Tiling.eligibleForStack(candidates[i])) {
+                    eligible.push(candidates[i]);
+                    const g = candidates[i].frameGeometry;
+                    session.savedFloats[String(candidates[i].internalId)] =
+                        { x: g.x, y: g.y, width: g.width, height: g.height };
+                }
+            }
+            session.stack = eligible;
+            relayout();
+            log("tiling: on (" + eligible.length + " stack window(s))");
+        }
+
+        function untoggle() {
+            if (!session.active) {
+                return;
+            }
+            // The stack windows return to their saved floats.
+            for (let i = 0; i < session.stack.length; ++i) {
+                const w = session.stack[i];
+                const saved = session.savedFloats[String(w.internalId)];
+                if (saved && !w.deleted) {
+                    w.frameGeometry = Qt.rect(saved.x, saved.y, saved.width, saved.height);
+                }
+            }
+            // The master's native restore (Meta+Backspace equivalent).
+            if (session.master && !session.master.deleted) {
+                Workspace.activeWindow = session.master;
+                Workspace.slotWindowRestore();
+            }
+            // Release the tree (an empty tree blocks future createTile).
+            if (apiAvailable && api && session.generation > 0) {
+                api.releaseTile(session.generation);
+            }
+            session = Tiling.createSession();
+            log("tiling: off");
+        }
+
+        function relayout() {
+            if (!session.active) {
+                return;
+            }
+            const area = Workspace.clientArea(Workspace.MaximizeArea, session.output, session.desktop);
+            const gap = tilingStackGap();
+            const result = Tiling.layoutStack(session.stack, area, session.dividerX, gap);
+            // Place the feasible windows.
+            for (let i = 0; i < result.placed.length; ++i) {
+                const p = result.placed[i];
+                if (!p.window.deleted) {
+                    p.window.frameGeometry = Qt.rect(p.rect.x, p.rect.y, p.rect.width, p.rect.height);
+                }
+            }
+        }
+
+        function addWindow(w) {
+            if (!session.active || !w || manages(w)) {
+                return;
+            }
+            if (!managesDesktop(w) || !Tiling.eligibleForStack(w)) {
+                return;
+            }
+            const g = w.frameGeometry;
+            session.savedFloats[String(w.internalId)] = { x: g.x, y: g.y, width: g.width, height: g.height };
+            session.stack.push(w);
+            relayout();
+        }
+
+        function removeWindow(w) {
+            if (!session.active || !w) {
+                return;
+            }
+            const idx = session.stack.indexOf(w);
+            if (idx >= 0) {
+                session.stack.splice(idx, 1);
+                delete session.savedFloats[String(w.internalId)];
+                relayout();
+            }
+        }
+
+        function focusMaster() {
+            if (session.active && session.master && !session.master.deleted) {
+                Workspace.activeWindow = session.master;
+            }
+        }
+
+        function focusNext() {
+            if (!session.active) {
+                return;
+            }
+            const next = Tiling.nextInCycle(session, Workspace.activeWindow);
+            if (next && !next.deleted) {
+                Workspace.activeWindow = next;
+            }
+        }
+
+        function focusPrevious() {
+            if (!session.active) {
+                return;
+            }
+            const prev = Tiling.previousInCycle(session, Workspace.activeWindow);
+            if (prev && !prev.deleted) {
+                Workspace.activeWindow = prev;
+            }
+        }
+    }
+
+    // The tiler's shortcuts (sequence-less: the user assigns them; none claims a default key
+    // from another action).
+    ShortcutHandler {
+        name: "Plasma Fusion: Tile Workspace"
+        text: i18n("Toggle dynamic tiling on this workspace")
+        sequence: ""
+        onActivated: tiler.toggle()
+    }
+    ShortcutHandler {
+        name: "Plasma Fusion: Tile Focus Master"
+        text: i18n("Focus the tiling master window")
+        sequence: ""
+        onActivated: tiler.focusMaster()
+    }
+    ShortcutHandler {
+        name: "Plasma Fusion: Tile Focus Next"
+        text: i18n("Focus the next window in the tiling cycle")
+        sequence: ""
+        onActivated: tiler.focusNext()
+    }
+    ShortcutHandler {
+        name: "Plasma Fusion: Tile Focus Previous"
+        text: i18n("Focus the previous window in the tiling cycle")
+        sequence: ""
+        onActivated: tiler.focusPrevious()
+    }
+
     // ---------------------------------------------------------------- start and stop
 
     Component.onCompleted: {
         log("started");
+        detectNativeWriter();
+        registerWithWriter();
+        tiler.detectApi();
         read();
         // Windows already open when the script (re)loads - a Fusion setup enables it in a running
         // session, a reconfigure can reload it - are watched so their moves and closes are
@@ -484,7 +882,11 @@ Item {
     // left connected would call into a destroyed context, and every disable/enable cycle would add
     // another.
     Component.onDestruction: {
-        if (Placement.teardownWrite(loaded, revision, sentRevision, sending, sendingRevision)) {
+        // The tiler's teardown: restore the stack floats before the script dies.
+        if (tiler.session.active) {
+            tiler.untoggle();
+        }
+        if (!nativeWriter && Placement.teardownWrite(loaded, revision, sentRevision, sending, sendingRevision)) {
             writeCall.arguments = [writeScript(Placement.serialize(apps))];
             writeCall.call();
         }
