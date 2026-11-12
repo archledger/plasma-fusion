@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# The install scriptlet of the plasma-fusion-full metapackage (referenced by its PKGBUILD's
+# install= line: functions left in the PKGBUILD itself never run). The pin has to be added by
+# hand — pacman has no holds an install scriptlet could set — so the messages are the pin's
+# instructions, shown where a user cannot miss them.
+
+post_install() {
+  # The pinned fork tag, from the profile marker this package installs (a scriptlet's own
+  # arguments carry the metapackage's version, not the pin).
+  local pin=""
+  if [ -r /usr/share/doc/plasma-fusion-full/PROFILE ]; then
+    pin=$(sed -n 's/^kwin=//p' /usr/share/doc/plasma-fusion-full/PROFILE)
+  fi
+  echo "==> plasma-fusion-full: the KWin fork is pinned at ${pin:-the tagged release}"
+  echo "==> Add 'IgnorePkg = kwin-fusion' to /etc/pacman.conf to hold the pin"
+  echo "==> See /usr/share/doc/plasma-fusion-full/ARCH-PINNING for details"
+}
+
+post_remove() {
+  echo "==> plasma-fusion-full removed: remove IgnorePkg from /etc/pacman.conf"
+  echo "==> and reinstall the stock kwin package"
+}
