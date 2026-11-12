@@ -1003,6 +1003,19 @@ Offline (laptop):
   its settings and for a gap that is not a number, and the settings dialog's (`main.xml`,
   `config.ui`); each fails with its old default of 6 (2026-10-16, 65 checks). Build the stage
   with `STAGE=STAGE_HOME tools/build.sh kwin`.
+ - `QT_QPA_PLATFORM=offscreen python3
+   packages/kwin/tests/offscreen/tiling_lifecycle_test.py [PACKAGES_KWIN_DIR]` (CI `build`, on
+   the snap geometry step's stage) loads the real placement `main.qml` in Qt with the stand-in
+   `org.kde.kwin` module and a mock of the fork's `TransientTilingApi` facade, then drives the
+   tiler's whole native lifecycle through the Tile Workspace shortcut: the tree created and the
+   master admitted before any stack geometry write (invariant 8; the mock snapshots the stack at
+   `createTile`), the configured `MasterFraction` reaching the native tile, the endpoint-rounded
+   column the script writes, a window joining live, the untoggle (floats back, the master's
+   `slotWindowRestore`, `releaseTile` with the admitted generation), the native `treeChanged`
+   teardown (floats back, no release of an ended tree, the next toggle lays out again) and a
+   refused tree (no admission, no geometry write); after the settling second, no managed
+   window's automatic rectangle reached the writer (invariant 7). Mutation-checked: skipping
+   `admitTile`, skipping the untoggle's `releaseTile` and ignoring the teardown each fail it.
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
 bus, 1440x900). Seeds: `packages/kwin/tests/vsession/make-seed.sh STAGE_HOME SEED dark|light`
@@ -1698,8 +1711,12 @@ feasible), the session structure, the focus cycle, the float save, the one works
 (`onWorkspace` - the candidates, the managed windows and the leavers read it), the
 minimized-before members (`dormantCandidates`, and `eligibleDormant` - the one rule the
 toggle-on scan and the live add of an already-minimized window read), the reflow float
-restores (`floatRestores`) and the own-cell test (`isOwnCell`). The eligibility predicates
-(`eligibleForMaster`, `eligibleForStack`) mirror the snap script's `usable()` guards.
+restores (`floatRestores`), the toggle's view comparison (`sameView`) and the own-cell test
+(`isOwnCell`). The eligibility predicates (`eligibleForMaster`, `eligibleForStack`) mirror
+the snap script's `usable()` guards. The QML path is covered too:
+`tests/offscreen/tiling_lifecycle_test.py` loads this `main.qml` under the stand-in KWin
+module with a mock `TransientTilingApi` and drives the native admission, the stack geometry
+writes, the untoggle, the native teardown and a refused tree (see the Tests list).
 
 ### What it rides
 

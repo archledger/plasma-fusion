@@ -5,6 +5,12 @@ contracts. Executed once the tiler (PR #164) merges; each scenario runs on a rea
 session (the ThinkPad or a VM lane) with the fork's KWin, the placement script, and the tiler
 active.
 
+The tiler's native lifecycle itself - the admission order (the tree before any stack write),
+the column geometry, the untoggle, the `treeChanged` teardown and a refused tree - is covered
+automatically by `packages/kwin/tests/offscreen/tiling_lifecycle_test.py` (the real `main.qml`
+under a mock facade, CI `build`); this matrix remains the real-Plasma verification of the same
+paths and everything only a compositor can prove.
+
 ## 1. Removal-release matrices
 
 ### 1a. Output removal while tiling

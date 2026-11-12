@@ -27,12 +27,22 @@ QtObject {
     property var customRoots: ({})
     property point cursorPos: Qt.point(700, 400)
     property string currentActivity: "a"
+    // The fork's TransientTilingApi facade (a null impl is a stock KWin: no facade). The
+    // harness installs its mock here; the placement script and the tiler probe it through
+    // transientTiling().
+    property var transientTilingImpl: null
+    // The explicit restore (Meta+Backspace's path) the tiler's untoggle asks for; counted.
+    property int slotWindowRestoreCalls: 0
 
     signal windowAdded(var window)
     signal windowRemoved(var window)
     signal windowActivated(var window)
     // screensChanged() comes with the screens property.
     signal virtualScreenGeometryChanged()
+
+    function transientTiling() {
+        return transientTilingImpl ? transientTilingImpl() : null;
+    }
 
     function screenAt(p) {
         return outlineScreen || screens.find(s => s.geometry && p.x >= s.geometry.x
@@ -63,4 +73,5 @@ QtObject {
         if (screenTransfer) screenTransfer(w, o);
         w.output = o;
     }
+    function slotWindowRestore() { slotWindowRestoreCalls++; }
 }

@@ -181,6 +181,13 @@ jobs:
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/kwin/tests/offscreen/snaptest.py "$RUNNER_TEMP/snap-stage"
 
+      - name: Dynamic tiler lifecycle (offscreen Qt)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen \
+            python3 packages/kwin/tests/offscreen/tiling_lifecycle_test.py \
+            "$RUNNER_TEMP/snap-stage/.local/share/kwin"
+
       - name: Hidden switcher thumbnail lifetime (offscreen Qt)
         run: |
           set -euo pipefail
