@@ -16,8 +16,11 @@ That source is based on KWin 6.8.2.
   asynchronous completion boundary with the read-only state/completion export (NT04), the
   command-intent matrix pinning ordinary versus explicit transitions (NT05), the ownership-aware
   placement-capture filter (NT06A), and the context-release/transfer-rebase contracts (NT06).
-- What remains open is the production placement-provider bridge and the complete tiling policy
-  (the Fusion-side feature), the #115 re-entry tests, and ADR 0001's full-profile packaging.
+  NT07 (the provider port onto the native writer) is merged as plasma-fusion #163 on the fork's
+  accessors and facade (fork PRs #17-#20). NT08 (unload and restart preservation) is qualified
+  at fork PR #21 with its unsupported session-lane cases recorded in docs/DEFERRED.md.
+- What remains open is the complete tiling policy (the Fusion-side feature, PR #164), the
+  #115 re-entry tests, and ADR 0001's full-profile packaging.
 - Private request helpers still do not expose a usable production tiler; the controller and
   writer have no scripting API and no production instance — the bridge is the next work.
 
@@ -539,12 +542,43 @@ Files: Fusion placement `contents/ui/{main.qml,Placement.js}`,
 `packages/kwin/tests/placement.test.js`, one isolated scenario, `docs/parts/kwin.md` (maximum five).
 
 ## NT08 — Qualify unload and restart preservation
-- [ ] Orderly owner unload releases before roots are destroyed; no test process remains.
-- [ ] Restart preserves manual-layout configuration and floating-placement data; newly mapped
-  clients do not inherit automatic placement from persisted owner state. Start from persisted
-  P != current A and exercise both orderly restart and an interrupted compositor.
-- [ ] Run the complete one-window matrix from pinned sources; record unsupported cases and
-  keep #115 open for the remaining tiler work.
+- [x] Orderly unload releases and keeps the pending map (fork PR #21, branch
+  `native/nt08-unload-restart`, fail-first on fork main `fd202c1d17`): an accepted record inside
+  the writer's flush-coalescing window was lost at compositor teardown — the destructor now
+  persists the pending map once, best effort, and only a change no flush attempt has covered, so
+  a failed flush is still never retried from a destructor and KConfig's own destructor never
+  retries either (`orderlyUnloadKeepsUnattemptedRecord` and the orderly arm of
+  `unloadPreservesPlacementData` were RED pre-fix, 53 passed / 2 failed; 55/0 after). The
+  manager's teardown shape is pinned by `transientReleaseAfterClosedRegistration`
+  (`kwin-testTiles`): `prepareForRemoval` releases the transient root while the manual model
+  stays exactly as it was, and a manager whose registration teardown has closed refuses new
+  transient trees. The lane leaves no process behind: the suites run in one-shot containers
+  (`--rm`, network-less), and the only compositor still running after the runs is the desktop's
+  own. The script-teardown release through the facade in a live session is recorded as the
+  unsupported case below.
+- [x] Restart preservation, at the writer — the only persistence boundary the native side has
+  (`unloadPreservesPlacementData`, orderly-restart and interrupted-compositor arms): a session
+  ending while an owner holds its reservation over P leaves the file with the manual floating
+  frame P — the automatic rectangle never reaches it (refused from the owner, held as deferred
+  intent from a same-key sibling) — and the interrupted artifact is exactly the last flushed
+  state, read as the restarted compositor would read it while the session still lives. The
+  orderly teardown keeps the coalesced record the interruption loses. The reopened writer carries
+  no owner state: a newly tracked window of the same app records through immediately (no
+  reservation, no watermark survives the restart) and adopting over a frame that differs from P
+  stays refused — the P != A matrix. Manual-layout preservation is pinned at the tile layer (the
+  manual root and its children unchanged through the transient tree's whole life, the row above)
+  and by the NT02 serialization rows: a transient tree never enters the manual model, the
+  serializer or `kwinrc`, so a restart rebuilds the manual layout and only that.
+- [x] The one-window matrix rerun from the pinned sources at the qualification head
+  `2ebfb2cc7e` (the CI-identical Fedora 44 container lane): TransientPlacementWriter 55/0,
+  Tiles 306/0, XdgShellWindow 840/0, QuickTiling 144/0, Maximized 8/0, OutputChanges 103/0,
+  `node packages/kwin/tests/placement.test.js` ok, `ruff check` clean, `git diff --check` clean;
+  the 18-suite campaign runs as PR #21's CI gate. Unsupported cases recorded in
+  [docs/DEFERRED.md](../docs/DEFERRED.md): the isolated-session reload/restart comparison on the
+  fork's KWin (no session lane exists for it yet — the re-entry is the `v6.8.2-pf3` tag, the RPM
+  build and a seeded container), and with it the facade-level script-teardown release in a live
+  session. #115 stays open for the remaining tiler work (PR #164), the re-entry tests and the
+  full-profile packaging.
 Verification: isolated-session reload/restart comparison, full native/Fusion checks, review.
 Dependencies: NT07.
 Files: at most three isolated test/evidence files plus `docs/DEFERRED.md` and milestone report.
