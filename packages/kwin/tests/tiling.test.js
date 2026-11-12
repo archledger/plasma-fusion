@@ -127,6 +127,31 @@ assert.ok(!eligibleForMaster(windowWith({ resizeable: false })), "not resizable 
         "two cells + gap = area height");
 }
 
+// Feasibility is against the cells as they would be for the set being placed: the worst fit
+// goes first and the rest are re-tried in the larger cells. A 300 px column with minimum
+// heights 100, 100 and 200 has no three-way cells (92-96 px each), but removing the 200 px
+// window gives the two that fit ~146 px cells: they place, and only the tall one floats -
+// where a single pass against the three-way cells would float all three.
+{
+    const tall = windowWith({ internalId: "tall", minSize: { width: 1, height: 200 } });
+    const two = [
+        windowWith({ internalId: "a", minSize: { width: 1, height: 100 } }),
+        windowWith({ internalId: "b", minSize: { width: 1, height: 100 } }),
+    ];
+    const area = rect(0, 0, 1000, 300);
+    const result = layoutStack([two[0], tall, two[1]], area, 500, 8);
+    assert.strictEqual(result.placed.length, 2, "the two that fit place");
+    assert.strictEqual(result.floated.length, 1, "only the tall window floats");
+    assert.strictEqual(result.floated[0], tall);
+    assert.ok(result.placed[0].rect.height >= 100 && result.placed[1].rect.height >= 100,
+        "in cells enlarged by the removal");
+    // A window too wide for the column can never fit at any count: it floats first.
+    const wide = windowWith({ internalId: "wide", minSize: { width: 900, height: 50 } });
+    const r2 = layoutStack([wide, two[0]], area, 500, 8);
+    assert.strictEqual(r2.placed.length, 1, "the other one still places");
+    assert.strictEqual(r2.floated[0], wide, "the hopeless one floats");
+}
+
 // ---------------------------------------------------------------- the focus cycle
 
 assert.deepStrictEqual(focusOrder({ master: "M", stack: ["S1", "S2"] }), ["M", "S1", "S2"]);

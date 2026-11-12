@@ -83,6 +83,12 @@ active.
   change, not a manual move, and no relayout reads it as the divider. The stack windows
   rejoin as placed when the master returns.
 
+### 2j. A minimized window moved to another output loses its float
+- With two outputs, minimize a workspace window; toggle on; move the minimized window to the
+  other output (still connected); untoggle
+- **Expect**: the window stays where it was moved - its dormant float belonged to the view it
+  left and is not applied. Restoring it on the session's output does not rejoin it either.
+
 ## 3. Saved-tree cases
 
 ### 3a. The user's manual tile layout is untouched

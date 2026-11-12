@@ -1626,7 +1626,9 @@ deliberately defers.
   during the session is detached (its `desktopsChanged`/`activitiesChanged`/`outputChanged`
   ends it): the session is per-workspace and per-screen, its cell belongs to the view it
   left, and the float is dropped so the untoggle cannot drag it back - the geometry it
-  carries over is the user's own.
+  carries over is the user's own. A dormant member-to-be that moves away while minimized
+  loses its saved float the same way: it never joined the layout, but the float described a
+  view it left, and the untoggle must not drag it back there either.
 - **A manual move of a stack window floats it**: the tiler never fights the user for a cell.
   The tiler's own writes are excluded twice - they run under a `placing` guard, and they land
   exactly on the cell the layout assigned (`Tiling.isOwnCell`: the synchronous write and the
@@ -1648,7 +1650,11 @@ deliberately defers.
 - **Infeasible windows float**: a window whose minimum size exceeds its cell is left
   floating (the defined safe state), not squeezed or dropped - and it stops being managed:
   the tiler never wrote its geometry, its moves are placement memory again, and the untoggle
-  does not drag it back to where it floated before the session. The same holds when a later
+  does not drag it back to where it floated before the session. Feasibility is judged against
+  the cells as they would be for the set being placed: the worst fit leaves first and the rest
+  are re-tried in the larger cells (a 300 px column with minimum heights 100, 100 and 200 has
+  no three-way cells, but the two that fit place once the tall window floats), and a window
+  too wide for the column is never feasible at any count. The same holds when a later
   addition shrinks the column below a placed member's minimum: the member's saved float goes
   back before the detach (`Tiling.floatRestores` - it sat at a cell no untoggle could undo),
   where a window the layout never placed already sits at its own float.

@@ -178,26 +178,38 @@ function isOwnCell(cell, frame) {
 }
 
 // Layout the stack: feasible windows get cells; infeasible windows float (the safe state).
+// Feasibility is against the cells as they would be for the set being placed, so the worst
+// fit goes first and the rest are re-tried in the larger cells: a 300 px column with minimum
+// heights 100, 100 and 200 has no three-way cells (~95 px each), but removing the 200 px
+// window gives the two that fit ~146 px cells - they place, and only the tall one floats,
+// where a single pass against the three-way cells would float all three.
 function layoutStack(candidates, area, dividerX, gap) {
-    const cells = stackRects(area, dividerX, gap, candidates.length);
-    const placed = [];
+    const pending = candidates.slice();
     const floated = [];
-    for (let i = 0; i < candidates.length; ++i) {
-        const cell = cells[i];
-        if (feasibleInCell(candidates[i].minSize, cell)) {
-            placed.push({ window: candidates[i], rect: cell });
-        } else {
-            floated.push(candidates[i]);
+    while (pending.length > 0) {
+        const cells = stackRects(area, dividerX, gap, pending.length);
+        // The worst fit leaves first: the tallest minimum (the column constrains height; a
+        // window too wide for the column is never feasible and leaves as soon as it is the
+        // worst - or the only - misfit, which it always eventually is).
+        let worst = -1;
+        for (let i = 0; i < pending.length; ++i) {
+            if (feasibleInCell(pending[i].minSize, cells[i])) {
+                continue;
+            }
+            if (worst < 0 || pending[i].minSize.height > pending[worst].minSize.height) {
+                worst = i;
+            }
         }
-    }
-    // Re-layout: only the placed windows get cells.
-    if (floated.length > 0) {
-        const rects = stackRects(area, dividerX, gap, placed.length);
-        for (let i = 0; i < placed.length; ++i) {
-            placed[i].rect = rects[i];
+        if (worst < 0) {
+            const placed = [];
+            for (let i = 0; i < pending.length; ++i) {
+                placed.push({ window: pending[i], rect: cells[i] });
+            }
+            return { placed: placed, floated: floated };
         }
+        floated.push(pending.splice(worst, 1)[0]);
     }
-    return { placed: placed, floated: floated };
+    return { placed: [], floated: floated };
 }
 
 // ---------------------------------------------------------------- the focus order

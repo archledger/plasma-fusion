@@ -1102,15 +1102,25 @@ Item {
             // another output stops being managed - the session is per-workspace and
             // per-screen, its cell belongs where the window no longer is, and the move
             // itself is the user's (the geometry it carries stays its own; the float is
-            // dropped so the untoggle cannot drag it back).
+            // dropped so the untoggle cannot drag it back). A dormant member-to-be (minimized
+            // at toggle-on, not yet in the stack) has no cell, but its saved float belongs to
+            // the view it left: drop it too, or the untoggle would drag the window back to a
+            // desktop, activity or output it was moved away from while minimized.
             const workspaceLeft = function () {
-                if (!session.active || session.stack.indexOf(w) < 0) {
+                if (!session.active) {
                     return;
                 }
-                if (!managesDesktop(w)) {
-                    detachWindow(w, false);
-                    relayout();
-                    log("tiling: a member left the workspace");
+                if (session.stack.indexOf(w) >= 0) {
+                    if (!managesDesktop(w)) {
+                        detachWindow(w, false);
+                        relayout();
+                        log("tiling: a member left the workspace");
+                    }
+                    return;
+                }
+                if (session.savedFloats[String(w.internalId)] !== undefined && !managesDesktop(w)) {
+                    delete session.savedFloats[String(w.internalId)];
+                    unwatchMinimize(w);
                 }
             };
             minimizeHandlers[id] = { w: w, handler: handler, onWorkspace: workspaceLeft };
