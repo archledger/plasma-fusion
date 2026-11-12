@@ -96,10 +96,13 @@ removes the version lock, the metapackage and the repository, then `dnf distro-s
 set **to the recorded EVRs** — the machine returns to the stock KWin it had, not to whatever the
 repositories offer now. Fedora keeps only a package's newest build, so a stock that advanced
 while the machine was on the fork can no longer be reinstalled: the fallback says so out loud
-and takes the current stock. The restore then **verifies the distag is gone** — a repository
+and takes the current stock — but only after verifying the recorded EVRs are really gone
+(`dnf -q repoquery`); a transient repository or solver failure stops instead of quietly
+becoming that fallback. The restore then **verifies the distag is gone** — a repository
 left enabled would win the sync, so the check catches it and says what to do. The six Plasma
 Fusion packages stay installed; they run on stock KWin. `uninstall` on a full system (also
-usable outside the stamp) runs the same restore first, then the normal uninstall.
+usable outside the stamp and through the Plasma-version gate, for the same reason: its job is
+to return KWin to stock) runs the same restore first, then the normal uninstall.
 The installer's `status` reports the profile (`full` with the pinned
 KWin, or `stock`); the packaged
 `plasma-fusion status` learns the profile with the capability reporting that follows the channel.

@@ -194,13 +194,20 @@ full_restore_kwin() {
   # Fedora keeps only a package's newest build, so a stock that advanced while the machine was
   # on the fork can no longer be reinstalled - then the honest fallback is the current stock,
   # said out loud, because the alternative (a KWin the repositories do not carry) helps nobody.
+  # A failure that is not that (a transient repository or solver trouble) must not quietly
+  # become the fallback: the recorded EVRs are verified present before it runs.
   recs=$(full_recorded_specs)
   if [ -n "$recs" ]; then
     # shellcheck disable=SC2086 # one spec per package
     if ! $SUDO dnf -y distro-sync $recs; then
-      say "the recorded stock KWin ($recs) is not in the repositories any more; syncing to the current stock."
       # shellcheck disable=SC2086 # one spec per package
-      $SUDO dnf -y distro-sync $FULL_KWIN_PKGS || die "dnf could not return KWin to stock."
+      if [ -z "$($SUDO dnf -q repoquery $recs 2>/dev/null)" ]; then
+        say "the recorded stock KWin ($recs) is not in the repositories any more; syncing to the current stock."
+        # shellcheck disable=SC2086 # one spec per package
+        $SUDO dnf -y distro-sync $FULL_KWIN_PKGS || die "dnf could not return KWin to stock."
+      else
+        die "dnf could not sync KWin back to the recorded $recs (the packages are in the repositories); try again."
+      fi
     fi
   else
     # No record (a --full from before the record, or the file was removed): the names alone.
@@ -723,7 +730,14 @@ main() {
     nix) check_plasma; print_nix; exit 0 ;;
     atomic) check_plasma; print_atomic; exit 0 ;;
   esac
-  [ "$MODE" = full-restore ] || check_plasma
+  # The recovery paths run on systems the gates refuse: --full-restore always (an upgraded
+  # Fedora, a stamp that moved on), and a full-profile uninstall the same way - its job is to
+  # return KWin to stock, not to install anything. A stock uninstall keeps the Plasma check.
+  case $MODE in
+    full-restore) : ;;
+    uninstall) full_meta_installed || kwin_is_fork || check_plasma ;;
+    *) check_plasma ;;
+  esac
   if [ "$MODE" = status ]; then status; exit 0; fi
 
   installed=$(pf_installed plasma-fusion)

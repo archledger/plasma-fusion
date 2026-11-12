@@ -76,6 +76,11 @@ exec \"\$@\""
 fake dnf "$LOGLINE
 # versionlock answers with the pre-existing entries the test sets (dnf5's list format)
 case \" \$* \" in *' versionlock list '*) printf '%b' \"\${FAKE_LOCKS:-}\"; exit 0 ;; esac
+# repoquery answers whether the recorded EVRs are in the repositories (the restore asks before
+# falling back); FAKE_SYNC_MISSES says they are gone, FAKE_SYNC_FAILS that they are there
+case \" \$* \" in *' repoquery '*kwin-*)
+  [ -z \"\${FAKE_SYNC_MISSES:-}\" ] && echo available
+  exit 0 ;; esac
 case \" \$* \" in *' install '*) $INSTALLS ;; esac
 case \" \$* \" in *' upgrade '*)
   for a; do
@@ -87,7 +92,8 @@ esac
 # distro-sync returns the fork's KWin to stock (the rpm fake reads the marker)
 case \" \$* \" in *' distro-sync '*) [ -z \"\${FAKE_NO_SYNC:-}\" ] && : >\"\$FAKE_BIN/distro-synced\"
   # a distro-sync that carries version specs fails when the test says those EVRs are gone
-  if [ -n \"\${FAKE_SYNC_MISSES:-}\" ]; then
+  # (FAKE_SYNC_MISSES) or simply fails while they are still there (FAKE_SYNC_FAILS)
+  if [ -n \"\${FAKE_SYNC_MISSES:-}\" ] || [ -n \"\${FAKE_SYNC_FAILS:-}\" ]; then
     for a; do case \$a in kwin-*[0-9].*) exit 1 ;; esac; done
   fi ;;
 esac
@@ -376,6 +382,13 @@ for SHNAME in "${shells[@]}"; do
   expect "a recorded EVR the repositories no longer carry falls back to the current stock" has_out "not in the repositories any more"
   expect "  and still syncs by name" has_log "dnf -y distro-sync kwin kwin-common kwin-libs"
   expect "  exiting 0" [ "$RC" = 0 ]
+  # a failure that is not the EVRs being gone (a transient repository or solver failure) must
+  # not quietly become that fallback: the recorded version is verified present first
+  plant_record
+  EXTRA_ENV="FAKE_SYNC_FAILS=1" VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --yes
+  expect "a failed sync with the EVRs still in the repositories stops" [ "$RC" = 1 ]
+  expect "  saying the packages are there" has_out "the packages are in the repositories"
+  expect "  without the by-name fallback" bash -c '! grep -q "^dnf -y distro-sync kwin kwin-common kwin-libs" <<<"$0"' "$LOG"
   # a full-profile system on a Fedora release the stamp does not carry can always get back
   # (detect_lane's stock refusal must not gate the recovery paths)
   plant_record
@@ -385,8 +398,17 @@ for SHNAME in "${shells[@]}"; do
   plant_record
   FEDORA=45 VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- uninstall --yes --package-only
   expect "uninstall works on a Fedora outside the stamp (it restores first)" has_log "dnf -y distro-sync kwin-6.7.5-1.fc44 kwin-common-6.7.5-1.fc44 kwin-libs-6.7.5-1.fc44"
+  # a full-profile uninstall also runs where the Plasma-version gate would refuse (an upgraded
+  # series): its job is to return KWin to stock, not to install anything
+  plant_record
+  FEDORA=45 VERSIONS="plasma-workspace=6.9.0 kwin=+6.8.2-3.fc44.pf3 plasma-fusion=0.2.0 plasma-fusion-full=0.2.0" KWIN_RUNNING=6.8.2 \
+    run "$sh" $FED -- uninstall --yes --package-only
+  expect "a full-profile uninstall works on an untested Plasma series" has_log "dnf -y distro-sync kwin-6.7.5-1.fc44 kwin-common-6.7.5-1.fc44 kwin-libs-6.7.5-1.fc44"
+  expect "  and completes the removal" has_log "dnf -y remove plasma-fusion-full"
   FEDORA=45 run "$sh" $FED -- --dry-run
   expect "a stock install on that Fedora is still refused" [ "$RC" = 3 ]
+  VERSIONS="plasma-workspace=6.9.0 kwin=6.9.0 plasma-fusion=0.2.0" KWIN_RUNNING=6.9.0 run "$sh" $FED -- uninstall --yes --package-only
+  expect "a stock uninstall on an untested Plasma series is still refused" [ "$RC" = 3 ]
   FEDORA=44
   # update on a full profile moves the pin with the metapackage: the lock goes first (it
   # would hold KWin at the old fork while the new metapackage requires the new one), and is
