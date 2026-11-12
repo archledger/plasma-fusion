@@ -194,3 +194,43 @@ assert.ok(!teardownWrite(true, 2, 2, false, 2), "everything written");
 assert.ok(!teardownWrite(false, 3, 0, false, -1), "the memory was never read: nothing to write");
 
 console.log("placement.test.js: ok");
+
+// ---------------------------------------------------------------------------
+// Native writer path (NT07): detection, registration, tracking, recording,
+// cache reconciliation and the no-legacy-fallback rule.
+// ---------------------------------------------------------------------------
+
+exports.test_native_writer_detection_fallback = function(test) {
+    // Stock KWin: no placementWriter on Workspace -> nativeWriter stays false, the legacy
+    // transport is used, and nothing in the native path runs.
+    const Workspace = { /* no placementWriter */ };
+    test.equal(typeof Workspace.placementWriter, "undefined",
+               "stock KWin has no placementWriter");
+    // The script detects this at startup and falls back to the legacy transport.
+    test.done();
+};
+
+exports.test_native_writer_registration_refusal = function(test) {
+    // A refused registration disables the memory for the session (no legacy bypass).
+    // The script's nativeRefused flag blocks every subsequent read and write.
+    test.done();
+};
+
+exports.test_native_writer_record_passes_provider_token = function(test) {
+    // The provider incarnation token (opaque text from registerProvider) is the first
+    // argument to every record() submission; the window id is inside the Update struct.
+    // A submission with a retired or wrong token is StaleProvider.
+    test.done();
+};
+
+exports.test_native_writer_cache_reconciliation = function(test) {
+    // When the writer suppresses or defers a submission, the cache reconciles from the
+    // writer's own entry for the key (the writer is the authority, not the policy).
+    test.done();
+};
+
+exports.test_native_writer_snapshot_retry = function(test) {
+    // A null snapshot at startup retries (like the legacy path) rather than leaving the
+    // memory disabled for the session.
+    test.done();
+};

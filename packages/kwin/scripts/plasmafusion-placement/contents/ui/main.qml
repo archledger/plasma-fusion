@@ -87,6 +87,7 @@ Item {
     // (stock or older forks) the script falls back to the legacy transport below.
 
     property bool nativeWriter: false
+    property bool nativeRefused: false // registration refused: no legacy fallback
     property var writer: null
     property string providerToken: ""
     property int writerRevision: 0
@@ -115,9 +116,12 @@ Item {
         }
         providerToken = String(writer.registerProvider(root));
         if (providerToken === "" || providerToken === "undefined") {
-            log("the writer refused the provider registration; falling back to the legacy transport");
+            // A native session must not bypass the sole native writer: the memory stays
+            // disabled rather than falling back to a transport the contract retires.
+            log("the writer refused the provider registration; the memory stays disabled this session");
             nativeWriter = false;
             writer = null;
+            nativeRefused = true;
             return;
         }
         log("registered as the placement provider");
@@ -138,18 +142,38 @@ Item {
     }
 
     function recordWithWriter(w, frame) {
-        if (!nativeWriter || !writer || !w) {
+        if (!nativeWriter || !writer || !w || providerToken === "") {
             return;
         }
         const id = String(w.internalId);
         const seq = (eventSequences[id] || 0) + 1;
-        writer.record(w.internalId, ++writerRevision, {
+        // The first argument is the provider incarnation token (the opaque text from
+        // registerProvider); the writer rejects submissions from retired incarnations.
+        writer.record(providerToken, ++writerRevision, {
             "window": w.internalId,
             "frame": Qt.rect(frame.x, frame.y, frame.width, frame.height),
             "eventSequence": seq,
             "origin": 0 // Origin.Manual
         });
         eventSequences[id] = seq;
+        // Reconcile the cache with the writer's decision: when the submission was suppressed
+        // (a restore watermark) or deferred (an active reservation), the writer's entry for
+        // this key is the authority, not the in-memory cache the policy just wrote.
+        reconcileKeyWithWriter(appIdOf(w));
+    }
+
+    function reconcileKeyWithWriter(key) {
+        if (!nativeWriter || !writer || key === "") {
+            return;
+        }
+        const snap = writer.snapshot();
+        if (!snap || !snap.entries) {
+            return;
+        }
+        const entry = snap.entries[key];
+        if (entry !== undefined) {
+            apps[key] = { x: entry.x, y: entry.y, width: entry.width, height: entry.height };
+        }
     }
 
     function readFromWriter() {
@@ -158,6 +182,13 @@ Item {
         }
         const snap = writer.snapshot();
         if (!snap) {
+            // The writer may not be ready at script-load time; retry like the legacy path.
+            if (readTries < 10) {
+                readTries++;
+                readRetry.start();
+            } else {
+                log("the native writer did not answer; this session runs without the window memory");
+            }
             return;
         }
         const entries = snap.entries;
@@ -190,7 +221,7 @@ Item {
     }
 
     function read() {
-        if (loaded) {
+        if (loaded || nativeRefused) {
             return;
         }
         if (nativeWriter) {

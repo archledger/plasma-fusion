@@ -450,18 +450,26 @@ offsets it) and the held record stays - the new window's own geometry changes in
 are not recorded either, while the user's later moves are.
 
 The memory file is `~/.config/plasmafusion-placementrc`, one JSON text under `[Windows] windows`
-(`{"v":1,"apps":{"<app id>":{"x":…,"y":…,"width":…,"height":…}}}`). Both directions run through
-plasmashell's desktop scripting (`ConfigFile`, the same bridge the tablet script's panel policy
-uses): the KWin scripting API has `readConfig` and no file write at all, and plasmashell's
-`evaluateScript` answers with what the script printed, which carries the file's text back. Writes
-are coalesced (two seconds after the last change, one retry when a change races the write); the file
-is read once at start with a few retries while plasmashell comes up - windows opened before that
-answer keep KWin's placement - and written once more when the script is disabled or KWin quits
-(also when a write is still in flight then: it carries an older snapshot). On that teardown the
-script disconnects the geometry handlers it put on the windows: KWin keeps one QML engine for its
-scripts and the windows outlive the script, so a handler left connected would call into a destroyed
-context, and each disable/enable cycle would add another. A profile snapshot carries the memory
-file (`tools/device/backup-profile.sh`, see device.md).
+(`{"v":1,"apps":{"<app id>":{"x":…,"y":…,"width":…,"height":…}}}`). On a KWin with the native
+placement writer (the fork's `Workspace.placementWriter()`, exposed to scripting since PR #18),
+the script registers as the provider, tracks each watched window and submits every record as a
+typed native call — the writer owns the file and its flush discipline, and the script's
+in-memory cache is a read-through from the writer's `snapshot()`. A submission the writer
+suppresses (a restore watermark) or defers (an active reservation) reconciles the cache from
+the writer's own entry. When the writer refuses the provider registration the memory stays
+disabled for the session — a native session must not bypass the sole native writer. On stock
+KWin or older forks without the accessor, both directions run through plasmashell's desktop
+scripting (`ConfigFile`, the same bridge the tablet script's panel policy uses): the KWin
+scripting API has `readConfig` and no file write at all, and plasmashell's `evaluateScript`
+answers with what the script printed, which carries the file's text back. Writes are coalesced
+(two seconds after the last change, one retry when a change races the write); the file is read
+once at start with a few retries while plasmashell comes up - windows opened before that answer
+keep KWin's placement - and written once more when the script is disabled or KWin quits (also
+when a write is still in flight then: it carries an older snapshot). On that teardown the
+script disconnects the geometry handlers it put on the windows: KWin keeps one QML engine for
+its scripts and the windows outlive the script, so a handler left connected would call into a
+destroyed context, and each disable/enable cycle would add another. A profile snapshot carries
+the memory file (`tools/device/backup-profile.sh`, see device.md).
 No timer runs while the desktop is idle.
 
 ### Dynamic workspaces
