@@ -8,7 +8,8 @@ Three pieces:
    `plasma-fusion-decoration`, `plasma-fusion-settings`, `plasma-fusion-navigation`,
    `plasma-fusion-quicklook` and `plasma-fusion-copytext`. Fedora
    (Copr), Arch (AUR), Ubuntu (PPA), KDE neon and Debian testing (release `.deb`s) and NixOS (flake
-   or module) build them from the same files; the installer (docs/parts/installer.md) picks the
+   or module) build them from the same files; the full profile adds a Fedora-only seventh, the
+   `plasma-fusion-full` metapackage (section 1); the installer (docs/parts/installer.md) picks the
    channel.
 2. **Login greeter styling** (`tools/system/greeter-apply.sh`, `greeter-restore.sh`): Plasma Fusion
    Dark for the plasma-login-manager 6.7.5 greeter, the way System Settings' "Apply Plasma
@@ -59,6 +60,13 @@ packaging/build-rpm.sh [--topdir DIR] [--compiled] [--no-lint]   # default DIR: 
 * Without `--compiled` it builds the shared part only (`rpmbuild --without compiled`; the build
   workflow does this); with it all six packages (KWin, KDecoration and KDE Frameworks development
   packages needed: `dnf builddep packaging/fedora/plasma-fusion.spec`).
+* A seventh package, the full profile's `plasma-fusion-full` metapackage, is built only by the
+  full profile's own Copr project, never by the stock repository: it needs `--with full` and
+  `%global kwin_full_pin <the fork tag's exact EVR>` (for example `6.8.2-3.fc44.pf2`; the pin's
+  pf suffix carries any number of digits, so `pf10` is as valid as `pf2`). A full build with the
+  pin unset, or with a pin carrying another Fedora release, is a hard error rather than a silent
+  skip; `packaging/check-full-profile.sh` exercises those gates
+  ([full-profile.md](../full-profile.md)).
 * The source tarball is the working tree as it is (tracked plus untracked, not git-ignored files;
   `git ls-files --cached --others --exclude-standard`), stable order, owners 0, the revision's
   commit time as mtime. git is only read (`--no-optional-locks`: no index refresh).

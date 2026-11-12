@@ -17,6 +17,27 @@
 %global debug_package %{nil}
 %endif
 
+# The full profile (ADR 0001, docs/adr/0001, docs/full-profile.md). The metapackage builds only
+# in the full profile's own Copr project - which passes "--with full" - for the Fedora release
+# the pin targets, and only when a release pair has set the pin to the fork tag's exact EVR
+# (%%global kwin_full_pin 6.8.2-3.fc44.pf2, for example). The stock repository's builds never
+# pass the bcond, so enabling the stock repository never offers a KWin replacement (the stock
+# Copr project and the full project are separate). The pin moves only through a release.
+%bcond full 0
+%global build_full 0
+# The full profile's own project builds --with full; anything else never emits the metapackage.
+# Inside a full build the pin must be set and must target this Fedora release - a wrong-series
+# pin is a build error, not a silent skip, because its exact requires could never resolve here.
+%if %{with full}
+%if "%{?kwin_full_pin}" == ""
+%{error:the full profile build needs the kwin pin set (%%global kwin_full_pin <exact fork EVR>)}
+%endif
+%if "%(echo '%{kwin_full_pin}' | grep -oE "\.fc%{?fedora}\.pf[0-9]+$" || echo mismatch)" == "mismatch"
+%{error:the kwin pin '%{kwin_full_pin}' targets another Fedora release; this build is fc%{?fedora}}
+%endif
+%global build_full 1
+%endif
+
 Name:           plasma-fusion
 Version:        0.7.0
 Release:        1%{?dist}
@@ -140,6 +161,31 @@ The package installs these for every user. Each user then runs
 and the settings a Global Theme cannot carry, and "plasma-fusion update" after
 later updates. As root, /usr/share/plasma-fusion/tools/system/greeter-apply.sh
 styles the login screen (plasma-login-manager or SDDM).
+
+%if %{build_full}
+%package full
+Summary:        The Plasma Fusion full profile: the six packages with the pinned KWin fork
+License:        GPL-2.0-or-later
+# The exact-EVR requires are the pin (ADR 0001): KWin, the fork packages and Plasma Fusion
+# move together in one transaction or not at all. The fork ships in its own Copr project;
+# enabling this repository never offers a KWin replacement on its own.
+Requires:       plasma-fusion = %{version}-%{release}
+Requires:       plasma-fusion-decoration = %{version}-%{release}
+Requires:       plasma-fusion-settings = %{version}-%{release}
+Requires:       plasma-fusion-navigation = %{version}-%{release}
+Requires:       plasma-fusion-quicklook = %{version}-%{release}
+Requires:       plasma-fusion-copytext = %{version}-%{release}
+Requires:       kwin = %{kwin_full_pin}
+Requires:       kwin-common = %{kwin_full_pin}
+Requires:       kwin-libs = %{kwin_full_pin}
+
+%description full
+The full profile of Plasma Fusion (ADR 0001): the complete desktop with the
+maintained KWin fork pinned at one exact version, unlocking the compositor-side
+guarantees the stock profile degrades gracefully without. The fork lags
+distribution security updates by its weekly integration cadence; users who
+cannot accept that use the stock profile.
+%endif
 
 %if %{with compiled}
 %package decoration
@@ -534,6 +580,12 @@ grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
 %{_kf6_datadir}/applications/org.plasmafusion.copytextoverlay.desktop
 %{_datadir}/dbus-1/services/org.plasmafusion.CopyTextOverlay.service
 %{_datadir}/plasma-fusion/built-against/copytext
+
+# A metapackage: the license only; the exact-EVR requires are its whole content.
+%if %{build_full}
+%files full
+%license LICENSES/GPL-2.0-or-later.txt
+%endif
 %endif
 
 %changelog
