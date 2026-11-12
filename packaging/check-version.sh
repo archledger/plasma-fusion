@@ -22,10 +22,11 @@ tag=$(git -C "$ROOT" describe --exact-match --tags --match 'v[0-9]*' HEAD 2>/dev
 # the pf number - never a range and never a suffixed EVR the exact Requires cannot satisfy.
 pin=$(sed -n 's/^%global kwin_full_pin *//p' "$ROOT/packaging/fedora/plasma-fusion.spec" | tr -d '[:space:]')
 if [ -n "$pin" ]; then
-  case "$pin" in
-    [0-9]*.[0-9]*.[0-9]*-*.pf[0-9]) ;;
-    *) echo "FAIL kwin pin: '$pin' is not an exact fork EVR (version-release dist pfN)"; rc=1; continue ;;
-  esac
+  if ! printf '%s' "$pin" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.]+\.fc[0-9]+\.pf[0-9]+$'; then
+    echo "FAIL kwin pin: '$pin' is not an exact fork EVR (numeric version-release, dist, pf number)"
+    rc=1
+    continue
+  fi
   case "$pin" in
     *.fc44.pf[0-9]) echo "ok   kwin pin: $pin" ;;
     *) echo "FAIL kwin pin: '$pin' targets a Fedora release other than the current one (fc44)"; rc=1 ;;

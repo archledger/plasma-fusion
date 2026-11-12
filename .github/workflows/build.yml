@@ -170,6 +170,9 @@ jobs:
       - name: One version everywhere (VERSION, spec, PKGBUILD, Debian changelog)
         run: packaging/check-version.sh
 
+      - name: Full-profile spec branch (stock default, pin gating, series refusal)
+        run: packaging/check-full-profile.sh
+
       - name: Snap geometry regression tests (offscreen Qt)
         run: |
           set -euo pipefail
