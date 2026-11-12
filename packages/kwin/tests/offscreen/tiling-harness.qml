@@ -1,0 +1,489 @@
+/*
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+    SPDX-License-Identifier: GPL-2.0-or-later
+
+    Offscreen harness for plasmafusion-placement's dynamic tiler (test use only): it loads the
+    real main.qml with the stand-in org.kde.kwin module and a mock of the fork's
+    TransientTilingApi facade, then drives the tiler through its native lifecycle - the
+    shortcut toggle (createTile + admitTile before any stack geometry write), the stack column
+    the script writes, a live window addition mid-session, the untoggle (floats back, the
+    master's native restore, releaseTile), the native treeChanged teardown, a refused tree,
+    a shortcut invoked on another desktop while a session lives (the untoggle's activation
+    carries the current view back; the captured invocation must win), and - past the
+    untoggles' quiet second - a manual move of an IgnoreApps stack member (it must leave the
+    session) and the settle pass recording the joined windows' floats. The python driver
+    (tiling_lifecycle_test.py) reads `problems`, `facadeCalls` and `snapshot`.
+    Context properties from the driver: packagesRoot (a directory holding
+    scripts/plasmafusion-placement), config prefill through the KWin context object.
+*/
+
+import QtQuick
+import org.kde.kwin as KWinStubs
+
+Item {
+    id: harness
+
+    property bool done: false
+    property var problems: []
+    property var facadeCalls: []
+    property var snapshot: ({})
+    property var script: null
+    property var tileShortcut: null
+    property var stackWindows: []
+    property var master: null
+    property var winA: null
+    property var winB: null
+    property var winD: null
+    property var firstDesktop: null
+
+    // The workspace view the stub provides: activeScreen Virtual-1 at (0,0 1440x900), the
+    // stub's maximizeArea (0,34 1440x866) is the tiler's area; the facade's master rect puts
+    // the divider at x=700, so the stack column is x=700..1440 (740 wide).
+    readonly property rect column: Qt.rect(700, 34, 740, 866)
+
+    function fail(message) {
+        problems = problems.concat([message]);
+    }
+    function calls(op) {
+        const out = [];
+        for (let i = 0; i < facadeCalls.length; ++i) {
+            if (facadeCalls[i].op === op) {
+                out.push(facadeCalls[i]);
+            }
+        }
+        return out;
+    }
+    function rectIs(r, x, y, width, height) {
+        return r.x === x && r.y === y && r.width === width && r.height === height;
+    }
+
+    function mk(over) {
+        return fakeWindow.createObject(harness, over);
+    }
+
+    // The mock facade: every method the script can call, each one recorded in facadeCalls.
+    // createTile also snapshots the stack windows' geometry at call time - invariant 8 (the
+    // native admission before any stack write) is checkable from that snapshot.
+    QtObject {
+        id: facade
+        property bool refuseCreate: false
+        property bool treeAlive: false
+        property int nextGeneration: 0
+        property rect masterRect: Qt.rect(0, 34, 700, 866)
+        signal treeChanged()
+        function registerProvider(item) {
+            harness.facadeCalls = harness.facadeCalls.concat([{ op: "registerProvider" }]);
+            return "harness-token";
+        }
+        function trackWindow(w, key) {
+            harness.facadeCalls = harness.facadeCalls.concat([{ op: "trackWindow", window: String(w.internalId), key: key }]);
+            return true;
+        }
+        function windowBinding(w) { return ""; }
+        function record(token, revision, w, rect, seq, origin) {
+            harness.facadeCalls = harness.facadeCalls.concat([{ op: "record", window: String(w.internalId), origin: origin,
+                                                                x: rect.x, y: rect.y, width: rect.width, height: rect.height }]);
+            return 0; // Accepted
+        }
+        function snapshot() { return { entries: {} }; }
+        function hasTree() { return treeAlive; }
+        function masterWindowRect() { return masterRect; }
+        function createTile(output, desktop, rect) {
+            const stackAtCreate = [];
+            for (let i = 0; i < harness.stackWindows.length; ++i) {
+                const g = harness.stackWindows[i].frameGeometry;
+                stackAtCreate.push({ window: String(harness.stackWindows[i].internalId),
+                                     x: g.x, y: g.y, width: g.width, height: g.height });
+            }
+            if (refuseCreate) {
+                harness.facadeCalls = harness.facadeCalls.concat([{ op: "createTile", refused: true }]);
+                return { result: 1, generation: 0 };
+            }
+            nextGeneration += 1;
+            treeAlive = true;
+            harness.facadeCalls = harness.facadeCalls.concat([{ op: "createTile", generation: nextGeneration,
+                                                                desktop: desktop && desktop.id !== undefined ? desktop.id : String(desktop),
+                                                                x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+                                                                stackAtCreate: stackAtCreate }]);
+            return { result: 0, generation: nextGeneration };
+        }
+        function admitTile(generation, w, key, token) {
+            harness.facadeCalls = harness.facadeCalls.concat([{ op: "admitTile", generation: generation,
+                                                                window: String(w.internalId), key: key, token: token }]);
+            return 0; // Accepted
+        }
+        function releaseTile(generation) {
+            harness.facadeCalls = harness.facadeCalls.concat([{ op: "releaseTile", generation: generation }]);
+            treeAlive = false;
+        }
+    }
+
+    // A stand-in KWin Window: every property the placement script and the tiler read, with the
+    // auto property-change signals the script connects to, KWin's two non-property maximize
+    // signals, and the fork's requestedGeometryChanged.
+    Component {
+        id: fakeWindow
+        QtObject {
+            property string internalId
+            property rect frameGeometry
+            property bool deleted: false
+            property bool normalWindow: true
+            // "transient" is a reserved QML identifier and cannot be declared: the script
+            // reads !w.transient, and an undeclared property reads as undefined (falsely
+            // transient never - every harness window is a normal window).
+            property bool modal: false
+            property bool moveable: true
+            property bool resizeable: true
+            property bool minimized: false
+            property bool fullScreen: false
+            property var tile: null
+            property int maximizeMode: 0
+            property bool onAllDesktops: false
+            property var desktops: []
+            property var activities: []
+            property var output: null
+            property string resourceClass: ""
+            property string desktopFileName: ""
+            property string caption: ""
+            property var minSize: ({ width: 1, height: 1 })
+            signal maximizedAboutToChange(int mode)
+            signal maximizedChanged()
+            signal requestedGeometryChanged()
+        }
+    }
+
+    Component.onCompleted: {
+        try {
+            run();
+        } catch (e) {
+            fail("harness threw: " + e);
+            done = true;
+        }
+        if (!done) {
+            // The ignored-member phase needs the untoggles' quiet second to have passed: a
+            // manual move inside it is indistinguishable from a float restore's late commit
+            // (the script quieted the window for exactly that reason), so the hand that
+            // must detach arrives after it.
+            latePhase.start();
+        }
+    }
+
+    Timer {
+        id: latePhase
+        interval: 1200
+        onTriggered: {
+            try {
+                runLate();
+            } catch (e) {
+                fail("late harness threw: " + e);
+            }
+            done = true;
+        }
+    }
+
+    function run() {
+        const ws = KWinStubs.Workspace;
+        // The view: desktop {id: 11}, activity "a", the stub's single screen.
+        const desktop = { id: 11 };
+        firstDesktop = desktop;
+        ws.desktops = [desktop];
+        ws.currentDesktop = desktop;
+        ws.currentActivity = "a";
+        ws.transientTilingImpl = function () { return facade; };
+
+        // The windows, floats first (stacking order bottom first, like KWin): the master plus
+        // two stack members-to-be.
+        master = mk({ internalId: "master", resourceClass: "org.fusion.terminal",
+                      desktopFileName: "org.fusion.terminal.desktop",
+                      frameGeometry: Qt.rect(40, 80, 620, 420) });
+        winA = mk({ internalId: "a", resourceClass: "org.fusion.editor",
+                    desktopFileName: "org.fusion.editor.desktop",
+                    frameGeometry: Qt.rect(700, 120, 300, 320) });
+        winB = mk({ internalId: "b", resourceClass: "org.fusion.files",
+                    desktopFileName: "org.fusion.files.desktop",
+                    frameGeometry: Qt.rect(760, 480, 300, 300) });
+        const windows = [master, winA, winB];
+        for (let i = 0; i < windows.length; ++i) {
+            windows[i].desktops = [desktop];
+            windows[i].output = ws.activeScreen;
+        }
+        stackWindows = [winA, winB];
+        ws.windows = [winB, winA, master];
+        ws.activeWindow = master;
+
+        // The real script (staged or checkout): its onCompleted adopts the open windows.
+        const base = "file://" + packagesRoot + "/scripts/plasmafusion-placement/contents/ui/";
+        const component = Qt.createComponent(base + "main.qml");
+        if (component.status !== Component.Ready) {
+            fail("main.qml did not load: " + component.errorString());
+            return;
+        }
+        script = component.createObject(harness);
+        const adopted = calls("trackWindow");
+        if (adopted.length !== 3) {
+            fail("the script adopted and tracked the three open windows (got " + adopted.length + ")");
+            return;
+        }
+        const masterKey = adopted.find(c => c.window === "master").key;
+
+        for (let i = 0; i < script.data.length; ++i) {
+            const child = script.data[i];
+            if (child && child.name === "Plasma Fusion: Tile Workspace") {
+                tileShortcut = child;
+            }
+        }
+        if (!tileShortcut) {
+            fail("the Tile Workspace shortcut was not registered");
+            return;
+        }
+
+        // ---- toggle on: the native admission, then the column ----
+        tileShortcut.activated();
+        const created = calls("createTile");
+        if (created.length !== 1) {
+            fail("one createTile for the toggle (got " + created.length + ")");
+            return;
+        }
+        if (created[0].refused) {
+            fail("createTile was refused although the mock accepts");
+            return;
+        }
+        const admitted = calls("admitTile");
+        if (admitted.length !== 1) {
+            fail("one admitTile for the toggle (got " + admitted.length + ")");
+            return;
+        }
+        if (admitted[0].window !== "master" || admitted[0].key !== masterKey) {
+            fail("the master was admitted under its app key (got " + admitted[0].window + "/" + admitted[0].key + ")");
+        }
+        if (admitted[0].token !== "harness-token") {
+            fail("admitTile carried the provider token (got " + admitted[0].token + ")");
+        }
+        if (admitted[0].generation !== created[0].generation) {
+            fail("admitTile carried the created generation");
+        }
+        // invariant 8: at createTile time the stack windows were still at their floats
+        if (created[0].stackAtCreate.length !== 2) {
+            fail("the create snapshot saw both stack windows");
+        } else {
+            const a = created[0].stackAtCreate.find(w => w.window === "a");
+            const b = created[0].stackAtCreate.find(w => w.window === "b");
+            if (!a || !rectIs(a, 700, 120, 300, 320) || !b || !rectIs(b, 760, 480, 300, 300)) {
+                fail("the stack was still at its floats when the tree was created");
+            }
+        }
+        // the configured fraction reached the native tile (MasterFraction 0.4 from the driver)
+        if (created[0].width !== 0.4 || created[0].x !== 0 || created[0].y !== 0 || created[0].height !== 1) {
+            fail("the tile rect is the configured fraction of the output (got " + created[0].x + "," + created[0].y
+                 + " " + created[0].width + "x" + created[0].height + ")");
+        }
+        // the column the script wrote: divider 700 (the facade's master rect), the stub's
+        // maximize area (0,34 1440x866), gap 8 - the column starts ceil(8/2)=4 right of the
+        // divider and runs to the area's right edge (740-4=736 wide), two cells of
+        // (866 - 8) / 2 = 429 each, the first at the area's top, the second 4 below the
+        // first's end (stackRects' endpoint-gap discipline)
+        if (!rectIs(winA.frameGeometry, 704, 34, 736, 429)) {
+            fail("the top stack window took the first cell (got " + JSON.stringify(winA.frameGeometry) + ")");
+        }
+        if (!rectIs(winB.frameGeometry, 704, 471, 736, 429)) {
+            fail("the second stack window took the second cell (got " + JSON.stringify(winB.frameGeometry) + ")");
+        }
+        if (calls("releaseTile").length !== 0) {
+            fail("releaseTile before any untoggle");
+        }
+
+        // ---- a live window joins mid-session ----
+        const winC = mk({ internalId: "c", resourceClass: "org.fusion.mail",
+                          desktopFileName: "org.fusion.mail.desktop",
+                          frameGeometry: Qt.rect(300, 500, 260, 260) });
+        winC.desktops = [desktop];
+        winC.output = ws.activeScreen;
+        stackWindows = [winA, winB, winC];
+        ws.windows = [winC, winB, winA, master];
+        ws.windowAdded(winC);
+        if (calls("createTile").length !== 1) {
+            fail("a live addition reuses the session's tree");
+        }
+        if (winC.frameGeometry.x < column.x || winC.frameGeometry.x + winC.frameGeometry.width > column.x + column.width) {
+            fail("the joined window was placed in the column (got " + JSON.stringify(winC.frameGeometry) + ")");
+        }
+        // the three cells cover the column without overlap (stackRects' endpoint discipline)
+        const cells = [winA.frameGeometry, winB.frameGeometry, winC.frameGeometry].sort((p, q) => p.y - q.y);
+        if (cells[0].y !== column.y || cells[2].y + cells[2].height !== column.y + column.height || cells[0].y + cells[0].height > cells[1].y || cells[1].y + cells[1].height > cells[2].y) {
+            fail("the relaid column covers the area without overlap: " + JSON.stringify(cells));
+        }
+
+        // ---- untoggle: the floats back, the master's native restore, the tree released ----
+        tileShortcut.activated();
+        if (!rectIs(winA.frameGeometry, 700, 120, 300, 320) || !rectIs(winB.frameGeometry, 760, 480, 300, 300)
+                || !rectIs(winC.frameGeometry, 300, 500, 260, 260)) {
+            fail("the untoggle restored the saved floats (got " + JSON.stringify(winA.frameGeometry) + " "
+                 + JSON.stringify(winB.frameGeometry) + " " + JSON.stringify(winC.frameGeometry) + ")");
+        }
+        if (ws.activeWindow !== master) {
+            fail("the master was activated for the native restore");
+        }
+        if (ws.slotWindowRestoreCalls !== 1) {
+            fail("the master's native restore ran once (got " + ws.slotWindowRestoreCalls + ")");
+        }
+        const released = calls("releaseTile");
+        if (released.length !== 1 || released[0].generation !== admitted[0].generation) {
+            fail("the untoggle released the session's tree (got " + JSON.stringify(released) + ")");
+        }
+
+        // ---- the native teardown: treeChanged with no live tree ends the session ----
+        tileShortcut.activated();
+        if (calls("createTile").length !== 2) {
+            fail("the second toggle started a second session");
+        }
+        facade.treeAlive = false;
+        facade.treeChanged();
+        if (!rectIs(winA.frameGeometry, 700, 120, 300, 320) || !rectIs(winB.frameGeometry, 760, 480, 300, 300)) {
+            fail("the native teardown restored the stack floats");
+        }
+        if (calls("releaseTile").length !== 1) {
+            fail("the native teardown does not release an already-ended tree");
+        }
+        // the session is gone: the next toggle starts a session instead of un-toggling
+        tileShortcut.activated();
+        if (calls("createTile").length !== 3) {
+            fail("a toggle after the native teardown lays out again (the session had ended)");
+        }
+        tileShortcut.activated(); // untoggle the third session (cleanup)
+        if (calls("releaseTile").length !== 2) {
+            fail("the third session released its tree");
+        }
+
+        // ---- a refused tree: no session, no geometry write ----
+        facade.refuseCreate = true;
+        const before = winA.frameGeometry;
+        tileShortcut.activated();
+        if (calls("admitTile").length !== 3) {
+            fail("a refused tree admits nothing");
+        }
+        if (!rectIs(winA.frameGeometry, before.x, before.y, before.width, before.height)) {
+            fail("a refused tree writes no geometry");
+        }
+        facade.refuseCreate = false;
+
+        // ---- the invoked view survives the untoggle of another view's session ----
+        // A session on the first desktop, then a second desktop with its own window; the
+        // shortcut is invoked there. The untoggle activates the old master, and KWin's
+        // activation can carry the current desktop back with it (the stub emulates that in
+        // the restore hook) - the new session must still tile the invoked desktop, not the
+        // one the teardown last looked at.
+        const desktop2 = { id: 12 };
+        const m2 = mk({ internalId: "m2", resourceClass: "org.fusion.help",
+                        desktopFileName: "org.fusion.help.desktop",
+                        frameGeometry: Qt.rect(60, 90, 500, 400) });
+        m2.desktops = [desktop2];
+        m2.output = ws.activeScreen;
+        ws.desktops = [desktop, desktop2];
+        ws.windows = [m2, winB, winA, master];
+        ws.currentDesktop = desktop;
+        ws.activeWindow = master;
+        tileShortcut.activated(); // the session on the first desktop
+        const desktop1Session = calls("createTile").length;
+        ws.currentDesktop = desktop2;
+        ws.activeWindow = m2;
+        ws.onSlotRestore = function () {
+            ws.currentDesktop = desktop;
+            ws.activeWindow = master;
+        };
+        tileShortcut.activated();
+        const creates = calls("createTile");
+        const lastCreate = creates[creates.length - 1];
+        const admits = calls("admitTile");
+        const lastAdmit = admits[admits.length - 1];
+        if (creates.length !== desktop1Session + 1) {
+            fail("the invocation on the other desktop started a new session");
+        }
+        if (lastCreate.desktop !== 12) {
+            fail("the new session tiled the invoked desktop (got " + lastCreate.desktop + ")");
+        }
+        if (!lastAdmit || lastAdmit.window !== "m2") {
+            fail("the invoked desktop's window became the master (got " + (lastAdmit ? lastAdmit.window : "none") + ")");
+        }
+        ws.onSlotRestore = null;
+        ws.currentDesktop = desktop2;
+        tileShortcut.activated(); // untoggle it (still the invoked view)
+
+        // ---- a manual move of an ignored app's stack window detaches it (late phase) ----
+        // org.fusion.files is in IgnoreApps: the memory never records it, but the tiler's
+        // membership decision comes first - its move by hand must still leave the session,
+        // or a later relayout would put it back in its cell over the user's move. The move
+        // runs in the late phase, past the untoggles' quiet second (runLate).
+        ws.currentDesktop = desktop;
+        ws.activeWindow = master;
+        tileShortcut.activated();
+        winD = mk({ internalId: "d", resourceClass: "org.fusion.web",
+                    desktopFileName: "org.fusion.web.desktop",
+                    frameGeometry: Qt.rect(200, 300, 240, 200) });
+        winD.desktops = [desktop];
+        winD.output = ws.activeScreen;
+    }
+
+
+    function runLate() {
+        const ws = KWinStubs.Workspace;
+        const manualRect = Qt.rect(100, 600, 280, 240);
+        winB.frameGeometry = manualRect;
+        const creates = calls("createTile");
+        stackWindows = [winA, winB, winD];
+        ws.windows = [winD, winB, winA, master];
+        ws.windowAdded(winD);
+        if (calls("createTile").length !== creates.length) {
+            fail("the ignored-member session still owns one tree");
+        }
+        if (!rectIs(winB.frameGeometry, manualRect.x, manualRect.y, manualRect.width, manualRect.height)) {
+            fail("the ignored member's manual move stands after the relayout (got "
+                 + JSON.stringify(winB.frameGeometry) + ")");
+        }
+
+        // ---- an ignored app that joins live records nothing, settle pass included ----
+        // org.fusion.files is in IgnoreApps: opening another of its windows during the
+        // session joins the stack (the tiler ignores the memory's list) and is settle
+        // pushed like any join - but its float must not reach the memory; the policy that
+        // nothing of an ignored app is recorded survives the tiler.
+        const winE = mk({ internalId: "e", resourceClass: "org.fusion.files",
+                          desktopFileName: "org.fusion.files.desktop",
+                          frameGeometry: Qt.rect(320, 560, 220, 220) });
+        winE.desktops = [firstDesktop];
+        winE.output = ws.activeScreen;
+        stackWindows = stackWindows.concat(winE);
+        ws.windows = [winE, winD, winB, winA, master];
+        ws.windowAdded(winE);
+
+        // ---- a reflow's float restore quiets the starved member's late cell commit ----
+        // A third join shrinks the placed cells below winA's minimum height: its saved
+        // float goes back and it leaves the session. The client's late commit of the old
+        // cell (a window without requestedGeometry support) must not then record the cell
+        // as the window's floating placement - the restore quiets it, like the untoggle's.
+        winA.minSize = { width: 1, height: 400 };
+        const winG = mk({ internalId: "g", resourceClass: "org.fusion.chat",
+                          desktopFileName: "org.fusion.chat.desktop",
+                          frameGeometry: Qt.rect(430, 150, 260, 300) });
+        winG.desktops = [firstDesktop];
+        winG.output = ws.activeScreen;
+        stackWindows = stackWindows.concat(winG);
+        ws.windows = [winG, winE, winD, winB, winA, master];
+        // a plain copy: a value-type property read through a QObject reference aliases the
+        // window's live geometry, and the reflow's own write would mutate the capture
+        const winACell = { x: winA.frameGeometry.x, y: winA.frameGeometry.y,
+                           width: winA.frameGeometry.width, height: winA.frameGeometry.height };
+        ws.windowAdded(winG);
+        if (rectIs(winA.frameGeometry, winACell.x, winACell.y, winACell.width, winACell.height)) {
+            fail("the starved member returned to its float (it kept its cell)");
+        }
+        winA.frameGeometry = Qt.rect(winACell.x, winACell.y, winACell.width, winACell.height); // the late commit
+        // the python driver asserts, after the settle pass, that no record carries winA's
+        // cell or anything of the ignored app's second window
+
+        // the snapshot the python driver counts from: everything the run itself caused
+        snapshot = ({ createTile: calls("createTile").length,
+                      admitTile: calls("admitTile").length,
+                      releaseTile: calls("releaseTile").length,
+                      registerProvider: calls("registerProvider").length,
+                      trackWindow: calls("trackWindow").length });
+    }
+}

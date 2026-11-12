@@ -1009,6 +1009,23 @@ Offline (laptop):
   its settings and for a gap that is not a number, and the settings dialog's (`main.xml`,
   `config.ui`); each fails with its old default of 6 (2026-10-16, 65 checks). Build the stage
   with `STAGE=STAGE_HOME tools/build.sh kwin`.
+ - `QT_QPA_PLATFORM=offscreen python3
+   packages/kwin/tests/offscreen/tiling_lifecycle_test.py [PACKAGES_KWIN_DIR]` (CI `build`, on
+   the snap geometry step's stage) loads the real placement `main.qml` in Qt with the stand-in
+   `org.kde.kwin` module and a mock of the fork's `TransientTilingApi` facade, then drives the
+   tiler's whole native lifecycle through the Tile Workspace shortcut: the tree created and the
+   master admitted before any stack geometry write (invariant 8; the mock snapshots the stack at
+   `createTile`), the configured `MasterFraction` reaching the native tile, the endpoint-rounded
+   column the script writes, a window joining live, the untoggle (floats back, the master's
+   `slotWindowRestore`, `releaseTile` with the admitted generation), the native `treeChanged`
+   teardown (floats back, no release of an ended tree, the next toggle lays out again) and a
+   refused tree (no admission, no geometry write); after the settling second, the joined
+   windows' saved floats - never a cell - are what the memory recorded (invariant 7), and
+   the shortcut invoked on another desktop while a session lives tiles the invoked view even
+   though the untoggle's activation carried the current desktop back (the stub emulates that
+   in its restore hook), an ignored app's live join records nothing, and a reflow-starved
+   member's late cell commit is quieted by the float restore. Mutation-checked: skipping
+   `admitTile`, skipping the untoggle's `releaseTile` and ignoring the teardown each fail it.
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
 bus, 1440x900). Seeds: `packages/kwin/tests/vsession/make-seed.sh STAGE_HOME SEED dark|light`
@@ -1583,3 +1600,160 @@ and down to the script.
   quick settings `toggle:<nonce>` twice, spread out `notifications:<nonce>`; up (Nothing) did
   nothing; down (Snap layouts) found no window to place. The machine was left as found (the
   script's keys deleted, the installed script loaded again, the first desktop current).
+
+## Dynamic tiling (2026-11-12)
+
+The per-workspace master-and-stack tiler (issue #115) lives inside `plasmafusion-placement`:
+the writer takes exactly one provider, and the tiler IS that provider's policy consumer —
+a separate package would need a fork-side per-window suppression seam the first slice
+deliberately defers.
+
+### How it works (Option A, the anchor approach)
+
+- **Toggle on** ("Plasma Fusion: Tile Workspace"): the active window becomes the master —
+  admitted into the transient tile through `Workspace.transientTiling().createTile()` +
+  `admitTile()` with the provider token; the workspace's other eligible windows become the
+  stack, their pre-tiling floats saved, placed by direct `frameGeometry` writes in the
+  endpoint-rounded column (the snap script's discipline: `Tiling.stackRects`).
+- **Toggle off**: the stack windows return to their saved floats; the master restores through
+  the native explicit restore (`Workspace.slotWindowRestore()` — Meta+Backspace's path);
+  the tree releases (`releaseTile`). The completion is asynchronous: the
+  `transientRestorationCompleted` signal marks the boundary.
+- **Native teardown**: the facade forwards `treeChanged`; a change with no live tree is
+  session-end — the stack floats restore, the session clears. This covers master close,
+  output removal, desktop removal, provider retirement, key conflict, a manual quick-tile or
+  move of the master, and output transfer — every native path at once, for free.
+- **Live**: new eligible windows on the tiled workspace join the stack (a window with a
+  remembered placement keeps it as its saved float: the untoggle returns the app to its
+  remembered spot, as the memory would have placed it); a window the stack
+  cannot manage - not resizable, or a minimum size above the cell it would get - is handed
+  back untouched (its remembered placement applies, and its own moves reach the placement
+  memory); closed or minimized windows leave the layout and the column refills, a minimized
+  one rejoining on restore with its pre-tiling float kept; a window that joins live keeps
+  the settle pass: one second after it opens, the memory records its saved float (never the
+  cell it sits at - invariant 7 keeps automatic rectangles out), so its next open has a
+  placement even if the user never moves it, and the memory's ignore policy still decides
+  whether anything is recorded (an ignored app's joined window records nothing, settle pass
+  included); the provider's `record()` skips
+  managed windows and the close of a managed window records nothing (invariant 7: automatic
+  rectangles never enter placement memory), and the tiler's own float restores quiet the
+  window for the restore's settling second, so a client's late commit of a cell cannot
+  record as the float. The workspace is the desktop *and* the activity *and* the session's
+  output: windows of another activity are not candidates even on a shared desktop, and a
+  same-desktop window on another screen is not the session's to place (stacking order top
+  first: KWin lists the bottom-most first, and the stack's first cell is the top-most
+  window's).
+- **Minimized-before members**: the workspace's minimized windows at toggle-on are
+  members-to-be, not strangers: their floats are saved and they are watched from the start
+  (restoring one during the session emits no `windowAdded` - it was there all along), so a
+  restore rejoins the layout instead of floating over it (`Tiling.dormantCandidates`) - but
+  a minimized window that is full-screen or manually tiled keeps that state through the
+  restore, and a relayout never overwrites it, so those are strangers; the rejoin rechecks
+  the eligibility for the same reason. A window that *arrives* already minimized while the
+  session is live is the same member-to-be (`Tiling.eligibleDormant`, the one rule both
+  paths read): it is watched on arrival - for it too, a later restore emits no
+  `windowAdded` - with the remembered placement as its saved float, as for every new member.
+- **Leavers stop being managed**: a member that moves to another desktop, activity or output
+  during the session is detached (its `desktopsChanged`/`activitiesChanged`/`outputChanged`
+  ends it): the session is per-workspace and per-screen, its cell belongs to the view it
+  left, and the float is dropped so the untoggle cannot drag it back - the geometry it
+  carries over is the user's own. A dormant member-to-be that moves away while minimized
+  loses its saved float the same way: it never joined the layout, but the float described a
+  view it left, and the untoggle must not drag it back there either.
+- **A manual move of a stack window floats it**: the tiler never fights the user for a cell,
+  for the memory's ignored apps as much as recorded ones (the tiler's membership decision
+  runs before the memory's `IgnoreApps` guard - an ignored member's move by hand leaves the
+  session too, or a later relayout would put it back in its cell over the move).
+  The tiler's own writes are excluded twice - they run under a `placing` guard, and they land
+  exactly on the cell the layout assigned (`Tiling.isOwnCell`: the synchronous write and the
+  client's late commit of it alike) - so anything else is the user's hand: the member is
+  detached, the move is recorded as its floating placement, and the untoggle cannot write the
+  saved float over it. The master is exempt (its manual teardown is native, and its maximize
+  or full-screen frames are mode changes, not hands - reading them as moves collapsed the
+  stack once; `cellRects` holds stack cells only, and the check is stack-members only).
+- **One session at a time, on the workspace it was invoked on**: the controller holds one
+  tree, the TileManager allows one transient root per desktop - this is the contract, not a
+  limitation to hide. A toggle on another workspace ends the session there (its floats
+  restore on that workspace) and lays out the current one, so the action never untoggles a
+  desktop the user left behind. The workspace is the desktop *and* the activity *and* the
+  output (`Tiling.sameView`, the session's one scoping rule): a toggle invoked while another
+  screen is the active one tiles that screen - the same desktop on another output is not
+  this session's view. The invocation's view is captured before the untoggle: the teardown
+  activates the old master for its native restore, and KWin's activation can carry the
+  current desktop and screen over to the old session's view, so `start()` lays out the
+  captured view, not whatever the teardown left current.
+- **The divider follows the master**: the stack column's left edge is the master's placed
+  right edge, read from the facade at every relayout (the tile is relative to the output's
+  root, so the native layer rescales it when the geometry changes; a screens change also
+  forces a relayout). A strut change that does not touch the screens heals at the next
+  membership event.
+- **Infeasible windows float**: a window whose minimum size exceeds its cell is left
+  floating (the defined safe state), not squeezed or dropped - and it stops being managed:
+  the tiler never wrote its geometry, its moves are placement memory again, and the untoggle
+  does not drag it back to where it floated before the session. Feasibility is judged against
+  the cells as they would be for the set being placed: the worst fit leaves first and the rest
+  are re-tried in the larger cells (a 300 px column with minimum heights 100, 100 and 200 has
+  no three-way cells, but the two that fit place once the tall window floats), and a window
+  too wide for the column is never feasible at any count. The same holds when a later
+  addition shrinks the column below a placed member's minimum: the member's saved float goes
+  back before the detach (`Tiling.floatRestores` - it sat at a cell no untoggle could undo),
+  where a window the layout never placed already sits at its own float. That reflow restore
+  quiets the window for the restore's settling second, like the untoggle's: a late commit of
+  the starved cell arriving after the member left the session must not record the cell as
+  its floating placement.
+- **Restored floats stay on a live screen**: an output that goes away takes its coordinates
+  with it, and KWin has already evacuated such windows - the untoggle and the teardown
+  restore a saved float only while it still lands on a screen the session has, so a stale
+  absolute rectangle cannot drag a window offscreen over the evacuation.
+
+### Shortcuts (sequence-less; the user assigns them)
+
+| Name | Action |
+|---|---|
+| Plasma Fusion: Tile Workspace | toggle on/off |
+| Plasma Fusion: Tile Focus Master | focus the master |
+| Plasma Fusion: Tile Focus Next | next in the cycle (master → stack → master) |
+| Plasma Fusion: Tile Focus Previous | previous in the cycle |
+
+### Config (`kwinrc [Script-plasmafusion-placement]`)
+
+The keys are flat (no nested group): `KWin.readConfig` reads the script's own kwinrc group
+and nothing below it, so the KConfigXT group in `main.xml` stays empty and the KCM writes
+where the script reads.
+
+| Key | Type | Range | Default |
+|---|---|---|---|
+| `MasterFraction` | Double | 0.25–0.75 | 0.5 |
+| `StackGap` | Int | 0–48 | 8 |
+
+### The pure rules (`Tiling.js`)
+
+The layout math lives in a `.pragma library` with node tests (`tiling.test.js`): the fraction
+clamp, the endpoint-rounded stack column, the per-window feasibility check, the layout
+separation (feasible placed, infeasible floated, the column re-filled between just the
+feasible), the session structure, the focus cycle, the float save, the one workspace rule
+(`onWorkspace` - the candidates, the managed windows and the leavers read it), the
+minimized-before members (`dormantCandidates`, and `eligibleDormant` - the one rule the
+toggle-on scan and the live add of an already-minimized window read), the reflow float
+restores (`floatRestores`), the toggle's view comparison (`sameView`) and the own-cell test
+(`isOwnCell`). The eligibility predicates (`eligibleForMaster`, `eligibleForStack`) mirror
+the snap script's `usable()` guards. The QML path is covered too:
+`tests/offscreen/tiling_lifecycle_test.py` loads this `main.qml` under the stand-in KWin
+module with a mock `TransientTilingApi` and drives the native admission, the stack geometry
+writes, the untoggle, the native teardown and a refused tree (see the Tests list).
+
+### What it rides
+
+Every native contract: the transient ownership (the master's floating-A guarantee), the
+placement-memory suppression (invariant 7), the explicit restore (NT03.6), the completion
+boundary (NT04), the command-intent matrix (NT05), the capture/replay filter (NT06A), the
+context-release and transfer rebase (NT06). The tiler is the policy consumer the contract
+names — it creates no geometry loops, writes no tree into kwinrc, and defers to native
+quick-tile/manual precedence.
+
+### Deliberately deferred
+
+Runtime master-width adjust and full-width-master (the re-admission dance); swap
+(release → settle → re-admit); multiple masters; simultaneous per-workspace sessions;
+divider dragging; session memory across toggle/restart; X11 (the native layer refuses
+admission); settings UI; auto-tiling rules; a separate tiler package.

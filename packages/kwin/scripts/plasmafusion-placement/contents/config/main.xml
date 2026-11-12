@@ -17,5 +17,19 @@
       <label>Apps to leave alone (window classes or app ids, comma-separated)</label>
       <default></default>
     </entry>
+    <!-- The keys stay in the script's own kwinrc group (no nested group): the KCM writes
+         where KWin.readConfig reads. -->
+    <entry name="MasterFraction" type="Double">
+      <label>Fraction of the workspace the tiling master takes</label>
+      <default>0.5</default>
+      <min>0.25</min>
+      <max>0.75</max>
+    </entry>
+    <entry name="StackGap" type="Int">
+      <label>Pixel gap between the tiling stack's windows</label>
+      <default>8</default>
+      <min>0</min>
+      <max>48</max>
+    </entry>
   </group>
 </kcfg>

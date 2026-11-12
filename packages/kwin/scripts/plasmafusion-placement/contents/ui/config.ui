@@ -20,6 +20,46 @@
    <item row="1" column="1">
     <widget class="QLineEdit" name="kcfg_IgnoreApps"/>
    </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="masterFractionLabel">
+     <property name="text">
+      <string>Fraction of the workspace the tiling master takes:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QDoubleSpinBox" name="kcfg_MasterFraction">
+     <property name="decimals">
+      <number>2</number>
+     </property>
+     <property name="minimum">
+      <double>0.250000000000000</double>
+     </property>
+     <property name="maximum">
+      <double>0.750000000000000</double>
+     </property>
+     <property name="singleStep">
+      <double>0.050000000000000</double>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="0">
+    <widget class="QLabel" name="stackGapLabel">
+     <property name="text">
+      <string>Pixel gap between the tiling stack's windows:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="1">
+    <widget class="QSpinBox" name="kcfg_StackGap">
+     <property name="minimum">
+      <number>0</number>
+     </property>
+     <property name="maximum">
+      <number>48</number>
+     </property>
+    </widget>
+   </item>
   </layout>
  </widget>
  <resources/>
