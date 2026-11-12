@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-placement", "contents", "ui", "Placement.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { appId, identities, valid, parse, serialize, floating, maximized, requestedMode, settled, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreSize, restoreRect, restoreFor, remember, teardownWrite, providerRefused, trackingDecision, nextEventSequence, caughtUpSequence, bindingProof, reconciled } = globalThis;
+const { appId, identities, valid, parse, serialize, floating, maximized, requestedMode, settled, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreSize, restoreRect, restoreFor, remember, teardownWrite, providerRefused, trackingDecision, refusedBindingDecision, nextEventSequence, caughtUpSequence, reconciled } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const desktop = () => ({ normal: true, transient: false, modal: false, fullScreen: false, tiled: false, minimized: false, maximizeMode: 0 });
@@ -231,22 +231,17 @@ assert.strictEqual(caughtUpSequence(1), 2);
 assert.strictEqual(caughtUpSequence(2), 4);
 assert.strictEqual(caughtUpSequence(5), 10);
 
-// ---- an assumed binding (a trackWindow the writer refused on reload) is proven by the entry
-// observably becoming the submitted rectangle, not by matching it: a key whose entry already
-// held the rectangle cannot tell the window's binding from another window of the app (or the
-// remembered spot the window sits on) while the writer still holds the window under its
-// earlier identity
-assert.strictEqual(bindingProof(undefined, rect(10, 10, 640, 480), rect(10, 10, 640, 480)),
-    "confirmed", "the entry appeared with the submitted rectangle");
-assert.strictEqual(bindingProof(rect(40, 40, 800, 500), rect(10, 10, 640, 480), rect(10, 10, 640, 480)),
-    "confirmed", "the entry moved to the submitted rectangle");
-assert.strictEqual(bindingProof(rect(10, 10, 640, 480), rect(10, 10, 640, 480), rect(10, 10, 640, 480)),
-    "waiting", "the entry already held the rectangle: no proof either way yet");
-assert.strictEqual(bindingProof(rect(40, 40, 800, 500), rect(40, 40, 800, 500), rect(10, 10, 640, 480)),
-    "disproven", "the record was filed under the window's earlier identity");
-assert.strictEqual(bindingProof(rect(10, 10, 640, 480), undefined, rect(10, 10, 640, 480)),
-    "disproven", "no entry for the key at all");
-// the false mark a disproven binding leaves: never tracked, never recorded natively again
+// ---- a refused trackWindow is settled by the key the writer says it holds the window under
+// (windowBinding; empty when it holds none), never by assuming the key: the record files under
+// the binding's key, so an assumed key after an identity changed across a script reload would
+// overwrite that app's saved entry where no comparison could detect or undo it
+assert.strictEqual(refusedBindingDecision("konsole", "konsole"), "confirmed",
+    "the reload case: the binding an earlier incarnation left is the one to keep");
+assert.strictEqual(refusedBindingDecision("kate", "konsole"), "changed",
+    "the identity changed across the reload: never rebound, never recorded natively");
+assert.strictEqual(refusedBindingDecision("", "konsole"), "retry",
+    "a busy writer holds nothing: the next record tries the track again");
+// the false mark a changed binding leaves: never tracked, never recorded natively again
 assert.strictEqual(trackingDecision(false, "konsole"), "refuse");
 
 // ---- the cache after a submission: the writer's entry is the authority

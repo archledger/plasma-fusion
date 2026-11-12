@@ -313,20 +313,20 @@ function caughtUpSequence(sequence) {
     return sequence + Math.max(1, sequence);
 }
 
-// Whether the writer's snapshot entries prove an assumed binding, disprove it, or cannot tell.
-// An Accepted record applied the submitted rectangle under the key the window's binding holds,
-// so a proof needs the key's entry to have become the rectangle: an entry that already was the
-// rectangle before the record cannot distinguish the binding from a coincidence (the window
-// sits exactly on the new app's remembered spot, while the writer still holds the window under
-// its earlier identity), so the assumption waits for a record whose rectangle differs from the
-// entry. An entry that did not take the rectangle - or no entry at all - disproves the binding:
-// the record was filed under the earlier identity.
-function bindingProof(preEntry, postEntry, frame) {
-    const submitted = valid(frame);
-    if (!submitted || !same(postEntry, submitted)) {
-        return "disproven";
+// What a refused trackWindow means, once the writer says which key it holds the window under
+// (windowBinding; empty when it holds none): the same key is the reload case - the binding an
+// earlier incarnation of this script left is exactly the one to keep writing through. Another
+// key means the window's identity changed across the reload, the same never-rebound policy as
+// an identity that changed after the binding: the record files under the binding's key, not
+// under any key the caller passes, so writing on an assumed key would overwrite the earlier
+// app's entry where nothing could detect or undo it. Empty means the refusal was the writer
+// being busy, so the next record tries the track again (until then the record stays in the
+// session cache - never an assumed key).
+function refusedBindingDecision(bound, key) {
+    if (bound === key) {
+        return "confirmed";
     }
-    return same(preEntry, submitted) ? "waiting" : "confirmed";
+    return bound === "" ? "retry" : "changed";
 }
 
 // The cache after re-reading the writer's entry for key: the writer's rectangle is the

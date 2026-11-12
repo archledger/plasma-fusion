@@ -99,12 +99,9 @@ Item {
     property var eventSequences: ({})
     // window internalId -> the app id the writer holds the window under (one key per window
     // for the window's whole lifetime; the writer refuses a second trackWindow). false marks a
-    // disproven binding: the window is never recorded natively again.
+    // binding the writer holds under another key (an identity that changed across a reload):
+    // the window is never recorded natively again.
     property var trackedKeys: ({})
-    // window internalId -> true while the binding is assumed, not proven: a trackWindow the
-    // writer refused (the window was bound by an earlier incarnation of this script) until the
-    // first Accepted record is checked against the writer's own snapshot.
-    property var unconfirmedBindings: ({})
 
     // TransientPlacementWriter::Result, in its enum order (the type itself is not a QML enum):
     // OutdatedEvent is not a policy decision but the reload signal the sequence catch-up
@@ -165,15 +162,31 @@ Item {
         if (decision === "track") {
             if (api.trackWindow(w, key)) {
                 trackedKeys[id] = key;
-            } else {
-                // The refusal cannot be told apart: the window is already bound by an earlier
-                // incarnation of this script (a reload in the session - the binding it left is
-                // the one the record goes through) or the writer is momentarily busy, and the
-                // facade has no way to ask which key a binding holds. The key is assumed, and
-                // the first Accepted record proves it against the writer's own snapshot.
-                trackedKeys[id] = key;
-                unconfirmedBindings[id] = true;
+                return;
             }
+            // The refusal cannot be told apart on its own, so the writer is asked which key it
+            // holds the window under (windowBinding, fork PR #20): a record files under the
+            // binding's key, never under a key the caller passes, so writing on an assumed key
+            // after an identity changed across a reload would overwrite that app's entry where
+            // no comparison could detect or undo it.
+            if (typeof api.windowBinding !== "function") {
+                // An older fork's facade has no question to ask: the record stays in the
+                // session cache rather than being filed under an assumed key.
+                trackedKeys[id] = false;
+                log("the writer refused the track for " + key + " and cannot be asked for its binding; it is not recorded natively");
+                return;
+            }
+            const outcome = Placement.refusedBindingDecision(String(api.windowBinding(w)), key);
+            if (outcome === "confirmed") {
+                // The reload case: the binding an earlier incarnation of this script left is
+                // the one to keep writing through.
+                trackedKeys[id] = key;
+            } else if (outcome === "changed") {
+                trackedKeys[id] = false;
+                log("the writer holds this window of " + key + " under an earlier key; it is not recorded natively");
+            }
+            // "retry": the writer was busy and holds nothing - the next record tries the track
+            // again, and until then the record lives in the session cache only.
         }
     }
 
@@ -184,22 +197,14 @@ Item {
         trackWithWriter(w);
         const key = appIdOf(w);
         if (trackedKeys[String(w.internalId)] !== key) {
-            // The window has no identity yet, or its identity changed after the writer bound
-            // it: a submission would be filed under the wrong key, so the record lives in the
-            // session cache only.
+            // The window has no identity yet, its identity changed after the writer bound it,
+            // or the writer holds it under an earlier key (an identity that changed across a
+            // script reload): a submission would be filed under the wrong key, so the record
+            // lives in the session cache only.
             return;
         }
         const rect = Qt.rect(frame.x, frame.y, frame.width, frame.height);
         let seq = Placement.nextEventSequence(eventSequences, key);
-        // An assumed binding is proven by a record that observably lands under the assumed key,
-        // so the key's entry is read before the first submission (Placement.bindingProof): an
-        // entry that already equals the frame cannot distinguish the binding from a coincidence.
-        const id = String(w.internalId);
-        let preEntry = undefined;
-        if (unconfirmedBindings[id]) {
-            const pre = api.snapshot();
-            preEntry = pre && pre.entries ? pre.entries[key] : undefined;
-        }
         // The facade call: the provider incarnation token first (the writer rejects submissions
         // from retired incarnations), then the revision, the window, the already rounded
         // rectangle, the key's event sequence and the origin (0 = Manual).
@@ -220,40 +225,10 @@ Item {
                 && result !== writerResult.Suppressed) {
             log("the writer refused a record for " + key + " (result " + result + ")");
         }
-        // An assumed binding (a refused trackWindow) is settled by the first Accepted record
-        // whose landing the snapshot can show. Deferred and Suppressed submissions, and a
-        // record whose rectangle the key's entry already held, leave the assumption standing
-        // until a later record applies observably.
-        if (unconfirmedBindings[id] && result === writerResult.Accepted) {
-            verifyBindingWithWriter(w, key, frame, preEntry);
-        }
         // Reconcile the cache with the writer's decision: when the submission was suppressed or
         // deferred, the writer's entry for this key is the authority, not the in-memory cache
         // the policy just wrote.
         reconcileKeyWithWriter(key);
-    }
-
-    // The proof an assumed binding waited for: the writer's own snapshot around an Accepted
-    // record (Placement.bindingProof compares the key's entry before and after it). A confirmed
-    // binding drops the assumption; an uninformative one waits for a record that lands
-    // observably; a disproven one marks the window so trackingDecision refuses it from here on -
-    // the wrong-key record already made is the one the old identity's own next record
-    // overwrites, and later records stay in the session cache, exactly like an identity that
-    // changed after the binding.
-    function verifyBindingWithWriter(w, key, frame, preEntry) {
-        const id = String(w.internalId);
-        const snap = api.snapshot();
-        const postEntry = snap && snap.entries ? snap.entries[key] : undefined;
-        const proof = Placement.bindingProof(preEntry, postEntry, frame);
-        if (proof === "waiting") {
-            return;
-        }
-        delete unconfirmedBindings[id];
-        if (proof === "confirmed") {
-            return;
-        }
-        trackedKeys[id] = false;
-        log("the writer holds this window of " + key + " under an earlier key; it is not recorded natively");
     }
 
     function reconcileKeyWithWriter(key) {
