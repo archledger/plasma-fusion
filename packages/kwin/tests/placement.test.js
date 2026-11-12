@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-placement", "contents", "ui", "Placement.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { appId, identities, valid, parse, serialize, floating, maximized, requestedMode, settled, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreSize, restoreRect, restoreFor, remember, teardownWrite } = globalThis;
+const { appId, identities, valid, parse, serialize, floating, maximized, requestedMode, settled, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreSize, restoreRect, restoreFor, remember, teardownWrite, providerRefused, trackingDecision, refusedBindingDecision, nextEventSequence, caughtUpSequence, reconciled } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const desktop = () => ({ normal: true, transient: false, modal: false, fullScreen: false, tiled: false, minimized: false, maximizeMode: 0 });
@@ -192,5 +192,82 @@ assert.ok(!teardownWrite(true, 2, 1, true, 2), "the write in flight carries the 
 assert.ok(teardownWrite(true, 3, 2, false, 2), "an unsent change");
 assert.ok(!teardownWrite(true, 2, 2, false, 2), "everything written");
 assert.ok(!teardownWrite(false, 3, 0, false, -1), "the memory was never read: nothing to write");
+
+// ---------------------------------------------------------------------------
+// Native writer path (NT07): the registration, identity-binding, event-sequence
+// and cache-reconciliation rules Placement.js owns. The QML wiring around them
+// (the transientTiling() facade calls) runs only on the fork's KWin - the
+// session scenarios cover the stock and backport lanes, which take the legacy
+// transport - so these drive the decisions the wiring follows.
+// ---------------------------------------------------------------------------
+
+// ---- a refused registration: empty or broken token text disables the memory, no legacy bypass
+assert.ok(providerRefused(""));
+assert.ok(providerRefused(undefined));
+assert.ok(providerRefused(null));
+assert.ok(providerRefused("undefined"), "a broken call surfaces undefined as text");
+assert.ok(!providerRefused("7c9e6679-7425-40de-944b-e07fc1f90ae7"));
+
+// ---- the identity binding: the writer holds one key per window for its whole lifetime
+assert.strictEqual(trackingDecision(undefined, "org.kde.kate"), "track", "the first binding");
+assert.strictEqual(trackingDecision(null, "kate"), "track");
+assert.strictEqual(trackingDecision(undefined, ""), "refuse", "no identity yet: nothing to bind");
+assert.strictEqual(trackingDecision("org.kde.kate", "org.kde.kate"), "keep");
+assert.strictEqual(trackingDecision("kate", "org.kde.kate"), "refuse",
+    "an identity that changed after the binding is never rebound nor recorded");
+
+// ---- event sequences are per app, not per window: the writer orders a key's events globally
+const sequences = {};
+assert.strictEqual(nextEventSequence(sequences, "konsole"), 1);
+sequences.konsole = 1; // the first window's first record
+assert.strictEqual(nextEventSequence(sequences, "konsole"), 2);
+sequences.konsole = 2; // the first window records again
+assert.strictEqual(nextEventSequence(sequences, "konsole"), 3,
+    "a second window of the app draws from the same counter");
+assert.strictEqual(nextEventSequence({}, "kate"), 1, "each key has its own counter");
+// a reload behind the writer's watermark: the catch-up strides exponentially (the writer keeps
+// its per-key watermarks across provider incarnations, and they are not readable)
+assert.strictEqual(caughtUpSequence(1), 2);
+assert.strictEqual(caughtUpSequence(2), 4);
+assert.strictEqual(caughtUpSequence(5), 10);
+
+// ---- a refused trackWindow is settled by the key the writer says it holds the window under
+// (windowBinding; empty when it holds none), never by assuming the key: the record files under
+// the binding's key, so an assumed key after an identity changed across a script reload would
+// overwrite that app's saved entry where no comparison could detect or undo it
+assert.strictEqual(refusedBindingDecision("konsole", "konsole"), "confirmed",
+    "the reload case: the binding an earlier incarnation left is the one to keep");
+assert.strictEqual(refusedBindingDecision("kate", "konsole"), "changed",
+    "the identity changed across the reload: never rebound, never recorded natively");
+assert.strictEqual(refusedBindingDecision("", "konsole"), "retry",
+    "a busy writer holds nothing: the next record tries the track again");
+// the false mark a changed binding leaves: never tracked, never recorded natively again
+assert.strictEqual(trackingDecision(false, "konsole"), "refuse");
+
+// ---- the cache after a submission: the writer's entry is the authority
+const cache = { konsole: rect(100, 100, 640, 480) };
+// suppressed or deferred: the writer kept the entry at its own decision
+assert.deepStrictEqual(reconciled(cache, { konsole: rect(100, 100, 640, 480) }, "konsole"), cache);
+// a deferred update became visible after its barrier ended: the writer's rectangle wins ...
+assert.deepStrictEqual(reconciled(cache, { konsole: rect(40, 40, 800, 500) }, "konsole"),
+    { konsole: rect(40, 40, 800, 500) });
+// ... and the restore reads the refreshed entry, not the stale mirror it replaced
+assert.deepStrictEqual(restoreFor("konsole", desktop(), cache.konsole, screens, [], "", true, current),
+    rect(40, 40, 800, 500), "the deferred-then-released rectangle is the one given back");
+// a key the writer carries and the cache does not is adopted as it is
+assert.deepStrictEqual(reconciled(cache, { kate: rect(0, 0, 640, 480) }, "kate"),
+    { konsole: rect(40, 40, 800, 500), kate: rect(0, 0, 640, 480) });
+// an entry the memory would not validate is never adopted
+assert.deepStrictEqual(reconciled({ konsole: rect(10, 10, 640, 480) }, { konsole: rect(0, 0, 1, 1) }, "konsole"),
+    { konsole: rect(10, 10, 640, 480) }, "never an invalid record");
+// nothing to read: no snapshot entries, no change
+assert.deepStrictEqual(reconciled({ konsole: rect(10, 10, 640, 480) }, null, "konsole"),
+    { konsole: rect(10, 10, 640, 480) });
+
+// ---- the submitted rectangle: already rounded and representable, as the writer's contract
+// requires (its own validation rejects fractional frames outright)
+assert.deepStrictEqual(valid(rect(10.5, 20.5, 640.5, 480.5)), rect(11, 21, 641, 481),
+    "a fractional frame is submitted rounded");
+assert.strictEqual(valid(rect(0, 0, 40000, 480)), null, "an absurd frame is not submitted at all");
 
 console.log("placement.test.js: ok");
