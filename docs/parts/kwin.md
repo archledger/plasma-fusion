@@ -1600,29 +1600,41 @@ deliberately defers.
   session-end — the stack floats restore, the session clears. This covers master close,
   output removal, desktop removal, provider retirement, key conflict, a manual quick-tile or
   move of the master, and output transfer — every native path at once, for free.
-- **Live**: new eligible windows on the tiled workspace join the stack; a window the stack
+- **Live**: new eligible windows on the tiled workspace join the stack (a window with a
+  remembered placement keeps it as its saved float: the untoggle returns the app to its
+  remembered spot, as the memory would have placed it); a window the stack
   cannot manage - not resizable, or a minimum size above the cell it would get - is handed
   back untouched (its remembered placement applies, and its own moves reach the placement
   memory); closed or minimized windows leave the layout and the column refills, a minimized
   one rejoining on restore with its pre-tiling float kept; the provider's `record()` skips
   managed windows and the close of a managed window records nothing (invariant 7: automatic
-  rectangles never enter placement memory). The workspace is the desktop *and* the activity:
-  windows of another activity are not candidates even on a shared desktop.
+  rectangles never enter placement memory), and the tiler's own float restores quiet the
+  window for the restore's settling second, so a client's late commit of a cell cannot
+  record as the float. The workspace is the desktop *and* the activity *and* the session's
+  output: windows of another activity are not candidates even on a shared desktop, and a
+  same-desktop window on another screen is not the session's to place (stacking order top
+  first: KWin lists the bottom-most first, and the stack's first cell is the top-most
+  window's).
 - **Minimized-before members**: the workspace's minimized windows at toggle-on are
   members-to-be, not strangers: their floats are saved and they are watched from the start
   (restoring one during the session emits no `windowAdded` - it was there all along), so a
-  restore rejoins the layout instead of floating over it (`Tiling.dormantCandidates`).
-- **Leavers stop being managed**: a member that moves to another desktop or activity during
-  the session is detached (its `desktopsChanged`/`activitiesChanged` ends it): the session is
-  per-workspace, its cell belongs to the workspace it left, and the float is dropped so the
-  untoggle cannot drag it back - the geometry it carries over is the user's own.
+  restore rejoins the layout instead of floating over it (`Tiling.dormantCandidates`) - but
+  a minimized window that is full-screen or manually tiled keeps that state through the
+  restore, and a relayout never overwrites it, so those are strangers; the rejoin rechecks
+  the eligibility for the same reason.
+- **Leavers stop being managed**: a member that moves to another desktop, activity or output
+  during the session is detached (its `desktopsChanged`/`activitiesChanged`/`outputChanged`
+  ends it): the session is per-workspace and per-screen, its cell belongs to the view it
+  left, and the float is dropped so the untoggle cannot drag it back - the geometry it
+  carries over is the user's own.
 - **A manual move of a stack window floats it**: the tiler never fights the user for a cell.
   The tiler's own writes are excluded twice - they run under a `placing` guard, and they land
   exactly on the cell the layout assigned (`Tiling.isOwnCell`: the synchronous write and the
   client's late commit of it alike) - so anything else is the user's hand: the member is
   detached, the move is recorded as its floating placement, and the untoggle cannot write the
-  saved float over it. The master needs none of this: a manual move of the master ends the
-  tree natively.
+  saved float over it. The master is exempt (its manual teardown is native, and its maximize
+  or full-screen frames are mode changes, not hands - reading them as moves collapsed the
+  stack once; `cellRects` holds stack cells only, and the check is stack-members only).
 - **One session at a time, on the workspace it was invoked on**: the controller holds one
   tree, the TileManager allows one transient root per desktop - this is the contract, not a
   limitation to hide. A toggle on another workspace ends the session there (its floats
@@ -1640,6 +1652,10 @@ deliberately defers.
   addition shrinks the column below a placed member's minimum: the member's saved float goes
   back before the detach (`Tiling.floatRestores` - it sat at a cell no untoggle could undo),
   where a window the layout never placed already sits at its own float.
+- **Restored floats stay on a live screen**: an output that goes away takes its coordinates
+  with it, and KWin has already evacuated such windows - the untoggle and the teardown
+  restore a saved float only while it still lands on a screen the session has, so a stale
+  absolute rectangle cannot drag a window offscreen over the evacuation.
 
 ### Shortcuts (sequence-less; the user assigns them)
 

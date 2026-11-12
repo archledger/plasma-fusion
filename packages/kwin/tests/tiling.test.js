@@ -17,7 +17,7 @@ const file = path.join(__dirname, "..", "scripts", "plasmafusion-placement", "co
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
 const { masterFraction, masterTileRect, stackRects, feasibleInCell, createSession,
         eligibleForMaster, stackCandidates, dormantCandidates, layoutStack, focusOrder, nextInCycle,
-        previousInCycle, saveFloats, onWorkspace, floatRestores, isOwnCell } = globalThis;
+        previousInCycle, saveFloats, onWorkspace, desktopMatches, floatRestores, isOwnCell } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const windowWith = (over) => Object.assign({
@@ -156,7 +156,7 @@ assert.deepStrictEqual(focusOrder({ master: "M", stack: ["S1", "S2"] }), ["M", "
 // The workspace filter: one place decides what "on this session's workspace" means for the
 // candidates, the managed windows and the leavers (a member that moves away is nobody's).
 {
-    const on = (desktops, activities) => ({ onAllDesktops: false, desktops: desktops, activities: activities });
+    const on = (desktops, activities, output) => ({ onAllDesktops: false, desktops: desktops, activities: activities, output: output });
     assert.ok(onWorkspace(on(["2"], []), "2", ""), "the session's desktop");
     assert.ok(!onWorkspace(on(["2"], []), "3", ""), "another desktop");
     assert.ok(onWorkspace(on(["2"], []), 2, ""), "a desktop given as a number still matches its string form");
@@ -165,6 +165,42 @@ assert.deepStrictEqual(focusOrder({ master: "M", stack: ["S1", "S2"] }), ["M", "
     assert.ok(!onWorkspace(on(["2"], ["a"]), "2", "b"), "another activity");
     assert.ok(!onWorkspace({ onAllDesktops: true, desktops: [], activities: [] }, "2", ""), "all desktops is no single desktop");
     assert.ok(onWorkspace(on(["2"], ["a"]), "2", ""), "a window of every activity is on the session's");
+    // VirtualDesktop objects, not strings: KWin hands the scripting API wrappers, and two
+    // wrappers of one desktop must compare as one desktop (identity or their id), or tiling
+    // on one desktop pulls another one's windows in
+    const desk1a = { id: "d-1" };
+    const desk1b = { id: "d-1" };
+    const desk2 = { id: "d-2" };
+    assert.ok(desktopMatches(desk1a, desk1a), "the same wrapper");
+    assert.ok(desktopMatches(desk1a, desk1b), "two wrappers of one desktop, by id");
+    assert.ok(!desktopMatches(desk1a, desk2), "another desktop's wrapper");
+    assert.ok(onWorkspace(on([desk1b], []), desk1a, ""), "the workspace rule reads the wrappers");
+    assert.ok(!onWorkspace(on([desk2], []), desk1a, ""), "another desktop's window is not on the session's");
+    // the session's output scopes the workspace: the session tiles its own screen
+    const outA = { name: "eDP" };
+    assert.ok(onWorkspace(on(["2"], [], outA), "2", "", outA), "the session's output");
+    assert.ok(!onWorkspace(on(["2"], [], outA), "2", "", { name: "HDMI" }), "another output's window");
+    assert.ok(onWorkspace(on(["2"], [], outA), "2", ""), "no output given: every screen's windows");
+}
+
+// The stack candidates: stacking order TOP FIRST (KWin's stackingOrder lists the bottom-most
+// first, and the stack's first cell and the focus cycle are the top-most window's), this
+// output only - a same-desktop window on another screen is not this session's to place.
+{
+    const out = { name: "eDP" };
+    const win = (id, over) => Object.assign({ internalId: id, normalWindow: true, transient: false, modal: false,
+        minimized: false, maximizeMode: 0, moveable: true, resizeable: true, onAllDesktops: false,
+        desktops: ["2"], activities: [], output: out }, over);
+    const master = win("M");
+    const top = win("top");
+    const bottom = win("bottom");
+    const otherScreen = win("hdmi", { output: { name: "HDMI" } });
+    const thisScreen = win("edp");
+    const c = stackCandidates([bottom, otherScreen, master, top, thisScreen], master, "2", "", out);
+    assert.deepStrictEqual(c.map(w => w.internalId), ["edp", "top", "bottom"],
+        "top first, this output only: not the master, not the other screen's, down to the bottom-most");
+    assert.deepStrictEqual(stackCandidates([bottom, top], master, "2", "").map(w => w.internalId),
+        ["top", "bottom"], "without an output, every screen's windows");
 }
 
 // The dormant candidates: this workspace's minimized windows at session start. They are not
@@ -182,6 +218,12 @@ assert.deepStrictEqual(focusOrder({ master: "M", stack: ["S1", "S2"] }), ["M", "
     const dormant = dormantCandidates([minimized, otherDesk, visible, master], master, "2", "");
     assert.deepStrictEqual(dormant.map(w => w.internalId), ["m1"],
         "this workspace's minimized windows only: not the visible ones, not the master, not another desktop's");
+    // a full-screen or manually tiled window keeps that state through a restore: the layout
+    // must never overwrite it
+    const fullscreen = win({ internalId: "fs", minimized: true, fullScreen: true });
+    const tiled = win({ internalId: "tiled", minimized: true, tile: {} });
+    assert.deepStrictEqual(dormantCandidates([fullscreen, tiled, minimized], master, "2", "").map(w => w.internalId),
+        ["m1"], "full-screen and manually tiled minimized windows are strangers");
 }
 
 // What a reflow takes away: a member the layout had placed gets its saved float back before it

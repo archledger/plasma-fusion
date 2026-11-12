@@ -76,18 +76,20 @@ function eligibleForStack(w) {
     return eligibleForMaster(w);
 }
 
-// The windows on the tiled workspace that are not the master (stacking order, top first).
-// The workspace is the desktop AND the activity: activities are orthogonal to desktops, and a
-// window of another activity is not on this workspace's view even where the desktop number is
-// shared - an empty activity list is a window on all of them.
-function stackCandidates(windows, master, desktop, activity) {
+// The windows on the tiled workspace that are not the master (stacking order, TOP FIRST:
+// KWin's stackingOrder lists the bottom-most first, and the stack's first cell and the focus
+// cycle are the top-most window's). The workspace is the desktop AND the activity AND the
+// session's output: activities are orthogonal to desktops, and a window of another activity
+// or another screen is not this session's to place - an empty activity list is a window on
+// all of them.
+function stackCandidates(windows, master, desktop, activity, output) {
     const out = [];
-    for (let i = 0; i < windows.length; ++i) {
+    for (let i = windows.length - 1; i >= 0; --i) {
         const w = windows[i];
         if (w === master || !eligibleForStack(w)) {
             continue;
         }
-        if (!onWorkspace(w, desktop, activity)) {
+        if (!onWorkspace(w, desktop, activity, output)) {
             continue;
         }
         out.push(w);
@@ -98,30 +100,54 @@ function stackCandidates(windows, master, desktop, activity) {
 // Whether a window is on this session's workspace: its desktop and its activity. Activities
 // are orthogonal to desktops, and a window of another activity is not on this workspace's view
 // even where the desktop number is shared; an empty activity list is a window on all of them.
-// The candidates, the managed windows and the leavers all read the one rule.
-function onWorkspace(w, desktop, activity) {
+// The candidates, the managed windows and the leavers all read the one rule. The output scopes
+// it further: the session tiles its own screen, and a same-desktop window on another output is
+// not the session's to place.
+function onWorkspace(w, desktop, activity, output) {
     if (!w || w.onAllDesktops || !w.desktops || w.desktops.length !== 1
-            || String(w.desktops[0]) !== String(desktop)) {
+            || !desktopMatches(w.desktops[0], desktop)) {
+        return false;
+    }
+    if (output !== undefined && w.output !== output) {
         return false;
     }
     const activities = w.activities || [];
     return activities.length === 0 || activity === "" || activities.indexOf(activity) >= 0;
 }
 
+// Whether two desktop references are the same desktop: KWin hands the scripting API
+// VirtualDesktop objects (identity, or their id when the references differ), and tests hand
+// plain numbers and strings. Stringifying the wrappers would compare representations, not
+// desktops - two wrappers of one desktop would differ, and tiling on one desktop could pull
+// another one's windows in.
+function desktopMatches(a, b) {
+    if (a === b) {
+        return true;
+    }
+    if (!a || !b) {
+        return false;
+    }
+    if (a.id !== undefined && b.id !== undefined) {
+        return String(a.id) === String(b.id);
+    }
+    return String(a) === String(b);
+}
+
 // The workspace's minimized windows at session start: not stack candidates (they are out of
 // the view), but each is a member-to-be. Its float is saved and it is watched from the start,
 // because restoring it during the session emits no windowAdded - it was there all along.
-// The eligibility is the master's minus the minimized state (that is the point) and the
-// full-screen/tile states, which a minimized window can carry and sheds nothing by restoring.
-function dormantCandidates(windows, master, desktop, activity) {
+// The eligibility is the master's minus the minimized state (that is the point); a window
+// that is full-screen or manually tiled keeps that state through a restore, and a relayout
+// must never overwrite it, so those are strangers too.
+function dormantCandidates(windows, master, desktop, activity, output) {
     const out = [];
     for (let i = 0; i < windows.length; ++i) {
         const w = windows[i];
         if (w === master || !w || w.deleted || !w.normalWindow || w.transient || w.modal
-                || !w.moveable || !w.resizeable || !w.minimized) {
+                || !w.moveable || !w.resizeable || !w.minimized || w.fullScreen || w.tile) {
             continue;
         }
-        if (!onWorkspace(w, desktop, activity)) {
+        if (!onWorkspace(w, desktop, activity, output)) {
             continue;
         }
         out.push(w);

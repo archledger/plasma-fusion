@@ -69,6 +69,20 @@ active.
   no untoggle could undo), it stops being managed, and its later moves are placement memory
   again.
 
+### 2h. The stack is this screen's, and a removed output's floats stay on live screens
+- With two outputs, put a same-desktop window on the other screen; toggle on
+- **Expect**: only this screen's windows join the stack; the other screen's window is not
+  placed. Then unplug the output the session tiles: the native teardown restores the stack's
+  floats only where they still land on a live screen - a window whose float sat on the
+  unplugged display keeps KWin's evacuation geometry instead of being dragged offscreen.
+
+### 2i. A maximize of the master does not collapse the stack
+- Toggle on; after the open quiet period, maximize (or full-screen) the master and return it
+  to its tile
+- **Expect**: the stack keeps its cells throughout - the master's full-area frame is a mode
+  change, not a manual move, and no relayout reads it as the divider. The stack windows
+  rejoin as placed when the master returns.
+
 ## 3. Saved-tree cases
 
 ### 3a. The user's manual tile layout is untouched
