@@ -18,7 +18,7 @@ vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m,
 const { masterFraction, masterTileRect, stackRects, feasibleInCell, createSession,
         eligibleForMaster, stackCandidates, dormantCandidates, eligibleDormant, layoutStack,
         focusOrder, nextInCycle, previousInCycle, saveFloats, onWorkspace, desktopMatches,
-        floatRestores, isOwnCell } = globalThis;
+        sameView, floatRestores, isOwnCell } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const windowWith = (over) => Object.assign({
@@ -309,5 +309,34 @@ assert.ok(isOwnCell(rect(600, 0, 400, 300), rect(600, 0, 400, 300)), "the assign
 assert.ok(!isOwnCell(rect(600, 0, 400, 300), rect(601, 0, 400, 300)), "a moved frame");
 assert.ok(!isOwnCell(rect(600, 0, 400, 300), rect(600, 0, 399, 300)), "a resized frame");
 assert.ok(!isOwnCell(null, rect(600, 0, 400, 300)), "no cell assigned");
+
+// The toggle's view comparison: the desktop AND the activity AND the output. The session is
+// per-workspace and per-screen everywhere else (onWorkspace); the toggle must read the same
+// scoping - a shortcut invoked while another output is the active screen ends that session
+// there and tiles the current screen, it does not silently untoggle the old one and return.
+{
+    const outA = { name: "A" };
+    const outB = { name: "B" };
+    const view = (over) => {
+        const s = createSession();
+        s.active = true;
+        return Object.assign(s, { desktop: "2", activity: "act1", output: outA }, over);
+    };
+    assert.ok(sameView(view({}), "2", "act1", outA), "the session's own view");
+    assert.ok(!sameView(view({}), "2", "act1", outB),
+        "another output is another workspace: the toggle there tiles it, not untoggles this");
+    assert.ok(!sameView(view({}), "3", "act1", outA), "another desktop");
+    assert.ok(!sameView(view({}), "2", "act2", outA), "another activity");
+    assert.ok(sameView(view({ activity: "" }), "2", "any", outA),
+        "an empty activity matches every activity, as the toggle always did");
+    assert.ok(!sameView(view({ activity: "" }), "2", "any", outB),
+        "but not another output");
+    // desktop wrappers compare by id (desktopMatches), the output by identity - the one rule
+    // onWorkspace reads for both
+    assert.ok(sameView(view({ desktop: { id: 7 } }), { id: 7 }, "act1", outA),
+        "two wrappers of one desktop are one view");
+    assert.ok(!sameView(view({}), "2", "act1", { name: "A" }),
+        "a look-alike output object is not the session's output");
+}
 
 console.log("tiling.test.js: ok");

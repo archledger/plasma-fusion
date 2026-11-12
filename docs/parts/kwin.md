@@ -1644,7 +1644,10 @@ deliberately defers.
   tree, the TileManager allows one transient root per desktop - this is the contract, not a
   limitation to hide. A toggle on another workspace ends the session there (its floats
   restore on that workspace) and lays out the current one, so the action never untoggles a
-  desktop the user left behind.
+  desktop the user left behind. The workspace is the desktop *and* the activity *and* the
+  output (`Tiling.sameView`, the session's one scoping rule): a toggle invoked while another
+  screen is the active one tiles that screen - the same desktop on another output is not
+  this session's view.
 - **The divider follows the master**: the stack column's left edge is the master's placed
   right edge, read from the facade at every relayout (the tile is relative to the output's
   root, so the native layer rescales it when the geometry changes; a screens change also

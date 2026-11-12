@@ -133,6 +133,18 @@ function desktopMatches(a, b) {
     return String(a) === String(b);
 }
 
+// Whether the current view is the session's own: the desktop AND the activity AND the output.
+// The toggle reads this to decide untoggle-versus-retile, and it must read the same scoping
+// the whole session does (onWorkspace): another screen is another workspace even where the
+// desktop and activity are shared, so a toggle there lays out that screen instead of silently
+// untoggling the old one and leaving the invoked screen untiled. The output compares by
+// identity and the desktop by desktopMatches - the one rule onWorkspace reads for both.
+function sameView(session, desktop, activity, output) {
+    return desktopMatches(session.desktop, desktop)
+            && (session.activity === "" || session.activity === activity)
+            && session.output === output;
+}
+
 // A dormant window: minimized, but otherwise a stack candidate - a member-to-be. This is the
 // one rule both dormant paths read: the toggle-on scan below, and the live add (a window can
 // first appear while the session is up, already minimized - for it too, a later restore emits

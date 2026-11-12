@@ -97,6 +97,13 @@ active.
   needed went on at arrival. A full-screen or manually tiled window opened minimized stays a
   stranger; its state survives the restore.
 
+### 2l. A toggle on another output tiles that output
+- With two outputs, tile output A; move the focus to output B (same desktop, same activity -
+  click a window on B); invoke Tile Workspace
+- **Expect**: the first invocation lays out B in one go: A's session ends (its floats restore
+  on A) and B tiles immediately - the toggle does not spend its first invocation silently
+  untoggling A while B stays floating.
+
 ## 3. Saved-tree cases
 
 ### 3a. The user's manual tile layout is untouched

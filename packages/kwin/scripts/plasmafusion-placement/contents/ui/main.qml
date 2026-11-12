@@ -810,11 +810,13 @@ Item {
         // Toggle the tiling on or off. The one-tree contract allows one session at a time, so
         // a toggle on another workspace ends that session first (its floats restore there)
         // and lays out the current one: the action always applies to the workspace it was
-        // invoked on, never by untoggling a desktop the user left behind.
+        // invoked on, never by untoggling a desktop the user left behind. The workspace is
+        // the desktop and the activity and the output (Tiling.sameView, the session's one
+        // scoping rule): a toggle while another screen is the active one tiles that screen.
         function toggle() {
             if (session.active) {
-                const same = Tiling.desktopMatches(session.desktop, Workspace.currentDesktop)
-                        && (session.activity === "" || session.activity === String(Workspace.currentActivity));
+                const same = Tiling.sameView(session, Workspace.currentDesktop,
+                                             String(Workspace.currentActivity), Workspace.activeScreen);
                 untoggle();
                 if (same) {
                     return;
