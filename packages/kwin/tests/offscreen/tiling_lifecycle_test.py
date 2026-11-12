@@ -31,7 +31,9 @@ class ScriptConfig(QObject):
 
     def __init__(self):
         super().__init__()
-        self.settings = {"MasterFraction": 0.4}
+        # MasterFraction exercises the tiler's settings path; IgnoreApps names winB's app in
+        # the harness (org.fusion.files), for the ignored-member detach scenario.
+        self.settings = {"MasterFraction": 0.4, "IgnoreApps": "org.fusion.files"}
         self.calls = []
 
     @Slot(str, "QVariant", result="QVariant")
@@ -97,20 +99,30 @@ for problem in problems:
     failures.append(str(problem))
 
 counts = {}
-for call in facade_calls:
-    counts[call["op"]] = counts.get(call["op"], 0) + 1
-# Three accepted sessions (toggle, post-teardown toggle, cleanup toggle after the teardown
-# proof) plus one refused create; three admissions; two releases (the two un-toggles - the
-# native teardown releases nothing because its tree is already gone).
+snapshot = harness.property("snapshot")
+snapshot = snapshot.toVariant() if hasattr(snapshot, "toVariant") else snapshot
+for key in ("createTile", "admitTile", "releaseTile", "registerProvider", "trackWindow"):
+    counts[key] = (snapshot or {}).get(key)
+# Six accepted sessions (toggle, post-teardown toggle, teardown-proof toggle, the first-desktop
+# session, the invoked-view toggle, the ignored-member toggle) plus one refused create; six
+# admissions; four releases (the run's own un-toggles, the invocation's teardown included - the
+# native teardown releases nothing, the last session is left standing for the settle pass, and
+# the destruction-time untoggle is outside the snapshot). Five windows tracked: the master and
+# the four the script saw open (the second desktop's master appears only as the tiler's target).
 check(counts.get("registerProvider") == 1, "registerProvider once")
-check(counts.get("createTile") == 4, "createTile four times (3 sessions + 1 refused), got %s" % counts.get("createTile"))
-check(counts.get("admitTile") == 3, "admitTile three times, got %s" % counts.get("admitTile"))
-check(counts.get("releaseTile") == 2, "releaseTile twice, got %s" % counts.get("releaseTile"))
-check(counts.get("trackWindow") == 4, "trackWindow for the four windows, got %s" % counts.get("trackWindow"))
-# Invariant 7 end-to-end: after the settling timer passed, no managed window's automatic
-# rectangle ever reached the placement writer (a late settle pass included).
+check(counts.get("createTile") == 7, "createTile seven times (6 sessions + 1 refused), got %s" % counts.get("createTile"))
+check(counts.get("admitTile") == 6, "admitTile six times, got %s" % counts.get("admitTile"))
+check(counts.get("releaseTile") == 4, "releaseTile four times, got %s" % counts.get("releaseTile"))
+check(counts.get("trackWindow") == 5, "trackWindow for the five windows, got %s" % counts.get("trackWindow"))
+
+# Invariant 7 and the float record, after the settling pass fired: the only records are the
+# live-joined windows' saved floats (c at its open geometry, d at its open geometry) - never a
+# cell rectangle, and nothing for the adopted windows or the ignored app.
 recorded = [c for c in facade_calls if c["op"] == "record"]
-check(not recorded, "no automatic geometry was recorded for managed windows, got %s" % recorded)
+expected_floats = {("c", 300, 500, 260, 260), ("d", 200, 300, 240, 200)}
+got_floats = {(c["window"], c["x"], c["y"], c["width"], c["height"]) for c in recorded}
+check(got_floats == expected_floats,
+      "only the joined windows' floats were recorded (a cell never was): got %s" % sorted(got_floats))
 
 if failures:
     for failure in failures:

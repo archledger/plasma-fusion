@@ -482,20 +482,41 @@ Item {
 
     // The callers decide whether the window may still be read: the close path records a window KWin
     // already marked deleted (its geometry and state stay readable for the close animation).
-    function record(w, id) {
-        if (!loaded || !w || ignoredWindow(w)) {
+    function record(w, id, floatRect) {
+        if (!loaded || !w) {
             return;
         }
-        // The tiler's managed windows are not the user's floating placement (invariant 7) - but
-        // a stack window the user moved or resized by hand has just left the session (the master
-        // has its own native teardown for that): the tiler never fights the user for a cell, the
-        // move is the window's new floating placement, and the untoggle cannot write the saved
-        // float over it. The tiler's own writes never read as this hand: they run under placing,
-        // and they land exactly on the cell the layout assigned (the synchronous write and the
-        // client's late commit of it alike).
+        // The tiler's membership decision comes before the memory's policies: a stack window
+        // the user moved or resized by hand has just left the session (the master has its own
+        // native teardown for that) - the tiler never fights the user for a cell, the move is
+        // the window's new floating placement, and the untoggle cannot write the saved float
+        // over it - and that is as true for a window the memory ignores (IgnoreApps) as for
+        // one it records: a later relayout would otherwise put an ignored member back in its
+        // cell and the untoggle would overwrite its move. The tiler's own writes never read
+        // as this hand: they run under placing, and they land exactly on the cell the layout
+        // assigned (the synchronous write and the client's late commit of it alike).
         if (tiler.manualMoveOf(w)) {
             tiler.detachManual(w);
             log("tiling: a member was moved by hand; it floats");
+        }
+        // A settle pass remembering a managed window's float: the rectangle is the saved
+        // float, not the cell the window sits at (invariant 7 keeps the cell out of the
+        // memory), and it is not a live frame a pending configure could still change - the
+        // settled() question does not apply to it.
+        if (floatRect) {
+            if (Placement.eligible(stateOf(w, watched[String(w.internalId)]))) {
+                if (Placement.remember(apps, id, floatRect)) {
+                    changed();
+                }
+                const submission = Placement.valid(floatRect);
+                if (submission) {
+                    recordWithWriter(w, submission);
+                }
+            }
+            return;
+        }
+        if (ignoredWindow(w)) {
+            return;
         }
         // The tiler's managed windows are not the user's floating placement (invariant 7).
         if (tiler.session.active && (w === tiler.session.master || tiler.manages(w))) {
@@ -603,6 +624,13 @@ Item {
         // would get) falls through to the ordinary restore and settle path like any
         // unmanaged window.
         if (tiler.session.active && tiler.managesDesktop(w) && tiler.addWindow(w, remembered)) {
+            // The settle pass is kept: a window that opened with no record must still be
+            // remembered where it floats (the settle records the saved float, never the
+            // cell it sits at), or its next open would have no placement at all.
+            if (restoreAllowed) {
+                settling.push(w);
+                settle.restart();
+            }
             return;
         }
         if (remembered) {
@@ -719,7 +747,16 @@ Item {
                 if (!entry || entry.settleSkip) {
                     continue;
                 }
-                root.record(w, root.appIdOf(w));
+                // A member the session still holds sits at its cell one second after it
+                // opened - not a floating placement (invariant 7). What the memory must
+                // learn is the float saved when the window joined: that is where the
+                // untoggle returns it, the placement the ordinary path would have recorded
+                // without the tiler. A window that already left the session (floated by
+                // hand or by a reflow) records its own current frame, as ever.
+                const sid = String(w.internalId);
+                const floatRect = tiler.session.active && tiler.manages(w)
+                        ? tiler.session.savedFloats[sid] : null;
+                root.record(w, root.appIdOf(w), floatRect || undefined);
             }
         }
     }
@@ -813,16 +850,24 @@ Item {
         // invoked on, never by untoggling a desktop the user left behind. The workspace is
         // the desktop and the activity and the output (Tiling.sameView, the session's one
         // scoping rule): a toggle while another screen is the active one tiles that screen.
+        // The invocation's view is captured BEFORE the untoggle: the untoggle activates the
+        // old master for its native restore, and KWin's activation can carry the current
+        // desktop and screen over to the old session's view - the new session must tile the
+        // view the shortcut was invoked on, not where the teardown looked last.
         function toggle() {
             if (session.active) {
-                const same = Tiling.sameView(session, Workspace.currentDesktop,
-                                             String(Workspace.currentActivity), Workspace.activeScreen);
+                const invoked = { window: Workspace.activeWindow, desktop: Workspace.currentDesktop,
+                                  activity: String(Workspace.currentActivity),
+                                  output: Workspace.activeScreen };
+                const same = Tiling.sameView(session, invoked.desktop, invoked.activity, invoked.output);
                 untoggle();
                 if (same) {
                     return;
                 }
+                start(invoked);
+                return;
             }
-            start();
+            start(null);
         }
 
         // The master's right edge from the facade when it answers, else the configured
@@ -840,18 +885,23 @@ Item {
             return area.x + Math.round(area.width * fraction);
         }
 
-        function start() {
+        // Lay out the invoked view. `invoked` is the view captured when the shortcut fired
+        // (toggle): start() runs right after an untoggle that activated the old master, and
+        // KWin's activation may have moved the current desktop and screen under the script -
+        // the captured view, not a fresh read, is what the user asked for. A null invoked is
+        // a plain start with no teardown behind it.
+        function start(invoked) {
             if (session.active || !loaded) {
                 return;
             }
-            const w = Workspace.activeWindow;
+            const w = invoked ? invoked.window : Workspace.activeWindow;
             if (!Tiling.eligibleForMaster(w)) {
                 log("tiling: the active window is not eligible");
                 return;
             }
-            const output = Workspace.activeScreen;
-            const desktop = Workspace.currentDesktop;
-            const activity = String(Workspace.currentActivity);
+            const output = invoked ? invoked.output : Workspace.activeScreen;
+            const desktop = invoked ? invoked.desktop : Workspace.currentDesktop;
+            const activity = invoked ? invoked.activity : String(Workspace.currentActivity);
             if (!output || !desktop) {
                 return;
             }

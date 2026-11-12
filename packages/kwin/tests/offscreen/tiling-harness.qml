@@ -7,8 +7,12 @@
     TransientTilingApi facade, then drives the tiler through its native lifecycle - the
     shortcut toggle (createTile + admitTile before any stack geometry write), the stack column
     the script writes, a live window addition mid-session, the untoggle (floats back, the
-    master's native restore, releaseTile), the native treeChanged teardown, and a refused tree.
-    The python driver (tiling_lifecycle_test.py) reads `problems`, `facadeCalls` and the counts.
+    master's native restore, releaseTile), the native treeChanged teardown, a refused tree,
+    a shortcut invoked on another desktop while a session lives (the untoggle's activation
+    carries the current view back; the captured invocation must win), and - past the
+    untoggles' quiet second - a manual move of an IgnoreApps stack member (it must leave the
+    session) and the settle pass recording the joined windows' floats. The python driver
+    (tiling_lifecycle_test.py) reads `problems`, `facadeCalls` and `snapshot`.
     Context properties from the driver: packagesRoot (a directory holding
     scripts/plasmafusion-placement), config prefill through the KWin context object.
 */
@@ -22,9 +26,14 @@ Item {
     property bool done: false
     property var problems: []
     property var facadeCalls: []
+    property var snapshot: ({})
     property var script: null
     property var tileShortcut: null
     property var stackWindows: []
+    property var master: null
+    property var winA: null
+    property var winB: null
+    property var winD: null
 
     // The workspace view the stub provides: activeScreen Virtual-1 at (0,0 1440x900), the
     // stub's maximizeArea (0,34 1440x866) is the tiler's area; the facade's master rect puts
@@ -67,7 +76,8 @@ Item {
         }
         function windowBinding(w) { return ""; }
         function record(token, revision, w, rect, seq, origin) {
-            harness.facadeCalls = harness.facadeCalls.concat([{ op: "record", window: String(w.internalId), origin: origin }]);
+            harness.facadeCalls = harness.facadeCalls.concat([{ op: "record", window: String(w.internalId), origin: origin,
+                                                                x: rect.x, y: rect.y, width: rect.width, height: rect.height }]);
             return 0; // Accepted
         }
         function snapshot() { return { entries: {} }; }
@@ -87,6 +97,7 @@ Item {
             nextGeneration += 1;
             treeAlive = true;
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "createTile", generation: nextGeneration,
+                                                                desktop: desktop && desktop.id !== undefined ? desktop.id : String(desktop),
                                                                 x: rect.x, y: rect.y, width: rect.width, height: rect.height,
                                                                 stackAtCreate: stackAtCreate }]);
             return { result: 0, generation: nextGeneration };
@@ -141,8 +152,28 @@ Item {
             run();
         } catch (e) {
             fail("harness threw: " + e);
+            done = true;
         }
-        done = true;
+        if (!done) {
+            // The ignored-member phase needs the untoggles' quiet second to have passed: a
+            // manual move inside it is indistinguishable from a float restore's late commit
+            // (the script quieted the window for exactly that reason), so the hand that
+            // must detach arrives after it.
+            latePhase.start();
+        }
+    }
+
+    Timer {
+        id: latePhase
+        interval: 1200
+        onTriggered: {
+            try {
+                runLate();
+            } catch (e) {
+                fail("late harness threw: " + e);
+            }
+            done = true;
+        }
     }
 
     function run() {
@@ -157,15 +188,15 @@ Item {
         // The windows, floats first (stacking order bottom first, like KWin): the master plus
         // two stack members-to-be.
         const mk = (over) => fakeWindow.createObject(harness, over);
-        const master = mk({ internalId: "master", resourceClass: "org.fusion.terminal",
-                            desktopFileName: "org.fusion.terminal.desktop",
-                            frameGeometry: Qt.rect(40, 80, 620, 420) });
-        const winA = mk({ internalId: "a", resourceClass: "org.fusion.editor",
-                          desktopFileName: "org.fusion.editor.desktop",
-                          frameGeometry: Qt.rect(700, 120, 300, 320) });
-        const winB = mk({ internalId: "b", resourceClass: "org.fusion.files",
-                          desktopFileName: "org.fusion.files.desktop",
-                          frameGeometry: Qt.rect(760, 480, 300, 300) });
+        master = mk({ internalId: "master", resourceClass: "org.fusion.terminal",
+                      desktopFileName: "org.fusion.terminal.desktop",
+                      frameGeometry: Qt.rect(40, 80, 620, 420) });
+        winA = mk({ internalId: "a", resourceClass: "org.fusion.editor",
+                    desktopFileName: "org.fusion.editor.desktop",
+                    frameGeometry: Qt.rect(700, 120, 300, 320) });
+        winB = mk({ internalId: "b", resourceClass: "org.fusion.files",
+                    desktopFileName: "org.fusion.files.desktop",
+                    frameGeometry: Qt.rect(760, 480, 300, 300) });
         const windows = [master, winA, winB];
         for (let i = 0; i < windows.length; ++i) {
             windows[i].desktops = [desktop];
@@ -328,5 +359,89 @@ Item {
         if (!rectIs(winA.frameGeometry, before.x, before.y, before.width, before.height)) {
             fail("a refused tree writes no geometry");
         }
+        facade.refuseCreate = false;
+
+        // ---- the invoked view survives the untoggle of another view's session ----
+        // A session on the first desktop, then a second desktop with its own window; the
+        // shortcut is invoked there. The untoggle activates the old master, and KWin's
+        // activation can carry the current desktop back with it (the stub emulates that in
+        // the restore hook) - the new session must still tile the invoked desktop, not the
+        // one the teardown last looked at.
+        const desktop2 = { id: 12 };
+        const m2 = mk({ internalId: "m2", resourceClass: "org.fusion.help",
+                        desktopFileName: "org.fusion.help.desktop",
+                        frameGeometry: Qt.rect(60, 90, 500, 400) });
+        m2.desktops = [desktop2];
+        m2.output = ws.activeScreen;
+        ws.desktops = [desktop, desktop2];
+        ws.windows = [m2, winB, winA, master];
+        ws.currentDesktop = desktop;
+        ws.activeWindow = master;
+        tileShortcut.activated(); // the session on the first desktop
+        const desktop1Session = calls("createTile").length;
+        ws.currentDesktop = desktop2;
+        ws.activeWindow = m2;
+        ws.onSlotRestore = function () {
+            ws.currentDesktop = desktop;
+            ws.activeWindow = master;
+        };
+        tileShortcut.activated();
+        const creates = calls("createTile");
+        const lastCreate = creates[creates.length - 1];
+        const admits = calls("admitTile");
+        const lastAdmit = admits[admits.length - 1];
+        if (creates.length !== desktop1Session + 1) {
+            fail("the invocation on the other desktop started a new session");
+        }
+        if (lastCreate.desktop !== 12) {
+            fail("the new session tiled the invoked desktop (got " + lastCreate.desktop + ")");
+        }
+        if (!lastAdmit || lastAdmit.window !== "m2") {
+            fail("the invoked desktop's window became the master (got " + (lastAdmit ? lastAdmit.window : "none") + ")");
+        }
+        ws.onSlotRestore = null;
+        ws.currentDesktop = desktop2;
+        tileShortcut.activated(); // untoggle it (still the invoked view)
+
+        // ---- a manual move of an ignored app's stack window detaches it (late phase) ----
+        // org.fusion.files is in IgnoreApps: the memory never records it, but the tiler's
+        // membership decision comes first - its move by hand must still leave the session,
+        // or a later relayout would put it back in its cell over the user's move. The move
+        // runs in the late phase, past the untoggles' quiet second (runLate).
+        ws.currentDesktop = desktop;
+        ws.activeWindow = master;
+        tileShortcut.activated();
+        winD = mk({ internalId: "d", resourceClass: "org.fusion.web",
+                    desktopFileName: "org.fusion.web.desktop",
+                    frameGeometry: Qt.rect(200, 300, 240, 200) });
+        winD.desktops = [desktop];
+        winD.output = ws.activeScreen;
+    }
+
+
+    function runLate() {
+        const ws = KWinStubs.Workspace;
+        const manualRect = Qt.rect(100, 600, 280, 240);
+        winB.frameGeometry = manualRect;
+        const creates = calls("createTile");
+        stackWindows = [winA, winB, winD];
+        ws.windows = [winD, winB, winA, master];
+        ws.windowAdded(winD);
+        if (calls("createTile").length !== creates.length) {
+            fail("the ignored-member session still owns one tree");
+        }
+        if (!rectIs(winB.frameGeometry, manualRect.x, manualRect.y, manualRect.width, manualRect.height)) {
+            fail("the ignored member's manual move stands after the relayout (got "
+                 + JSON.stringify(winB.frameGeometry) + ")");
+        }
+        // the settle pass (a second after the opens) records the joined window's float, not
+        // its cell - the python driver asserts the recorded rectangles after it fires
+
+        // the snapshot the python driver counts from: everything the run itself caused
+        snapshot = ({ createTile: calls("createTile").length,
+                      admitTile: calls("admitTile").length,
+                      releaseTile: calls("releaseTile").length,
+                      registerProvider: calls("registerProvider").length,
+                      trackWindow: calls("trackWindow").length });
     }
 }

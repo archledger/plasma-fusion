@@ -1013,9 +1013,12 @@ Offline (laptop):
    column the script writes, a window joining live, the untoggle (floats back, the master's
    `slotWindowRestore`, `releaseTile` with the admitted generation), the native `treeChanged`
    teardown (floats back, no release of an ended tree, the next toggle lays out again) and a
-   refused tree (no admission, no geometry write); after the settling second, no managed
-   window's automatic rectangle reached the writer (invariant 7). Mutation-checked: skipping
-   `admitTile`, skipping the untoggle's `releaseTile` and ignoring the teardown each fail it.
+   refused tree (no admission, no geometry write); after the settling second, the joined
+   windows' saved floats - never a cell - are what the memory recorded (invariant 7), and
+   the shortcut invoked on another desktop while a session lives tiles the invoked view even
+   though the untoggle's activation carried the current desktop back (the stub emulates that
+   in its restore hook). Mutation-checked: skipping `admitTile`, skipping the untoggle's
+   `releaseTile` and ignoring the teardown each fail it.
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
 bus, 1440x900). Seeds: `packages/kwin/tests/vsession/make-seed.sh STAGE_HOME SEED dark|light`
@@ -1619,7 +1622,10 @@ deliberately defers.
   cannot manage - not resizable, or a minimum size above the cell it would get - is handed
   back untouched (its remembered placement applies, and its own moves reach the placement
   memory); closed or minimized windows leave the layout and the column refills, a minimized
-  one rejoining on restore with its pre-tiling float kept; the provider's `record()` skips
+  one rejoining on restore with its pre-tiling float kept; a window that joins live keeps
+  the settle pass: one second after it opens, the memory records its saved float (never the
+  cell it sits at - invariant 7 keeps automatic rectangles out), so its next open has a
+  placement even if the user never moves it; the provider's `record()` skips
   managed windows and the close of a managed window records nothing (invariant 7: automatic
   rectangles never enter placement memory), and the tiler's own float restores quiet the
   window for the restore's settling second, so a client's late commit of a cell cannot
@@ -1645,7 +1651,10 @@ deliberately defers.
   carries over is the user's own. A dormant member-to-be that moves away while minimized
   loses its saved float the same way: it never joined the layout, but the float described a
   view it left, and the untoggle must not drag it back there either.
-- **A manual move of a stack window floats it**: the tiler never fights the user for a cell.
+- **A manual move of a stack window floats it**: the tiler never fights the user for a cell,
+  for the memory's ignored apps as much as recorded ones (the tiler's membership decision
+  runs before the memory's `IgnoreApps` guard - an ignored member's move by hand leaves the
+  session too, or a later relayout would put it back in its cell over the move).
   The tiler's own writes are excluded twice - they run under a `placing` guard, and they land
   exactly on the cell the layout assigned (`Tiling.isOwnCell`: the synchronous write and the
   client's late commit of it alike) - so anything else is the user's hand: the member is
@@ -1660,7 +1669,10 @@ deliberately defers.
   desktop the user left behind. The workspace is the desktop *and* the activity *and* the
   output (`Tiling.sameView`, the session's one scoping rule): a toggle invoked while another
   screen is the active one tiles that screen - the same desktop on another output is not
-  this session's view.
+  this session's view. The invocation's view is captured before the untoggle: the teardown
+  activates the old master for its native restore, and KWin's activation can carry the
+  current desktop and screen over to the old session's view, so `start()` lays out the
+  captured view, not whatever the teardown left current.
 - **The divider follows the master**: the stack column's left edge is the master's placed
   right edge, read from the facade at every relayout (the tile is relative to the output's
   root, so the native layer rescales it when the geometry changes; a screens change also
