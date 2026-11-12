@@ -82,20 +82,32 @@ Item {
 
     // ---------------------------------------------------------------- the memory writer
     // The compositor's placement writer (docs/NATIVE-TILING-CONTRACT.md): typed native calls
-    // replace the legacy plasmashell D-Bus file transport. The token is opaque text to QML; the
-    // writer validates every submission natively. On a KWin without Workspace.placementWriter
-    // (stock or older forks) the script falls back to the legacy transport below.
+    // replace the legacy plasmashell D-Bus file transport. The writer's own C++ methods are not
+    // callable from QML (its QUuid tokens and struct arguments do not cross that boundary), so
+    // every call goes through Workspace.transientTiling(), the facade the fork exposes for the
+    // provider side (fork PRs #17-#19). The token is opaque text to QML; the writer validates
+    // every submission natively. On a KWin without the facade (stock or older forks) the script
+    // falls back to the legacy transport below.
 
     property bool nativeWriter: false
     property bool nativeRefused: false // registration refused: no legacy fallback
-    property var writer: null
+    property var api: null // the transientTiling() facade
     property string providerToken: ""
     property int writerRevision: 0
+    // app id -> the last event sequence submitted for it: the writer orders a key's events
+    // globally, so every window of one app draws from the same counter.
     property var eventSequences: ({})
+    // window internalId -> the app id the writer holds the window under (one key per window
+    // for the window's whole lifetime; the writer refuses a second trackWindow).
+    property var trackedKeys: ({})
+
+    // TransientPlacementWriter::Result, in its enum order (the type itself is not a QML enum):
+    // the three outcomes that are the writer's own policy decisions, not contract violations.
+    readonly property var writerResult: ({ "Accepted": 0, "Deferred": 10, "Suppressed": 11 })
 
     function detectNativeWriter() {
         try {
-            nativeWriter = typeof Workspace.placementWriter === "function";
+            nativeWriter = typeof Workspace.transientTiling === "function";
         } catch (e) {
             nativeWriter = false;
         }
@@ -106,81 +118,97 @@ Item {
     }
 
     function registerWithWriter() {
-        if (!nativeWriter || writer) {
+        if (!nativeWriter || api) {
             return;
         }
-        writer = Workspace.placementWriter();
-        if (!writer) {
+        api = Workspace.transientTiling();
+        if (!api) {
             nativeWriter = false;
             return;
         }
-        providerToken = String(writer.registerProvider(root));
-        if (providerToken === "" || providerToken === "undefined") {
+        providerToken = String(api.registerProvider(root));
+        if (Placement.providerRefused(providerToken)) {
             // A native session must not bypass the sole native writer: the memory stays
             // disabled rather than falling back to a transport the contract retires.
             log("the writer refused the provider registration; the memory stays disabled this session");
             nativeWriter = false;
-            writer = null;
+            api = null;
             nativeRefused = true;
             return;
         }
         log("registered as the placement provider");
     }
 
+    // Bind the window to the writer under its app id (Placement.trackingDecision): a window
+    // that opens before its identity is usable (no desktop file and no class yet) is bound at
+    // its first record instead, and an identity that changed after the binding is never
+    // rebound - the writer would file every later record under the app the window no longer is.
     function trackWithWriter(w) {
-        if (!nativeWriter || !writer || !w) {
+        if (!nativeWriter || !api || !w) {
             return;
         }
+        const id = String(w.internalId);
         const key = appIdOf(w);
-        if (key === "") {
-            return;
-        }
-        writer.trackWindow(w.internalId, key);
-        if (!eventSequences[String(w.internalId)]) {
-            eventSequences[String(w.internalId)] = 0;
+        const decision = Placement.trackingDecision(trackedKeys[id], key);
+        if (decision === "track") {
+            // A window an earlier incarnation of this script already bound (a reload in the
+            // session) answers false: the binding it left is the one the record goes through.
+            api.trackWindow(w, key);
+            trackedKeys[id] = key;
         }
     }
 
     function recordWithWriter(w, frame) {
-        if (!nativeWriter || !writer || !w || providerToken === "") {
+        if (!nativeWriter || !api || !w || providerToken === "") {
             return;
         }
-        const id = String(w.internalId);
-        const seq = (eventSequences[id] || 0) + 1;
-        // The first argument is the provider incarnation token (the opaque text from
-        // registerProvider); the writer rejects submissions from retired incarnations.
-        writer.record(providerToken, ++writerRevision, {
-            "window": w.internalId,
-            "frame": Qt.rect(frame.x, frame.y, frame.width, frame.height),
-            "eventSequence": seq,
-            "origin": 0 // Origin.Manual
-        });
-        eventSequences[id] = seq;
-        // Reconcile the cache with the writer's decision: when the submission was suppressed
-        // (a restore watermark) or deferred (an active reservation), the writer's entry for
-        // this key is the authority, not the in-memory cache the policy just wrote.
-        reconcileKeyWithWriter(appIdOf(w));
+        trackWithWriter(w);
+        const key = appIdOf(w);
+        if (trackedKeys[String(w.internalId)] !== key) {
+            // The window has no identity yet, or its identity changed after the writer bound
+            // it: a submission would be filed under the wrong key, so the record lives in the
+            // session cache only.
+            return;
+        }
+        const seq = Placement.nextEventSequence(eventSequences, key);
+        // The facade call: the provider incarnation token first (the writer rejects submissions
+        // from retired incarnations), then the revision, the window, the already rounded
+        // rectangle, the key's event sequence and the origin (0 = Manual).
+        const result = api.record(providerToken, ++writerRevision, w,
+                                  Qt.rect(frame.x, frame.y, frame.width, frame.height), seq, 0);
+        eventSequences[key] = seq;
+        // Accepted, Deferred (an active reservation) and Suppressed (a restore watermark) are
+        // the writer's decisions; anything else is a contract violation worth a line.
+        if (result !== writerResult.Accepted && result !== writerResult.Deferred
+                && result !== writerResult.Suppressed) {
+            log("the writer refused a record for " + key + " (result " + result + ")");
+        }
+        // Reconcile the cache with the writer's decision: when the submission was suppressed or
+        // deferred, the writer's entry for this key is the authority, not the in-memory cache
+        // the policy just wrote.
+        reconcileKeyWithWriter(key);
     }
 
     function reconcileKeyWithWriter(key) {
-        if (!nativeWriter || !writer || key === "") {
+        if (!nativeWriter || !api || key === "") {
             return;
         }
-        const snap = writer.snapshot();
+        const snap = api.snapshot();
         if (!snap || !snap.entries) {
             return;
         }
-        const entry = snap.entries[key];
-        if (entry !== undefined) {
-            apps[key] = { x: entry.x, y: entry.y, width: entry.width, height: entry.height };
-        }
+        // Placement.reconciled adopts the writer's entry: a deferred same-key update only
+        // becomes visible in the snapshot after its barrier ended, later than the cache's own
+        // write, and a suppressed or deferred submission leaves the entry at the writer's
+        // decision.
+        apps = Placement.reconciled(apps, snap.entries, key);
     }
 
     function readFromWriter() {
-        if (!nativeWriter || !writer || loaded) {
+        if (!nativeWriter || !api || loaded) {
             return;
         }
-        const snap = writer.snapshot();
+        const snap = api.snapshot();
         if (!snap) {
             // The writer may not be ready at script-load time; retry like the legacy path.
             if (readTries < 10) {
@@ -406,13 +434,19 @@ Item {
         }
         // A frame the client has not brought up to KWin's request yet is not the window's place
         // (the late tile-sized commit after an untile); the change that settles it records it.
-        if (!Placement.settled(requestedRect(w), frameRect(w))) {
+        const frame = frameRect(w);
+        if (!Placement.settled(requestedRect(w), frame)) {
             return;
         }
-        if (Placement.remember(apps, id, frameRect(w))) {
+        if (Placement.remember(apps, id, frame)) {
             changed();
         }
-        recordWithWriter(w, frameRect(w));
+        // The writer's contract takes an already rounded rectangle within the size limits: a
+        // frame it could not represent (fractional on a scaled output) is not submitted.
+        const submission = Placement.valid(frame);
+        if (submission) {
+            recordWithWriter(w, submission);
+        }
     }
 
     // A geometry change the memory was told about (never during the quiet window after a restore;
@@ -477,6 +511,10 @@ Item {
 
         const state = stateOf(w, entry);
         if (restoreAllowed && loaded && id !== "" && !ignoredWindow(w) && Placement.eligible(state)) {
+            // A deferred same-key update (an active reservation held the key) only becomes
+            // visible in the writer's snapshot after its barrier ended - later than the last
+            // reconciliation. The writer's entry decides the restore, not a stale mirror.
+            reconcileKeyWithWriter(id);
             const saved = apps[id];
             const current = frameRect(w);
             const screens = screenRects();

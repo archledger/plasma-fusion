@@ -272,3 +272,52 @@ function remember(apps, id, rect) {
     apps[id] = clean;
     return true;
 }
+
+// Whether the native writer refused the provider registration: the facade answers with empty
+// text (and a broken call surfaces "undefined"). A native session must not fall back to the
+// legacy transport the contract retires, so this decides the memory's disable rule.
+function providerRefused(token) {
+    const text = token === undefined || token === null ? "" : String(token);
+    return text === "" || text === "undefined";
+}
+
+// What the native path does with a window's identity: "track" binds the window to the writer
+// now (not bound yet, and it has a key), "keep" leaves the binding alone (the same key), and
+// "refuse" must neither bind nor record. The writer binds a window to one key for its whole
+// lifetime (a second trackWindow is refused), so a window with no identity yet waits, and an
+// identity that changed after the binding would file every later record under the app the
+// window no longer is - those stay in the session cache only.
+function trackingDecision(trackedKey, currentKey) {
+    if (currentKey === "") {
+        return "refuse";
+    }
+    if (trackedKey === undefined || trackedKey === null) {
+        return "track";
+    }
+    return trackedKey === currentKey ? "keep" : "refuse";
+}
+
+// The next event sequence to submit for a key. The writer orders a key's events globally (its
+// per-key watermark rejects any sequence it has already seen for the app), so every window of
+// one app draws from the same counter: a per-window counter would have the second window of an
+// app rejected as outdated from its first record.
+function nextEventSequence(sequences, key) {
+    return (sequences[key] || 0) + 1;
+}
+
+// The cache after re-reading the writer's entry for key: the writer's rectangle is the
+// authority. A suppressed or deferred submission leaves the entry at the writer's decision, and
+// a deferred update only becomes visible in the snapshot after its barrier ended - both later
+// than the cache's own write, so the refresh at the read (the restore) is what observes it. A
+// key the writer does not carry, or an entry it would not validate, leaves the cache alone.
+function reconciled(apps, entries, key) {
+    const entry = entries ? entries[key] : undefined;
+    if (entry === undefined) {
+        return apps;
+    }
+    const rect = valid(entry);
+    if (rect) {
+        apps[key] = rect;
+    }
+    return apps;
+}

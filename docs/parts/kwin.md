@@ -44,8 +44,8 @@ sources) plus `org.kde.plasma.core` (Dialog), Kirigami (theme colours, icons) an
 | `packages/kwin/scripts/plasmafusion-attach/metadata.json` | KPackage metadata (KWin/Script, javascript, config KCM) |
 | `.../contents/code/main.js`, `contents/config/main.xml`, `contents/ui/config.ui` | script and settings |
 | `packages/kwin/scripts/plasmafusion-placement/metadata.json` | KPackage metadata (KWin/Script, declarativescript, config KCM) |
-| `.../contents/ui/main.qml` | the script: window watch, restore and record, the memory file through plasmashell |
-| `.../contents/ui/Placement.js` | the pure rules (identity, file format, on-screen and stack guard, record); node-tested |
+| `.../contents/ui/main.qml` | the script: window watch, restore and record, the memory file through plasmashell or the fork's native writer facade |
+| `.../contents/ui/Placement.js` | the pure rules (identity, file format, on-screen and stack guard, record, the native-writer registration/binding/sequence/reconciliation rules); node-tested |
 | `.../contents/config/main.xml`, `contents/ui/config.ui` | `RememberSize` and `IgnoreApps` (System Settings > Window Management > KWin Scripts) |
 | `packages/kwin/scripts/plasmafusion-workspaces/metadata.json` | KPackage metadata (KWin/Script, declarativescript, config KCM, `EnabledByDefault: false`) |
 | `.../contents/ui/main.qml` | the script: reads the desktops and windows, carries out a pass, watches the windows' desktop moves |
@@ -451,17 +451,30 @@ are not recorded either, while the user's later moves are.
 
 The memory file is `~/.config/plasmafusion-placementrc`, one JSON text under `[Windows] windows`
 (`{"v":1,"apps":{"<app id>":{"x":…,"y":…,"width":…,"height":…}}}`). On a KWin with the native
-placement writer (the fork's `Workspace.placementWriter()`, exposed to scripting since PR #18),
-the script registers as the provider, tracks each watched window and submits every record as a
-typed native call — the writer owns the file and its flush discipline, and the script's
-in-memory cache is a read-through from the writer's `snapshot()`. A submission the writer
-suppresses (a restore watermark) or defers (an active reservation) reconciles the cache from
-the writer's own entry. When the writer refuses the provider registration the memory stays
-disabled for the session — a native session must not bypass the sole native writer. On stock
-KWin or older forks without the accessor, both directions run through plasmashell's desktop
-scripting (`ConfigFile`, the same bridge the tablet script's panel policy uses): the KWin
-scripting API has `readConfig` and no file write at all, and plasmashell's `evaluateScript`
-answers with what the script printed, which carries the file's text back. Writes are coalesced
+placement writer (the fork's `Workspace.transientTiling()` facade, fork PRs #17-#19 — the
+writer's own C++ methods are not callable from QML), the script registers as the provider,
+binds each watched window to the writer under its app id and submits every record as a typed
+native call: the provider incarnation token first, then the revision, the window, an already
+rounded rectangle (the writer rejects fractional frames outright), the key's next event
+sequence (the writer orders a key's events globally, so all windows of one app share the
+counter) and the origin. The writer owns the file and its flush discipline, and the script's
+in-memory cache is a read-through from the writer's `snapshot()`, re-read for a key before each
+restore: a deferred same-key update (an active reservation held the key) only becomes visible
+in the snapshot after its barrier ended, later than the cache's own write. A submission the
+writer suppresses (a restore watermark) or defers reconciles the cache from the writer's own
+entry. The writer binds a window to one key for its whole lifetime: a window that opens before
+its identity is usable (no desktop file and no class yet) is bound at its first record, and an
+identity that changes after the binding is neither rebound nor recorded natively — those
+records live in the session cache only, until the writer grows a re-binding path. When the
+writer refuses the provider registration the memory stays disabled for the session — a native
+session must not bypass the sole native writer. The native lane runs only on the fork's KWin;
+the session scenarios in CI exercise the stock and backport lanes, which take the legacy
+transport, and the node suite drives the registration, identity-binding, event-sequence and
+reconciliation rules (`packages/kwin/tests/placement.test.js`). On stock KWin or older forks
+without the facade, both directions run through plasmashell's desktop scripting (`ConfigFile`,
+the same bridge the tablet script's panel policy uses): the KWin scripting API has `readConfig`
+and no file write at all, and plasmashell's `evaluateScript` answers with what the script
+printed, which carries the file's text back. Writes are coalesced
 (two seconds after the last change, one retry when a change races the write); the file is read
 once at start with a few retries while plasmashell comes up - windows opened before that answer
 keep KWin's placement - and written once more when the script is disabled or KWin quits (also
@@ -935,7 +948,11 @@ Offline (laptop):
   pending move or resize, an empty requested size, X11 rounding under 1 px, malformed values), and
   the maximize asked for but not yet taken (`maximized`, `requestedMode`: a full or partial
   maximize pending, a restore pending while the frame is still maximized, a signal without a usable
-  mode, no tracking at all).
+  mode, no tracking at all), and the native-writer rules (a refused registration disables the
+  memory, the one-key-per-window identity binding, the per-app event sequence the writer orders
+  globally, the cache reconciling from the writer's entry - a deferred update that became visible
+  after its barrier ended wins, and the restore reads the refreshed entry - and the rounded,
+  representable submission rectangle).
 - `node packages/kwin/tests/workspaces.test.js` (the build runs it when node is installed): the
   dynamic workspaces' rules - which windows hold a workspace (every exclusion), the plan (GNOME's
   cases, an empty one in the middle, the shown one, each screen's shown one, `KeepFirst` and its
