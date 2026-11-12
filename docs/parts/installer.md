@@ -92,7 +92,9 @@ the lock comes back at the newly installed fork.
 
 `--full-restore` (no stamp needed — a system on the full profile must always get back, including
 on a Fedora release the release's stamp does not carry, where the stock lanes stay refused):
-removes the version lock, the metapackage and the repository, then `dnf distro-sync`s the KWin
+removes the version lock, the metapackage (with `--no-autoremove`: on a fresh `--full` the six
+came in as its dependencies, and dnf's `clean_requirements_on_remove` default would take them
+with it — the restore promises they stay) and the repository, then `dnf distro-sync`s the KWin
 set **to the recorded EVRs** — the machine returns to the stock KWin it had, not to whatever the
 repositories offer now. Fedora keeps only a package's newest build, so a stock that advanced
 while the machine was on the fork can no longer be reinstalled: the fallback says so out loud

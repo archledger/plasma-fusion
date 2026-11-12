@@ -77,10 +77,11 @@ fake dnf "$LOGLINE
 # versionlock answers with the pre-existing entries the test sets (dnf5's list format)
 case \" \$* \" in *' versionlock list '*) printf '%b' \"\${FAKE_LOCKS:-}\"; exit 0 ;; esac
 # repoquery answers whether the recorded EVRs are in the repositories (the restore asks before
-# falling back); FAKE_SYNC_MISSES says they are gone, FAKE_SYNC_FAILS that they are there
+# falling back); FAKE_SYNC_MISSES says they are gone, FAKE_SYNC_FAILS that they are there, and
+# FAKE_REPOQUERY_RC that the query itself failed (a transient error is not an answer)
 case \" \$* \" in *' repoquery '*kwin-*)
   [ -z \"\${FAKE_SYNC_MISSES:-}\" ] && echo available
-  exit 0 ;; esac
+  exit \${FAKE_REPOQUERY_RC:-0} ;; esac
 case \" \$* \" in *' install '*) $INSTALLS ;; esac
 case \" \$* \" in *' upgrade '*)
   for a; do
@@ -378,16 +379,16 @@ for SHNAME in "${shells[@]}"; do
   plant_record
   VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --dry-run
   expect "--full-restore plans the lock removal" has_out "dnf -y versionlock delete kwin kwin-common kwin-libs"
-  expect "  the metapackage removal" has_out "dnf -y remove plasma-fusion-full"
+  expect "  the metapackage removal" has_out "dnf -y remove --no-autoremove plasma-fusion-full"
   expect "  the repository removal" has_out "dnf -y copr remove archledger/plasma-fusion-full"
   expect "  and the distro-sync back to stock" has_out "dnf -y distro-sync kwin kwin-common kwin-libs"
   expect "  a dry run changes nothing" no_change
   VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --yes
   expect "--full-restore removes the version lock" has_log "sudo dnf -y versionlock delete kwin kwin-common kwin-libs"
-  expect "  then the metapackage" has_log "dnf -y remove plasma-fusion-full"
+  expect "  then the metapackage" has_log "dnf -y remove --no-autoremove plasma-fusion-full"
   expect "  then the repository" has_log "dnf -y copr remove archledger/plasma-fusion-full"
   expect "  then syncs KWin back to the recorded EVRs" has_log "dnf -y distro-sync kwin-6.7.5-1.fc44 kwin-common-6.7.5-1.fc44 kwin-libs-6.7.5-1.fc44"
-  expect "  in that order" bash -c 'v=$(grep -n "^dnf -y versionlock delete" <<<"$0" | cut -d: -f1); m=$(grep -n "^dnf -y remove plasma-fusion-full" <<<"$0" | cut -d: -f1); s=$(grep -n "^dnf -y distro-sync" <<<"$0" | cut -d: -f1); [ -n "$v" ] && [ "$v" -lt "$m" ] && [ "$m" -lt "$s" ]' "$LOG"
+  expect "  in that order" bash -c 'v=$(grep -n "^dnf -y versionlock delete" <<<"$0" | cut -d: -f1); m=$(grep -n "^dnf -y remove --no-autoremove plasma-fusion-full" <<<"$0" | cut -d: -f1); s=$(grep -n "^dnf -y distro-sync" <<<"$0" | cut -d: -f1); [ -n "$v" ] && [ "$v" -lt "$m" ] && [ "$m" -lt "$s" ]' "$LOG"
   expect "  and reports the stock KWin" has_out "stock again (6.8.2-3.fc44)"
   expect "  the six stay installed" has_out "stay"
   expect "  exits 0" [ "$RC" = 0 ]
@@ -406,12 +407,18 @@ for SHNAME in "${shells[@]}"; do
   expect "  and still syncs by name" has_log "dnf -y distro-sync kwin kwin-common kwin-libs"
   expect "  exiting 0" [ "$RC" = 0 ]
   # a failure that is not the EVRs being gone (a transient repository or solver failure) must
-  # not quietly become that fallback: the recorded version is verified present first
+  # not quietly become that fallback: the recorded version is verified present first, and a
+  # lookup that itself failed is no verification at all
   plant_record
   EXTRA_ENV="FAKE_SYNC_FAILS=1" VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --yes
   expect "a failed sync with the EVRs still in the repositories stops" [ "$RC" = 1 ]
   expect "  saying the packages are there" has_out "the packages are in the repositories"
   expect "  without the by-name fallback" bash -c '! grep -q "^dnf -y distro-sync kwin kwin-common kwin-libs" <<<"$0"' "$LOG"
+  plant_record
+  EXTRA_ENV="FAKE_SYNC_FAILS=1 FAKE_REPOQUERY_RC=1" VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --yes
+  expect "a failed lookup is no proof the EVRs are gone" [ "$RC" = 1 ]
+  expect "  saying the sync may be transient" has_out "the failed sync may be transient"
+  expect "  and taking no fallback" bash -c '! grep -q "^dnf -y distro-sync kwin kwin-common kwin-libs" <<<"$0"' "$LOG"
   # a full-profile system on a Fedora release the stamp does not carry can always get back
   # (detect_lane's stock refusal must not gate the recovery paths)
   plant_record
@@ -427,7 +434,7 @@ for SHNAME in "${shells[@]}"; do
   FEDORA=45 VERSIONS="plasma-workspace=6.9.0 kwin=+6.8.2-3.fc44.pf3 plasma-fusion=0.2.0 plasma-fusion-full=0.2.0" KWIN_RUNNING=6.8.2 \
     run "$sh" $FED -- uninstall --yes --package-only
   expect "a full-profile uninstall works on an untested Plasma series" has_log "dnf -y distro-sync kwin-6.7.5-1.fc44 kwin-common-6.7.5-1.fc44 kwin-libs-6.7.5-1.fc44"
-  expect "  and completes the removal" has_log "dnf -y remove plasma-fusion-full"
+  expect "  and completes the removal" has_log "dnf -y remove --no-autoremove plasma-fusion-full"
   FEDORA=45 run "$sh" $FED -- --dry-run
   expect "a stock install on that Fedora is still refused" [ "$RC" = 3 ]
   VERSIONS="plasma-workspace=6.9.0 kwin=6.9.0 plasma-fusion=0.2.0" KWIN_RUNNING=6.9.0 run "$sh" $FED -- uninstall --yes --package-only
@@ -452,7 +459,7 @@ for SHNAME in "${shells[@]}"; do
   # uninstall on a full system restores the stock KWin first
   VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- uninstall --yes --package-only
   expect "uninstall returns KWin to stock first" has_log "dnf -y distro-sync kwin kwin-common kwin-libs"
-  expect "  removing the metapackage" has_log "dnf -y remove plasma-fusion-full"
+  expect "  removing the metapackage" has_log "dnf -y remove --no-autoremove plasma-fusion-full"
   expect "  before the six go" bash -c 's=$(grep -n "^dnf -y distro-sync" <<<"$0" | cut -d: -f1); r=$(grep -n "^dnf -y remove plasma-fusion$" <<<"$0" | tail -n1 | cut -d: -f1); [ -n "$s" ] && [ -n "$r" ] && [ "$s" -lt "$r" ]' "$LOG"
   # status reports the profile
   VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- status

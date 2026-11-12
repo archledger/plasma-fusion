@@ -197,8 +197,11 @@ full_restore_kwin() {
   $SUDO dnf -y versionlock delete $FULL_KWIN_PKGS ||
     die "could not remove the version lock; run: sudo dnf -y versionlock delete $FULL_KWIN_PKGS"
   if full_meta_installed; then
-    $SUDO dnf -y remove plasma-fusion-full ||
-      die "could not remove plasma-fusion-full (the lock is already gone); run: sudo dnf -y remove plasma-fusion-full"
+    # --no-autoremove: on a fresh --full the six came in as the metapackage's dependencies, and
+    # dnf's clean_requirements_on_remove default would take them with it - the restore promises
+    # they stay (they run on stock KWin); the regular uninstall removes them explicitly.
+    $SUDO dnf -y remove --no-autoremove plasma-fusion-full ||
+      die "could not remove plasma-fusion-full (the lock is already gone); run: sudo dnf -y remove --no-autoremove plasma-fusion-full"
   fi
   $SUDO dnf -y copr remove "$FULL_REPO" ||
     say "note: the full profile's repository was not enabled through copr; if it is still on, remove it: sudo dnf -y copr remove $FULL_REPO"
@@ -212,8 +215,14 @@ full_restore_kwin() {
   if [ -n "$recs" ]; then
     # shellcheck disable=SC2086 # one spec per package
     if ! $SUDO dnf -y distro-sync $recs; then
+      # Why it failed decides what happens next. The lookup's own failure is no answer: an
+      # empty output from a failed repoquery would read as the EVRs being gone, and a
+      # transient metadata or network error would then quietly become the fallback.
       # shellcheck disable=SC2086 # one spec per package
-      if [ -z "$($SUDO dnf -q repoquery $recs 2>/dev/null)" ]; then
+      if ! $SUDO dnf -q repoquery $recs >"$TMP/repoquery" 2>/dev/null; then
+        die "dnf could not look up the recorded $recs (the failed sync may be transient); try again."
+      fi
+      if [ ! -s "$TMP/repoquery" ]; then
         say "the recorded stock KWin ($recs) is not in the repositories any more; syncing to the current stock."
         # shellcheck disable=SC2086 # one spec per package
         $SUDO dnf -y distro-sync $FULL_KWIN_PKGS || die "dnf could not return KWin to stock."
@@ -789,7 +798,7 @@ main() {
     say "Plan:"
     if full_meta_installed || kwin_is_fork; then
       echo "  sudo dnf -y versionlock delete $FULL_KWIN_PKGS   (the full profile's pin goes first)" >&2
-      full_meta_installed && echo "  sudo dnf -y remove plasma-fusion-full   (the metapackage)" >&2
+      full_meta_installed && echo "  sudo dnf -y remove --no-autoremove plasma-fusion-full   (the metapackage)" >&2
       echo "  sudo dnf -y copr remove $FULL_REPO   (the full profile's repository)" >&2
       echo "  sudo dnf -y distro-sync $FULL_KWIN_PKGS   (KWin back to stock)" >&2
     fi
@@ -855,7 +864,7 @@ main() {
     [ -n "$rec" ] && rec=" (recorded: $rec)"
     say "Plan:"
     echo "  sudo dnf -y versionlock delete $FULL_KWIN_PKGS   (the pin goes)" >&2
-    full_meta_installed && echo "  sudo dnf -y remove plasma-fusion-full   (the metapackage)" >&2
+    full_meta_installed && echo "  sudo dnf -y remove --no-autoremove plasma-fusion-full   (the metapackage)" >&2
     echo "  sudo dnf -y copr remove $FULL_REPO   (the full profile's repository)" >&2
     echo "  sudo dnf -y distro-sync $FULL_KWIN_PKGS   (back to the stock KWin$rec)" >&2
     echo "  the six Plasma Fusion packages stay installed (they run on stock KWin)" >&2
