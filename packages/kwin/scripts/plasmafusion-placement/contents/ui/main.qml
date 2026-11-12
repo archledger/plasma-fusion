@@ -191,6 +191,15 @@ Item {
         }
         const rect = Qt.rect(frame.x, frame.y, frame.width, frame.height);
         let seq = Placement.nextEventSequence(eventSequences, key);
+        // An assumed binding is proven by a record that observably lands under the assumed key,
+        // so the key's entry is read before the first submission (Placement.bindingProof): an
+        // entry that already equals the frame cannot distinguish the binding from a coincidence.
+        const id = String(w.internalId);
+        let preEntry = undefined;
+        if (unconfirmedBindings[id]) {
+            const pre = api.snapshot();
+            preEntry = pre && pre.entries ? pre.entries[key] : undefined;
+        }
         // The facade call: the provider incarnation token first (the writer rejects submissions
         // from retired incarnations), then the revision, the window, the already rounded
         // rectangle, the key's event sequence and the origin (0 = Manual).
@@ -211,11 +220,12 @@ Item {
                 && result !== writerResult.Suppressed) {
             log("the writer refused a record for " + key + " (result " + result + ")");
         }
-        // An assumed binding (a refused trackWindow) is settled by the first Accepted record:
-        // only an applied one proves which key the binding holds. Deferred and Suppressed
-        // submissions leave the assumption standing until a later record applies.
-        if (unconfirmedBindings[String(w.internalId)] && result === writerResult.Accepted) {
-            verifyBindingWithWriter(w, key, frame);
+        // An assumed binding (a refused trackWindow) is settled by the first Accepted record
+        // whose landing the snapshot can show. Deferred and Suppressed submissions, and a
+        // record whose rectangle the key's entry already held, leave the assumption standing
+        // until a later record applies observably.
+        if (unconfirmedBindings[id] && result === writerResult.Accepted) {
+            verifyBindingWithWriter(w, key, frame, preEntry);
         }
         // Reconcile the cache with the writer's decision: when the submission was suppressed or
         // deferred, the writer's entry for this key is the authority, not the in-memory cache
@@ -223,17 +233,23 @@ Item {
         reconcileKeyWithWriter(key);
     }
 
-    // The proof an assumed binding waited for: the writer's own snapshot after an Accepted
-    // record. A confirmed binding drops the assumption; a disproven one marks the window so
-    // trackingDecision refuses it from here on - the wrong-key record already made is the one
-    // the old identity's own next record overwrites, and later records stay in the session
-    // cache, exactly like an identity that changed after the binding.
-    function verifyBindingWithWriter(w, key, frame) {
+    // The proof an assumed binding waited for: the writer's own snapshot around an Accepted
+    // record (Placement.bindingProof compares the key's entry before and after it). A confirmed
+    // binding drops the assumption; an uninformative one waits for a record that lands
+    // observably; a disproven one marks the window so trackingDecision refuses it from here on -
+    // the wrong-key record already made is the one the old identity's own next record
+    // overwrites, and later records stay in the session cache, exactly like an identity that
+    // changed after the binding.
+    function verifyBindingWithWriter(w, key, frame, preEntry) {
         const id = String(w.internalId);
-        delete unconfirmedBindings[id];
         const snap = api.snapshot();
-        const entry = snap && snap.entries ? snap.entries[key] : undefined;
-        if (Placement.bindingConfirmed(entry, frame)) {
+        const postEntry = snap && snap.entries ? snap.entries[key] : undefined;
+        const proof = Placement.bindingProof(preEntry, postEntry, frame);
+        if (proof === "waiting") {
+            return;
+        }
+        delete unconfirmedBindings[id];
+        if (proof === "confirmed") {
             return;
         }
         trackedKeys[id] = false;

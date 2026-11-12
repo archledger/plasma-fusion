@@ -470,9 +470,13 @@ its identity is usable (no desktop file and no class yet) is bound at its first 
 identity that changes after the binding is neither rebound nor recorded natively — those
 records live in the session cache only, until the writer grows a re-binding path. A window an
 earlier incarnation of the script already bound (a reload) keeps that binding; the facade
-cannot ask which key it holds, so the current key is assumed and the first Accepted record is
-proven against the writer's snapshot — a binding disproven that way (the identity changed
-across the reload) is retired, and the window's records stay in the session cache. When the
+cannot ask which key it holds, so the current key is assumed and the first Accepted record
+whose landing the snapshot can show proves or disproves it: the proof needs the key's entry to
+have become the submitted rectangle, not merely to match it - an entry that already held the
+rectangle (the window sits on the new app's remembered spot, or another window of the app
+wrote it) cannot distinguish the binding from a coincidence, and the assumption waits for a
+record that lands observably. A binding disproven that way (the identity changed across the
+reload) is retired, and the window's records stay in the session cache. When the
 writer refuses the provider registration — or the facade exists but answers nothing — the
 memory stays disabled for the session — a native
 session must not bypass the sole native writer. The native lane runs only on the fork's KWin;
