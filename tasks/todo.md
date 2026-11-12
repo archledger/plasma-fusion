@@ -21,8 +21,10 @@ That source is based on KWin 6.8.2.
   at fork PR #21 with its unsupported session-lane cases recorded in docs/DEFERRED.md.
 - What remains open is the complete tiling policy (the Fusion-side feature, PR #164), the
   #115 re-entry tests, and ADR 0001's full-profile packaging.
-- Private request helpers still do not expose a usable production tiler; the controller and
-  writer have no scripting API and no production instance — the bridge is the next work.
+- Private request helpers still do not expose a usable production tiler, and the scripting
+  surface the policy rides is the fork's facade (fork PRs #17-#20), not an upstream API. The
+  provider bridge itself is not pending: NT07, the placement-provider port, is merged as #163.
+  The remaining work is the production tiling policy (PR #164) and its #115 qualification.
 
 The 6.7.5/6.7.91 commits, image identifiers and test counts in the design sections below remain
 historical evidence for their own baselines, not new results for this source.
@@ -510,9 +512,10 @@ Files: KWin `src/window.cpp`, `src/xdgshellwindow.cpp`, `src/useractions.cpp`, `
   and related-window closure are covered by testControllerOwnedDestruction (12 rows: three
   stages times four causes) and the release-ordering suites.
 
-The native sequence NT01-NT06 is complete. What remains for #115 is the production
-placement-provider bridge and the complete tiling policy (the Fusion-side feature), the
-re-entry tests, and ADR 0001's full-profile packaging.
+The native sequence NT01-NT06 is complete, and NT07 - the production placement-provider
+bridge - is merged as #163 (NT08, unload and restart preservation, is qualified at fork PR
+#21). What remains for #115 is the complete tiling policy (the Fusion-side feature, PR #164),
+the re-entry tests, and ADR 0001's full-profile packaging.
 
 ## Checkpoint B
 - [ ] Relevant native suites pass with zero unexpected failures/skips/blacklists.
