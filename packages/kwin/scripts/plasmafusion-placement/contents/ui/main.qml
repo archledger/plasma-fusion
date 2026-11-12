@@ -80,10 +80,99 @@ Item {
         return setting("IgnoreApps", "");
     }
 
-    // ---------------------------------------------------------------- the memory file
-    // Both directions run through plasmashell's desktop scripting: evaluateScript answers with
-    // what the script printed, and a ConfigFile write is synced when the scripting engine drops
-    // the object at the end of the call.
+    // ---------------------------------------------------------------- the memory writer
+    // The compositor's placement writer (docs/NATIVE-TILING-CONTRACT.md): typed native calls
+    // replace the legacy plasmashell D-Bus file transport. The token is opaque text to QML; the
+    // writer validates every submission natively. On a KWin without Workspace.placementWriter
+    // (stock or older forks) the script falls back to the legacy transport below.
+
+    property bool nativeWriter: false
+    property var writer: null
+    property string providerToken: ""
+    property int writerRevision: 0
+    property var eventSequences: ({})
+
+    function detectNativeWriter() {
+        try {
+            nativeWriter = typeof Workspace.placementWriter === "function";
+        } catch (e) {
+            nativeWriter = false;
+        }
+        if (!nativeWriter) {
+            log("no native placement writer; using the legacy transport");
+        }
+        return nativeWriter;
+    }
+
+    function registerWithWriter() {
+        if (!nativeWriter || writer) {
+            return;
+        }
+        writer = Workspace.placementWriter();
+        if (!writer) {
+            nativeWriter = false;
+            return;
+        }
+        providerToken = String(writer.registerProvider(root));
+        if (providerToken === "" || providerToken === "undefined") {
+            log("the writer refused the provider registration; falling back to the legacy transport");
+            nativeWriter = false;
+            writer = null;
+            return;
+        }
+        log("registered as the placement provider");
+    }
+
+    function trackWithWriter(w) {
+        if (!nativeWriter || !writer || !w) {
+            return;
+        }
+        const key = appIdOf(w);
+        if (key === "") {
+            return;
+        }
+        writer.trackWindow(w.internalId, key);
+        if (!eventSequences[String(w.internalId)]) {
+            eventSequences[String(w.internalId)] = 0;
+        }
+    }
+
+    function recordWithWriter(w, frame) {
+        if (!nativeWriter || !writer || !w) {
+            return;
+        }
+        const id = String(w.internalId);
+        const seq = (eventSequences[id] || 0) + 1;
+        writer.record(w.internalId, ++writerRevision, {
+            "window": w.internalId,
+            "frame": Qt.rect(frame.x, frame.y, frame.width, frame.height),
+            "eventSequence": seq,
+            "origin": 0 // Origin.Manual
+        });
+        eventSequences[id] = seq;
+    }
+
+    function readFromWriter() {
+        if (!nativeWriter || !writer || loaded) {
+            return;
+        }
+        const snap = writer.snapshot();
+        if (!snap) {
+            return;
+        }
+        const entries = snap.entries;
+        const out = {};
+        for (const key in entries) {
+            const r = entries[key];
+            out[key] = { x: r.x, y: r.y, width: r.width, height: r.height };
+        }
+        apps = out;
+        loaded = true;
+        log("memory loaded from the native writer: " + Object.keys(apps).length + " app(s)");
+    }
+
+    // ---------------------------------------------------------------- the legacy transport
+    // Used when the session's KWin does not expose the placement writer (stock or older forks).
 
     function readScript() {
         return "var out = '';\n"
@@ -102,6 +191,10 @@ Item {
 
     function read() {
         if (loaded) {
+            return;
+        }
+        if (nativeWriter) {
+            readFromWriter();
             return;
         }
         readTries++;
@@ -144,6 +237,10 @@ Item {
         if (!loaded || sending || sentRevision === revision) {
             return;
         }
+        if (nativeWriter) {
+            sentRevision = revision;
+            return;
+        }
         sending = true;
         sendingRevision = revision;
         writeCall.arguments = [writeScript(Placement.serialize(apps))];
@@ -180,7 +277,7 @@ Item {
 
     function changed() {
         revision++;
-        if (!sending) {
+        if (!nativeWriter && !sending) {
             flush.interval = 2000;
             flush.restart();
         }
@@ -284,6 +381,7 @@ Item {
         if (Placement.remember(apps, id, frameRect(w))) {
             changed();
         }
+        recordWithWriter(w, frameRect(w));
     }
 
     // A geometry change the memory was told about (never during the quiet window after a restore;
@@ -344,6 +442,7 @@ Item {
             entry.onRequested = true;
         }
         watched[key] = entry;
+        trackWithWriter(w);
 
         const state = stateOf(w, entry);
         if (restoreAllowed && loaded && id !== "" && !ignoredWindow(w) && Placement.eligible(state)) {
@@ -455,6 +554,8 @@ Item {
 
     Component.onCompleted: {
         log("started");
+        detectNativeWriter();
+        registerWithWriter();
         read();
         // Windows already open when the script (re)loads - a Fusion setup enables it in a running
         // session, a reconfigure can reload it - are watched so their moves and closes are
@@ -484,7 +585,7 @@ Item {
     // left connected would call into a destroyed context, and every disable/enable cycle would add
     // another.
     Component.onDestruction: {
-        if (Placement.teardownWrite(loaded, revision, sentRevision, sending, sendingRevision)) {
+        if (!nativeWriter && Placement.teardownWrite(loaded, revision, sentRevision, sending, sendingRevision)) {
             writeCall.arguments = [writeScript(Placement.serialize(apps))];
             writeCall.call();
         }
