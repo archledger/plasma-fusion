@@ -24,10 +24,18 @@
 # pass the bcond, so enabling the stock repository never offers a KWin replacement (the stock
 # Copr project and the full project are separate). The pin moves only through a release.
 %bcond full 0
-%if %{with full} && "%{?fedora}" == "44" && "%{?kwin_full_pin}" != ""
-%global build_full 1
-%else
 %global build_full 0
+# The full profile's own project builds --with full; anything else never emits the metapackage.
+# Inside a full build the pin must be set and must target this Fedora release - a wrong-series
+# pin is a build error, not a silent skip, because its exact requires could never resolve here.
+%if %{with full}
+%if "%{?kwin_full_pin}" == ""
+%{error:the full profile build needs the kwin pin set (%%global kwin_full_pin <exact fork EVR>)}
+%endif
+%if "%(echo '%{kwin_full_pin}' | grep -oE "\.fc%{?fedora}\.pf[0-9]$" || echo mismatch)" == "mismatch"
+%{error:the kwin pin '%{kwin_full_pin}' targets another Fedora release; this build is fc%{?fedora}}
+%endif
+%global build_full 1
 %endif
 
 Name:           plasma-fusion

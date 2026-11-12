@@ -23,8 +23,12 @@ tag=$(git -C "$ROOT" describe --exact-match --tags --match 'v[0-9]*' HEAD 2>/dev
 pin=$(sed -n 's/^%global kwin_full_pin *//p' "$ROOT/packaging/fedora/plasma-fusion.spec" | tr -d '[:space:]')
 if [ -n "$pin" ]; then
   case "$pin" in
-    [0-9]*.[0-9]*.[0-9]*-*.pf[0-9]) echo "ok   kwin pin: $pin" ;;
-    *) echo "FAIL kwin pin: '$pin' is not an exact fork EVR (version-release dist pfN)"; rc=1 ;;
+    [0-9]*.[0-9]*.[0-9]*-*.pf[0-9]) ;;
+    *) echo "FAIL kwin pin: '$pin' is not an exact fork EVR (version-release dist pfN)"; rc=1; continue ;;
+  esac
+  case "$pin" in
+    *.fc44.pf[0-9]) echo "ok   kwin pin: $pin" ;;
+    *) echo "FAIL kwin pin: '$pin' targets a Fedora release other than the current one (fc44)"; rc=1 ;;
   esac
 else
   echo "ok   kwin pin: (not set; plasma-fusion-full is not built)"
