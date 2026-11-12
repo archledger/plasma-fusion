@@ -323,6 +323,18 @@ for SHNAME in "${shells[@]}"; do
   expect "a pre-existing KWin version lock refuses --full" [ "$RC" = 3 ]
   expect "  saying whose pin it is" has_out "versionlock already holds"
   expect "  with nothing changed" bash -c '! grep -qE "^dnf -y (copr enable|install|versionlock add)" <<<"$0"' "$LOG"
+  # dnf5 lock names are shell globs: kwin* pins every KWin build, and so does a wider pattern
+  # that happens to cover the set - each lock is matched as the pattern it is
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" LOCKS='Package name: kwin*\nevra = 6.7.4-1.fc44\n' \
+    VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" run "$sh" $FED -- --full --yes
+  expect "a wildcard KWin lock refuses --full the same way" [ "$RC" = 3 ]
+  expect "  naming the pattern" has_out "versionlock already holds kwin*"
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" LOCKS='Package name: kw*\nevra = 6.7.4-1.fc44\n' \
+    VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" run "$sh" $FED -- --full --yes
+  expect "a wider glob that covers kwin refuses too" [ "$RC" = 3 ]
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" LOCKS='Package name: konsole*\nevra = 6.9.0-1.fc44\n' \
+    VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" run "$sh" $FED -- --full --yes
+  expect "a lock that covers none of the set does not refuse" has_log "dnf -y install plasma-fusion-full"
   VERSIONS="$P675 plasma-fusion=0.2.0" EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $FED -- --full --yes
   expect "a stock profile switches to full" has_log "dnf -y install plasma-fusion-full"
   expect "  without a setup rerun" bash -c '! grep -q "^plasma-fusion \(setup\|update\)" <<<"$0"' "$LOG"

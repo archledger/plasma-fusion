@@ -146,11 +146,18 @@ full_recorded_specs() { sed -n 's/^\([a-z-]*\)=\([0-9][0-9.]*-[0-9][^ ]*\)$/\1-\
 full_swap_packages() {
   # A KWin the user already pins themselves is not taken over: dnf's versionlock delete works by
   # name only, so a pre-existing entry could not be given back at restore time, and a user who
-  # holds KWin's version is deliberately pinning it. Nothing has changed yet at this point.
-  if $SUDO dnf versionlock list 2>/dev/null |
-      grep -qE '^(Package name: )?kwin(-common|-libs)?([ .,-]|$)'; then
-    refuse "versionlock already holds kwin, kwin-common or kwin-libs; remove those entries first (dnf versionlock delete <name>) so the full profile can own the pin."
-  fi
+  # holds KWin's version is deliberately pinning it. The names are shell globs in dnf5 (kwin*
+  # pins every KWin build, and a wider pattern can cover the set just the same), so each lock
+  # is matched as the pattern it is. Nothing has changed yet at this point.
+  locks=$($SUDO dnf versionlock list 2>/dev/null | sed -n 's/^Package name: //p')
+  for p in $FULL_KWIN_PKGS; do
+    for name in $locks; do
+      # shellcheck disable=SC2254 # the lock name IS the pattern to match against
+      case $p in $name)
+        refuse "versionlock already holds $name (covering $p); remove those entries first (dnf versionlock delete <name>) so the full profile can own the pin." ;;
+      esac
+    done
+  done
   evrs=
   for p in $FULL_KWIN_PKGS; do
     e=$(pkg_evr "$p")
