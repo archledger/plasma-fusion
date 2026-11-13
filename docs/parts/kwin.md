@@ -1017,7 +1017,11 @@ Offline (laptop):
    master admitted before any stack geometry write (invariant 8; the mock snapshots the stack at
    `createTile`), the configured `MasterFraction` reaching the native tile, the endpoint-rounded
    column the script writes, a window joining live, the untoggle (floats back, the master's
-   `slotWindowRestore`, `releaseTile` with the admitted generation), the native `treeChanged`
+   `restoreWindow`, `releaseTile` with the admitted generation, and no second teardown when
+   the release reports the tree's end), a refused admission (its tree released), a cell
+   landing a fraction of a pixel off on a 133% output (still the tiler's own), a facade
+   without `restoreWindow` (the tiler off, the memory's transport intact), the native
+   `treeChanged`
    teardown (floats back, no release of an ended tree, the next toggle lays out again) and a
    refused tree (no admission, no geometry write); after the settling second, the joined
    windows' saved floats - never a cell - are what the memory recorded (invariant 7), and
@@ -1614,15 +1618,30 @@ deliberately defers.
   admitted into the transient tile through `Workspace.transientTiling().createTile()` +
   `admitTile()` with the provider token; the workspace's other eligible windows become the
   stack, their pre-tiling floats saved, placed by direct `frameGeometry` writes in the
-  endpoint-rounded column (the snap script's discipline: `Tiling.stackRects`).
+  endpoint-rounded column (the snap script's discipline: `Tiling.stackRects`). The window
+  inside the admission call is already managed for the memory (`tiler.admitting`): the native
+  admission can land it on the tile before `admitTile` returns, and a record there would put
+  the tile into the memory and move the provider's revision under the admission.
 - **Toggle off**: the stack windows return to their saved floats; the master restores through
-  the native explicit restore (`Workspace.slotWindowRestore()` — Meta+Backspace's path);
-  the tree releases (`releaseTile`). The completion is asynchronous: the
+  the native explicit restore (the facade's `restoreWindow(master)` — Meta+Backspace's action
+  for that window; the scripting `Workspace` has no slot for it, and a first version that
+  called one threw on hardware and left the session stuck); the tree releases
+  (`releaseTile`, whatever the restore did). The restore comes first because it restores an
+  owned window only. The session is ended before the native layer is told, because the
+  release reports the tree's end before it returns. The completion is asynchronous: the
   `transientRestorationCompleted` signal marks the boundary.
 - **Native teardown**: the facade forwards `treeChanged`; a change with no live tree is
   session-end — the stack floats restore, the session clears. This covers master close,
   output removal, desktop removal, provider retirement, key conflict, a manual quick-tile or
-  move of the master, and output transfer — every native path at once, for free.
+  move of the master, and output transfer — every native path at once, for free. The
+  controller keeps a tree whose window has left it; the facade ends that tree, which is what
+  turns a release of the master into this signal. A release that is not the explicit restore
+  (a second window of the master's app is a key conflict, for one) is detach-only
+  (`NT03-RESTORATION-SPEC.md`): the master stays where it stands, the native layer keeps its
+  record, Window Restore is consumed without a restoration, and a toggle on that window is
+  refused as busy until it closes. The tiler does not restore the master there itself: it
+  cannot tell that release from the user's own move or quick-tile of the master, which ends
+  the tree the same way.
 - **Live**: new eligible windows on the tiled workspace join the stack (a window with a
   remembered placement keeps it as its saved float: the untoggle returns the app to its
   remembered spot, as the memory would have placed it); a window the stack
@@ -1665,8 +1684,12 @@ deliberately defers.
   runs before the memory's `IgnoreApps` guard - an ignored member's move by hand leaves the
   session too, or a later relayout would put it back in its cell over the move).
   The tiler's own writes are excluded twice - they run under a `placing` guard, and they land
-  exactly on the cell the layout assigned (`Tiling.isOwnCell`: the synchronous write and the
-  client's late commit of it alike) - so anything else is the user's hand: the member is
+  on the cell the layout assigned, to the output's pixel (`Tiling.isOwnCell`: the synchronous
+  write and the client's late commit of it alike; off a scale of 1 KWin snaps the frame to
+  device pixels and gives the client a whole logical size, so a 718 px cell lands as
+  717.75 px at 133%; `Tiling.cellSlack` is how far a landed frame may be from its cell, and
+  the largest over the outputs applies, since an X11 window lands on Xwayland's scale) -
+  so anything else is the user's hand: the member is
   detached, the move is recorded as its floating placement, and the untoggle cannot write the
   saved float over it. The master is exempt (its manual teardown is native, and its maximize
   or full-screen frames are mode changes, not hands - reading them as moves collapsed the
@@ -1678,10 +1701,11 @@ deliberately defers.
   desktop the user left behind. The workspace is the desktop *and* the activity *and* the
   output (`Tiling.sameView`, the session's one scoping rule): a toggle invoked while another
   screen is the active one tiles that screen - the same desktop on another output is not
-  this session's view. The invocation's view is captured before the untoggle: the teardown
-  activates the old master for its native restore, and KWin's activation can carry the
-  current desktop and screen over to the old session's view, so `start()` lays out the
-  captured view, not whatever the teardown left current.
+  this session's view. The invocation's view is captured before the untoggle: the master's
+  native restore raises and focuses the old master, which carries the active window and
+  screen over to the old session's view, so `start()` lays out the captured view, not
+  whatever the teardown left current, and the focus goes back to the window the shortcut was
+  invoked on.
 - **The divider follows the master**: the stack column's left edge is the master's placed
   right edge, read from the facade at every relayout (the tile is relative to the output's
   root, so the native layer rescales it when the geometry changes; a screens change also
@@ -1737,10 +1761,14 @@ minimized-before members (`dormantCandidates`, and `eligibleDormant` - the one r
 toggle-on scan and the live add of an already-minimized window read), the reflow float
 restores (`floatRestores`), the toggle's view comparison (`sameView`) and the own-cell test
 (`isOwnCell`). The eligibility predicates (`eligibleForMaster`, `eligibleForStack`) mirror
-the snap script's `usable()` guards. The QML path is covered too:
+the snap script's `usable()` guards and leave out a window that keeps itself off the taskbar
+or the window switcher (`userWindow`: the XWayland Video Bridge's invisible window took a
+stack cell on hardware). The QML path is covered too:
 `tests/offscreen/tiling_lifecycle_test.py` loads this `main.qml` under the stand-in KWin
 module with a mock `TransientTilingApi` and drives the native admission, the stack geometry
-writes, the untoggle, the native teardown and a refused tree (see the Tests list).
+writes, the untoggle, the native teardown and a refused tree (see the Tests list). The mock
+and the stand-in `Workspace` answer only what the compositor answers: a call the mock takes
+and KWin does not is a failure only hardware shows.
 
 ### What it rides
 

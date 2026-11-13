@@ -24,6 +24,9 @@ Item {
     id: harness
 
     property bool done: false
+    // Set by the driver for a second run: the fork's facade as an older build has it, without
+    // restoreWindow.
+    property bool legacyFacade: false
     property var problems: []
     property var facadeCalls: []
     property var snapshot: ({})
@@ -61,15 +64,25 @@ Item {
         return fakeWindow.createObject(harness, over);
     }
 
-    // The mock facade: every method the script can call, each one recorded in facadeCalls.
+    // The mock facade: every method the script can call, each one recorded in facadeCalls, and
+    // no method the fork's facade does not have (kwin src/scripting/transienttilingapi.h) - a
+    // call the mock answers and the compositor cannot is a failure only hardware would show.
     // createTile also snapshots the stack windows' geometry at call time - invariant 8 (the
     // native admission before any stack write) is checkable from that snapshot.
     QtObject {
         id: facade
         property bool refuseCreate: false
+        property bool refuseAdmit: false
+        // The native admission can land the window on the tile before it returns (a client
+        // whose size already fits needs no configure): the mock then moves the window inside
+        // admitTile.
+        property bool landOnAdmit: false
         property bool treeAlive: false
         property int nextGeneration: 0
         property rect masterRect: Qt.rect(0, 34, 700, 866)
+        // The native restore raises and focuses the restored window, which carries the active
+        // window and screen to its view; onRestore lets a scenario add to that.
+        property var onRestore: null
         signal treeChanged()
         function registerProvider(item) {
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "registerProvider" }]);
@@ -110,12 +123,36 @@ Item {
         function admitTile(generation, w, key, token) {
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "admitTile", generation: generation,
                                                                 window: String(w.internalId), key: key, token: token }]);
-            return 0; // Accepted
+            if (landOnAdmit && !refuseAdmit) {
+                w.frameGeometry = masterRect;
+            }
+            return refuseAdmit ? 7 : 0; // Ineligible : Accepted
         }
         function releaseTile(generation) {
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "releaseTile", generation: generation }]);
+            // As the controller's clearTree does: the tree's end is reported before the call
+            // returns, to the script that asked for it like to anyone else.
             treeAlive = false;
+            treeChanged();
         }
+        function restoreWindow(w) {
+            harness.facadeCalls = harness.facadeCalls.concat([{ op: "restoreWindow", window: String(w.internalId) }]);
+            KWinStubs.Workspace.activeWindow = w;
+            if (onRestore) {
+                onRestore();
+            }
+        }
+    }
+
+    // The facade of a fork build from before restoreWindow: every other answer is the mock's.
+    function facadeWithoutRestore() {
+        const older = { treeChanged: facade.treeChanged };
+        const names = ["registerProvider", "trackWindow", "windowBinding", "record", "snapshot", "hasTree",
+                       "masterWindowRect", "createTile", "admitTile", "releaseTile"];
+        for (let i = 0; i < names.length; ++i) {
+            older[names[i]] = facade[names[i]];
+        }
+        return older;
     }
 
     // A stand-in KWin Window: every property the placement script and the tiler read, with the
@@ -189,7 +226,10 @@ Item {
         ws.desktops = [desktop];
         ws.currentDesktop = desktop;
         ws.currentActivity = "a";
-        ws.transientTilingImpl = function () { return facade; };
+        // A 133% output, as the ThinkPad's: the frames KWin lands are not the whole-pixel cells.
+        ws.activeScreen = { name: "Virtual-1", geometry: Qt.rect(0, 0, 1440, 900), devicePixelRatio: 4 / 3 };
+        const older = legacyFacade ? facadeWithoutRestore() : null;
+        ws.transientTilingImpl = function () { return older || facade; };
 
         // The windows, floats first (stacking order bottom first, like KWin): the master plus
         // two stack members-to-be.
@@ -234,6 +274,22 @@ Item {
         }
         if (!tileShortcut) {
             fail("the Tile Workspace shortcut was not registered");
+            return;
+        }
+
+        if (legacyFacade) {
+            // ---- a facade without restoreWindow: no session, the memory's transport intact ----
+            // The untoggle is that restore: a session the tiler could start it could not end.
+            tileShortcut.activated();
+            if (calls("createTile").length !== 0) {
+                fail("a facade without restoreWindow starts no session");
+            }
+            if (calls("registerProvider").length !== 1) {
+                fail("the placement memory still registered as the provider");
+            }
+            snapshot = ({ createTile: calls("createTile").length, registerProvider: calls("registerProvider").length,
+                          trackWindow: calls("trackWindow").length });
+            done = true;
             return;
         }
 
@@ -320,11 +376,9 @@ Item {
             fail("the untoggle restored the saved floats (got " + JSON.stringify(winA.frameGeometry) + " "
                  + JSON.stringify(winB.frameGeometry) + " " + JSON.stringify(winC.frameGeometry) + ")");
         }
-        if (ws.activeWindow !== master) {
-            fail("the master was activated for the native restore");
-        }
-        if (ws.slotWindowRestoreCalls !== 1) {
-            fail("the master's native restore ran once (got " + ws.slotWindowRestoreCalls + ")");
+        const restored = calls("restoreWindow");
+        if (restored.length !== 1 || restored[0].window !== String(master.internalId)) {
+            fail("the master's native restore ran once, for the master (got " + JSON.stringify(restored) + ")");
         }
         const released = calls("releaseTile");
         if (released.length !== 1 || released[0].generation !== admitted[0].generation) {
@@ -366,6 +420,39 @@ Item {
         }
         facade.refuseCreate = false;
 
+        // ---- a refused admission: the tree released, no session, no geometry write ----
+        // What the ThinkPad answered every KDE window (7): the tree the toggle created must not
+        // stay behind, and the tree's end that the release reports finds no session to end.
+        facade.refuseAdmit = true;
+        const releasedBefore = calls("releaseTile").length;
+        tileShortcut.activated();
+        if (calls("admitTile").length !== 4) {
+            fail("the refused admission was asked once (got " + calls("admitTile").length + ")");
+        }
+        if (calls("releaseTile").length !== releasedBefore + 1 || facade.treeAlive) {
+            fail("a refused admission releases the tree it created");
+        }
+        if (!rectIs(winA.frameGeometry, before.x, before.y, before.width, before.height)) {
+            fail("a refused admission writes no geometry");
+        }
+        facade.refuseAdmit = false;
+
+        // ---- the admission lands the master before it returns: nothing is recorded ----
+        // The session is not active inside admitTile, and the master's frame is the tile by
+        // then. A record there would put the tile into the memory (invariant 7) and move the
+        // provider's revision under the admission.
+        facade.landOnAdmit = true;
+        const recordsBeforeLanding = calls("record").length;
+        tileShortcut.activated();
+        if (calls("record").length !== recordsBeforeLanding) {
+            fail("the window being admitted is not recorded (got " + JSON.stringify(calls("record").slice(recordsBeforeLanding)) + ")");
+        }
+        if (!rectIs(master.frameGeometry, facade.masterRect.x, facade.masterRect.y, facade.masterRect.width, facade.masterRect.height)) {
+            fail("the mock landed the master on the tile inside admitTile");
+        }
+        facade.landOnAdmit = false;
+        tileShortcut.activated(); // untoggle it
+
         // ---- the invoked view survives the untoggle of another view's session ----
         // A session on the first desktop, then a second desktop with its own window; the
         // shortcut is invoked there. The untoggle activates the old master, and KWin's
@@ -386,7 +473,7 @@ Item {
         const desktop1Session = calls("createTile").length;
         ws.currentDesktop = desktop2;
         ws.activeWindow = m2;
-        ws.onSlotRestore = function () {
+        facade.onRestore = function () {
             ws.currentDesktop = desktop;
             ws.activeWindow = master;
         };
@@ -404,7 +491,11 @@ Item {
         if (!lastAdmit || lastAdmit.window !== "m2") {
             fail("the invoked desktop's window became the master (got " + (lastAdmit ? lastAdmit.window : "none") + ")");
         }
-        ws.onSlotRestore = null;
+        // the old master's restore took the focus; it is back on the window the user was in
+        if (ws.activeWindow !== m2) {
+            fail("the focus returned to the window the shortcut was invoked on");
+        }
+        facade.onRestore = null;
         ws.currentDesktop = desktop2;
         tileShortcut.activated(); // untoggle it (still the invoked view)
 
@@ -426,12 +517,24 @@ Item {
 
     function runLate() {
         const ws = KWinStubs.Workspace;
+        // ---- the cell as a fractional scale lands it is the tiler's own write ----
+        // KWin snaps the frame to device pixels and gives the client a whole logical size, so
+        // the client's commit of a cell is a fraction of a pixel off it (717.75 for 718 at
+        // 133%). That is not the user's hand: the member stays, and the next relayout places
+        // it on a whole-pixel cell again. (The ThinkPad detached every placed window.)
+        const cellA = { x: winA.frameGeometry.x, y: winA.frameGeometry.y,
+                        width: winA.frameGeometry.width, height: winA.frameGeometry.height };
+        winA.frameGeometry = Qt.rect(cellA.x, cellA.y, cellA.width - 0.25, cellA.height + 0.5);
         const manualRect = Qt.rect(100, 600, 280, 240);
         winB.frameGeometry = manualRect;
         const creates = calls("createTile");
         stackWindows = [winA, winB, winD];
         ws.windows = [winD, winB, winA, master];
         ws.windowAdded(winD);
+        if (winA.frameGeometry.width !== cellA.width || winA.frameGeometry.height !== Math.round(winA.frameGeometry.height)) {
+            fail("a member whose cell landed a fraction of a pixel off stays a member (got "
+                 + JSON.stringify(winA.frameGeometry) + ")");
+        }
         if (calls("createTile").length !== creates.length) {
             fail("the ignored-member session still owns one tree");
         }
