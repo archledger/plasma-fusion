@@ -101,13 +101,21 @@ def run_harness(initial=None):
     return instance
 
 
-def retire(instance):
+def retire(instance, name):
     """End a run whose results have been read. The stand-in Workspace is one object for the
     whole engine, so a script left alive answers the next run's windows as well: with its
-    own session, its own mock facade and its own lines in the journal."""
+    own session, its own mock facade and its own lines in the journal.
+
+    The script goes with a session live or just ended (its own untoggle on destruction): a
+    throw on that path shows only as the engine's message, so the lines of the retirement
+    are read for one. (The engine's teardown reads the script's settings once more, which is
+    the one such line that is not the script's.)"""
+    before_retire = len(messages)
     instance.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     app.processEvents()
+    thrown = [message for message in messages[before_retire:] if "TypeError" in message and "readConfig" not in message]
+    check(not thrown, "%s: the script went without a throw, got %s" % (name, thrown))
 
 
 harness = run_harness()
@@ -129,8 +137,8 @@ for key in ("createTile", "admitTile", "releaseTile", "registerProvider", "track
 # admissions, one of them refused; six releases (the run's own un-toggles, the invocation's
 # teardown included, and the refused admission's tree - the native teardown releases nothing,
 # the last session is left standing for the settle pass, and the destruction-time untoggle is
-# outside the snapshot). Five windows tracked: the master and the four the script saw open (the
-# second desktop's master appears only as the tiler's target).
+# outside the snapshot). Seven windows tracked: the three open at the start and the four the
+# script saw open (the second desktop's master appears only as the tiler's target).
 check(counts.get("registerProvider") == 1, "registerProvider once")
 check(counts.get("createTile") == 9, "createTile nine times (7 sessions + 1 refused + 1 refused admission), got %s" % counts.get("createTile"))
 check(counts.get("admitTile") == 8, "admitTile eight times, got %s" % counts.get("admitTile"))
@@ -155,7 +163,7 @@ check(got_floats == expected_floats,
       "only the joined windows' floats and the master's own were recorded (a cell, the tile, an ignored app and a late commit"
       " never were): got %s" % sorted(got_floats))
 
-retire(harness)
+retire(harness, "first run")
 
 # A second run against the facade of a fork build from before restoreWindow: the tiler stays off
 # (it could start a session and never end it) and says so, and the placement memory keeps its
@@ -170,7 +178,7 @@ check((older_counts or {}).get("trackWindow") == 3, "older facade: the three ope
 check(any("the native facade has no restoreWindow" in message for message in messages),
       "older facade: the tiler said why it stays off")
 
-retire(older)
+retire(older, "older facade")
 
 # A third run: the master a native teardown released without restoring it (a removed desktop, a
 # second window of its app, a move of the master). The harness asserts the geometry, the settle
@@ -183,8 +191,9 @@ journal = messages[before:]
 settled = sum("a released master's record is settled" in message for message in journal)
 held = sum("a released master has not settled; its record is held" in message for message in journal)
 refused = sum("the admission was refused (7)" in message for message in journal)
-check(settled == 12, "released: twelve records were settled (returned, moved, re-checked, unresized, unmaximized, at the toggle, left alone,"
-      " after its app's second window, in its quiet second, transferred, the display back, after a closed one), got %s" % settled)
+check(settled == 13, "released: thirteen records were settled (returned, moved, re-checked, unresized, unmaximized, at the toggle, left alone,"
+      " after its app's second window, in its quiet second, released in the gap, transferred, the display back, after a closed one),"
+      " got %s" % settled)
 check(held == 4, "released: four records were held (a drag held still, maximized, unanswered, no float to return to), got %s" % held)
 check(refused == 1, "released: one admission stayed refused, after its retries, got %s" % refused)
 check(sum("the tree was refused" in message for message in journal) == 1,

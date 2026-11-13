@@ -60,8 +60,8 @@ paths and everything only a compositor can prove.
 - Toggle on; change the work area (add or resize a panel that reserves space)
 - **Expect**: the session ends (KWin's re-check of the window positions asks the master for
   its tile's rectangle with a public request, which releases it); the stack floats restore;
-  the master returns to its floating frame A, not the tile's new rectangle; the placement
-  file is unchanged; a later toggle on the master is admitted.
+  the master returns to its floating frame A, not the tile's new rectangle; no automatic
+  rectangle enters the placement file; a later toggle on the master is admitted.
 
 ### 1g. The master sent to another output
 - With two outputs, toggle on; send the master to the other output (Window to Next Screen)
@@ -156,7 +156,17 @@ paths and everything only a compositor can prove.
 - Toggle on and off again at once (two invocations with nothing in between); repeat
 - **Expect**: no tree is left; every stack window is back on its float - a float given back
   while the cell's configure was still in flight is asked for once more when the cell lands;
-  the master is on its float; the placement file is unchanged.
+  the master is on its float; no cell and no tile enters the placement file (the first press
+  records the master's own floating frame as its app's place where that was another
+  rectangle).
+
+### 2n. On, off and on again within a few milliseconds
+- Three invocations with nothing in between, then a fourth after the session has settled;
+  repeat
+- **Expect**: the three leave a live session (the master's admission after its own restore
+  is tried again within the press); the fourth ends it and every stack window is back on
+  the float it had before the first press - the second session takes a window that still
+  stands on the first one's cell with the float that session saved, not with the cell.
 
 ## 3. Saved-tree cases
 
@@ -218,6 +228,11 @@ paths and everything only a compositor can prove.
 
 - Each scenario is a scripted session on the ThinkPad (or a VM): the setup, the action, the
   asserts. The `tools/tests/release-vm/` harness or a direct SSH session script works.
+- A toggle records the master's own floating frame as its app's place before the native
+  admission, where the memory had another rectangle for the app (a window that was never
+  moved since it was adopted, an app whose last record was another window's). That entry is
+  a floating placement and the one change of the placement file a scenario may show for the
+  master; a tile's or a cell's rectangle never is.
 - The placement file is read at every step of a scenario and all the snapshots are compared,
   oldest first. (Until 2026-11-13 the harness compared the alphabetically first snapshot
   with the newest one, which in a scenario with an "after" snapshot compared that file with

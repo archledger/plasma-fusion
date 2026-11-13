@@ -1034,12 +1034,20 @@ Offline (laptop):
    by a newer press), an unsettled master left out of another session's stack, a second
    window of the master's app (the mock's writer reports the key's second window as the
    fork's does: the master released at once, the tree's end queued; the new window is given
-   no cell, keeps its place and records nothing), a float given back while the cell's
-   configure is in flight (asked for once more when the cell lands, not a second time, and
-   not while KWin still asks for the float), the app's remembered place being another
-   window's (the mock's writer admits a window only from the app's entry: the toggle records
-   the master's own place first; nothing is recorded beside another window of the app, of a
-   window on the tile's rectangle, or in the quiet second), a press with the active window
+   no cell, keeps its place and records nothing; the same for a window that opens after
+   the master closed, before the tree's end), a press in that gap (no explicit restore, the
+   tree released, the master returned and settled), a float given back while the cell's
+   configure is in flight (asked for once more when KWin takes the cell as its request, not
+   a second time, not while KWin still asks for the float, not out of the user's hand, not
+   after the bound; the cell never recorded, by a change, a toggle or the close; a member of
+   a new session left on its cell), the float a window brings into the next session (the
+   last session's while it stands on that session's cell, KWin's request while the frame is
+   in flight), the app's remembered place being another window's (the mock's writer admits
+   a window only from the app's entry, refuses a key two tracked windows share and a window
+   of another output: the toggle records the master's own place first; nothing is recorded
+   beside another window of the app - one the writer holds under the key included -, of a
+   window on the tile's rectangle or the last session's, without the tile's rectangle, or
+   in the quiet second), a press with the active window
    on a screen other than KWin's active one (that window's screen is tiled), a master sent
    to another output
    (returned to the float the record carried there), a float on a display that is gone
@@ -1664,9 +1672,14 @@ deliberately defers.
   floating frame as its app's place (`recordForAdmission`), by the memory's ordinary record
   and under its rules - nothing in the window's quiet second, nothing of a held, ignored or
   unsettled window. Not while another window of the app is open: the native layer refuses a
-  key two windows share (8) and the memory stays as it is. And not a window that stands on
-  the tile's own rectangle (an earlier release left it there; that is no floating placement).
-  A window whose place the memory does not take is refused (8), as before.
+  key two windows share (8) and the memory stays as it is - a window counts as the app's by
+  the key the writer holds it under as well as by what it calls itself now. And not a window
+  that stands on the tile's own rectangle, this tree's or the last session's (an earlier
+  release left it there; that is no floating placement); where the native layer does not say
+  where the tile is, nothing is recorded.
+  A window whose place the memory does not take is refused (8), as before: an ignored app's
+  window that moved since its last record, a window with a sibling open, a window that
+  stands on a cell the tiler took back (below).
   The master's frame is the tile's rectangle where the window reaches it. On a
   fractional-scale output most whole-pixel rectangles are off the pixels a frame can have,
   and the fork gives the window the tile's corner and the largest size it reaches inside the
@@ -1744,8 +1757,26 @@ deliberately defers.
   tiler remembers the cell the window had last been given, and when that cell lands and
   KWin is not still asking for the float it asks for the float once more
   (`returnFromStaleCell`, `Tiling.staleCellLanding`): the sizes differ now, so the client is
-  told. Once per window and restore; a window a new session manages, one in the user's hand
-  or in a mode of its own is left alone.
+  told. Once per window and restore (`staleCellMillis`); a window in the user's hand or in a
+  mode of its own is asked when it is out of it, and a new session's members are that
+  session's (their entries go when it takes them).
+  A cell the tiler took back is no placement for as long as the window stands on it
+  (`onStaleCell`): not in the quiet second and not after it, not by a geometry change, the
+  settle pass, a toggle's record or the window's close. That holds for the answer that comes
+  after the five seconds too, and for one the float did not follow; the entry goes when the
+  window stands somewhere else, once the float has been asked again or the five seconds are
+  over and the window has settled where it is.
+  The other way round, an off and an on in quick succession: the window still stands on its
+  cell while the float's configure is in flight, and the new session would save the cell as
+  its float - where every later untoggle would put it. A member's float is where the window
+  is going (`floatEntering`): the float the last session saved while it stands on that
+  session's cell, KWin's request while the frame is not there yet, its frame otherwise.
+- **A press between the master's release and the tree's end** (`vacated`, above): the
+  native layer has released the master and nothing of it is the session's any more. The
+  untoggle's explicit restore would find no record it owns, and nobody would settle the one
+  the release left. The press is that native teardown, taken now: the stack goes back, the
+  master is returned and its record settled as after any native release, and the vacated
+  tree is released. The same when the script goes in that moment.
 - **Live**: new eligible windows on the tiled workspace join the stack (a window with a
   remembered placement keeps it as its saved float: the untoggle returns the app to its
   remembered spot, as the memory would have placed it); a window the stack
@@ -1864,10 +1895,12 @@ feasible), the session structure, the focus cycle, the float save, the one works
 minimized-before members (`dormantCandidates`, and `eligibleDormant` - the one rule the
 toggle-on scan and the live add of an already-minimized window read), the reflow float
 restores (`floatRestores`), the toggle's view comparison (`sameView`), the own-cell test
-(`isOwnCell`), the released master's tile test (`onMasterTile`, with `tileFitShort` for how
+(`isOwnCell`), the late answer to a cell that was taken back (`staleCellLanding`), the
+released master's tile test (`onMasterTile`, with `tileFitShort` for how
 far inside its tile a fit can be), the native answers the tiler asks again about
-(`settleAgain`, `admitAgain`) and the screens a returned master may show on
-(`touchesScreen`). The eligibility predicates (`eligibleForMaster`, `eligibleForStack`) mirror
+(`settleAgain`, `admitAgain`), the screens a returned master may show on
+(`touchesScreen`), a rectangle's equality to the last bits (`sameRect`) and whether a window
+reference is still a window (`alive`). The eligibility predicates (`eligibleForMaster`, `eligibleForStack`) mirror
 the snap script's `usable()` guards and leave out a window that keeps itself off the taskbar
 or the window switcher (`userWindow`: the XWayland Video Bridge's invisible window took a
 stack cell on hardware). The QML path is covered too:

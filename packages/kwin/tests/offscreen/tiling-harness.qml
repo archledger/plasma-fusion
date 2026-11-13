@@ -134,6 +134,8 @@ Item {
         }
         // internalId -> key: the windows the writer tracks. It tracks a window once.
         property var tracked: ({})
+        // The output the tree was made for: the controller admits no window of another one.
+        property var tileOutput: null
         // key -> the rectangle the writer has for the app. The writer grants an admission
         // only to a window whose floating frame is that rectangle (its reserve: the entry
         // must be the memory's image of the frame). The mock holds an admission to that when
@@ -249,7 +251,9 @@ Item {
         }
         function snapshot() { return { entries: entries }; }
         function hasTree() { return treeAlive; }
-        function masterWindowRect() { return masterRect; }
+        // The tile's rectangle, or none when the test has the native layer say nothing.
+        property bool silentTile: false
+        function masterWindowRect() { return silentTile ? Qt.rect(0, 0, 0, 0) : masterRect; }
         function createTile(output, desktop, rect) {
             const stackAtCreate = [];
             for (let i = 0; i < harness.stackWindows.length; ++i) {
@@ -263,6 +267,7 @@ Item {
             }
             nextGeneration += 1;
             treeAlive = true;
+            tileOutput = output && output.name !== undefined ? output : null;
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "createTile", generation: nextGeneration,
                                                                 output: output && output.name !== undefined ? String(output.name) : "",
                                                                 desktop: desktop && desktop.id !== undefined ? desktop.id : String(desktop),
@@ -285,6 +290,14 @@ Item {
             }
             if (refuseAdmit) {
                 return 7; // Ineligible
+            }
+            if (tileOutput && w.output && w.output !== tileOutput) {
+                return 7; // Ineligible: the window is on another output than the tree
+            }
+            for (const id in tracked) {
+                if (id !== String(w.internalId) && tracked[id] === key) {
+                    return 8; // Refused: another live window shares the key
+                }
             }
             if (entryRule && (!entries[key] || !same(entries[key], image(w.frameGeometry)))) {
                 return 8; // Refused: the app's remembered place is not this window's frame
@@ -317,6 +330,29 @@ Item {
             if (onRestore) {
                 onRestore();
             }
+        }
+    }
+
+    // The writer forgets a window when it is destroyed: after its close and whatever the
+    // close recorded.
+    property var closedWindows: []
+    Connections {
+        target: KWinStubs.Workspace
+        function onWindowRemoved(w) {
+            harness.closedWindows = harness.closedWindows.concat([String(w.internalId)]);
+            forgetClosed.start();
+        }
+    }
+    Timer {
+        id: forgetClosed
+        interval: 0
+        onTriggered: {
+            const tracked = facade.tracked;
+            for (let i = 0; i < harness.closedWindows.length; ++i) {
+                delete tracked[harness.closedWindows[i]];
+            }
+            facade.tracked = tracked;
+            harness.closedWindows = [];
         }
     }
 
@@ -424,7 +460,9 @@ Item {
 
     // The scenario's steps: each runs once its own condition holds (the script's retry
     // timers fire in between), or fails after five seconds without it. A step waits for what
-    // it checks, not for a fixed time, so a loaded machine only makes the run longer.
+    // it checks, not for a fixed time, so a loaded machine only makes the run longer. (One
+    // step is bound to the memory's quiet second, which the script does not let a test
+    // shorten: it says so when it ran too late to check anything.)
     Timer {
         id: stepper
         interval: 20
@@ -822,6 +860,12 @@ Item {
         let since = 0;
         let twin = null;
         let twinMoves = 0;
+        let floatA = null;
+        let cellA = null;
+        let late = null;
+        let cellLate = null;
+        let restores = 0;
+        let releases = 0;
         let victim = null;
         let second = null;
         steps = [
@@ -1102,58 +1146,6 @@ Item {
                     fail("released: the app's place stays the master's: its second window records nothing when it opens (got "
                          + JSON.stringify(twinRecords) + ")");
                 }
-                // ---- a float given back while the cell's configure is in flight ----
-                // KWin applies a request for the size a window already has at once, with no
-                // configure. The client's answer to the cell lands afterwards and KWin takes
-                // it as the window's request: the window stands on a cell no session owns.
-                // On hardware a second press of the shortcut 15 ms after the first did this,
-                // three times out of three. The float is asked for once more then, once.
-                const floatA = facade.plain(winA.frameGeometry);
-                tileShortcut.activated();
-                if (!inColumn(winA)) {
-                    fail("released: the stack window is in its cell");
-                }
-                const cellA = facade.plain(winA.frameGeometry);
-                tileShortcut.activated();
-                if (!facade.same(winA.frameGeometry, floatA)) {
-                    fail("released: the untoggle gave the stack window its float back");
-                }
-                const recordsBefore = calls("record").filter(c => c.window === "a").length;
-                winA.requestedGeometry = Qt.rect(cellA.x, cellA.y, cellA.width, cellA.height);
-                winA.frameGeometry = Qt.rect(cellA.x, cellA.y, cellA.width, cellA.height);
-                if (!facade.same(winA.frameGeometry, floatA)) {
-                    fail("released: a late answer to the cell is followed by the float once more (got "
-                         + JSON.stringify(winA.frameGeometry) + ")");
-                }
-                // Once: a window that lands there again is left where it is.
-                winA.frameGeometry = Qt.rect(cellA.x, cellA.y, cellA.width, cellA.height);
-                if (!facade.same(winA.frameGeometry, cellA)) {
-                    fail("released: the float is asked for once, not in a loop (got " + JSON.stringify(winA.frameGeometry) + ")");
-                }
-                winA.requestedGeometry = null;
-                winA.frameGeometry = Qt.rect(floatA.x, floatA.y, floatA.width, floatA.height);
-                // While the float is still what KWin is asking for, the window is on its way
-                // there (the cell's answer came first, the float's follows): left alone.
-                const floatB = facade.plain(winB.frameGeometry);
-                tileShortcut.activated();
-                const cellB = facade.plain(winB.frameGeometry);
-                tileShortcut.activated();
-                winB.requestedGeometry = Qt.rect(floatB.x, floatB.y, floatB.width, floatB.height);
-                winB.frameGeometry = Qt.rect(cellB.x, cellB.y, cellB.width, cellB.height);
-                if (!facade.same(winB.frameGeometry, cellB)) {
-                    fail("released: a window still on its way to its float is not asked again (got "
-                         + JSON.stringify(winB.frameGeometry) + ")");
-                }
-                winB.frameGeometry = Qt.rect(floatB.x, floatB.y, floatB.width, floatB.height);
-                winB.requestedGeometry = null;
-                const cellRecords = calls("record").slice(0).filter(c => (c.window === "a" && facade.same(c, cellA))
-                                                                         || (c.window === "b" && facade.same(c, cellB)));
-                if (cellRecords.length !== 0 || calls("record").filter(c => c.window === "a").length !== recordsBefore) {
-                    fail("released: no cell was recorded and nothing of the returning window (got " + JSON.stringify(cellRecords) + ")");
-                }
-                since = Date.now();
-            } },
-            { name: "the quiet second after the stack's floats", until: () => Date.now() - since >= 1150, run: function () {
                 // ---- the app's remembered place is another window's: a toggle makes it the master's ----
                 // The writer admits a window only from the place it has for the window's app
                 // (facade.entryRule). The app's second window closes where it stood, and that
@@ -1161,7 +1153,6 @@ Item {
                 // refused (8) until the master moved. The toggle records the master's own
                 // place first, by the memory's ordinary record.
                 const key = "org.fusion.terminal";
-                master.frameGeometry = Qt.rect(40, 80, 620, 420);
                 facade.entryRule = true;
                 twin.deleted = true;
                 ws.windows = [winB, winA, master];
@@ -1170,6 +1161,11 @@ Item {
                 if (!facade.entries[key] || !rectIs(facade.entries[key], 900, 500, 300, 300)) {
                     fail("released: the app's place is where its second window closed (got " + JSON.stringify(facade.entries[key]) + ")");
                 }
+            } },
+            // The writer tracks a closed window until it is destroyed, and admits no window
+            // whose key a tracked one shares.
+            { name: "the writer forgot the app's second window", until: () => facade.tracked["twin"] === undefined, run: function () {
+                const key = "org.fusion.terminal";
                 let recorded = masterRecords().length;
                 ws.activeWindow = master;
                 tileShortcut.activated();
@@ -1191,9 +1187,32 @@ Item {
                     fail("released: a window on the tile's rectangle is not recorded there; the admission is asked and refused (records "
                          + (masterRecords().length - recorded) + ", admissions " + (calls("admitTile").length - admissions) + ")");
                 }
+                // Nor when the next tree's tile is another rectangle (the fraction changed):
+                // the window still stands where the last session's tile was.
+                const tileBefore = facade.plain(facade.masterRect);
+                facade.masterRect = Qt.rect(0, 34, 760, 866);
+                admissions = calls("admitTile").length;
+                tileShortcut.activated();
+                if (master.tile || masterRecords().length !== recorded || calls("admitTile").length !== admissions + 1) {
+                    fail("released: a window on the last session's tile is not recorded there either (records "
+                         + (masterRecords().length - recorded) + ", admissions " + (calls("admitTile").length - admissions) + ")");
+                }
+                facade.masterRect = Qt.rect(tileBefore.x, tileBefore.y, tileBefore.width, tileBefore.height);
+                // Where the native layer does not say where the tile is, nothing is recorded:
+                // whether the window stands on it cannot be told.
+                master.frameGeometry = Qt.rect(40, 80, 620, 420);
+                facade.entries[key] = { x: 900, y: 500, width: 300, height: 300 };
+                facade.silentTile = true;
+                recorded = masterRecords().length;
+                admissions = calls("admitTile").length;
+                tileShortcut.activated();
+                if (master.tile || masterRecords().length !== recorded || calls("admitTile").length !== admissions + 1) {
+                    fail("released: without the tile's rectangle nothing is recorded for the toggle (records "
+                         + (masterRecords().length - recorded) + ", admissions " + (calls("admitTile").length - admissions) + ")");
+                }
+                facade.silentTile = false;
                 // With another window of the app open the memory is left as it is: the native
                 // layer refuses a key two windows share, and the record would be for nothing.
-                master.frameGeometry = Qt.rect(40, 80, 620, 420);
                 const other = mk({ internalId: "twin2", resourceClass: "org.fusion.terminal",
                                    desktopFileName: "org.fusion.terminal.desktop",
                                    frameGeometry: Qt.rect(900, 500, 300, 300) });
@@ -1210,10 +1229,23 @@ Item {
                     fail("released: with another window of the app open nothing is recorded for the toggle (records "
                          + (masterRecords().length - recorded) + ", admissions " + (calls("admitTile").length - admissions) + ")");
                 }
+                // The writer holds a window under the key it was bound with. One that calls
+                // itself something else since then still shares the master's key.
+                other.resourceClass = "org.fusion.renamed";
+                other.desktopFileName = "org.fusion.renamed.desktop";
+                recorded = masterRecords().length;
+                admissions = calls("admitTile").length;
+                tileShortcut.activated();
+                if (master.tile || masterRecords().length !== recorded || calls("admitTile").length !== admissions + 1) {
+                    fail("released: a window the writer holds under the app's key counts as the app's, whatever it calls itself now (records "
+                         + (masterRecords().length - recorded) + ", admissions " + (calls("admitTile").length - admissions) + ")");
+                }
                 facade.entryRule = false;
                 other.deleted = true;
                 ws.windows = [winB, winA, master];
                 ws.windowRemoved(other);
+            } },
+            { name: "the writer forgot the app's other window", until: () => facade.tracked["twin2"] === undefined, run: function () {
                 ws.activeWindow = master;
                 // ---- in the window's quiet second a toggle records nothing ----
                 // A released master goes back to its float under the restore's quiet second,
@@ -1224,8 +1256,12 @@ Item {
                 }
                 mark = calls("settleWindow").length;
                 facade.detach(master);
+                since = Date.now();
             } },
             { name: "the released master's record settled inside its quiet second", until: () => settledSince(mark), run: function () {
+                if (Date.now() - since >= 900) {
+                    fail("released: the step ran " + (Date.now() - since) + " ms after the release, too late to check the quiet second");
+                }
                 facade.entries["org.fusion.terminal"] = { x: 900, y: 500, width: 300, height: 300 };
                 facade.entryRule = true;
                 const recorded = masterRecords().length;
@@ -1236,6 +1272,235 @@ Item {
                          + (masterRecords().length - recorded) + ", admissions " + (calls("admitTile").length - admissions) + ")");
                 }
                 facade.entryRule = false;
+                ws.activeWindow = master;
+                // ---- a float given back while the cell's configure is in flight ----
+                // KWin applies a request for the size a window already has at once, with no
+                // configure. The client's answer to the cell lands afterwards and KWin takes
+                // it as the window's request: the window stands on a cell no session owns.
+                // On hardware a second press of the shortcut 15 ms after the first did this,
+                // three times out of three. The float is asked for once more then, once.
+                floatA = facade.plain(winA.frameGeometry);
+                tileShortcut.activated();
+                if (!inColumn(winA)) {
+                    fail("released: the stack window is in its cell");
+                }
+                cellA = facade.plain(winA.frameGeometry);
+                tileShortcut.activated();
+                if (!facade.same(winA.frameGeometry, floatA)) {
+                    fail("released: the untoggle gave the stack window its float back");
+                }
+                since = Date.now();
+            } },
+            { name: "the quiet second after the stack's floats", until: () => Date.now() - since >= 1150, run: function () {
+                // After the quiet second, where an ordinary frame would be recorded.
+                const cellRecordsOf = function (id, cell) {
+                    return calls("record").filter(c => c.window === id && facade.same(c, cell));
+                };
+                // While the float is still what KWin is asking for, the window is on its way
+                // there (the cell's answer came first, the float's follows): left alone, and
+                // the cell is no placement meanwhile.
+                winA.requestedGeometry = Qt.rect(floatA.x, floatA.y, floatA.width, floatA.height);
+                winA.frameGeometry = Qt.rect(cellA.x, cellA.y, cellA.width, cellA.height);
+                if (!facade.same(winA.frameGeometry, cellA) || cellRecordsOf("a", cellA).length !== 0) {
+                    fail("released: a window still on its way to its float is not asked again, and its cell is not recorded (at "
+                         + JSON.stringify(winA.frameGeometry) + ", cell records " + cellRecordsOf("a", cellA).length + ")");
+                }
+                // KWin takes the cell's answer as the request: nothing brings the float any
+                // more. That change alone - the frame does not move - asks for the float.
+                winA.requestedGeometry = Qt.rect(cellA.x, cellA.y, cellA.width, cellA.height);
+                if (!facade.same(winA.frameGeometry, floatA) || cellRecordsOf("a", cellA).length !== 0) {
+                    fail("released: a late answer to the cell is followed by the float once more (at "
+                         + JSON.stringify(winA.frameGeometry) + ", cell records " + cellRecordsOf("a", cellA).length + ")");
+                }
+                // Once: a window that lands there again is left where it is, and the cell is
+                // still no placement of it.
+                winA.frameGeometry = Qt.rect(cellA.x, cellA.y, cellA.width, cellA.height);
+                if (!facade.same(winA.frameGeometry, cellA) || cellRecordsOf("a", cellA).length !== 0) {
+                    fail("released: the float is asked for once, not in a loop, and the cell stays unrecorded (at "
+                         + JSON.stringify(winA.frameGeometry) + ", cell records " + cellRecordsOf("a", cellA).length + ")");
+                }
+                winA.requestedGeometry = null;
+                winA.frameGeometry = Qt.rect(floatA.x, floatA.y, floatA.width, floatA.height);
+                // Not while the window is in the user's hand: asked once the hand lets go.
+                tileShortcut.activated();
+                tileShortcut.activated();
+                winA.move = true;
+                winA.requestedGeometry = Qt.rect(cellA.x, cellA.y, cellA.width, cellA.height);
+                winA.frameGeometry = Qt.rect(cellA.x, cellA.y, cellA.width, cellA.height);
+                if (!facade.same(winA.frameGeometry, cellA)) {
+                    fail("released: a window in the user's hand is not taken out of it (at " + JSON.stringify(winA.frameGeometry) + ")");
+                }
+                winA.move = false;
+                winA.requestedGeometryChanged();
+                if (!facade.same(winA.frameGeometry, floatA) || cellRecordsOf("a", cellA).length !== 0) {
+                    fail("released: the float is asked for once the hand lets go (at " + JSON.stringify(winA.frameGeometry) + ")");
+                }
+                winA.requestedGeometry = null;
+                // ---- the next session's floats: where a window is going, not a cell ----
+                // An off and an on in quick succession: the float's configure is in flight and
+                // the window still stands on the cell. Saved as the float, the cell would be
+                // where every later untoggle puts the window.
+                tileShortcut.activated();
+                tileShortcut.activated();
+                winA.requestedGeometry = Qt.rect(floatA.x, floatA.y, floatA.width, floatA.height);
+                winA.frameGeometry = Qt.rect(cellA.x, cellA.y, cellA.width, cellA.height);
+                tileShortcut.activated();
+                tileShortcut.activated();
+                if (!facade.same(winA.frameGeometry, floatA)) {
+                    fail("released: a window that stood on the last session's cell brings that session's float (back at "
+                         + JSON.stringify(winA.frameGeometry) + ")");
+                }
+                winA.requestedGeometry = null;
+                // And a window KWin is still moving somewhere brings the place it is going to.
+                const floatB = facade.plain(winB.frameGeometry);
+                winB.requestedGeometry = Qt.rect(700, 420, 300, 300);
+                tileShortcut.activated();
+                tileShortcut.activated();
+                if (!rectIs(winB.frameGeometry, 700, 420, 300, 300)) {
+                    fail("released: a window on its way somewhere brings the place it is going to (back at "
+                         + JSON.stringify(winB.frameGeometry) + ")");
+                }
+                winB.requestedGeometry = null;
+                winB.frameGeometry = Qt.rect(floatB.x, floatB.y, floatB.width, floatB.height);
+                // ---- a new session's cells are its members' own ----
+                // On, off and on again: the answer to the first session's cell lands on a
+                // window the second one manages, on the cell that session gave it.
+                tileShortcut.activated();
+                tileShortcut.activated();
+                tileShortcut.activated();
+                winA.requestedGeometry = Qt.rect(cellA.x, cellA.y, cellA.width, cellA.height);
+                if (!inColumn(winA) || !facade.same(winA.frameGeometry, cellA)) {
+                    fail("released: a member of a new session is not taken off its cell (at " + JSON.stringify(winA.frameGeometry) + ")");
+                }
+                winA.requestedGeometry = null;
+                tileShortcut.activated();
+                if (!facade.same(winA.frameGeometry, floatA)) {
+                    fail("released: the second session gave the stack window its float back");
+                }
+                // ---- an answer that comes too late is not taken back, and is no placement ----
+                late = mk({ internalId: "late", resourceClass: "org.fusion.late",
+                            desktopFileName: "org.fusion.late.desktop",
+                            frameGeometry: Qt.rect(200, 200, 320, 240) });
+                late.desktops = [firstDesktop];
+                late.output = ws.activeScreen;
+                stackWindows = stackWindows.concat(late);
+                ws.windows = [late, winB, winA, master];
+                ws.windowAdded(late);
+                ws.activeWindow = master;
+                script.staleCellMillis = 60;
+                tileShortcut.activated();
+                if (!inColumn(late)) {
+                    fail("released: the late window is in its cell");
+                }
+                cellLate = facade.plain(late.frameGeometry);
+                tileShortcut.activated();
+                if (!rectIs(late.frameGeometry, 200, 200, 320, 240)) {
+                    fail("released: the untoggle gave the late window its float back");
+                }
+                since = Date.now();
+            } },
+            { name: "the cell's answer can no longer be taken back", until: () => Date.now() - since >= 1250, run: function () {
+                const cellRecords = function () {
+                    return calls("record").filter(c => c.window === "late" && facade.same(c, cellLate));
+                };
+                late.requestedGeometry = Qt.rect(cellLate.x, cellLate.y, cellLate.width, cellLate.height);
+                late.frameGeometry = Qt.rect(cellLate.x, cellLate.y, cellLate.width, cellLate.height);
+                late.requestedGeometryChanged();
+                if (!facade.same(late.frameGeometry, cellLate)) {
+                    fail("released: an answer after the bound is not taken back (at " + JSON.stringify(late.frameGeometry) + ")");
+                }
+                if (cellRecords().length !== 0) {
+                    fail("released: a cell the tiler took back is not recorded, after the quiet second either (got "
+                         + JSON.stringify(cellRecords()) + ")");
+                }
+                // A press of the shortcut on it there: the admission's record of the window's
+                // own place takes no cell either, and the native layer refuses the window (its
+                // app's place is another rectangle).
+                facade.entryRule = true;
+                ws.activeWindow = late;
+                const admissions = calls("admitTile").length;
+                tileShortcut.activated();
+                if (late.tile || cellRecords().length !== 0 || calls("admitTile").length !== admissions + 1) {
+                    fail("released: a press on a window that stands on a cell the tiler took back records no cell and is refused (cell records "
+                         + cellRecords().length + ", admissions " + (calls("admitTile").length - admissions) + ")");
+                }
+                facade.entryRule = false;
+                ws.activeWindow = master;
+                // The next session takes the window with the float the last one saved, not
+                // with the cell it stands on: its untoggle puts the window back where it
+                // floated.
+                tileShortcut.activated();
+                if (!inColumn(late)) {
+                    fail("released: the next session takes the window that stood on the old cell");
+                }
+                cellLate = facade.plain(late.frameGeometry);
+                tileShortcut.activated();
+                if (!rectIs(late.frameGeometry, 200, 200, 320, 240)) {
+                    fail("released: a window left on a cell the tiler took back goes into the next session with its float (back at "
+                         + JSON.stringify(late.frameGeometry) + ")");
+                }
+                late.requestedGeometry = null;
+                since = Date.now();
+            } },
+            { name: "the second cell's answer can no longer be taken back either", until: () => Date.now() - since >= 1250, run: function () {
+                const cellRecords = function () {
+                    return calls("record").filter(c => c.window === "late" && facade.same(c, cellLate));
+                };
+                late.requestedGeometry = Qt.rect(cellLate.x, cellLate.y, cellLate.width, cellLate.height);
+                late.frameGeometry = Qt.rect(cellLate.x, cellLate.y, cellLate.width, cellLate.height);
+                late.requestedGeometryChanged();
+                if (!facade.same(late.frameGeometry, cellLate) || cellRecords().length !== 0) {
+                    fail("released: the window stands on the cell again, unrecorded (at " + JSON.stringify(late.frameGeometry)
+                         + ", cell records " + cellRecords().length + ")");
+                }
+                // It closes there: the app's place stays the one it had.
+                late.deleted = true;
+                ws.windows = [winB, winA, master];
+                stackWindows = stackWindows.filter(w => w !== late);
+                ws.windowRemoved(late);
+                if (cellRecords().length !== 0) {
+                    fail("released: a window that closes on a cell the tiler took back records nothing (got "
+                         + JSON.stringify(cellRecords()) + ")");
+                }
+                script.staleCellMillis = 5000;
+                // ---- a press between the master's release and the tree's end ----
+                // The native layer has released the master (its app's second window) and the
+                // tree's end is queued. The untoggle's explicit restore would find nothing it
+                // owns and nobody would settle the master's record: the press is the native
+                // teardown, taken now.
+                master.frameGeometry = Qt.rect(40, 80, 620, 420);
+                ws.activeWindow = master;
+                tileShortcut.activated();
+                if (!onTile(master) || !master.tile) {
+                    fail("released: the master is on its tile before the press in the gap");
+                }
+                twin = mk({ internalId: "twin3", resourceClass: "org.fusion.terminal",
+                            desktopFileName: "org.fusion.terminal.desktop",
+                            frameGeometry: Qt.rect(900, 500, 300, 300) });
+                twin.desktops = [firstDesktop];
+                twin.output = ws.activeScreen;
+                ws.windows = [twin, winB, winA, master];
+                restores = calls("restoreWindow").length;
+                releases = calls("releaseTile").length;
+                mark = calls("settleWindow").length;
+                ws.windowAdded(twin);
+                tileShortcut.activated();
+                if (calls("restoreWindow").length !== restores || calls("releaseTile").length !== releases + 1
+                        || calls("settleWindow").length === mark) {
+                    fail("released: a press in the gap is the native teardown: no explicit restore, the tree released, the record asked (restores "
+                         + (calls("restoreWindow").length - restores) + ", releases " + (calls("releaseTile").length - releases)
+                         + ", settles " + (calls("settleWindow").length - mark) + ")");
+                }
+            } },
+            { name: "the master released in the gap settled", until: () => settledSince(mark), run: function () {
+                if (!rectIs(master.frameGeometry, 40, 80, 620, 420) || calls("restoreWindow").length !== restores) {
+                    fail("released: the master released in the gap is back on its float (at " + JSON.stringify(master.frameGeometry) + ")");
+                }
+                twin.deleted = true;
+                ws.windows = [winB, winA, master];
+                ws.windowRemoved(twin);
+            } },
+            { name: "the writer forgot the window that ended the session", until: () => facade.tracked["twin3"] === undefined, run: function () {
                 ws.activeWindow = master;
                 // ---- the screen a press tiles is the active window's own ----
                 // The active screen is where the window was when it was activated. On
@@ -1373,12 +1638,29 @@ Item {
                 since = Date.now();
             } },
             { name: "the closed master's destruction", until: () => Date.now() - since >= 200, run: function () {
+                // A window that opens before the tree's end arrives is no member of a session
+                // whose master is gone. (An app the memory has no place for: the window stays
+                // where it opens.)
+                late = mk({ internalId: "late2", resourceClass: "org.fusion.orphan",
+                            desktopFileName: "org.fusion.orphan.desktop",
+                            frameGeometry: Qt.rect(220, 220, 320, 240) });
+                late.desktops = [firstDesktop];
+                late.output = ws.activeScreen;
+                ws.windows = [late, winB, winA, master];
+                ws.windowAdded(late);
+                if (!rectIs(late.frameGeometry, 220, 220, 320, 240)) {
+                    fail("released: a window that opens after the master closed is given no cell (at "
+                         + JSON.stringify(late.frameGeometry) + ")");
+                }
                 asked = calls("settleWindow").length;
                 facade.treeAlive = false;
                 facade.treeChanged();
                 if (calls("settleWindow").length !== asked) {
                     fail("released: a closed master has nothing to settle (asked " + (calls("settleWindow").length - asked) + ")");
                 }
+                late.deleted = true;
+                ws.windows = [winB, winA, master];
+                ws.windowRemoved(late);
                 ws.activeWindow = master;
                 // ---- the script goes while a master's record is held: nothing stays connected ----
                 // The window and the facade outlive the script. The end of a later drag, or a
