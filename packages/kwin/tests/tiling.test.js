@@ -19,7 +19,7 @@ const { masterFraction, masterTileRect, stackRects, feasibleInCell, createSessio
         eligibleForMaster, stackCandidates, dormantCandidates, eligibleDormant, layoutStack,
         focusOrder, nextInCycle, previousInCycle, saveFloats, onWorkspace, desktopMatches,
         sameView, floatRestores, isOwnCell, cellSlack, onMasterTile, tileFitShort, settleAgain,
-        admitAgain, touchesScreen, sameRect, alive } = globalThis;
+        admitAgain, touchesScreen, sameRect, alive, staleCellLanding } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const windowWith = (over) => Object.assign({
@@ -397,6 +397,22 @@ assert.ok(!alive(windowWith({ deleted: true })), "a closing window");
 assert.ok(!alive({}), "a destroyed window: every property undefined");
 assert.ok(!alive(null));
 assert.ok(!alive(undefined));
+
+// A float given back while the cell's configure was in flight: the client's answer to the cell
+// lands afterwards. It is that when the frame is the cell and KWin is not (any longer) asking
+// for the float; a window whose request is still the float is on its way there.
+{
+    const pending = { float: rect(660, 120, 560.25, 521.25), cell: rect(722, 34, 718, 866) };
+    const landed = rect(722, 34, 717.75, 866.25); // the cell on a 133% output's pixels
+    const slack = cellSlack(4 / 3);
+    assert.ok(staleCellLanding(pending, landed, rect(722, 34, 717.75, 866.25), slack), "the cell landed and is KWin's request now");
+    assert.ok(staleCellLanding(pending, landed, null, slack), "the cell landed, no request to read");
+    assert.ok(!staleCellLanding(pending, landed, rect(660, 120, 560.25, 521.25), slack), "KWin still asks for the float");
+    assert.ok(!staleCellLanding(pending, rect(660, 120, 560.25, 521.25), rect(660, 120, 560.25, 521.25), slack), "the float landed");
+    assert.ok(!staleCellLanding(pending, rect(300, 200, 500, 400), rect(300, 200, 500, 400), slack), "another frame: the user's or the app's own");
+    assert.ok(!staleCellLanding(null, landed, null, slack), "nothing pending");
+    assert.ok(!staleCellLanding({ float: pending.float }, landed, null, slack), "no cell remembered");
+}
 
 // The native layer's answers the tiler asks again about, and no others: an unsettled window
 // or one still on its tile (settleWindow), a busy or not-yet-eligible one (admitTile).

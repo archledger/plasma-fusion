@@ -40,9 +40,15 @@ paths and everything only a compositor can prove.
   stack floats; the session clears.
 
 ### 1d. A second window of the master's app
-- Toggle on; open another window of the master's app (a key conflict)
+- Toggle on; open another window of the master's app (a key conflict); toggle on the master
+  with both windows open; close the second window; toggle on the master again
 - **Expect**: the session ends; the stack floats restore; the master returns to its floating
-  frame A as in 1a; the placement file is unchanged; a later toggle on the master is admitted.
+  frame A as in 1a; the new window is given no stack cell and stays where KWin placed it;
+  the placement file is unchanged while both windows are open, and a toggle on the master
+  then is refused (8: the native layer admits no window whose key another live window
+  shares). Closing the second window records its place as the app's, by the memory's
+  ordinary rule; the next toggle on the master records the master's own place first and is
+  admitted.
 
 ### 1e. The master moved by hand
 - Toggle on; move the master (Alt-drag or its title bar)
@@ -145,6 +151,12 @@ paths and everything only a compositor can prove.
   its first admission can answer ineligible while the client has not answered that
   configure; the tiler tries again within the same press.)
 
+### 2m. A second press of the shortcut within a few milliseconds
+- Toggle on and off again at once (two invocations with nothing in between); repeat
+- **Expect**: no tree is left; every stack window is back on its float - a float given back
+  while the cell's configure was still in flight is asked for once more when the cell lands;
+  the master is on its float; the placement file is unchanged.
+
 ## 3. Saved-tree cases
 
 ### 3a. The user's manual tile layout is untouched
@@ -205,6 +217,9 @@ paths and everything only a compositor can prove.
 
 - Each scenario is a scripted session on the ThinkPad (or a VM): the setup, the action, the
   asserts. The `tools/tests/release-vm/` harness or a direct SSH session script works.
-- The placement file is read before and after each scenario to verify the memory state.
+- The placement file is read at every step of a scenario and all the snapshots are compared,
+  oldest first. (Until 2026-11-13 the harness compared the alphabetically first snapshot
+  with the newest one, which in a scenario with an "after" snapshot compared that file with
+  itself; the runs before that date were evaluated again from their snapshots.)
 - The kwinrc is read before and after to verify no tree was written.
 - Evidence: screenshots or programmatic geometry reads for each assert; the full session log.

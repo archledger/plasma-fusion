@@ -17,7 +17,7 @@ tree's .local/share/kwin.
 import os
 import sys
 
-from PySide6.QtCore import QObject, QTimer, QUrl, Slot, qInstallMessageHandler
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QTimer, QUrl, Slot, qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 
@@ -101,6 +101,15 @@ def run_harness(initial=None):
     return instance
 
 
+def retire(instance):
+    """End a run whose results have been read. The stand-in Workspace is one object for the
+    whole engine, so a script left alive answers the next run's windows as well: with its
+    own session, its own mock facade and its own lines in the journal."""
+    instance.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    app.processEvents()
+
+
 harness = run_harness()
 teardowns = sum("tiling: off (native teardown)" in message for message in messages)
 
@@ -133,14 +142,20 @@ check(counts.get("trackWindow") == 7, "trackWindow for the seven windows, got %s
 check(teardowns == 1, "one native teardown in the run, got %s" % teardowns)
 
 # Invariant 7, the ignore policy and the float record, after the settling pass fired: the only
-# records are the live-joined windows' saved floats (c, d and g at their open geometries) -
-# never a cell rectangle, nothing for the adopted windows, and nothing at all for the ignored
-# app's second window (e) or the reflow-starved member's late cell commit (a).
+# records are the live-joined windows' saved floats (c, d and g at their open geometries) and
+# the master's own floating frame, recorded by its first toggle (the native layer admits a
+# window from the place the memory has for its app) - never a cell or the tile's rectangle,
+# nothing for the adopted stack windows, and nothing at all for the ignored app's second
+# window (e) or the reflow-starved member's late cell commit (a).
 recorded = [c for c in facade_calls if c["op"] == "record"]
-expected_floats = {("c", 300, 500, 260, 260), ("d", 200, 300, 240, 200), ("g", 430, 150, 260, 300)}
+expected_floats = {("c", 300, 500, 260, 260), ("d", 200, 300, 240, 200), ("g", 430, 150, 260, 300),
+                   ("master", 40, 80, 620, 420)}
 got_floats = {(c["window"], c["x"], c["y"], c["width"], c["height"]) for c in recorded}
 check(got_floats == expected_floats,
-      "only the joined windows' floats were recorded (a cell, an ignored app and a late commit never were): got %s" % sorted(got_floats))
+      "only the joined windows' floats and the master's own were recorded (a cell, the tile, an ignored app and a late commit"
+      " never were): got %s" % sorted(got_floats))
+
+retire(harness)
 
 # A second run against the facade of a fork build from before restoreWindow: the tiler stays off
 # (it could start a session and never end it) and says so, and the placement memory keeps its
@@ -155,6 +170,8 @@ check((older_counts or {}).get("trackWindow") == 3, "older facade: the three ope
 check(any("the native facade has no restoreWindow" in message for message in messages),
       "older facade: the tiler said why it stays off")
 
+retire(older)
+
 # A third run: the master a native teardown released without restoring it (a removed desktop, a
 # second window of its app, a move of the master). The harness asserts the geometry, the settle
 # answers and the records step by step; the journal lines are checked here.
@@ -166,8 +183,8 @@ journal = messages[before:]
 settled = sum("a released master's record is settled" in message for message in journal)
 held = sum("a released master has not settled; its record is held" in message for message in journal)
 refused = sum("the admission was refused (7)" in message for message in journal)
-check(settled == 10, "released: ten records were settled (returned, moved, re-checked, unresized, unmaximized, at the toggle, left alone,"
-      " transferred, the display back, after a closed one), got %s" % settled)
+check(settled == 12, "released: twelve records were settled (returned, moved, re-checked, unresized, unmaximized, at the toggle, left alone,"
+      " after its app's second window, in its quiet second, transferred, the display back, after a closed one), got %s" % settled)
 check(held == 4, "released: four records were held (a drag held still, maximized, unanswered, no float to return to), got %s" % held)
 check(refused == 1, "released: one admission stayed refused, after its retries, got %s" % refused)
 check(sum("the tree was refused" in message for message in journal) == 1,

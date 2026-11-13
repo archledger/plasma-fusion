@@ -585,11 +585,55 @@ Item {
         }
     }
 
+    // Whether another window of the app is open, on any desktop: the native key is the app's,
+    // for all of its windows.
+    function hasOtherWindow(id, w) {
+        for (const key in watched) {
+            const o = watched[key].w;
+            if (o !== w && Tiling.alive(o) && appIdOf(o) === id) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Before a native admission: the window's floating frame becomes the app's remembered
+    // place, by the memory's ordinary record and under its rules. The native layer admits a
+    // window only from the place the memory has for its app (NATIVE-TILING-CONTRACT.md, the
+    // admission's steps 2 and 3), and the two differ whenever the app's last record was
+    // another window's. On hardware the master's app had opened a second window, that window
+    // was closed where it stood, and every later toggle on the master was refused (8) until
+    // the master moved. A toggle is the user's choice of this window, so its place is the
+    // app's from then on. Not in the window's quiet second, and not while another window of
+    // the app is open: the admission refuses that anyway, and the memory stays as it is.
+    function recordForAdmission(w) {
+        const entry = watched[String(w.internalId)];
+        const id = appIdOf(w);
+        if (!entry || !loaded || id === "" || entry.held || Date.now() < entry.quietUntil || hasOtherWindow(id, w)) {
+            return;
+        }
+        reconcileKeyWithWriter(id);
+        const frame = Placement.valid(frameRect(w));
+        if (!frame || Placement.same(apps[id], frame)) {
+            return;
+        }
+        record(w, id);
+    }
+
     // A geometry change the memory was told about (never during the quiet window after a restore;
     // the settling pass reads the window then instead).
     function geometryChanged(key) {
         const entry = watched[key];
-        if (!entry || !loaded || !entry.w || entry.w.deleted || Date.now() < entry.quietUntil) {
+        if (!entry || !entry.w || entry.w.deleted) {
+            return;
+        }
+        // The late answer to a cell the tiler took back is neither the window's place nor the
+        // end of its way: its float is asked for again (tiler.returnFromStaleCell), in the
+        // quiet second or not.
+        if (tiler.returnFromStaleCell(entry.w)) {
+            return;
+        }
+        if (!loaded || Date.now() < entry.quietUntil) {
             return;
         }
         record(entry.w, appIdOf(entry.w));
@@ -666,7 +710,9 @@ Item {
         // window the stack cannot manage (not resizable, a minimum size above any cell it
         // would get) falls through to the ordinary restore and settle path like any
         // unmanaged window.
-        if (tiler.session.active && tiler.managesDesktop(w) && tiler.addWindow(w, remembered)) {
+        // Not a session whose master has left its tile: that session is over, only the
+        // notice is still on its way (tiler.vacated), and its stack is about to go back.
+        if (tiler.session.active && !tiler.vacated() && tiler.managesDesktop(w) && tiler.addWindow(w, remembered)) {
             // The settle pass is kept: a window that opened with no record must still be
             // remembered where it floats (the settle records the saved float, never the
             // cell it sits at), or its next open would have no placement at all.
@@ -744,6 +790,7 @@ Item {
         // the window, and the entry's reference is about to point at a destroyed window.
         const wasReleased = tiler.holds(w);
         tiler.forgetWindow(w);
+        delete tiler.returning[key];
         // The last place before the window went. KWin marks a closing window deleted before
         // windowRemoved (Wayland and X11), so the window is read as it is: its frame geometry,
         // maximize mode and tile stay as they were (requestTile is a no-op once deleted).
@@ -831,6 +878,11 @@ Item {
         // True while the tiler writes its own placements (the relayout, the float restores):
         // those writes must not read as the user's manual moves.
         property bool placing: false
+        // internalId -> {float, cell, until}: the stack windows a session gave their floats
+        // back, with the cell each had last been given, for as long as a late answer to that
+        // cell can still arrive (returnFromStaleCell).
+        property var returning: ({})
+        readonly property int staleCellMillis: 5000
         // The window inside the native admission call, if any: managed from that moment for
         // the memory's purposes (record()), before the session exists.
         property var admitting: null
@@ -1244,6 +1296,15 @@ Item {
                 }
                 const gen = result.generation;
                 const key = appIdOf(w);
+                // The place the native layer admits the window from is the one the memory has
+                // for its app: this window's, from here on (recordForAdmission). Not a window
+                // that stands on the tile's own rectangle: an earlier release left it there
+                // (a fork build that cannot settle its record), and that is no floating
+                // placement of anyone's choosing.
+                const tileNow = api.masterWindowRect();
+                if (!(tileNow && tileNow.width > 0 && Tiling.onMasterTile(tileNow, masterFloat, output.devicePixelRatio))) {
+                    root.recordForAdmission(w);
+                }
                 let admitResult = -1;
                 admitting = w;
                 try {
@@ -1267,6 +1328,9 @@ Item {
                 return;
             }
 
+            // The cells of this session are its own: a late answer to an earlier session's
+            // cell lands on a window this one manages.
+            returning = {};
             session.active = true;
             session.master = w;
             session.masterKey = appIdOf(w);
@@ -1310,6 +1374,60 @@ Item {
         // drag offscreen. The minimize watches are the live membership: minimized members are
         // out of the layout but keep their floats, while floated and closed windows were
         // unwatched and their floats dropped with them.
+        // Whether the session's master has left its tile. The native layer releases the
+        // master at once (a second window of its app, its close) and the facade ends the tree
+        // in a queued call, so for a moment the session still reads active. A window that
+        // opens in that moment - the second window itself - is no member: it would be given a
+        // cell and, an instant later, a float it has no configure for (returnFromStaleCell).
+        // An owned master keeps its tile through full screen and back.
+        function vacated() {
+            return session.active && (!Tiling.alive(session.master) || !session.master.tile);
+        }
+
+        // A stack window was given its float back: remember the cell it had last been given.
+        function expectReturn(id, float) {
+            const cell = cellRects[id];
+            if (cell) {
+                returning[id] = { float: { x: float.x, y: float.y, width: float.width, height: float.height },
+                                  cell: cell, until: Date.now() + staleCellMillis };
+            }
+        }
+
+        // The late answer to a cell the tiler took back (Tiling.staleCellLanding): the float
+        // is asked for once more - the sizes differ now, so the client is told - and the
+        // window is not asked a third time. Not a window a new session manages (the cell is
+        // that session's), and not one in the user's hand or in a mode of its own.
+        function returnFromStaleCell(w) {
+            const id = String(w.internalId);
+            const pending = returning[id];
+            if (!pending) {
+                return false;
+            }
+            if (Date.now() > pending.until) {
+                delete returning[id];
+                return false;
+            }
+            if (!Tiling.staleCellLanding(pending, frameRect(w), requestedRect(w), landingSlack())) {
+                return false;
+            }
+            delete returning[id];
+            if ((session.active && (w === session.master || manages(w)))
+                    || w.fullScreen || w.maximizeMode !== 0 || w.tile || w.move || w.resize
+                    || !Placement.onScreen(pending.float, screenRects())) {
+                return false;
+            }
+            // Quiet first: nothing between here and the float is the window's place.
+            const quietEntry = watched[id];
+            if (quietEntry) {
+                quietEntry.quietUntil = Date.now() + quietMillis;
+            }
+            placing = true;
+            w.frameGeometry = Qt.rect(pending.float.x, pending.float.y, pending.float.width, pending.float.height);
+            placing = false;
+            log("tiling: a window's late answer to its cell; its float is asked again");
+            return true;
+        }
+
         function restoreStackFloats() {
             placing = true;
             const screens = screenRects();
@@ -1318,6 +1436,7 @@ Item {
                 const saved = session.savedFloats[id];
                 if (w && !w.deleted && saved && Placement.onScreen(saved, screens)) {
                     w.frameGeometry = Qt.rect(saved.x, saved.y, saved.width, saved.height);
+                    expectReturn(id, saved);
                 }
                 // The restored window's own late commits of a cell must not record: the
                 // geometry settles after the client acknowledges, and the quiet window the
@@ -1400,6 +1519,7 @@ Item {
                 if (!restores[i].window.deleted) {
                     restores[i].window.frameGeometry =
                         Qt.rect(restores[i].rect.x, restores[i].rect.y, restores[i].rect.width, restores[i].rect.height);
+                    expectReturn(String(restores[i].window.internalId), restores[i].rect);
                     // The restore's quiet: the starved member leaves the session right
                     // after this, and its client may still commit the old cell configure
                     // (a window without requestedGeometry support shows that commit as a

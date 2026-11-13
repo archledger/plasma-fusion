@@ -283,6 +283,27 @@ function alive(w) {
     return !!w && w.deleted === false;
 }
 
+// Whether the frame a window just took is the late answer to a cell the tiler has already
+// taken back, with nothing on its way to its float any more. KWin applies a request for the
+// size a window already has at once and sends no configure; when the float is given back
+// while the cell's configure is still in flight (a second press of the shortcut within a few
+// milliseconds, a native teardown right after a window joined), the client's answer to the
+// cell lands afterwards, KWin takes it as the window's request, and the window stays on a
+// cell no session owns. pending is {float, cell}; requested is KWin's request where the
+// window has one to read (null otherwise): while it is still the float the window is on its
+// way there and is left alone.
+function staleCellLanding(pending, frame, requested, slack) {
+    if (!pending || !pending.cell || !pending.float || !isOwnCell(pending.cell, frame, slack)) {
+        return false;
+    }
+    if (!requested) {
+        return true;
+    }
+    const f = pending.float;
+    return !(Math.abs(requested.x - f.x) < 1 && Math.abs(requested.y - f.y) < 1
+             && Math.abs(requested.width - f.width) < 1 && Math.abs(requested.height - f.height) < 1);
+}
+
 // The same rectangle, to the last bits of a frame's arithmetic.
 function sameRect(a, b) {
     return !!a && !!b && Math.abs(a.x - b.x) < 1e-3 && Math.abs(a.y - b.y) < 1e-3
