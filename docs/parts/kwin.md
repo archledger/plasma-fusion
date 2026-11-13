@@ -1034,7 +1034,9 @@ Offline (laptop):
    by a newer press), an unsettled master left out of another session's stack, a second
    window of the master's app keeping its own place, a master sent to another output
    (returned to the float the record carried there), a float on a display that is gone
-   (never applied) and the script destroyed while a record is held (nothing stays
+   (never applied, then applied when the display is back), a released master and a tiled
+   master that close and are destroyed (the mock refuses a destroyed window as the
+   compositor does) and the script destroyed while a record is held (nothing stays
    connected). Each step waits for the condition it checks, not for a fixed time; after the settling second, the joined
    windows' saved floats - never a cell - are what the memory recorded (invariant 7), and
    the shortcut invoked on another desktop while a session lives tiles the invoked view even
@@ -1688,7 +1690,11 @@ deliberately defers.
   by then is held (a maximized or full-screen master, a client that does not answer): the
   window's next geometry change asks again, and so do the end of a drag and a toggle on the
   window once it is in an ordinary state. Until its record is settled nothing of a released
-  master is recorded, and a new session leaves it out of its stack. The placement memory
+  master is recorded, and a new session leaves it out of its stack. A released master that
+  closes takes its entry along and records nothing (its native record ends with the
+  window); the tiler never hands the facade a window that is closing or destroyed
+  (`Tiling.alive`: a script's reference to a destroyed window is neither null nor falsy, and
+  reads "not deleted"). The placement memory
   counts a window the tiler holds where it floats, not on its tile or cell (`siblings`), so
   a second window of the master's app is not restored onto the spot the master returns to.
   On a fork build without `settleWindow` the tiler leaves the master as before. When the

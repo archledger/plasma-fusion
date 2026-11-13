@@ -275,6 +275,14 @@ function touchesScreen(rect, screens) {
     return false;
 }
 
+// Whether a window reference can still be used. KWin marks a closing window deleted and
+// destroys it a moment later; a script's reference to the destroyed window is neither null
+// nor falsy, every property of it reads undefined (deleted too, so "not deleted" is true of
+// it), and handing it to the compositor throws. A live window's deleted is the boolean false.
+function alive(w) {
+    return !!w && w.deleted === false;
+}
+
 // The same rectangle, to the last bits of a frame's arithmetic.
 function sameRect(a, b) {
     return !!a && !!b && Math.abs(a.x - b.x) < 1e-3 && Math.abs(a.y - b.y) < 1e-3

@@ -111,6 +111,14 @@ Item {
         function plain(r) {
             return { x: r.x, y: r.y, width: r.width, height: r.height };
         }
+        // The facade's methods take a KWin::Window*: a reference to a destroyed window does
+        // not convert, and the call throws (every property of such a reference is undefined).
+        function window(w) {
+            if (!w || w.internalId === undefined) {
+                throw new TypeError("Passing incompatible arguments to C++ functions from JavaScript is not allowed.");
+            }
+            return w;
+        }
         function same(a, b) {
             return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
         }
@@ -140,7 +148,7 @@ Item {
         // provider's, 3 not settled (a pending configure, a drag, or maximized, full screen or
         // tiled), 4 neither on its floating frame nor placed by the user, 0 settled.
         function settleWindow(w, token) {
-            const id = String(w.internalId);
+            const id = String(window(w).internalId);
             const held = heldRecords[id];
             let result = 0;
             if (!held) {
@@ -165,7 +173,7 @@ Item {
         }
         // The record's floating frame, owned or released; null without a record.
         function floatingFrame(w) {
-            const f = floatings[String(w.internalId)];
+            const f = floatings[String(window(w).internalId)];
             return f ? Qt.rect(f.x, f.y, f.width, f.height) : Qt.rect(0, 0, 0, 0);
         }
         function registerProvider(item) {
@@ -206,7 +214,7 @@ Item {
         }
         function admitTile(generation, w, key, token) {
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "admitTile", generation: generation,
-                                                                window: String(w.internalId), key: key, token: token }]);
+                                                                window: String(window(w).internalId), key: key, token: token }]);
             if (heldRecords[String(w.internalId)]) {
                 return 3; // Busy: the window still has its released record
             }
@@ -730,6 +738,8 @@ Item {
         let asked = 0;
         let since = 0;
         let twin = null;
+        let victim = null;
+        let second = null;
         steps = [
             { run: function () {
                 // ---- the explicit restore during a session: the native layer is restoring ----
@@ -979,9 +989,8 @@ Item {
                 // ---- sent to another output: back to the float the record carried along ----
                 // The native record's floating frame follows the window; the frame the tiler
                 // saved before the admission is on the screen the window left.
-                const first = ws.activeScreen;
-                const second = { name: "Virtual-2", geometry: Qt.rect(1440, 0, 1280, 800), devicePixelRatio: 1 };
-                ws.screens = [first, second];
+                second = { name: "Virtual-2", geometry: Qt.rect(1440, 0, 1280, 800), devicePixelRatio: 1 };
+                ws.screens = [ws.activeScreen, second];
                 tileShortcut.activated();
                 master.output = second;
                 master.frameGeometry = Qt.rect(1740, 34, 700, 866);
@@ -1016,6 +1025,92 @@ Item {
                 if (automaticRecords().length !== 0) {
                     fail("released: no automatic rectangle of the master was ever recorded (got " + JSON.stringify(automaticRecords()) + ")");
                 }
+                since = Date.now();
+            } },
+            { name: "the quiet second after the last float restore", until: () => Date.now() - since >= 1150, run: function () {
+                // The display comes back: the master's next geometry change asks again, and
+                // now there is a float to return it to.
+                ws.screens = [ws.activeScreen, second];
+                mark = calls("settleWindow").length;
+                master.frameGeometry = Qt.rect(301, 60, 700, 866);
+            } },
+            { name: "the held master's record settled once its float's display is back", until: () => settledSince(mark), run: function () {
+                if (!rectIs(master.frameGeometry, 1500, 100, 620, 420) || automaticRecords().length !== 0) {
+                    fail("released: the held master went to its float on the display that came back (got "
+                         + JSON.stringify(master.frameGeometry) + ")");
+                }
+                // ---- a released master that closes takes its entry with it ----
+                // KWin marks a closing window deleted, reports it removed and destroys it. A
+                // reference to the destroyed window is not null and reads "not deleted";
+                // passed to the facade it throws, which would abort every later settle step
+                // and the toggle that asked.
+                victim = mk({ internalId: "victim", resourceClass: "org.fusion.notes",
+                              desktopFileName: "org.fusion.notes.desktop",
+                              frameGeometry: Qt.rect(120, 140, 500, 400) });
+                victim.desktops = [firstDesktop];
+                victim.output = ws.activeScreen;
+                ws.windows = [victim, winB, winA, master];
+                ws.windowAdded(victim);
+                ws.activeWindow = victim;
+                tileShortcut.activated();
+                if (!onTile(victim)) {
+                    fail("released: the victim was admitted as the master");
+                }
+                // Its floating frame is on no display: it cannot be returned and stands on
+                // its tile, its record held, when it closes.
+                facade.floatings.victim = { x: 3000, y: 100, width: 500, height: 400 };
+                facade.detach(victim);
+                if (!onTile(victim)) {
+                    fail("released: the victim stands on its tile");
+                }
+                const before = calls("record").filter(c => c.window === "victim").length;
+                victim.deleted = true;
+                ws.windows = [winB, winA, master];
+                ws.windowRemoved(victim);
+                if (calls("record").filter(c => c.window === "victim").length !== before) {
+                    fail("released: a released master that closes records nothing");
+                }
+                victim.destroy();
+                since = Date.now();
+            } },
+            { name: "the victim's destruction", until: () => Date.now() - since >= 200, run: function () {
+                // Another master is released: its settle step must not trip over the victim.
+                master.output = ws.activeScreen;
+                master.frameGeometry = Qt.rect(40, 80, 620, 420);
+                ws.activeWindow = master;
+                tileShortcut.activated();
+                mark = calls("settleWindow").length;
+                facade.detach(master);
+                if (!rectIs(master.frameGeometry, 40, 80, 620, 420)) {
+                    fail("released: the next released master went back to its float (got " + JSON.stringify(master.frameGeometry) + ")");
+                }
+            } },
+            { name: "the next master's record settled", until: () => settledSince(mark), run: function () {
+                // ---- the master closes while tiling: destroyed before the tree's end arrives ----
+                // The facade ends the tree in a queued call; the window can be gone by then.
+                victim = mk({ internalId: "victim2", resourceClass: "org.fusion.notes",
+                              desktopFileName: "org.fusion.notes.desktop",
+                              frameGeometry: Qt.rect(120, 140, 500, 400) });
+                victim.desktops = [firstDesktop];
+                victim.output = ws.activeScreen;
+                ws.windows = [victim, winB, winA, master];
+                ws.windowAdded(victim);
+                ws.activeWindow = victim;
+                tileShortcut.activated();
+                victim.deleted = true;
+                ws.windows = [winB, winA, master];
+                ws.windowRemoved(victim);
+                victim.destroy();
+                since = Date.now();
+            } },
+            { name: "the closed master's destruction", until: () => Date.now() - since >= 200, run: function () {
+                asked = calls("settleWindow").length;
+                facade.treeAlive = false;
+                facade.treeChanged();
+                if (calls("settleWindow").length !== asked) {
+                    fail("released: a closed master has nothing to settle (asked " + (calls("settleWindow").length - asked) + ")");
+                }
+                ws.activeWindow = master;
                 // ---- the script goes while a master's record is held: nothing stays connected ----
                 // The window and the facade outlive the script. The end of a later drag, or a
                 // tree's end, must not call into a script that is gone.

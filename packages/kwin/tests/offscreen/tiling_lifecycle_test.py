@@ -166,18 +166,20 @@ journal = messages[before:]
 settled = sum("a released master's record is settled" in message for message in journal)
 held = sum("a released master has not settled; its record is held" in message for message in journal)
 refused = sum("the admission was refused (7)" in message for message in journal)
-check(settled == 8, "released: eight records were settled (returned, moved, re-checked, unresized, unmaximized, at the toggle, left alone,"
-      " transferred), got %s" % settled)
+check(settled == 10, "released: ten records were settled (returned, moved, re-checked, unresized, unmaximized, at the toggle, left alone,"
+      " transferred, the display back, after a closed one), got %s" % settled)
 check(held == 4, "released: four records were held (a drag held still, maximized, unanswered, no float to return to), got %s" % held)
 check(refused == 1, "released: one admission stayed refused, after its retries, got %s" % refused)
 check(sum("the tree was refused" in message for message in journal) == 1,
       "released: the newer press was refused once and the dropped retry asked for nothing")
-# The script was destroyed with a master's record held, then the master's drag ended and a tree
-# ended: a callback left connected to the window or to the facade runs in a context that is gone
-# and says so with a TypeError in main.qml. (The engine's own teardown reads the script's
-# settings once more, which is the one such line that is not this.)
-stale = [message for message in journal if "main.qml" in message and "TypeError" in message and "readConfig" not in message]
-check(not stale, "released: nothing of the destroyed script was still connected, got %s" % stale)
+# No TypeError in the run. The script was destroyed with a master's record held, then the
+# master's drag ended and a tree ended: a callback left connected to the window or to the facade
+# runs in a context that is gone and says so. And a reference to a destroyed window handed to
+# the facade does not convert: the mock throws as the compositor does, from inside a signal
+# handler, where only the engine's message shows it. (The engine's own teardown reads the
+# script's settings once more, which is the one such line that is neither.)
+errors = [message for message in journal if "TypeError" in message and "readConfig" not in message]
+check(not errors, "released: no call into a destroyed script and no destroyed window handed to the facade, got %s" % errors)
 
 if failures:
     for failure in failures:

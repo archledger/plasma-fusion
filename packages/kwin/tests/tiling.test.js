@@ -19,7 +19,7 @@ const { masterFraction, masterTileRect, stackRects, feasibleInCell, createSessio
         eligibleForMaster, stackCandidates, dormantCandidates, eligibleDormant, layoutStack,
         focusOrder, nextInCycle, previousInCycle, saveFloats, onWorkspace, desktopMatches,
         sameView, floatRestores, isOwnCell, cellSlack, onMasterTile, tileFitShort, settleAgain,
-        admitAgain, touchesScreen, sameRect } = globalThis;
+        admitAgain, touchesScreen, sameRect, alive } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const windowWith = (over) => Object.assign({
@@ -388,6 +388,15 @@ assert.strictEqual(cellSlack(0), 0);
     assert.ok(!sameRect(rect(40, 80, 620, 420), rect(40, 80, 620, 420.25)), "a quarter pixel is another frame");
     assert.ok(!sameRect(null, rect(40, 80, 620, 420)));
 }
+
+// A window reference the tiler may still use. KWin's closing window has deleted === true; a
+// reference to a destroyed window is a truthy object whose every property reads undefined, so
+// "not deleted" would be true of it.
+assert.ok(alive(windowWith({})), "an open window");
+assert.ok(!alive(windowWith({ deleted: true })), "a closing window");
+assert.ok(!alive({}), "a destroyed window: every property undefined");
+assert.ok(!alive(null));
+assert.ok(!alive(undefined));
 
 // The native layer's answers the tiler asks again about, and no others: an unsettled window
 // or one still on its tile (settleWindow), a busy or not-yet-eligible one (admitTile).

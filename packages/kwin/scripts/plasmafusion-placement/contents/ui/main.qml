@@ -740,10 +740,14 @@ Item {
         if (tiler.session.active) {
             tiler.removeWindow(w);
         }
+        // A released master that closes takes its entry along: the native record ends with
+        // the window, and the entry's reference is about to point at a destroyed window.
+        const wasReleased = tiler.holds(w);
+        tiler.forgetWindow(w);
         // The last place before the window went. KWin marks a closing window deleted before
         // windowRemoved (Wayland and X11), so the window is read as it is: its frame geometry,
         // maximize mode and tile stay as they were (requestTile is a no-op once deleted).
-        if (loaded && !entry.held && !wasManaged && Date.now() >= entry.quietUntil) {
+        if (loaded && !entry.held && !wasManaged && !wasReleased && Date.now() >= entry.quietUntil) {
             record(w, appIdOf(w));
         }
         disconnectHandlers(entry);
@@ -908,7 +912,9 @@ Item {
         // the user's own move put it where it is, and the native layer settles the record
         // once the window's geometry has settled (settleStep).
         function releaseMaster(master, float, tile, output) {
-            if (!canSettle || !master || master.deleted) {
+            // A closed master has no record to settle, and by the time the tree's end arrives
+            // it can be destroyed already (Tiling.alive).
+            if (!canSettle || !Tiling.alive(master)) {
                 return;
             }
             const id = String(master.internalId);
@@ -927,16 +933,27 @@ Item {
             settleStep();
         }
 
-        // Drop a released master's entry and its watch.
+        // Drop a released master's entry and its watch. The window may be destroyed by now:
+        // its signals are gone with it.
         function forget(id) {
             const entry = released[id];
             if (!entry) {
                 return;
             }
-            if (entry.onFinished && entry.w && entry.w.interactiveMoveResizeFinished) {
+            if (entry.onFinished && Tiling.alive(entry.w) && entry.w.interactiveMoveResizeFinished) {
                 entry.w.interactiveMoveResizeFinished.disconnect(entry.onFinished);
             }
             delete released[id];
+        }
+
+        // A window closed: a released master's entry goes with it (its native record ends
+        // with the window). Found by identity, the id being unreadable once it is destroyed.
+        function forgetWindow(w) {
+            for (const id in released) {
+                if (released[id].w === w) {
+                    forget(id);
+                }
+            }
         }
 
         // The script is going: nothing of the tiler stays connected to a window or to the
@@ -954,9 +971,11 @@ Item {
             }
         }
 
-        // Whether a window is a released master whose record is not settled yet.
+        // Whether a window is a released master whose record is not settled yet. True of
+        // one that is closing (marked deleted, still readable); a destroyed window's id
+        // reads undefined.
         function holds(w) {
-            return !!w && released[String(w.internalId)] !== undefined;
+            return !!w && w.internalId !== undefined && released[String(w.internalId)] !== undefined;
         }
 
         // Where a released master goes back to: the floating frame its native record holds
@@ -1000,7 +1019,7 @@ Item {
         // user's own move or resize.
         function returnReleased(entry) {
             const w = entry.w;
-            if (!w || w.deleted || w.fullScreen || w.maximizeMode !== 0 || w.tile || w.move || w.resize) {
+            if (!Tiling.alive(w) || w.fullScreen || w.maximizeMode !== 0 || w.tile || w.move || w.resize) {
                 return false;
             }
             const target = returnTarget(entry);
@@ -1033,7 +1052,10 @@ Item {
             let again = false;
             for (const id in released) {
                 const entry = released[id];
-                if (!entry.w || entry.w.deleted || !apiAvailable || !api) {
+                // A window that closed has no record left, and a reference to a destroyed
+                // window must not reach the facade: the call would throw and take the rest
+                // of this step, or the toggle that asked, with it.
+                if (!Tiling.alive(entry.w) || !apiAvailable || !api) {
                     forget(id);
                     continue;
                 }
