@@ -391,6 +391,26 @@ Item {
         onTriggered: root.write()
     }
 
+    // The tiler's two retries (tiler.settleStep, tiler.retryStart): their pacing and bounds.
+    // A client answers a configure within a frame or two; three seconds of settle attempts
+    // and four tenths of a second of admission attempts cover a busy one.
+    property int settleRetryMillis: 100
+    property int settleRetryLimit: 30
+    property int admitRetryMillis: 50
+    property int admitRetryLimit: 8
+
+    Timer {
+        id: settleRetry
+        interval: root.settleRetryMillis
+        onTriggered: tiler.settleStep()
+    }
+
+    Timer {
+        id: admitRetry
+        interval: root.admitRetryMillis
+        onTriggered: tiler.retryStart()
+    }
+
     function changed() {
         revision++;
         if (!nativeWriter && !sending) {
@@ -475,7 +495,11 @@ Item {
             if (!Placement.sameDesktop(desktopView(w), desktopView(o)) || !Placement.sameActivity(activityView(w), activityView(o))) {
                 continue;
             }
-            out.push(frameRect(o));
+            // A window the tiler holds at an automatic rectangle counts where it floats: that
+            // is where it returns, and a new window of the app restored onto that spot would
+            // end up exactly under it (a second window of the master's app ends the session,
+            // and the master goes back to the app's remembered place).
+            out.push(tiler.floatOf(o) || frameRect(o));
         }
         return out;
     }
@@ -499,6 +523,14 @@ Item {
         if (tiler.manualMoveOf(w)) {
             tiler.detachManual(w);
             log("tiling: a member was moved by hand; it floats");
+        }
+        // A master a native teardown released stands at its tile's size, or is on its way
+        // back to its float, until the native layer has settled its record: nothing of it is
+        // a floating placement yet. Its geometry changed, so the settle is asked again; the
+        // place it settles at is recorded then (tiler.settleStep).
+        if (tiler.holds(w)) {
+            tiler.settleSoon(w);
+            return;
         }
         // A settle pass remembering a managed window's float: the rectangle is the saved
         // float, not the cell the window sits at (invariant 7 keeps the cell out of the
@@ -798,6 +830,17 @@ Item {
         // The window inside the native admission call, if any: managed from that moment for
         // the memory's purposes (record()), before the session exists.
         property var admitting: null
+        // Whether the facade can settle a released master's record (settleWindow; a fork
+        // build from before it leaves such a master as it stands until it closes).
+        property bool canSettle: false
+        // window internalId -> {w, float, tile, scale, returned, attempts, held, onFinished}:
+        // the masters a native teardown released without restoring them, until the native
+        // layer has settled their records (releaseMaster). Nothing of such a window is
+        // recorded meanwhile, and no session takes it into its stack.
+        property var released: ({})
+        // A start whose admission was refused for a state that passes, to be tried again:
+        // {invoked: the view the shortcut was invoked on, attempts}.
+        property var pendingStart: null
 
         function detectApi() {
             try {
@@ -827,6 +870,7 @@ Item {
                 // desktop removal, provider retirement, key conflict, a manual quick-tile
                 // or move of the master, an output transfer — every native path at once).
                 api.treeChanged.connect(tiler.onTreeChanged);
+                canSettle = typeof api.settleWindow === "function";
             }
             return apiAvailable;
         }
@@ -836,15 +880,218 @@ Item {
                 return;
             }
             if (!api.hasTree()) {
-                // The tree is gone: restore the stack floats (the master's own restore
-                // already ran through the native layer — this is its aftermath).
+                // The tree is gone: restore the stack floats, then the master (releaseMaster:
+                // the explicit restore is returning it by itself; every other native release
+                // left it standing at the tile's size).
                 log("tiling: the tree ended natively; restoring the stack");
+                const master = session.master;
+                const float = session.masterFloat;
+                const tile = session.masterTile;
+                const output = session.output;
                 restoreStackFloats();
                 disconnectMinimizeHandlers();
                 session = Tiling.createSession();
                 cellRects = {};
                 log("tiling: off (native teardown)");
+                releaseMaster(master, float, tile, output);
             }
+        }
+
+        // The master after a native teardown. The explicit restore is returning it to its
+        // floating frame and completes its record by itself, and a closed master has none: the
+        // native layer answers that there is nothing to settle, and the tiler touches
+        // nothing. Every other release (a removed desktop or output, a second window of its
+        // app, a move or a quick tile of the master, a change of the work area) is
+        // detach-only: the window stands where the release left it, at the tile's size, and
+        // the native layer holds its record, so no later session can admit it. The tiler ends
+        // that as it does for the stack: the master goes back to its floating frame, unless
+        // the user's own move put it where it is, and the native layer settles the record
+        // once the window's geometry has settled (settleStep).
+        function releaseMaster(master, float, tile, output) {
+            if (!canSettle || !master || master.deleted) {
+                return;
+            }
+            const id = String(master.internalId);
+            forget(id);
+            const entry = { w: master, float: float, tile: tile, scale: output ? output.devicePixelRatio : 1,
+                            returned: false, attempts: 0, held: false, onFinished: null };
+            // The end of the user's drag changes no geometry, and it is what the native
+            // layer waits for.
+            if (master.interactiveMoveResizeFinished) {
+                entry.onFinished = function () {
+                    tiler.settleSoon(master);
+                };
+                master.interactiveMoveResizeFinished.connect(entry.onFinished);
+            }
+            released[id] = entry;
+            settleStep();
+        }
+
+        // Drop a released master's entry and its watch.
+        function forget(id) {
+            const entry = released[id];
+            if (!entry) {
+                return;
+            }
+            if (entry.onFinished && entry.w && entry.w.interactiveMoveResizeFinished) {
+                entry.w.interactiveMoveResizeFinished.disconnect(entry.onFinished);
+            }
+            delete released[id];
+        }
+
+        // Whether a window is a released master whose record is not settled yet.
+        function holds(w) {
+            return !!w && released[String(w.internalId)] !== undefined;
+        }
+
+        // Where a released master goes back to: the floating frame its native record holds
+        // (the facade's floatingFrame: it follows the window to another output), or the
+        // frame the tiler saved before the admission on a fork build without it. Never a
+        // frame on a display that is gone.
+        function returnTarget(entry) {
+            let float = entry.float;
+            if (api && typeof api.floatingFrame === "function") {
+                const native = api.floatingFrame(entry.w);
+                if (native && native.width > 0 && native.height > 0) {
+                    float = { x: native.x, y: native.y, width: native.width, height: native.height };
+                }
+            }
+            return float && Tiling.touchesScreen(float, screenRects()) ? float : null;
+        }
+
+        // Where a window the tiler holds at an automatic rectangle floats: the master's and
+        // the stack's saved floats, a released master's return. Null for any other window.
+        function floatOf(w) {
+            if (!w) {
+                return null;
+            }
+            const id = String(w.internalId);
+            if (released[id] !== undefined) {
+                return returnTarget(released[id]);
+            }
+            if (session.active && w === session.master) {
+                return session.masterFloat;
+            }
+            if (session.active && session.savedFloats[id] !== undefined) {
+                return session.savedFloats[id];
+            }
+            return null;
+        }
+
+        // Give a released master its floating frame back: an ordinary request, under placing
+        // and the restore's quiet like the stack's floats. Not while it is maximized, full
+        // screen or in a tile of the user's (the mode owns the frame and returns to the
+        // tile's size; the record waits for the ordinary state), nor in the middle of the
+        // user's own move or resize.
+        function returnReleased(entry) {
+            const w = entry.w;
+            if (!w || w.deleted || w.fullScreen || w.maximizeMode !== 0 || w.tile || w.move || w.resize) {
+                return false;
+            }
+            const target = returnTarget(entry);
+            if (!target || Tiling.sameRect(target, frameRect(w))) {
+                return false;
+            }
+            entry.returned = true;
+            placing = true;
+            w.frameGeometry = Qt.rect(target.x, target.y, target.width, target.height);
+            placing = false;
+            const watch = watched[String(w.internalId)];
+            if (watch) {
+                watch.quietUntil = Date.now() + quietMillis;
+            }
+            return true;
+        }
+
+        // Ask the native layer to settle every released master's record. It does so only once
+        // the window's geometry is settled and the window stands on its floating frame or
+        // where the user's own move left it, so no automatic rectangle reaches the memory.
+        // The native layer never moves the window; the tiler returns it when the answer is
+        // that it stands somewhere else (4), and at once while it still stands on its tile
+        // with the release's configure unanswered (3). The question is asked again, a
+        // bounded number of times, while the client answers. A record that does not settle
+        // in that time is held (a maximized or full-screen master, a float that cannot be
+        // applied): the window's next geometry change or the end of a drag asks again
+        // (settleSoon), and so does a toggle on it (start).
+        function settleStep() {
+            settleRetry.stop();
+            let again = false;
+            for (const id in released) {
+                const entry = released[id];
+                if (!entry.w || entry.w.deleted || !apiAvailable || !api) {
+                    forget(id);
+                    continue;
+                }
+                const result = api.settleWindow(entry.w, providerToken);
+                if (Tiling.settleAgain(result)) {
+                    if (result === 4 || (!entry.returned && Tiling.onMasterTile(entry.tile, frameRect(entry.w), entry.scale))) {
+                        returnReleased(entry);
+                    }
+                    if (++entry.attempts < settleRetryLimit) {
+                        again = true;
+                    } else if (!entry.held) {
+                        entry.held = true;
+                        log("tiling: a released master has not settled; its record is held");
+                    }
+                    continue;
+                }
+                forget(id);
+                if (result === 0) {
+                    log("tiling: a released master's record is settled");
+                    // The frame it settled at is its floating placement: the one it had (the
+                    // memory holds it already, unless the window went to another output) or
+                    // the one the user's move gave it.
+                    root.record(entry.w, root.appIdOf(entry.w));
+                } else if (result !== 1) {
+                    log("tiling: a released master's record was not settled (" + result + ")");
+                }
+            }
+            if (again) {
+                settleRetry.restart();
+            }
+        }
+
+        // A released master changed its geometry, or the user's drag of it ended: ask again,
+        // from the start.
+        function settleSoon(w) {
+            const entry = released[String(w.internalId)];
+            if (entry) {
+                entry.attempts = 0;
+                entry.held = false;
+                settleRetry.restart();
+            }
+        }
+
+        // A refused admission that may pass (Tiling.admitAgain) is tried again shortly, a
+        // bounded number of times, for the view the shortcut was invoked on. False once the
+        // attempts are used up: the refusal stands.
+        function scheduleStartRetry(invoked) {
+            const attempts = pendingStart ? pendingStart.attempts : 0;
+            if (attempts >= admitRetryLimit) {
+                pendingStart = null;
+                return false;
+            }
+            pendingStart = { invoked: invoked, attempts: attempts + 1 };
+            admitRetry.restart();
+            return true;
+        }
+
+        function retryStart() {
+            const pending = pendingStart;
+            if (!pending || session.active) {
+                pendingStart = null;
+                return;
+            }
+            start(pending.invoked);
+            // A start that scheduled nothing new has ended the matter either way.
+            if (pendingStart === pending) {
+                pendingStart = null;
+            }
+        }
+
+        function cancelPendingStart() {
+            pendingStart = null;
+            admitRetry.stop();
         }
 
         // Whether a window is one of this session's managed windows.
@@ -877,6 +1124,8 @@ Item {
         // invoked on, not where the teardown looked last. The focus goes back to the window
         // the shortcut was invoked on, too: the new master, or the window the user was in.
         function toggle() {
+            // The shortcut again is the newer intent: a start still being retried is dropped.
+            cancelPendingStart();
             if (session.active) {
                 const invoked = { window: Workspace.activeWindow, desktop: Workspace.currentDesktop,
                                   activity: String(Workspace.currentActivity),
@@ -932,7 +1181,20 @@ Item {
 
             // The stack candidates (before the master is admitted): this workspace's, this
             // output's, stacking order top first.
-            const candidates = Tiling.stackCandidates(Workspace.stackingOrder, w, desktop, activity, output);
+            // A released master whose record is not settled yet is left alone: it is on its
+            // way back to its float, and a cell would be one more automatic rectangle for it.
+            const candidates = Tiling.stackCandidates(Workspace.stackingOrder, w, desktop, activity, output)
+                .filter(c => !holds(c));
+            // The master's float, as it is before the admission: where the tiler returns it
+            // after a native teardown that did not, on a fork build that does not say where
+            // (releaseMaster).
+            const masterFloat = frameRect(w);
+
+            // A master an earlier teardown released: its record is settled first, if it can
+            // be; the admission answers busy until it is.
+            if (holds(w)) {
+                settleStep();
+            }
 
             // The native admission first (invariant 8: before any stack write).
             if (apiAvailable && api) {
@@ -953,8 +1215,13 @@ Item {
                     admitting = null;
                 }
                 if (admitResult !== 0) { // 0 = Accepted
-                    log("tiling: the admission was refused (" + admitResult + ")");
+                    // The tree goes whatever follows: a later attempt creates its own.
                     api.releaseTile(gen);
+                    if (Tiling.admitAgain(admitResult)
+                            && scheduleStartRetry({ window: w, desktop: desktop, activity: activity, output: output })) {
+                        return;
+                    }
+                    log("tiling: the admission was refused (" + admitResult + ")");
                     return;
                 }
                 session.generation = gen;
@@ -966,6 +1233,7 @@ Item {
             session.active = true;
             session.master = w;
             session.masterKey = appIdOf(w);
+            session.masterFloat = masterFloat;
             session.output = output;
             session.desktop = desktop;
             session.activity = activity;
@@ -987,7 +1255,8 @@ Item {
             // they are watched now, because restoring one during the session emits no
             // windowAdded - it was there all along - and without a watch it would float over
             // the managed layout until the next relayout never comes for it.
-            const dormant = Tiling.dormantCandidates(Workspace.stackingOrder, w, desktop, activity, output);
+            const dormant = Tiling.dormantCandidates(Workspace.stackingOrder, w, desktop, activity, output)
+                .filter(c => !holds(c));
             for (let i = 0; i < dormant.length; ++i) {
                 const g = dormant[i].frameGeometry;
                 session.savedFloats[String(dormant[i].internalId)] =
@@ -1062,6 +1331,12 @@ Item {
             }
             const area = Workspace.clientArea(Workspace.MaximizeArea, session.output, session.desktop);
             session.dividerX = masterRightEdge(area);
+            // The tile's rectangle as the native layer has it now: where the master stands
+            // until someone moves it (releaseMaster reads it after a native teardown).
+            const tile = apiAvailable && api ? api.masterWindowRect() : null;
+            if (tile && tile.width > 0) {
+                session.masterTile = { x: tile.x, y: tile.y, width: tile.width, height: tile.height };
+            }
             const gap = tilingStackGap();
             const result = Tiling.layoutStack(session.stack, area, session.dividerX, gap);
             // The tiler's own writes: while these run, a geometry change is not the user's
@@ -1130,7 +1405,7 @@ Item {
         // the memory has one (the untoggle returns the app to its remembered spot, as the
         // memory would have placed it), else the window's current geometry.
         function addWindow(w, remembered) {
-            if (!session.active || !w || manages(w)) {
+            if (!session.active || !w || manages(w) || holds(w)) {
                 return false;
             }
             if (!managesDesktop(w)) {

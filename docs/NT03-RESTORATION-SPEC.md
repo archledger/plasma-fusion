@@ -57,6 +57,41 @@ Generic revocation stays detach-only. Manual movement, ordinary tile assignment,
 context teardown must not implicitly request A. Only an explicit restore intent may claim a new
 restore attempt against the exact current Owned generation.
 
+A record released that way has an end of its own, the settle operation
+(`Window::settleReleasedTransientOwnership`, the facade's `settleWindow(window, token)`;
+added 2026-11-13). Before it, such a record lasted until the window closed: after a removed
+desktop the window kept the tile's size and no later session could admit it. The native layer
+still requests nothing for a released record. The policy that admitted the window moves it
+with an ordinary request, or leaves it where the user put it, and asks for the record to be
+settled. The native layer settles it only when all of these hold; any other answer changes
+nothing:
+
+- the caller is the provider that admitted the window, and it is still registered;
+- no restoration attempt is live (a live one completes at its own boundary);
+- the window is in an ordinary mode (not maximized, not full screen) and in no tile;
+- nothing of its native geometry is in flight, and its frame is its requested geometry;
+- the window stands on a frame that is known not to be automatic: its floating frame A, or
+  the frame the user's own interactive move or resize left it on (the record is marked when
+  such an operation ends without being cancelled).
+
+The last condition is positive evidence on purpose. The rectangle recorded at the admission
+is not the only automatic one a released window can stand on: the workspace's re-check of a
+window's position (a panel, a strut, an output's size) asks a tiled window for its tile's
+rectangle with a public request, which releases it and puts it on the tile's rectangle as it
+is then, and a transfer to another output carries the tile's size along. A frame of unknown
+origin is treated as automatic.
+
+The record's floating frame is available to the policy (`Window::transientFloatingFrame`,
+the facade's `floatingFrame(window)`) and follows the window's screen: on a transfer to
+another output, and when the re-check moves the window off an output that was removed or
+resized.
+
+The writer finalizes as it does for a completed restoration: a deferred update for the key
+is applied, else the entry stays. The results are `Settled` (0), `NotReleased` (1),
+`StaleProvider` (2), `Unsettled` (3), `AtManagedRectangle` (4: neither on A nor placed by
+the user) and `Refused` (5, the writer's own validation). A policy that never asks leaves
+the record until the window closes.
+
 Action handling must distinguish whether an action was consumed from whether restoration started:
 
 | Situation | Handling |

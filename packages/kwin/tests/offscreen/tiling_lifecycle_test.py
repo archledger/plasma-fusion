@@ -155,6 +155,24 @@ check((older_counts or {}).get("trackWindow") == 3, "older facade: the three ope
 check(any("the native facade has no restoreWindow" in message for message in messages),
       "older facade: the tiler said why it stays off")
 
+# A third run: the master a native teardown released without restoring it (a removed desktop, a
+# second window of its app, a move of the master). The harness asserts the geometry, the settle
+# answers and the records step by step; the journal lines are checked here.
+before = len(messages)
+released = run_harness({"scenario": "released"})
+for problem in list(released.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+settled = sum("a released master's record is settled" in message for message in journal)
+held = sum("a released master has not settled; its record is held" in message for message in journal)
+refused = sum("the admission was refused (7)" in message for message in journal)
+check(settled == 8, "released: eight records were settled (returned, moved, re-checked, unresized, unmaximized, at the toggle, left alone,"
+      " transferred), got %s" % settled)
+check(held == 4, "released: four records were held (a drag held still, maximized, unanswered, no float to return to), got %s" % held)
+check(refused == 1, "released: one admission stayed refused, after its retries, got %s" % refused)
+check(sum("the tree was refused" in message for message in journal) == 1,
+      "released: the newer press was refused once and the dropped retry asked for nothing")
+
 if failures:
     for failure in failures:
         print("FAIL tiling_lifecycle_test.py: " + failure)

@@ -16,19 +16,52 @@ paths and everything only a compositor can prove.
 ### 1a. Output removal while tiling
 - Toggle the tiler on with 2+ windows (a master and a stack)
 - Remove the output the tiling session lives on (OutputConfiguration disable)
-- **Expect**: the tree releases natively (treeChanged fires, no live tree); the tiler restores
-  the stack windows' saved floats; the master restores to its floating frame A through the
-  native explicit restore; no window is left at an automatic rectangle; no corrective geometry
-  loop (each window moves at most once); no kwinrc tile tree is written.
+- **Expect**: the tree releases natively (treeChanged fires, no live tree); every window is
+  on a live screen. A stack window whose float sat on the removed display keeps KWin's
+  evacuation geometry (2h). The master returns to its floating frame, which its native
+  record carried onto the remaining screen; its record is settled. No corrective geometry
+  loop (each window moves at most twice: KWin's evacuation, then the return); no kwinrc tile
+  tree is written; a later toggle on the master is admitted.
+- Variant: remove the other output. The session ends too (KWin replays the placements it
+  tracks for the new layout, which moves the master); the master is back on its floating
+  frame A, its record is settled and a later toggle on it is admitted.
 
 ### 1b. Desktop removal while tiling
 - Toggle the tiler on; remove the desktop the session lives on
-- **Expect**: identical to 1a (the native desktop-removal release path).
+- **Expect**: the tree releases natively; the tiler restores the stack windows' saved floats;
+  the master returns to its floating frame A (the release is detach-only, so the tiler moves
+  it with an ordinary request and the native layer settles its record); no window is left at
+  an automatic rectangle; each window moves at most once; no kwinrc tile tree is written; a
+  later toggle on the master is admitted.
 
 ### 1c. Master window closed while tiling
 - Toggle on; close the master (its titlebar close button)
 - **Expect**: treeChanged fires (the close releases the ownership); the tiler restores the
   stack floats; the session clears.
+
+### 1d. A second window of the master's app
+- Toggle on; open another window of the master's app (a key conflict)
+- **Expect**: the session ends; the stack floats restore; the master returns to its floating
+  frame A as in 1a; the placement file is unchanged; a later toggle on the master is admitted.
+
+### 1e. The master moved by hand
+- Toggle on; move the master (Alt-drag or its title bar)
+- **Expect**: the session ends; the stack floats restore; the master stays where it was put
+  and, once the drag has ended, that place is recorded as its floating placement; a later
+  toggle on it is admitted.
+
+### 1f. The work area changes while tiling
+- Toggle on; change the work area (add or resize a panel that reserves space)
+- **Expect**: the session ends (KWin's re-check of the window positions asks the master for
+  its tile's rectangle with a public request, which releases it); the stack floats restore;
+  the master returns to its floating frame A, not the tile's new rectangle; the placement
+  file is unchanged; a later toggle on the master is admitted.
+
+### 1g. The master sent to another output
+- With two outputs, toggle on; send the master to the other output (Window to Next Screen)
+- **Expect**: the session ends; the master stands on the other output at its floating size
+  (its floating frame, carried over), not at the tile's size; that frame is recorded; a
+  later toggle on it there is admitted.
 
 ## 2. Placement-memory matrices
 
@@ -108,7 +141,9 @@ paths and everything only a compositor can prove.
   click a window on B); invoke Tile Workspace
 - **Expect**: the first invocation lays out B in one go: A's session ends (its floats restore
   on A) and B tiles immediately - the toggle does not spend its first invocation silently
-  untoggling A while B stays floating.
+  untoggling A while B stays floating. (B's window has just lost and regained the focus, so
+  its first admission can answer ineligible while the client has not answered that
+  configure; the tiler tries again within the same press.)
 
 ## 3. Saved-tree cases
 
@@ -151,6 +186,20 @@ paths and everything only a compositor can prove.
 ### 5b. A forced-position window (a window rule)
 - A window with a forced-position rule; try to toggle on with it active
 - **Expect**: the admission refuses (the native preflight); the tree releases; nothing changes.
+
+## 6. Fractional scales
+
+### 6a. A master column off the output's pixels
+- On a fractional-scale output, set a `MasterFraction` (or a panel size) that makes the
+  master tile's width or height a whole number that is not on the output's device pixels
+  (at 133%, one that is not a multiple of 3); toggle on; toggle off
+- **Expect**: the master is admitted; its frame has the tile's corner and is at most a pixel
+  or two short of the tile; the untoggle returns it to its exact float.
+
+### 6b. A scale whose pixel is not a binary fraction
+- At 125%, 150% or 175%, with a master whose floating frame has a fractional size; toggle
+  on; toggle off; toggle on again
+- **Expect**: the master is admitted, restored to its exact float and admitted again.
 
 ## Execution notes
 

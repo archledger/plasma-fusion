@@ -13,6 +13,9 @@
     untoggles' quiet second - a manual move of an IgnoreApps stack member (it must leave the
     session) and the settle pass recording the joined windows' floats. The python driver
     (tiling_lifecycle_test.py) reads `problems`, `facadeCalls` and `snapshot`.
+    A second scenario (scenario: "released") drives the master a native teardown released
+    without restoring it - returned to its float, left where the user moved it, held while
+    maximized, settled at the next toggle - and the admission's retries.
     Context properties from the driver: packagesRoot (a directory holding
     scripts/plasmafusion-placement), config prefill through the KWin context object.
 */
@@ -27,6 +30,10 @@ Item {
     // Set by the driver for a second run: the fork's facade as an older build has it, without
     // restoreWindow.
     property bool legacyFacade: false
+    // Set by the driver for another run: "released" (runReleased).
+    property string scenario: ""
+    property var steps: []
+    property int stepIndex: 0
     property var problems: []
     property var facadeCalls: []
     property var snapshot: ({})
@@ -83,7 +90,84 @@ Item {
         // The native restore raises and focuses the restored window, which carries the active
         // window and screen to its view; onRestore lets a scenario add to that.
         property var onRestore: null
+        // window internalId -> {target, floating, placedByUser}: the records of masters the
+        // native layer released without restoring them (detach). A window with one cannot be
+        // admitted (busy).
+        property var heldRecords: ({})
+        // window internalId -> the frame a window had when it was admitted: its record's
+        // floating frame, until the record ends.
+        property var floatings: ({})
+        // window internalId -> the frame the admission landed the window on.
+        property var landings: ({})
+        // Where an admission lands the window when that is not the tile's rectangle: the fit
+        // of a window in a tile that is off the output's pixels.
+        property rect fitRect: Qt.rect(0, 0, 0, 0)
+        // How many more settle questions find the window's geometry unsettled: the client
+        // has that many configures left to answer.
+        property int unsettledAnswers: 0
+        // The next admissions' answers, in order (none left: accepted).
+        property var admitAnswers: []
         signal treeChanged()
+        function plain(r) {
+            return { x: r.x, y: r.y, width: r.width, height: r.height };
+        }
+        function same(a, b) {
+            return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+        }
+        // The native layer's detach-only release (a removed desktop or output, a second
+        // window of the app, a move of the master, a re-check of the work area): the window
+        // stays where it stands, its record is held, the tree ends.
+        function detach(w) {
+            const id = String(w.internalId);
+            const held = heldRecords;
+            held[id] = { target: landings[id] || plain(masterRect), floating: floatings[id], placedByUser: false };
+            heldRecords = held;
+            treeAlive = false;
+            treeChanged();
+        }
+        // The user's own move or resize of a released window ended: the native record takes
+        // its mark, and the window says so.
+        function userDragEnded(w) {
+            const held = heldRecords[String(w.internalId)];
+            if (held) {
+                held.placedByUser = true;
+            }
+            w.move = false;
+            w.resize = false;
+            w.interactiveMoveResizeFinished();
+        }
+        // As Window::settleReleasedTransientOwnership answers: 1 nothing to settle, 2 another
+        // provider's, 3 not settled (a pending configure, a drag, or maximized, full screen or
+        // tiled), 4 neither on its floating frame nor placed by the user, 0 settled.
+        function settleWindow(w, token) {
+            const id = String(w.internalId);
+            const held = heldRecords[id];
+            let result = 0;
+            if (!held) {
+                result = 1;
+            } else if (token !== "harness-token") {
+                result = 2;
+            } else if (unsettledAnswers > 0) {
+                unsettledAnswers -= 1;
+                result = 3;
+            } else if (w.fullScreen || w.maximizeMode !== 0 || w.tile || w.move || w.resize) {
+                result = 3;
+            } else if (!same(w.frameGeometry, held.floating) && !(held.placedByUser && !same(w.frameGeometry, held.target))) {
+                result = 4;
+            } else {
+                const records = heldRecords;
+                delete records[id];
+                heldRecords = records;
+                delete floatings[id];
+            }
+            harness.facadeCalls = harness.facadeCalls.concat([{ op: "settleWindow", window: id, result: result }]);
+            return result;
+        }
+        // The record's floating frame, owned or released; null without a record.
+        function floatingFrame(w) {
+            const f = floatings[String(w.internalId)];
+            return f ? Qt.rect(f.x, f.y, f.width, f.height) : Qt.rect(0, 0, 0, 0);
+        }
         function registerProvider(item) {
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "registerProvider" }]);
             return "harness-token";
@@ -123,10 +207,25 @@ Item {
         function admitTile(generation, w, key, token) {
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "admitTile", generation: generation,
                                                                 window: String(w.internalId), key: key, token: token }]);
-            if (landOnAdmit && !refuseAdmit) {
-                w.frameGeometry = masterRect;
+            if (heldRecords[String(w.internalId)]) {
+                return 3; // Busy: the window still has its released record
             }
-            return refuseAdmit ? 7 : 0; // Ineligible : Accepted
+            if (admitAnswers.length > 0) {
+                const answer = admitAnswers[0];
+                admitAnswers = admitAnswers.slice(1);
+                if (answer !== 0) {
+                    return answer;
+                }
+            }
+            if (refuseAdmit) {
+                return 7; // Ineligible
+            }
+            floatings[String(w.internalId)] = plain(w.frameGeometry);
+            if (landOnAdmit) {
+                w.frameGeometry = fitRect.width > 0 ? fitRect : masterRect;
+                landings[String(w.internalId)] = plain(w.frameGeometry);
+            }
+            return 0; // Accepted
         }
         function releaseTile(generation) {
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "releaseTile", generation: generation }]);
@@ -137,6 +236,7 @@ Item {
         }
         function restoreWindow(w) {
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "restoreWindow", window: String(w.internalId) }]);
+            delete floatings[String(w.internalId)]; // the restoration completes the record
             KWinStubs.Workspace.activeWindow = w;
             if (onRestore) {
                 onRestore();
@@ -183,6 +283,10 @@ Item {
             property string desktopFileName: ""
             property string caption: ""
             property var minSize: ({ width: 1, height: 1 })
+            // The user's interactive move or resize in progress, and its end.
+            property bool move: false
+            property bool resize: false
+            signal interactiveMoveResizeFinished()
             signal maximizedAboutToChange(int mode)
             signal maximizedChanged()
             signal requestedGeometryChanged()
@@ -190,6 +294,15 @@ Item {
     }
 
     Component.onCompleted: {
+        if (scenario === "released") {
+            try {
+                runReleased();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
         try {
             run();
         } catch (e) {
@@ -218,7 +331,46 @@ Item {
         }
     }
 
-    function run() {
+    // The scenario's steps: each runs once its own condition holds (the script's retry
+    // timers fire in between), or fails after five seconds without it. A step waits for what
+    // it checks, not for a fixed time, so a loaded machine only makes the run longer.
+    Timer {
+        id: stepper
+        interval: 20
+        repeat: true
+        onTriggered: harness.nextStep()
+    }
+    property double stepSince: 0
+
+    function nextStep() {
+        if (stepIndex >= steps.length) {
+            stepper.stop();
+            snapshot = ({ createTile: calls("createTile").length, admitTile: calls("admitTile").length,
+                          settleWindow: calls("settleWindow").length });
+            done = true;
+            return;
+        }
+        const step = steps[stepIndex];
+        try {
+            if (step.until && !step.until()) {
+                if (Date.now() - stepSince < 5000) {
+                    return;
+                }
+                fail("released: step " + stepIndex + " waited five seconds for: " + step.name);
+            }
+            step.run();
+        } catch (e) {
+            fail("step " + stepIndex + " threw: " + e);
+            stepper.stop();
+            done = true;
+            return;
+        }
+        stepIndex += 1;
+        stepSince = Date.now();
+    }
+
+    // The view, the three windows and the real script; the master's app key, or "" on failure.
+    function setup() {
         const ws = KWinStubs.Workspace;
         // The view: desktop {id: 11}, activity "a", the stub's single screen.
         const desktop = { id: 11 };
@@ -256,13 +408,13 @@ Item {
         const component = Qt.createComponent(base + "main.qml");
         if (component.status !== Component.Ready) {
             fail("main.qml did not load: " + component.errorString());
-            return;
+            return "";
         }
         script = component.createObject(harness);
         const adopted = calls("trackWindow");
         if (adopted.length !== 3) {
             fail("the script adopted and tracked the three open windows (got " + adopted.length + ")");
-            return;
+            return "";
         }
         const masterKey = adopted.find(c => c.window === "master").key;
 
@@ -274,8 +426,18 @@ Item {
         }
         if (!tileShortcut) {
             fail("the Tile Workspace shortcut was not registered");
+            return "";
+        }
+        return masterKey;
+    }
+
+    function run() {
+        const ws = KWinStubs.Workspace;
+        const masterKey = setup();
+        if (masterKey === "") {
             return;
         }
+        const desktop = firstDesktop;
 
         if (legacyFacade) {
             // ---- a facade without restoreWindow: no session, the memory's transport intact ----
@@ -514,6 +676,351 @@ Item {
         winD.output = ws.activeScreen;
     }
 
+
+    // ---- the released master (scenario "released") ----
+    // What the ThinkPad showed after a desktop removal: the stack restored, the master left
+    // at the tile's size and refused (busy) by every later toggle until it closed.
+    function settles(from) {
+        return calls("settleWindow").slice(from).map(c => c.result);
+    }
+    function settledSince(from) {
+        const results = settles(from);
+        return results.length > 0 && results[results.length - 1] === 0;
+    }
+    function masterRecords() {
+        return calls("record").filter(c => c.window === "master");
+    }
+    function lastMasterRecord() {
+        const records = masterRecords();
+        return records.length > 0 ? records[records.length - 1] : null;
+    }
+    function onTile(w) {
+        return rectIs(w.frameGeometry, facade.masterRect.x, facade.masterRect.y, facade.masterRect.width, facade.masterRect.height);
+    }
+    // In a stack cell: the column's x past half the gap, its whole width (run() derives both).
+    function inColumn(w) {
+        return w.frameGeometry.x === 704 && w.frameGeometry.width === 736;
+    }
+    function maximize(w, mode, frame) {
+        w.maximizedAboutToChange(mode);
+        w.maximizeMode = mode;
+        w.frameGeometry = frame;
+        w.maximizedChanged();
+    }
+    function automaticRecords() {
+        return masterRecords().filter(c => rectIs(c, 0, 34, 700, 866) || rectIs(c, 0, 34, 700, 865.75)
+                                           || rectIs(c, 0, 34, 1440, 866) || rectIs(c, 300, 60, 700, 866));
+    }
+
+    function runReleased() {
+        const ws = KWinStubs.Workspace;
+        if (setup() === "") {
+            done = true;
+            return;
+        }
+        // Fast retries: the pacing is the script's own property, the bounds stay bounds.
+        script.settleRetryMillis = 20;
+        script.settleRetryLimit = 5;
+        script.admitRetryMillis = 20;
+        script.admitRetryLimit = 3;
+        facade.landOnAdmit = true;
+        let mark = 0;
+        let admits = 0;
+        let creates = 0;
+        let asked = 0;
+        let since = 0;
+        let twin = null;
+        steps = [
+            { run: function () {
+                // ---- the explicit restore during a session: the native layer is restoring ----
+                // Window Restore on the tiled master ends the tree while the client has not
+                // committed the floating frame yet. The record completes by itself; a request
+                // of the tiler's would replace the restoration.
+                tileShortcut.activated();
+                if (!onTile(master) || !inColumn(winA)) {
+                    fail("released: the session started with the master on its tile");
+                }
+                mark = calls("settleWindow").length;
+                delete facade.floatings.master; // the record is the restoration's from here
+                facade.treeAlive = false;
+                facade.treeChanged();
+                if (JSON.stringify(settles(mark)) !== "[1]" || !onTile(master)) {
+                    fail("released: a master the native layer is restoring is left to it (got " + JSON.stringify(settles(mark))
+                         + ", " + JSON.stringify(master.frameGeometry) + ")");
+                }
+                if (!rectIs(winA.frameGeometry, 700, 120, 300, 320)) {
+                    fail("released: the stack went back to its floats");
+                }
+                master.frameGeometry = Qt.rect(40, 80, 620, 420); // the restoration lands
+
+                // ---- a detach-only release, the master on its fit in the tile: back to its float ----
+                // The tile is off the output's pixels: the window stands a quarter pixel short.
+                facade.fitRect = Qt.rect(0, 34, 700, 865.75);
+                tileShortcut.activated();
+                if (!rectIs(master.frameGeometry, 0, 34, 700, 865.75)) {
+                    fail("released: the admission landed the master on its fit");
+                }
+                mark = calls("settleWindow").length;
+                facade.unsettledAnswers = 2; // the release's configure, then the float's
+                facade.detach(master);
+                if (!rectIs(master.frameGeometry, 40, 80, 620, 420)) {
+                    fail("released: the master went back to its float at once (got " + JSON.stringify(master.frameGeometry) + ")");
+                }
+                if (JSON.stringify(settles(mark)) !== "[3]") {
+                    fail("released: the settle was asked first and found the window unsettled (got " + JSON.stringify(settles(mark)) + ")");
+                }
+                facade.fitRect = Qt.rect(0, 0, 0, 0);
+            } },
+            { name: "the returned master's record settled", until: () => settledSince(mark), run: function () {
+                if (JSON.stringify(settles(mark)) !== "[3,3,0]") {
+                    fail("released: the settle was asked again until the record was settled (got " + JSON.stringify(settles(mark)) + ")");
+                }
+                const record = lastMasterRecord();
+                if (!record || !rectIs(record, 40, 80, 620, 420)) {
+                    fail("released: the frame the master settled at is its record (got " + JSON.stringify(record) + ")");
+                }
+                // ---- the master the user moved: it stays, and its place is recorded ----
+                tileShortcut.activated();
+                if (!onTile(master)) {
+                    fail("released: the settled master was admitted again");
+                }
+                master.move = true; // the drag's first step releases it
+                master.frameGeometry = Qt.rect(500, 200, 600, 400);
+                mark = calls("settleWindow").length;
+                facade.detach(master);
+                if (!rectIs(master.frameGeometry, 500, 200, 600, 400) || JSON.stringify(settles(mark)) !== "[3]") {
+                    fail("released: a master in the user's hand is left there (got " + JSON.stringify(master.frameGeometry)
+                         + ", " + JSON.stringify(settles(mark)) + ")");
+                }
+            } },
+            { name: "the settle attempts during the drag used up", until: () => settles(mark).length >= 5, run: function () {
+                // The drag is held still past the attempts; its end changes no geometry.
+                asked = calls("settleWindow").length;
+                facade.userDragEnded(master);
+            } },
+            { name: "the moved master's record settled", until: () => settledSince(mark), run: function () {
+                if (calls("settleWindow").length !== asked + 1) {
+                    fail("released: the end of the drag asked once more, and that settled it (got " + JSON.stringify(settles(mark)) + ")");
+                }
+                const record = lastMasterRecord();
+                if (!rectIs(master.frameGeometry, 500, 200, 600, 400) || !record || !rectIs(record, 500, 200, 600, 400)) {
+                    fail("released: the place the user chose is the master's floating placement (got " + JSON.stringify(record) + ")");
+                }
+                // ---- released onto another automatic rectangle: back to its float ----
+                // A re-check of the work area asks the master for the tile's rectangle as it
+                // is then; nothing says the user chose that frame.
+                tileShortcut.activated();
+                master.frameGeometry = Qt.rect(300, 60, 700, 866);
+                mark = calls("settleWindow").length;
+                facade.detach(master);
+                if (JSON.stringify(settles(mark)) !== "[4]" || !rectIs(master.frameGeometry, 500, 200, 600, 400)) {
+                    fail("released: a master on a frame of nobody's choice goes back to its float (got "
+                         + JSON.stringify(settles(mark)) + ", " + JSON.stringify(master.frameGeometry) + ")");
+                }
+            } },
+            { name: "the record settled on the float", until: () => settledSince(mark), run: function () {
+                if (JSON.stringify(settles(mark)) !== "[4,0]") {
+                    fail("released: settled once it stood on its float (got " + JSON.stringify(settles(mark)) + ")");
+                }
+                // ---- the user's resize in progress: the master is not taken out of the hand ----
+                // The resize released it and has not changed the frame yet: it still stands
+                // on its tile, and the tiler's return waits for the hand to let go.
+                tileShortcut.activated();
+                master.resize = true;
+                mark = calls("settleWindow").length;
+                facade.detach(master);
+                if (JSON.stringify(settles(mark)) !== "[3]" || !onTile(master)) {
+                    fail("released: a master the user is resizing is not moved (got " + JSON.stringify(settles(mark))
+                         + ", " + JSON.stringify(master.frameGeometry) + ")");
+                }
+                facade.userDragEnded(master); // let go where it started
+            } },
+            { name: "the unresized master's record settled", until: () => settledSince(mark), run: function () {
+                if (!rectIs(master.frameGeometry, 500, 200, 600, 400)) {
+                    fail("released: left on its tile by the user, the master went back to its float (got "
+                         + JSON.stringify(master.frameGeometry) + ")");
+                }
+                // ---- a maximized master: the record is held, then settled when it returns ----
+                tileShortcut.activated();
+                maximize(master, 3, Qt.rect(0, 34, 1440, 866));
+                mark = calls("settleWindow").length;
+                facade.detach(master);
+            } },
+            { name: "the settle attempts on the maximized master used up", until: () => settles(mark).length >= 5, run: function () {
+                asked = calls("settleWindow").length;
+                since = Date.now();
+            } },
+            { name: "the quiet second after the last float restore", until: () => Date.now() - since >= 1150, run: function () {
+                if (calls("settleWindow").length !== asked || JSON.stringify(settles(mark)) !== "[3,3,3,3,3]") {
+                    fail("released: a maximized master is asked about a bounded number of times (got " + JSON.stringify(settles(mark)) + ")");
+                }
+                if (!rectIs(master.frameGeometry, 0, 34, 1440, 866)) {
+                    fail("released: a maximized master is left as it is");
+                }
+                // Unmaximized, it returns to the frame it had before: the tile's.
+                mark = calls("settleWindow").length;
+                maximize(master, 0, facade.masterRect);
+            } },
+            { name: "the unmaximized master's record settled", until: () => settledSince(mark), run: function () {
+                if (JSON.stringify(settles(mark)) !== "[4,0]") {
+                    fail("released: back on its tile, the held master was returned and settled (got " + JSON.stringify(settles(mark)) + ")");
+                }
+                if (!rectIs(master.frameGeometry, 500, 200, 600, 400)) {
+                    fail("released: the held master went back to its float (got " + JSON.stringify(master.frameGeometry) + ")");
+                }
+                // ---- a held record is settled by the next toggle on the window ----
+                tileShortcut.activated();
+                master.move = true;
+                master.frameGeometry = Qt.rect(520, 220, 600, 400);
+                mark = calls("settleWindow").length;
+                facade.detach(master);
+                facade.userDragEnded(master);
+                facade.unsettledAnswers = 100; // a client that does not answer
+            } },
+            { name: "the settle attempts on the unanswered master used up", until: () => settles(mark).length >= 6, run: function () {
+                facade.unsettledAnswers = 0;
+                admits = calls("admitTile").length;
+                tileShortcut.activated();
+                if (calls("admitTile").length !== admits + 1 || !onTile(master) || !inColumn(winA)) {
+                    fail("released: the toggle settled the held record and admitted the window at once (admissions: "
+                         + (calls("admitTile").length - admits) + ")");
+                }
+                const record = lastMasterRecord();
+                if (!record || !rectIs(record, 520, 220, 600, 400)) {
+                    fail("released: the place it was settled at is recorded (got " + JSON.stringify(record) + ")");
+                }
+                tileShortcut.activated(); // untoggle
+                // ---- an admission refused for a state that passes is tried again ----
+                master.frameGeometry = Qt.rect(40, 80, 620, 420);
+                facade.admitAnswers = [7, 7];
+                admits = calls("admitTile").length;
+                tileShortcut.activated();
+                if (calls("admitTile").length !== admits + 1 || inColumn(winA) || facade.treeAlive) {
+                    fail("released: a refused admission starts no session and leaves no tree");
+                }
+            } },
+            { name: "the third admission", until: () => calls("admitTile").length >= admits + 3, run: function () {
+                if (calls("admitTile").length !== admits + 3 || !onTile(master) || !inColumn(winA)) {
+                    fail("released: the admission was tried again until it was accepted (admissions: "
+                         + (calls("admitTile").length - admits) + ")");
+                }
+                tileShortcut.activated(); // untoggle
+                // ---- and the attempts are bounded ----
+                master.frameGeometry = Qt.rect(40, 80, 620, 420);
+                facade.admitAnswers = [7, 7, 7, 7, 7, 7, 7, 7];
+                admits = calls("admitTile").length;
+                tileShortcut.activated();
+            } },
+            { name: "the last admission attempt", until: () => calls("admitTile").length >= admits + 4, run: function () {
+                since = Date.now();
+            } },
+            { name: "time for an attempt too many", until: () => Date.now() - since >= 300, run: function () {
+                if (calls("admitTile").length !== admits + 4 || inColumn(winA) || facade.treeAlive) {
+                    fail("released: the first attempt and three more, then the refusal stands (admissions: "
+                         + (calls("admitTile").length - admits) + ")");
+                }
+                // ---- the shortcut again drops a start that is still being retried ----
+                facade.admitAnswers = [7];
+                creates = calls("createTile").length;
+                tileShortcut.activated(); // refused, to be retried
+                facade.refuseCreate = true;
+                tileShortcut.activated(); // the newer intent, refused outright
+                facade.refuseCreate = false;
+                since = Date.now();
+            } },
+            { name: "time for the dropped retry", until: () => Date.now() - since >= 300, run: function () {
+                if (calls("createTile").length !== creates + 2 || inColumn(winA)) {
+                    fail("released: the retry of the earlier press was dropped (trees asked for: "
+                         + (calls("createTile").length - creates) + ")");
+                }
+                facade.admitAnswers = [];
+                // ---- a released master is not taken into another session's stack ----
+                tileShortcut.activated();
+                if (!onTile(master)) {
+                    fail("released: the master was admitted");
+                }
+                mark = calls("settleWindow").length;
+                facade.unsettledAnswers = 100;
+                facade.detach(master); // returned at once; the client does not answer
+                if (!rectIs(master.frameGeometry, 40, 80, 620, 420)) {
+                    fail("released: the master went back to its float (got " + JSON.stringify(master.frameGeometry) + ")");
+                }
+                ws.activeWindow = winA;
+                tileShortcut.activated(); // a session with another master
+                if (!onTile(winA) || !inColumn(winB) || !rectIs(master.frameGeometry, 40, 80, 620, 420)) {
+                    fail("released: the new session left the unsettled master alone (got " + JSON.stringify(master.frameGeometry) + ")");
+                }
+                tileShortcut.activated(); // untoggle
+                winA.frameGeometry = Qt.rect(700, 120, 300, 320); // the restoration lands
+                ws.activeWindow = master;
+                facade.unsettledAnswers = 0;
+                master.frameGeometry = Qt.rect(42, 82, 620, 420); // a move of the user's: asks again
+                master.frameGeometry = Qt.rect(40, 80, 620, 420);
+            } },
+            { name: "the left-alone master's record settled", until: () => settledSince(mark), run: function () {
+                // ---- a second window of the master's app does not take the master's place ----
+                // The app's record is the master's float. A new window of the app is not
+                // restored onto a spot one of its windows holds, and the master's spot is
+                // where it floats, not the tile it stands on.
+                tileShortcut.activated();
+                twin = mk({ internalId: "twin", resourceClass: "org.fusion.terminal",
+                            desktopFileName: "org.fusion.terminal.desktop",
+                            frameGeometry: Qt.rect(900, 500, 300, 300) });
+                twin.desktops = [firstDesktop];
+                twin.output = ws.activeScreen;
+                stackWindows = stackWindows.concat(twin);
+                ws.windows = [twin, winB, winA, master];
+                ws.windowAdded(twin);
+                tileShortcut.activated(); // untoggle
+                if (!rectIs(twin.frameGeometry, 900, 500, 300, 300)) {
+                    fail("released: the app's second window keeps its own place, not the master's float (got "
+                         + JSON.stringify(twin.frameGeometry) + ")");
+                }
+                // ---- sent to another output: back to the float the record carried along ----
+                // The native record's floating frame follows the window; the frame the tiler
+                // saved before the admission is on the screen the window left.
+                const first = ws.activeScreen;
+                const second = { name: "Virtual-2", geometry: Qt.rect(1440, 0, 1280, 800), devicePixelRatio: 1 };
+                ws.screens = [first, second];
+                tileShortcut.activated();
+                master.output = second;
+                master.frameGeometry = Qt.rect(1740, 34, 700, 866);
+                facade.floatings.master = { x: 1500, y: 100, width: 620, height: 420 };
+                mark = calls("settleWindow").length;
+                facade.detach(master);
+                if (JSON.stringify(settles(mark)) !== "[4]" || !rectIs(master.frameGeometry, 1500, 100, 620, 420)) {
+                    fail("released: a master sent to another output goes to the record's floating frame there (got "
+                         + JSON.stringify(settles(mark)) + ", " + JSON.stringify(master.frameGeometry) + ")");
+                }
+            } },
+            { name: "the transferred master's record settled", until: () => settledSince(mark), run: function () {
+                const record = lastMasterRecord();
+                if (!record || !rectIs(record, 1500, 100, 620, 420)) {
+                    fail("released: the float on the other output is the record now (got " + JSON.stringify(record) + ")");
+                }
+                // ---- a floating frame on a display that is gone is never applied ----
+                master.output = ws.activeScreen;
+                master.frameGeometry = Qt.rect(40, 80, 620, 420);
+                tileShortcut.activated();
+                ws.screens = [ws.activeScreen]; // the second display is unplugged
+                master.frameGeometry = Qt.rect(300, 60, 700, 866);
+                facade.floatings.master = { x: 1500, y: 100, width: 620, height: 420 };
+                mark = calls("settleWindow").length;
+                facade.detach(master);
+            } },
+            { name: "the settle attempts without a float to return to used up", until: () => settles(mark).length >= 5, run: function () {
+                if (!rectIs(master.frameGeometry, 300, 60, 700, 866)) {
+                    fail("released: a master whose float is on a display that is gone stays where it is (got "
+                         + JSON.stringify(master.frameGeometry) + ")");
+                }
+                if (automaticRecords().length !== 0) {
+                    fail("released: no automatic rectangle of the master was ever recorded (got " + JSON.stringify(automaticRecords()) + ")");
+                }
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
 
     function runLate() {
         const ws = KWinStubs.Workspace;
