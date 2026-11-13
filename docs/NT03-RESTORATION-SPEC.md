@@ -84,7 +84,14 @@ origin is treated as automatic.
 The record's floating frame is available to the policy (`Window::transientFloatingFrame`,
 the facade's `floatingFrame(window)`) and follows the window's screen: on a transfer to
 another output, and when the re-check moves the window off an output that was removed or
-resized.
+resized. Its size was on the pixels of the output it was taken on. On an output of another
+scale it is not (560.25x521.25 from a 133% output is no size of a window on whole pixels):
+a request for it would never be the frame and the window's geometry would never settle. The
+policy is therefore given the frame as the window takes it where it is now
+(`Window::transientFloatingImage`: the same corner, the size taken to that output's pixels
+and to the client's grid and back, as a request and its commit take it), and a window that
+stands on that image stands on its floating frame. On the output the frame was taken on,
+and on any output whose pixels it is on, the image is the frame itself.
 
 The writer finalizes as it does for a completed restoration: a deferred update for the key
 is applied, else the entry stays. The results are `Settled` (0), `NotReleased` (1),

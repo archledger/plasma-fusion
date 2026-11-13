@@ -66,8 +66,9 @@ paths and everything only a compositor can prove.
 ### 1g. The master sent to another output
 - With two outputs, toggle on; send the master to the other output (Window to Next Screen)
 - **Expect**: the session ends; the master stands on the other output at its floating size
-  (its floating frame, carried over), not at the tile's size; that frame is recorded; a
-  later toggle on it there is admitted.
+  (its floating frame, carried over), not at the tile's size - on an output of another
+  scale at that size on that output's pixels (560.25x521.25 becomes 560x521 from 133% to
+  100%); that frame is recorded; a later toggle on it there is admitted.
 
 ## 2. Placement-memory matrices
 

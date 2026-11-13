@@ -1701,7 +1701,8 @@ deliberately defers.
     floating frame, as the stack does, by an ordinary request under the `placing` guard and
     the restore's quiet second. The frame is the native record's own
     (`floatingFrame(master)`, which follows the window to another output and off an
-    unplugged one), or the frame saved before the admission on a fork build without it;
+    unplugged one, and on an output of another scale has its size on that output's
+    pixels), or the frame saved before the admission on a fork build without it;
     never one on a display that is gone (`Tiling.touchesScreen`).
   - not settled (3): the client has not answered a configure, the user is still moving or
     resizing the window, or it is maximized, full screen or quick-tiled. A master that still
