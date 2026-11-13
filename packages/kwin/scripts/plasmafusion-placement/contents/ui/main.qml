@@ -525,8 +525,12 @@ Item {
         if (ignoredWindow(w)) {
             return;
         }
-        // The tiler's managed windows are not the user's floating placement (invariant 7).
-        if (tiler.session.active && (w === tiler.session.master || tiler.manages(w))) {
+        // The tiler's managed windows are not the user's floating placement (invariant 7). The
+        // window being admitted is one already: the native admission can land it on the tile
+        // before admitTile returns, the session is not active until then, and a record at that
+        // moment would put the tile into the memory and move the provider's revision under the
+        // admission, which the native layer answers by superseding it and holding the window.
+        if (tiler.admitting === w || (tiler.session.active && (w === tiler.session.master || tiler.manages(w)))) {
             return;
         }
         if (!Placement.eligible(stateOf(w, watched[String(w.internalId)]))) {
@@ -791,6 +795,9 @@ Item {
         // True while the tiler writes its own placements (the relayout, the float restores):
         // those writes must not read as the user's manual moves.
         property bool placing: false
+        // The window inside the native admission call, if any: managed from that moment for
+        // the memory's purposes (record()), before the session exists.
+        property var admitting: null
 
         function detectApi() {
             try {
@@ -938,7 +945,13 @@ Item {
                 }
                 const gen = result.generation;
                 const key = appIdOf(w);
-                const admitResult = api.admitTile(gen, w, key, providerToken);
+                let admitResult = -1;
+                admitting = w;
+                try {
+                    admitResult = api.admitTile(gen, w, key, providerToken);
+                } finally {
+                    admitting = null;
+                }
                 if (admitResult !== 0) { // 0 = Accepted
                     log("tiling: the admission was refused (" + admitResult + ")");
                     api.releaseTile(gen);

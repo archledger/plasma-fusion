@@ -114,18 +114,18 @@ snapshot = harness.property("snapshot")
 snapshot = snapshot.toVariant() if hasattr(snapshot, "toVariant") else snapshot
 for key in ("createTile", "admitTile", "releaseTile", "registerProvider", "trackWindow"):
     counts[key] = (snapshot or {}).get(key)
-# Six accepted sessions (toggle, post-teardown toggle, teardown-proof toggle, the first-desktop
-# session, the invoked-view toggle, the ignored-member toggle) plus one refused create and one
-# tree whose admission was refused; seven admissions, one of them refused; five releases (the
-# run's own un-toggles, the invocation's teardown included, and the refused admission's tree -
-# the native teardown releases nothing, the last session is left standing for the settle pass,
-# and the destruction-time untoggle is outside the snapshot). Five windows tracked: the master
-# and the four the script saw open (the second desktop's master appears only as the tiler's
-# target).
+# Seven accepted sessions (toggle, post-teardown toggle, teardown-proof toggle, the session whose
+# admission lands the master, the first-desktop session, the invoked-view toggle, the
+# ignored-member toggle) plus one refused create and one tree whose admission was refused; eight
+# admissions, one of them refused; six releases (the run's own un-toggles, the invocation's
+# teardown included, and the refused admission's tree - the native teardown releases nothing,
+# the last session is left standing for the settle pass, and the destruction-time untoggle is
+# outside the snapshot). Five windows tracked: the master and the four the script saw open (the
+# second desktop's master appears only as the tiler's target).
 check(counts.get("registerProvider") == 1, "registerProvider once")
-check(counts.get("createTile") == 8, "createTile eight times (6 sessions + 1 refused + 1 refused admission), got %s" % counts.get("createTile"))
-check(counts.get("admitTile") == 7, "admitTile seven times, got %s" % counts.get("admitTile"))
-check(counts.get("releaseTile") == 5, "releaseTile five times, got %s" % counts.get("releaseTile"))
+check(counts.get("createTile") == 9, "createTile nine times (7 sessions + 1 refused + 1 refused admission), got %s" % counts.get("createTile"))
+check(counts.get("admitTile") == 8, "admitTile eight times, got %s" % counts.get("admitTile"))
+check(counts.get("releaseTile") == 6, "releaseTile six times, got %s" % counts.get("releaseTile"))
 check(counts.get("trackWindow") == 7, "trackWindow for the seven windows, got %s" % counts.get("trackWindow"))
 # The mock's releaseTile reports the tree's end before it returns, as the compositor's does. The
 # untoggle has ended its session by then: the run has one native teardown (the scenario that

@@ -1618,7 +1618,10 @@ deliberately defers.
   admitted into the transient tile through `Workspace.transientTiling().createTile()` +
   `admitTile()` with the provider token; the workspace's other eligible windows become the
   stack, their pre-tiling floats saved, placed by direct `frameGeometry` writes in the
-  endpoint-rounded column (the snap script's discipline: `Tiling.stackRects`).
+  endpoint-rounded column (the snap script's discipline: `Tiling.stackRects`). The window
+  inside the admission call is already managed for the memory (`tiler.admitting`): the native
+  admission can land it on the tile before `admitTile` returns, and a record there would put
+  the tile into the memory and move the provider's revision under the admission.
 - **Toggle off**: the stack windows return to their saved floats; the master restores through
   the native explicit restore (the facade's `restoreWindow(master)` — Meta+Backspace's action
   for that window; the scripting `Workspace` has no slot for it, and a first version that

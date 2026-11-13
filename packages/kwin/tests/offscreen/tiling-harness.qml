@@ -73,6 +73,10 @@ Item {
         id: facade
         property bool refuseCreate: false
         property bool refuseAdmit: false
+        // The native admission can land the window on the tile before it returns (a client
+        // whose size already fits needs no configure): the mock then moves the window inside
+        // admitTile.
+        property bool landOnAdmit: false
         property bool treeAlive: false
         property int nextGeneration: 0
         property rect masterRect: Qt.rect(0, 34, 700, 866)
@@ -119,6 +123,9 @@ Item {
         function admitTile(generation, w, key, token) {
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "admitTile", generation: generation,
                                                                 window: String(w.internalId), key: key, token: token }]);
+            if (landOnAdmit && !refuseAdmit) {
+                w.frameGeometry = masterRect;
+            }
             return refuseAdmit ? 7 : 0; // Ineligible : Accepted
         }
         function releaseTile(generation) {
@@ -429,6 +436,22 @@ Item {
             fail("a refused admission writes no geometry");
         }
         facade.refuseAdmit = false;
+
+        // ---- the admission lands the master before it returns: nothing is recorded ----
+        // The session is not active inside admitTile, and the master's frame is the tile by
+        // then. A record there would put the tile into the memory (invariant 7) and move the
+        // provider's revision under the admission.
+        facade.landOnAdmit = true;
+        const recordsBeforeLanding = calls("record").length;
+        tileShortcut.activated();
+        if (calls("record").length !== recordsBeforeLanding) {
+            fail("the window being admitted is not recorded (got " + JSON.stringify(calls("record").slice(recordsBeforeLanding)) + ")");
+        }
+        if (!rectIs(master.frameGeometry, facade.masterRect.x, facade.masterRect.y, facade.masterRect.width, facade.masterRect.height)) {
+            fail("the mock landed the master on the tile inside admitTile");
+        }
+        facade.landOnAdmit = false;
+        tileShortcut.activated(); // untoggle it
 
         // ---- the invoked view survives the untoggle of another view's session ----
         // A session on the first desktop, then a second desktop with its own window; the
