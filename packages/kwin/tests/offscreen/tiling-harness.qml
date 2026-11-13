@@ -264,6 +264,7 @@ Item {
             nextGeneration += 1;
             treeAlive = true;
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "createTile", generation: nextGeneration,
+                                                                output: output && output.name !== undefined ? String(output.name) : "",
                                                                 desktop: desktop && desktop.id !== undefined ? desktop.id : String(desktop),
                                                                 x: rect.x, y: rect.y, width: rect.width, height: rect.height,
                                                                 stackAtCreate: stackAtCreate }]);
@@ -1236,11 +1237,29 @@ Item {
                 }
                 facade.entryRule = false;
                 ws.activeWindow = master;
+                // ---- the screen a press tiles is the active window's own ----
+                // The active screen is where the window was when it was activated. On
+                // hardware the active window had been moved to the other screen by a script,
+                // the tile was made on the screen it had left, and the admission of a window
+                // of another screen was refused (7): the press did nothing.
+                second = { name: "Virtual-2", geometry: Qt.rect(1440, 0, 1280, 800), devicePixelRatio: 1 };
+                ws.screens = [ws.activeScreen, second];
+                const home = master.output;
+                master.output = second;
+                master.frameGeometry = Qt.rect(1500, 100, 620, 420);
+                tileShortcut.activated();
+                const made = calls("createTile");
+                if (made[made.length - 1].output !== "Virtual-2" || !master.tile || inColumn(winA) || inColumn(winB)) {
+                    fail("released: a press tiles the screen its window is on, with that screen's windows (the tile on '"
+                         + made[made.length - 1].output + "', the master " + (master.tile ? "admitted" : "not admitted") + ")");
+                }
+                tileShortcut.activated();
+                master.output = home;
+                master.frameGeometry = Qt.rect(40, 80, 620, 420);
+                ws.activeWindow = master;
                 // ---- sent to another output: back to the float the record carried along ----
                 // The native record's floating frame follows the window; the frame the tiler
                 // saved before the admission is on the screen the window left.
-                second = { name: "Virtual-2", geometry: Qt.rect(1440, 0, 1280, 800), devicePixelRatio: 1 };
-                ws.screens = [ws.activeScreen, second];
                 tileShortcut.activated();
                 master.output = second;
                 master.frameGeometry = Qt.rect(1740, 34, 700, 866);

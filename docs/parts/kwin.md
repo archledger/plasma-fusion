@@ -1039,7 +1039,9 @@ Offline (laptop):
    not while KWin still asks for the float), the app's remembered place being another
    window's (the mock's writer admits a window only from the app's entry: the toggle records
    the master's own place first; nothing is recorded beside another window of the app, of a
-   window on the tile's rectangle, or in the quiet second), a master sent to another output
+   window on the tile's rectangle, or in the quiet second), a press with the active window
+   on a screen other than KWin's active one (that window's screen is tiled), a master sent
+   to another output
    (returned to the float the record carried there), a float on a display that is gone
    (never applied, then applied when the display is back), a released master and a tiled
    master that close and are destroyed (the mock refuses a destroyed window as the
@@ -1635,7 +1637,11 @@ deliberately defers.
 
 ### How it works (Option A, the anchor approach)
 
-- **Toggle on** ("Plasma Fusion: Tile Workspace"): the active window becomes the master —
+- **Toggle on** ("Plasma Fusion: Tile Workspace"): the active window becomes the master, and
+  the screen that is tiled is that window's own (`viewOutput`), not KWin's active screen:
+  the active screen is where the window stood when it was activated, a window moved to
+  another screen since (a script's move, a rule's) leaves it behind, and a tile made there
+  admits no window of another screen (on hardware the press did nothing, 7). The master is
   admitted into the transient tile through `Workspace.transientTiling().createTile()` +
   `admitTile()` with the provider token; the workspace's other eligible windows become the
   stack, their pre-tiling floats saved, placed by direct `frameGeometry` writes in the

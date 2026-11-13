@@ -1212,13 +1212,22 @@ Item {
         // to the old session's view - the new session must tile the view the shortcut was
         // invoked on, not where the teardown looked last. The focus goes back to the window
         // the shortcut was invoked on, too: the new master, or the window the user was in.
+        // The screen a press of the shortcut tiles: the active window's own. KWin's active
+        // screen is where the window stood when it was activated, and a window moved to
+        // another screen since then (a script's move, a rule's) leaves it behind; a tile
+        // made there admits no window of another screen. On hardware such a press did
+        // nothing (7), on the virtual second screen of the re-entry tests among others.
+        function viewOutput(w) {
+            return w && w.output ? w.output : Workspace.activeScreen;
+        }
+
         function toggle() {
             // The shortcut again is the newer intent: a start still being retried is dropped.
             cancelPendingStart();
             if (session.active) {
                 const invoked = { window: Workspace.activeWindow, desktop: Workspace.currentDesktop,
                                   activity: String(Workspace.currentActivity),
-                                  output: Workspace.activeScreen };
+                                  output: viewOutput(Workspace.activeWindow) };
                 const same = Tiling.sameView(session, invoked.desktop, invoked.activity, invoked.output);
                 untoggle();
                 if (!same) {
@@ -1261,7 +1270,7 @@ Item {
                 log("tiling: the active window is not eligible");
                 return;
             }
-            const output = invoked ? invoked.output : Workspace.activeScreen;
+            const output = invoked ? invoked.output : viewOutput(w);
             const desktop = invoked ? invoked.desktop : Workspace.currentDesktop;
             const activity = invoked ? invoked.activity : String(Workspace.currentActivity);
             if (!output || !desktop) {
