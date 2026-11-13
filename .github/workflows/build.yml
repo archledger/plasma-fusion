@@ -112,6 +112,9 @@ jobs:
       - name: Device tools' --help prints the usage only
         run: tools/device/tests/help-unit.sh
 
+      - name: plasma-fusion status names the profile and the compositor's capabilities (stand-ins)
+        run: tools/tests/status-unit.sh build/status-unit
+
       - name: Setup search keys (launcher and KRunner)
         run: tools/device/tests/launcher-keys-unit.sh build/launcher-keys
 

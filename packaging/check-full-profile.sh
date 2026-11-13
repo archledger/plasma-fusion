@@ -42,4 +42,35 @@ if rpmspec --define 'fedora 44' --with full -q "$spec" >/dev/null 2>&1; then
 else
   echo "ok   full without a pin fails the build"
 fi
+# The profile's record (plasma-fusion status reads it): written by a full build only, with the
+# pin and the fork tag it is built from, and shipped by the metapackage only.
+record() { # DESC EXPECTED ARGS...: the record's two lines as %install writes them
+  local desc=$1 expected=$2 body got
+  shift 2
+  body=$(rpmspec --define 'fedora 44' "$@" -P "$spec" 2>/dev/null |
+    sed -n "/^pin='/,/full-profile\$/p")
+  if [ -z "$body" ]; then
+    got=
+  else
+    got=$(buildroot=$(mktemp -d) && eval "$(printf '%s\n' "$body" | sed "s#>.*/plasma-fusion/full-profile#>$buildroot/record#")" &&
+      tr '\n' ' ' <"$buildroot/record" && rm -rf "$buildroot")
+  fi
+  if [ "$got" = "$expected" ]; then
+    echo "ok   $desc"
+  else
+    echo "FAIL $desc: expected '$expected', got '$got'"
+    rc=1
+  fi
+}
+record "a full build writes the pin and its fork tag" "kwin=6.8.2-3.fc44.pf2 tag=v6.8.2-pf2 " --with full --define 'kwin_full_pin 6.8.2-3.fc44.pf2'
+record "a two-digit pf suffix gives its tag" "kwin=6.8.2-3.fc44.pf10 tag=v6.8.2-pf10 " --with full --define 'kwin_full_pin 6.8.2-3.fc44.pf10'
+record "a stock build writes no record" ""
+files=$(rpmspec --define 'fedora 44' --with full --define 'kwin_full_pin 6.8.2-3.fc44.pf2' -P "$spec" 2>/dev/null |
+  awk '/^%files full$/{p=1; next} /^%files/{p=0} p' | grep -c '/plasma-fusion/full-profile$' || true)
+if [ "$files" = 1 ]; then
+  echo "ok   the metapackage ships the record"
+else
+  echo "FAIL the metapackage ships the record: found x$files in its file list"
+  rc=1
+fi
 exit "$rc"

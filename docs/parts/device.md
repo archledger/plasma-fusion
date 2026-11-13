@@ -44,7 +44,7 @@ to itself (`../share/plasma-fusion`), so the same script serves `/usr` and a Nix
 |---|---|
 | `plasma-fusion setup [OPTIONS]` | `fusion-config.sh OPTIONS` in the session |
 | `plasma-fusion update` | `fusion-config.sh` without options (keeps the user's choices) |
-| `plasma-fusion status` | version, each compiled part and what it was built against (a part built against another KWin than the running one is named), the tested Plasma series, the version this account was set up with, per-user copies that hide the package, the login check's status |
+| `plasma-fusion status` | version, each compiled part and what it was built against (a part built against another KWin than the running one is named), the tested Plasma series, the profile (stock, or full with the pinned KWin and its fork tag), what the running KWin advertises of the fork's capabilities, the version this account was set up with, per-user copies that hide the package, the login check's status |
 | `plasma-fusion restore [OPTIONS]` | `fusion-restore.sh` (by default the state before Plasma Fusion; `--latest`, `--list`) |
 | `plasma-fusion drop-user-copy` | moves the per-user copies of the package's files (`items.txt`, from an earlier `--install`) and `~/.local/libexec/plasma-fusion` to `~/.local/state/plasma-fusion/user-copy-<UTC>/` and prints how to put them back; Plasma prefers `~/.local/share`, so without this a package update would not show |
 | `plasma-fusion version` | the package version |
