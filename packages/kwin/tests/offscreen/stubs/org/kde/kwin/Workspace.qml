@@ -31,12 +31,6 @@ QtObject {
     // harness installs its mock here; the placement script and the tiler probe it through
     // transientTiling().
     property var transientTilingImpl: null
-    // The explicit restore (Meta+Backspace's path) the tiler's untoggle asks for; counted.
-    // onSlotRestore lets a harness emulate KWin's activation side effects during the restore
-    // (activating the old master can carry the current desktop and screen to its view).
-    property int slotWindowRestoreCalls: 0
-    property var onSlotRestore: null
-
     signal windowAdded(var window)
     signal windowRemoved(var window)
     signal windowActivated(var window)
@@ -75,11 +69,5 @@ QtObject {
         sentTo = o;
         if (screenTransfer) screenTransfer(w, o);
         w.output = o;
-    }
-    function slotWindowRestore() {
-        slotWindowRestoreCalls++;
-        if (onSlotRestore) {
-            onSlotRestore();
-        }
     }
 }

@@ -18,7 +18,7 @@ vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m,
 const { masterFraction, masterTileRect, stackRects, feasibleInCell, createSession,
         eligibleForMaster, stackCandidates, dormantCandidates, eligibleDormant, layoutStack,
         focusOrder, nextInCycle, previousInCycle, saveFloats, onWorkspace, desktopMatches,
-        sameView, floatRestores, isOwnCell } = globalThis;
+        sameView, floatRestores, isOwnCell, cellSlack } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const windowWith = (over) => Object.assign({
@@ -81,6 +81,20 @@ assert.ok(eligibleForMaster(windowWith()));
 assert.ok(!eligibleForMaster(windowWith({ fullScreen: true })), "fullscreen refused");
 assert.ok(!eligibleForMaster(windowWith({ tile: { some: "tile" } })), "tiled refused");
 assert.ok(!eligibleForMaster(windowWith({ resizeable: false })), "not resizable refused");
+assert.ok(!eligibleForMaster(windowWith({ skipTaskbar: true })), "a window out of the taskbar is not the user's to tile");
+assert.ok(!eligibleForMaster(windowWith({ skipSwitcher: true })), "nor one out of the window switcher");
+{
+    // The XWayland Video Bridge keeps an invisible normal window mapped on the desktop: on
+    // the ThinkPad it took a stack cell, and the whole column once the others had left.
+    const master = windowWith({});
+    const dolphin = windowWith({});
+    const bridge = windowWith({ skipTaskbar: true, skipSwitcher: true });
+    assert.deepStrictEqual(stackCandidates([bridge, dolphin, master], master, "1", ""), [dolphin],
+        "the bridge is not a stack candidate");
+    const minimizedBridge = windowWith({ skipTaskbar: true, skipSwitcher: true, minimized: true });
+    assert.deepStrictEqual(dormantCandidates([minimizedBridge, master], master, "1", ""), [],
+        "nor a member-to-be when minimized");
+}
 
 // ---------------------------------------------------------------- the candidates
 
@@ -309,6 +323,24 @@ assert.ok(isOwnCell(rect(600, 0, 400, 300), rect(600, 0, 400, 300)), "the assign
 assert.ok(!isOwnCell(rect(600, 0, 400, 300), rect(601, 0, 400, 300)), "a moved frame");
 assert.ok(!isOwnCell(rect(600, 0, 400, 300), rect(600, 0, 399, 300)), "a resized frame");
 assert.ok(!isOwnCell(null, rect(600, 0, 400, 300)), "no cell assigned");
+// On a fractional scale the frame that lands is the cell as KWin snaps it, not the cell. The
+// ThinkPad's 133% output: a 718 px cell landed 717.75 px wide and a 280 px one 280.5 px high
+// under a 50.25 px title bar, an X11 window's position moved to the device pixel too, and the
+// tiler read each as the user's hand at every session start.
+assert.ok(isOwnCell(rect(722, 327, 718, 280), rect(722, 327, 717.75, 280.5), cellSlack(4 / 3)), "the cell as a 133% output lands it");
+assert.ok(isOwnCell(rect(722, 34, 718, 866), rect(722.25, 33.75, 717.75, 866.25), cellSlack(4 / 3)), "an X11 window's snapped position too");
+assert.ok(!isOwnCell(rect(722, 327, 718, 280), rect(722, 327, 716, 280), cellSlack(4 / 3)), "two pixels narrower is the user's resize");
+assert.ok(!isOwnCell(rect(722, 327, 718, 280), rect(724, 327, 718, 280), cellSlack(4 / 3)), "two pixels aside is the user's move");
+assert.ok(isOwnCell(rect(600, 0, 400, 300), rect(600, 0, 400, 300.5), cellSlack(2)), "half a pixel under a fractional title bar at 200%");
+assert.ok(isOwnCell(rect(722, 34, 718, 866), rect(722, 34, 718 + 2 / 3, 866), cellSlack(0.75)), "a 75% output snaps too");
+assert.ok(!isOwnCell(rect(600, 0, 400, 300), rect(600.5, 0, 400, 300), cellSlack(1)), "no slack on a scale of 1");
+assert.ok(!isOwnCell(rect(600, 0, 400, 300), rect(600.5, 0, 400, 300)), "nor without one given");
+assert.strictEqual(cellSlack(1), 0);
+assert.strictEqual(cellSlack(2), 1);
+assert.ok(Math.abs(cellSlack(4 / 3) - 1.25) < 1e-9);
+assert.ok(Math.abs(cellSlack(0.75) - (0.5 + 4 / 3)) < 1e-9, "a scale below 1 has a coarser grid, not none");
+assert.strictEqual(cellSlack(undefined), 0, "an output without a scale is a scale of 1");
+assert.strictEqual(cellSlack(0), 0);
 
 // The toggle's view comparison: the desktop AND the activity AND the output. The session is
 // per-workspace and per-screen everywhere else (onWorkspace); the toggle must read the same

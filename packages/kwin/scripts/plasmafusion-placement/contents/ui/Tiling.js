@@ -65,11 +65,20 @@ function createSession() {
              activity: "" };
 }
 
+// A window that keeps itself out of the taskbar or the window switcher is not one the user
+// arranges, and the tiler leaves it alone as the tablet and snap scripts do. The XWayland
+// Video Bridge keeps an invisible normal window mapped on the desktop (skip-taskbar,
+// skip-switcher, opacity 0): as a stack member it took a cell, and the whole column once the
+// others had left.
+function userWindow(w) {
+    return !w.skipTaskbar && !w.skipSwitcher;
+}
+
 // Toggle on: the eligibility checks, then the layout.
 function eligibleForMaster(w) {
     return w && !w.deleted && w.normalWindow && !w.transient && !w.modal
         && w.moveable && w.resizeable && !w.fullScreen && !w.tile
-        && !w.minimized && w.maximizeMode === 0;
+        && !w.minimized && w.maximizeMode === 0 && userWindow(w);
 }
 
 function eligibleForStack(w) {
@@ -152,7 +161,7 @@ function sameView(session, desktop, activity, output) {
 // restore, and a relayout must never overwrite it, so those are strangers too.
 function eligibleDormant(w) {
     return w && !w.deleted && w.normalWindow && !w.transient && !w.modal && w.moveable
-        && w.resizeable && w.minimized && !w.fullScreen && !w.tile;
+        && w.resizeable && w.minimized && !w.fullScreen && !w.tile && userWindow(w);
 }
 
 // The workspace's minimized windows at session start: not stack candidates (they are out of
@@ -187,12 +196,27 @@ function floatRestores(floated, savedFloats, cellRects) {
     return out;
 }
 
+// How far the frame KWin lands can be from the whole-pixel rectangle the tiler asked for, on
+// each of x, y, width and height, for a pixel grid of the given scale. On a scale of 1 it is the
+// rectangle. On any other, KWin snaps the frame to device pixels (half a device pixel), gives
+// the client a whole logical size under its decoration (half a logical pixel) and snaps what the
+// client commits again: a 718 px cell is a 717.75 px frame at 133%, a 280 px one 280.5 px under
+// a 50.25 px title bar, a 718 px one 718.67 px at 75%.
+function cellSlack(scale) {
+    const s = Number(scale);
+    return s > 0 && s !== 1 ? 0.5 + 1 / s : 0;
+}
+
 // Whether a frame is the tiler's own placement landing on the cell it assigned: the
-// synchronous write or the client's late commit of it. Anything else is the user's hand.
-function isOwnCell(cell, frame) {
-    return !!cell && !!frame
-        && frame.x === cell.x && frame.y === cell.y
-        && frame.width === cell.width && frame.height === cell.height;
+// synchronous write or the client's late commit of it, within the slack the pixel grids in use
+// allow (cellSlack; none by default). Anything else is the user's hand.
+function isOwnCell(cell, frame, slack) {
+    if (!cell || !frame) {
+        return false;
+    }
+    const allowed = (Number(slack) || 0) + 1e-6;
+    return Math.abs(frame.x - cell.x) <= allowed && Math.abs(frame.y - cell.y) <= allowed
+        && Math.abs(frame.width - cell.width) <= allowed && Math.abs(frame.height - cell.height) <= allowed;
 }
 
 // Layout the stack: feasible windows get cells; infeasible windows float (the safe state).

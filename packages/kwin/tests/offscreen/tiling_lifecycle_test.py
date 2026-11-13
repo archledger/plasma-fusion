@@ -17,7 +17,7 @@ tree's .local/share/kwin.
 import os
 import sys
 
-from PySide6.QtCore import QObject, QTimer, QUrl, Slot
+from PySide6.QtCore import QObject, QTimer, QUrl, Slot, qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 
@@ -61,6 +61,16 @@ def check(condition, message):
         failures.append(message)
 
 
+# The script's own journal lines (console.info), kept for the teardown count below and passed on.
+messages = []
+
+
+def keep_message(mode, context, message):
+    messages.append(message)
+    print(message, file=sys.stderr)
+
+
+qInstallMessageHandler(keep_message)
 app = QGuiApplication(sys.argv[:1])
 engine = QQmlEngine()
 engine.addImportPath(os.path.join(here, "stubs"))
@@ -76,22 +86,23 @@ if component.status() != QQmlComponent.Ready:
     print("FAIL tiling_lifecycle_test.py: the harness did not load: "
           + "; ".join(e.toString() for e in component.errors()))
     sys.exit(1)
-harness = component.create()
+def run_harness(initial=None):
+    """One harness instance run to its end, past the script's 1 s settling timer."""
+    instance = component.createWithInitialProperties(initial) if initial else component.create()
+
+    def poll():
+        if instance.property("done"):
+            QTimer.singleShot(1300, app.quit)
+        else:
+            QTimer.singleShot(50, poll)
+
+    QTimer.singleShot(50, poll)
+    app.exec()
+    return instance
 
 
-def finish():
-    app.quit()
-
-
-def poll():
-    if harness.property("done"):
-        QTimer.singleShot(1300, finish)  # past the script's 1 s settling timer
-    else:
-        QTimer.singleShot(50, poll)
-
-
-QTimer.singleShot(50, poll)
-app.exec()
+harness = run_harness()
+teardowns = sum("tiling: off (native teardown)" in message for message in messages)
 
 problems = list(harness.property("problems").toVariant() or [])
 facade_calls = list(harness.property("facadeCalls").toVariant() or [])
@@ -104,16 +115,22 @@ snapshot = snapshot.toVariant() if hasattr(snapshot, "toVariant") else snapshot
 for key in ("createTile", "admitTile", "releaseTile", "registerProvider", "trackWindow"):
     counts[key] = (snapshot or {}).get(key)
 # Six accepted sessions (toggle, post-teardown toggle, teardown-proof toggle, the first-desktop
-# session, the invoked-view toggle, the ignored-member toggle) plus one refused create; six
-# admissions; four releases (the run's own un-toggles, the invocation's teardown included - the
-# native teardown releases nothing, the last session is left standing for the settle pass, and
-# the destruction-time untoggle is outside the snapshot). Five windows tracked: the master and
-# the four the script saw open (the second desktop's master appears only as the tiler's target).
+# session, the invoked-view toggle, the ignored-member toggle) plus one refused create and one
+# tree whose admission was refused; seven admissions, one of them refused; five releases (the
+# run's own un-toggles, the invocation's teardown included, and the refused admission's tree -
+# the native teardown releases nothing, the last session is left standing for the settle pass,
+# and the destruction-time untoggle is outside the snapshot). Five windows tracked: the master
+# and the four the script saw open (the second desktop's master appears only as the tiler's
+# target).
 check(counts.get("registerProvider") == 1, "registerProvider once")
-check(counts.get("createTile") == 7, "createTile seven times (6 sessions + 1 refused), got %s" % counts.get("createTile"))
-check(counts.get("admitTile") == 6, "admitTile six times, got %s" % counts.get("admitTile"))
-check(counts.get("releaseTile") == 4, "releaseTile four times, got %s" % counts.get("releaseTile"))
+check(counts.get("createTile") == 8, "createTile eight times (6 sessions + 1 refused + 1 refused admission), got %s" % counts.get("createTile"))
+check(counts.get("admitTile") == 7, "admitTile seven times, got %s" % counts.get("admitTile"))
+check(counts.get("releaseTile") == 5, "releaseTile five times, got %s" % counts.get("releaseTile"))
 check(counts.get("trackWindow") == 7, "trackWindow for the seven windows, got %s" % counts.get("trackWindow"))
+# The mock's releaseTile reports the tree's end before it returns, as the compositor's does. The
+# untoggle has ended its session by then: the run has one native teardown (the scenario that
+# ends the tree behind the script's back), not one more for every release the script asked for.
+check(teardowns == 1, "one native teardown in the run, got %s" % teardowns)
 
 # Invariant 7, the ignore policy and the float record, after the settling pass fired: the only
 # records are the live-joined windows' saved floats (c, d and g at their open geometries) -
@@ -124,6 +141,19 @@ expected_floats = {("c", 300, 500, 260, 260), ("d", 200, 300, 240, 200), ("g", 4
 got_floats = {(c["window"], c["x"], c["y"], c["width"], c["height"]) for c in recorded}
 check(got_floats == expected_floats,
       "only the joined windows' floats were recorded (a cell, an ignored app and a late commit never were): got %s" % sorted(got_floats))
+
+# A second run against the facade of a fork build from before restoreWindow: the tiler stays off
+# (it could start a session and never end it) and says so, and the placement memory keeps its
+# native transport.
+older = run_harness({"legacyFacade": True})
+for problem in list(older.property("problems").toVariant() or []):
+    failures.append("older facade: " + str(problem))
+older_counts = older.property("snapshot")
+older_counts = older_counts.toVariant() if hasattr(older_counts, "toVariant") else older_counts
+check((older_counts or {}).get("createTile") == 0, "older facade: no tree was created")
+check((older_counts or {}).get("trackWindow") == 3, "older facade: the three open windows were tracked natively")
+check(any("the native facade has no restoreWindow" in message for message in messages),
+      "older facade: the tiler said why it stays off")
 
 if failures:
     for failure in failures:

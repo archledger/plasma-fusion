@@ -162,7 +162,8 @@ Admission uses this sequence:
    Do not force recording during its quiet period or bypass eligibility/rule checks.
 3. Freeze the key against ordinary updates, drain accepted pending updates through the native
    writer, require explicit sync success, and independently read the existing placement file.
-   Its entry must equal A for the same provider incarnation, revision and native snapshot.
+   Its entry must equal the memory's image of A (below) for the same provider incarnation,
+   revision and native snapshot.
    Otherwise release the tentative reservation and refuse adoption without changing geometry.
    A successful legacy D-Bus reply is insufficient: the read-only control returned `true` with P.
 4. Revalidate the complete native snapshot before any automatic geometry or owner mutation.
@@ -183,8 +184,17 @@ performs restoration. A retained window reference alone does not preserve eligib
 Use exactly `Placement.appId`: desktop-file basename, remove a trailing lowercase `.desktop`,
 then lowercase; fall back to resource class. Preserve its test vectors. Key uniqueness is global
 across all live windows eligible for placement recording, not restricted to the current desktop
-or Activity. A must also be exactly representable by `Placement.valid` without rounding and
-within its size limits. Refuse non-representable fractional A in this proof.
+or Activity. A must be within `Placement.valid`'s size limits.
+
+The memory holds whole logical pixels: `Placement.valid` rounds each of x, y, width and height
+(`Math.round`), and that rounding of A is the memory's image of A
+(`TransientPlacementWriter::memoryFrame` natively, the same rule). The reservation compares the
+entry with the image, and the exact A lives only in the ownership, for the native restore. The
+first proof refused every A that was not whole pixels. On a fractional-scale output a native
+frame rarely is (560.25 x 521.25 at 133%, where the pixel is 0.75), so no KDE window was
+admissible on the ThinkPad. Where this contract says A remains in the memory (owner close,
+compositor interruption), it is the image that remains: a later window is placed from whole
+pixels, up to half a pixel from A on each of x, y, width and height.
 
 While K is reserved, accepted writes for other keys proceed normally. A new eligible instance
 with K, or a relevant identity change, revokes the owner. Legitimate manual record updates from

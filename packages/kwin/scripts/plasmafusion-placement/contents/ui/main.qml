@@ -493,8 +493,9 @@ Item {
         // over it - and that is as true for a window the memory ignores (IgnoreApps) as for
         // one it records: a later relayout would otherwise put an ignored member back in its
         // cell and the untoggle would overwrite its move. The tiler's own writes never read
-        // as this hand: they run under placing, and they land exactly on the cell the layout
-        // assigned (the synchronous write and the client's late commit of it alike).
+        // as this hand: they run under placing, and they land on the cell the layout assigned,
+        // to the output's pixel (the synchronous write and the client's late commit of it
+        // alike; Tiling.isOwnCell).
         if (tiler.manualMoveOf(w)) {
             tiler.detachManual(w);
             log("tiling: a member was moved by hand; it floats");
@@ -784,8 +785,8 @@ Item {
         // windows are unwatched, minimized ones stay watched for the rejoin.
         property var minimizeHandlers: ({})
         // window internalId -> the cell the last layout assigned (the frame the tiler wrote):
-        // a geometry change landing exactly there is the tiler's own write arriving, anything
-        // else is the user's hand moving a stack window.
+        // a geometry change landing there, to the output's pixel, is the tiler's own write
+        // arriving; anything else is the user's hand moving a stack window.
         property var cellRects: ({})
         // True while the tiler writes its own placements (the relayout, the float restores):
         // those writes must not read as the user's manual moves.
@@ -805,6 +806,13 @@ Item {
                     // memory keeps working, as it does through a refused provider.
                     apiAvailable = false;
                     log("tiling: the native facade did not answer; the tiler stays off this session");
+                    return apiAvailable;
+                }
+                if (typeof api.restoreWindow !== "function") {
+                    // A facade that cannot restore the master could start a session and never
+                    // end it (the untoggle is that restore): the tiler stays off instead.
+                    apiAvailable = false;
+                    log("tiling: the native facade has no restoreWindow; the tiler stays off this session");
                     return apiAvailable;
                 }
                 // The native teardown: the facade forwards the controller's treeChanged; a
@@ -856,10 +864,11 @@ Item {
         // invoked on, never by untoggling a desktop the user left behind. The workspace is
         // the desktop and the activity and the output (Tiling.sameView, the session's one
         // scoping rule): a toggle while another screen is the active one tiles that screen.
-        // The invocation's view is captured BEFORE the untoggle: the untoggle activates the
-        // old master for its native restore, and KWin's activation can carry the current
-        // desktop and screen over to the old session's view - the new session must tile the
-        // view the shortcut was invoked on, not where the teardown looked last.
+        // The invocation's view is captured BEFORE the untoggle: the master's native restore
+        // raises and focuses the old master, which carries the active window and screen over
+        // to the old session's view - the new session must tile the view the shortcut was
+        // invoked on, not where the teardown looked last. The focus goes back to the window
+        // the shortcut was invoked on, too: the new master, or the window the user was in.
         function toggle() {
             if (session.active) {
                 const invoked = { window: Workspace.activeWindow, desktop: Workspace.currentDesktop,
@@ -867,10 +876,12 @@ Item {
                                   output: Workspace.activeScreen };
                 const same = Tiling.sameView(session, invoked.desktop, invoked.activity, invoked.output);
                 untoggle();
-                if (same) {
-                    return;
+                if (!same) {
+                    start(invoked);
                 }
-                start(invoked);
+                if (invoked.window && !invoked.window.deleted && Workspace.activeWindow !== invoked.window) {
+                    Workspace.activeWindow = invoked.window;
+                }
                 return;
             }
             start(null);
@@ -1005,18 +1016,30 @@ Item {
                 return;
             }
             restoreStackFloats();
-            // The master's native restore (Meta+Backspace equivalent).
-            if (session.master && !session.master.deleted) {
-                Workspace.activeWindow = session.master;
-                Workspace.slotWindowRestore();
-            }
-            // Release the tree (an empty tree blocks future createTile).
-            if (apiAvailable && api && session.generation > 0) {
-                api.releaseTile(session.generation);
-            }
+            const master = session.master;
+            const generation = session.generation;
+            // The session is over before the native layer is told: releasing the tree reports
+            // treeChanged with no live tree, and onTreeChanged would read that as a native
+            // teardown of the session this untoggle is still ending.
             disconnectMinimizeHandlers();
             session = Tiling.createSession();
             cellRects = {};
+            // The master's native restore: the Window Restore action (Meta+Backspace's path)
+            // for that window, through the facade - the scripting Workspace has no slot for
+            // the action, and it addresses a window, not whichever is active. KWin raises and
+            // focuses the restored window, as the action does. Before the release: the action
+            // restores an owned window, and a released one stays where it stands.
+            try {
+                if (apiAvailable && api && master && !master.deleted) {
+                    api.restoreWindow(master);
+                }
+            } finally {
+                // Release the tree whatever the restore did (a tree left behind blocks every
+                // later createTile, and this session has already ended).
+                if (apiAvailable && api && generation > 0) {
+                    api.releaseTile(generation);
+                }
+            }
             log("tiling: off");
         }
 
@@ -1133,7 +1156,19 @@ Item {
         function manualMoveOf(w) {
             return tiler.session.active && !tiler.placing && tiler.manages(w)
                     && w !== tiler.session.master
-                    && !Tiling.isOwnCell(tiler.cellRects[String(w.internalId)], frameRect(w));
+                    && !Tiling.isOwnCell(tiler.cellRects[String(w.internalId)], frameRect(w), landingSlack());
+        }
+
+        // How far a landed frame may be from its cell: the largest slack over the outputs. A
+        // Wayland window lands on its own output's pixels, an X11 window on Xwayland's scale,
+        // which is not the session output's on a mixed-scale setup.
+        function landingSlack() {
+            let slack = 0;
+            const screens = Workspace.screens || [];
+            for (let i = 0; i < screens.length; ++i) {
+                slack = Math.max(slack, Tiling.cellSlack(screens[i] ? screens[i].devicePixelRatio : 1));
+            }
+            return slack;
         }
 
         // The user's manual move or resize of a stack member: it leaves the session (the
