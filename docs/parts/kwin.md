@@ -1033,8 +1033,9 @@ Offline (laptop):
    the next toggle, the admission's retries (accepted on a later attempt, bounded, dropped
    by a newer press), an unsettled master left out of another session's stack, a second
    window of the master's app keeping its own place, a master sent to another output
-   (returned to the float the record carried there) and a float on a display that is gone
-   (never applied). Each step waits for the condition it checks, not for a fixed time; after the settling second, the joined
+   (returned to the float the record carried there), a float on a display that is gone
+   (never applied) and the script destroyed while a record is held (nothing stays
+   connected). Each step waits for the condition it checks, not for a fixed time; after the settling second, the joined
    windows' saved floats - never a cell - are what the memory recorded (invariant 7), and
    the shortcut invoked on another desktop while a session lives tiles the invoked view even
    though the untoggle's activation carried the current desktop back (the stub emulates that
@@ -1690,7 +1691,9 @@ deliberately defers.
   master is recorded, and a new session leaves it out of its stack. The placement memory
   counts a window the tiler holds where it floats, not on its tile or cell (`siblings`), so
   a second window of the master's app is not restored onto the spot the master returns to.
-  On a fork build without `settleWindow` the tiler leaves the master as before.
+  On a fork build without `settleWindow` the tiler leaves the master as before. When the
+  script goes (disabled, reloaded) the tiler disconnects from the facade and from every
+  released master it still holds: both outlive it.
 - **Live**: new eligible windows on the tiled workspace join the stack (a window with a
   remembered placement keeps it as its saved float: the untoggle returns the app to its
   remembered spot, as the memory would have placed it); a window the stack

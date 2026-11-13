@@ -172,6 +172,12 @@ check(held == 4, "released: four records were held (a drag held still, maximized
 check(refused == 1, "released: one admission stayed refused, after its retries, got %s" % refused)
 check(sum("the tree was refused" in message for message in journal) == 1,
       "released: the newer press was refused once and the dropped retry asked for nothing")
+# The script was destroyed with a master's record held, then the master's drag ended and a tree
+# ended: a callback left connected to the window or to the facade runs in a context that is gone
+# and says so with a TypeError in main.qml. (The engine's own teardown reads the script's
+# settings once more, which is the one such line that is not this.)
+stale = [message for message in journal if "main.qml" in message and "TypeError" in message and "readConfig" not in message]
+check(not stale, "released: nothing of the destroyed script was still connected, got %s" % stale)
 
 if failures:
     for failure in failures:

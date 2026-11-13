@@ -939,6 +939,21 @@ Item {
             delete released[id];
         }
 
+        // The script is going: nothing of the tiler stays connected to a window or to the
+        // facade, both of which outlive it (a held master's drag would otherwise end in a
+        // callback of a script that is gone, and every reload would add one).
+        function disconnectAll() {
+            settleRetry.stop();
+            admitRetry.stop();
+            pendingStart = null;
+            for (const id in released) {
+                forget(id);
+            }
+            if (apiAvailable && api) {
+                api.treeChanged.disconnect(tiler.onTreeChanged);
+            }
+        }
+
         // Whether a window is a released master whose record is not settled yet.
         function holds(w) {
             return !!w && released[String(w.internalId)] !== undefined;
@@ -1665,6 +1680,7 @@ Item {
         if (tiler.session.active) {
             tiler.untoggle();
         }
+        tiler.disconnectAll();
         if (!nativeWriter && Placement.teardownWrite(loaded, revision, sentRevision, sending, sendingRevision)) {
             writeCall.arguments = [writeScript(Placement.serialize(apps))];
             writeCall.call();

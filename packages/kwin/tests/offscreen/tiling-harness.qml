@@ -1016,6 +1016,19 @@ Item {
                 if (automaticRecords().length !== 0) {
                     fail("released: no automatic rectangle of the master was ever recorded (got " + JSON.stringify(automaticRecords()) + ")");
                 }
+                // ---- the script goes while a master's record is held: nothing stays connected ----
+                // The window and the facade outlive the script. The end of a later drag, or a
+                // tree's end, must not call into a script that is gone.
+                script.destroy();
+                since = Date.now();
+            } },
+            { name: "the script's deletion", until: () => Date.now() - since >= 200, run: function () {
+                asked = calls("settleWindow").length;
+                master.interactiveMoveResizeFinished();
+                facade.treeChanged();
+                if (calls("settleWindow").length !== asked) {
+                    fail("released: a script that is gone asks nothing (asked " + (calls("settleWindow").length - asked) + ")");
+                }
             } }
         ];
         stepSince = Date.now();
