@@ -62,6 +62,16 @@ Item {
     // own late repositioning must not churn the record before the window settles.
     readonly property int quietMillis: 1000
 
+    // The script is going (disabled, reloaded, KWin quitting). KWin unloads a declarative
+    // script by deleting the object that owns it, and the first thing that goes with it is the
+    // script's own context, with the KWin object in it: Component.onDestruction runs while that
+    // context is being torn down. Reading the KWin object from there crashed the compositor
+    // (2026-11-14): the tiler's teardown moved a stack window back to its float, the window's
+    // frameGeometryChanged reached the memory's handler, and the handler read a setting. So
+    // from here on no setting is read, and nothing of the script stays connected to answer
+    // what the teardown writes.
+    property bool going: false
+
     readonly property string memoryFile: "plasmafusion-placementrc"
     readonly property string memoryGroup: "Windows"
     readonly property string memoryKey: "windows"
@@ -73,6 +83,12 @@ Item {
     // ---------------------------------------------------------------- settings
 
     function setting(key, fallback) {
+        // The KWin object is a property of the script's own context, which KWin tears down
+        // first when it unloads the script; reading it from the script's teardown crashes the
+        // compositor (see going).
+        if (going) {
+            return fallback;
+        }
         const value = KWin.readConfig(key, fallback);
         if (typeof fallback === "boolean") {
             return value === true || value === "true";
@@ -956,13 +972,13 @@ Item {
         // The native layer ended the session: restore the stack floats, then the master
         // (releaseMaster: the explicit restore is returning it by itself; every other native
         // release left it standing at the tile's size).
-        function nativeTeardown() {
+        function nativeTeardown(members) {
             log("tiling: the tree ended natively; restoring the stack");
             const master = session.master;
             const float = session.masterFloat;
             const tile = session.masterTile;
             const output = session.output;
-            restoreStackFloats();
+            restoreStackFloats(members);
             disconnectMinimizeHandlers();
             session = Tiling.createSession();
             cellRects = {};
@@ -1022,6 +1038,24 @@ Item {
                 if (released[id].w === w) {
                     forget(id);
                 }
+            }
+        }
+
+        // The script is going (see going): every connection of the tiler goes before anything
+        // is written - the members' watches, a released master's drag, the facade's
+        // treeChanged (the release below reports it before it returns) - and the session then
+        // ends with writes nothing of the script answers: the stack back on its saved floats,
+        // the master restored and its tree released through the facade, as the shortcut ends
+        // it. What that end connected for later (a released master's drag, after a native
+        // release in between) goes as well. The memory's own window handlers are gone
+        // before this is called.
+        function teardown() {
+            const members = stackMembers();
+            disconnectMinimizeHandlers();
+            disconnectAll();
+            untoggle(members);
+            for (const id in released) {
+                forget(id);
             }
         }
 
@@ -1166,8 +1200,11 @@ Item {
                     log("tiling: a released master's record is settled");
                     // The frame it settled at is its floating placement: the one it had (the
                     // memory holds it already, unless the window went to another output) or
-                    // the one the user's move gave it.
-                    root.record(entry.w, root.appIdOf(entry.w));
+                    // the one the user's move gave it. Not while the script is going: the
+                    // memory reads its settings to record (see going).
+                    if (!root.going) {
+                        root.record(entry.w, root.appIdOf(entry.w));
+                    }
                 } else if (result !== 1) {
                     log("tiling: a released master's record was not settled (" + result + ")");
                 }
@@ -1518,11 +1555,25 @@ Item {
         // drag offscreen. The minimize watches are the live membership: minimized members are
         // out of the layout but keep their floats, while floated and closed windows were
         // unwatched and their floats dropped with them.
-        function restoreStackFloats() {
+        // The members whose floats the end of a session restores: their ids and windows, read
+        // from the members' watches.
+        function stackMembers() {
+            const out = [];
+            for (const id in minimizeHandlers) {
+                out.push({ id: id, w: minimizeHandlers[id].w });
+            }
+            return out;
+        }
+
+        // members: what stackMembers() gave (the script's teardown reads it before the
+        // members' watches go); the watches as they are otherwise.
+        function restoreStackFloats(members) {
+            const list = members || stackMembers();
             placing = true;
             const screens = screenRects();
-            for (const id in minimizeHandlers) {
-                const w = minimizeHandlers[id].w;
+            for (let i = 0; i < list.length; ++i) {
+                const id = list[i].id;
+                const w = list[i].w;
                 const saved = session.savedFloats[id];
                 if (w && !w.deleted && saved && Placement.onScreen(saved, screens)) {
                     w.frameGeometry = Qt.rect(saved.x, saved.y, saved.width, saved.height);
@@ -1539,7 +1590,9 @@ Item {
             placing = false;
         }
 
-        function untoggle() {
+        // members: the stack's members as the script's teardown read them (teardown);
+        // the members' watches otherwise.
+        function untoggle(members) {
             if (!session.active) {
                 return;
             }
@@ -1549,13 +1602,13 @@ Item {
                 // between). The explicit restore below would find nothing it owns, and the
                 // master would be left at the tile's size with nobody to settle its record.
                 const vacatedTree = session.generation;
-                nativeTeardown();
+                nativeTeardown(members);
                 if (vacatedTree > 0) {
                     api.releaseTile(vacatedTree);
                 }
                 return;
             }
-            restoreStackFloats();
+            restoreStackFloats(members);
             const master = session.master;
             const generation = session.generation;
             // The session is over before the native layer is told: releasing the tree reports
@@ -1920,17 +1973,17 @@ Item {
     // left connected would call into a destroyed context, and every disable/enable cycle would add
     // another.
     Component.onDestruction: {
-        // The tiler's teardown: restore the stack floats before the script dies.
-        if (tiler.session.active) {
-            tiler.untoggle();
+        // See going. Nothing of the script answers anything from here on: the memory's window
+        // handlers go first, then the tiler's own connections, and only then does the
+        // session end (tiler.teardown).
+        going = true;
+        for (const key in watched) {
+            disconnectHandlers(watched[key]);
         }
-        tiler.disconnectAll();
+        tiler.teardown();
         if (!nativeWriter && Placement.teardownWrite(loaded, revision, sentRevision, sending, sendingRevision)) {
             writeCall.arguments = [writeScript(Placement.serialize(apps))];
             writeCall.call();
-        }
-        for (const key in watched) {
-            disconnectHandlers(watched[key]);
         }
     }
 }

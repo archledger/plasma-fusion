@@ -1025,7 +1025,15 @@ Offline (laptop):
    the memory has the window's own place), the native
    `treeChanged`
    teardown (floats back, no release of an ended tree, the next toggle lays out again) and a
-   refused tree (no admission, no geometry write); a further run (`scenario: "released"`)
+   refused tree (no admission, no geometry write); two runs (`scenario: "unload"`) make the
+   script as KWin makes a declarative script - its own context with the `KWin` property,
+   owned with the component and the root object by one object (`KWinScript`) - and unload it
+   the same way, the context first, past the memory's quiet second: once in a live session,
+   once with the master released by the native layer in between. The session's end is all
+   the facade is asked for (`restoreWindow` and `releaseTile`, or the released master's
+   `settleWindow` and `releaseTile`), the stack is back on its float, nothing of the script
+   answers afterwards, and no TypeError or ReferenceError is printed at all (before the
+   teardown's fix the process died with KWin's segmentation fault); a further run (`scenario: "released"`)
    drives the master a native teardown released without restoring it, against a mock of
    `settleWindow` and `floatingFrame` that answers as the fork does: a master the native
    layer is restoring (left to it), one returned from its fit and settled, one in the user's
@@ -1754,6 +1762,23 @@ deliberately defers.
   On a fork build without `settleWindow` the tiler leaves the master as before. When the
   script goes (disabled, reloaded) the tiler disconnects from the facade and from every
   released master it still holds: both outlive it.
+- **The script going mid-session** (disabled in KWin Scripts, reloaded by an update, KWin
+  quitting): KWin unloads a declarative script by deleting the object that owns it, and the
+  first thing that goes is the script's own context, which carries the `KWin` object;
+  `Component.onDestruction` runs while that context is being torn down. A lookup of the
+  `KWin` object from there crashed the compositor (2026-11-14, found by NT08's session check:
+  the tiler's teardown moved a stack window back to its float, the window's
+  `frameGeometryChanged` reached the placement memory's handler, and the handler read a
+  setting). So the script is `going` from the first line of its teardown: `setting()`
+  answers its fallback and reads nothing; the memory's window handlers go first, then the
+  tiler's own connections (the members' watches, a released master's drag, the facade's
+  `treeChanged`), and only then does the session end as the shortcut ends it - the stack on
+  its saved floats, the master's `restoreWindow`, `releaseTile` (`tiler.teardown`). A
+  released master's record settled in that teardown is not recorded: recording reads the
+  settings. In KWin the master then came back at its floating size but at the tile's
+  corner, and a new instance's admission of it answered busy until it closed; why the
+  native restore does not complete once the script is gone is open (the shortcut's
+  untoggle, with the same calls, lands it on its float).
   The window whose arrival ends the session is no member of it. The native layer has
   released the master by the time the script sees the app's second window, the tree's end
   follows in a queued call, and in between the session still reads active (`vacated`: the
