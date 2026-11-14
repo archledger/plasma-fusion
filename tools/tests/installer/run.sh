@@ -70,8 +70,10 @@ for kv in \$FAKE_VERSIONS; do echo \"/nix/store/0123456789abcdfghijklmnpqrsvwxyz
 INSTALLS='mkdir -p "$FAKE_BIN" && printf "#!/bin/sh\nprintf \"%%s\\\\n\" \"plasma-fusion \$*\" >>\"\$FAKE_LOG\"\n[ \"\$1\" = version ] && echo \"\$FAKE_PF_VERSION\"\nexit \${FAKE_SETUP_RC:-0}\n" >"$FAKE_BIN/plasma-fusion" && chmod +x "$FAKE_BIN/plasma-fusion"'
 # FAKE_ROOT_DIR: a directory only root can enter (the tests make it mode 000, which keeps its
 # owner out as 0700 root keeps a user out); sudo opens it for its command, as root would.
+# FAKE_SUDO_NO_CAT: a sudo that may not run cat (a policy that names its commands).
 fake sudo "[ \"\$1\" = -v ] && exit 0
 $LOGLINE
+[ -z \"\${FAKE_SUDO_NO_CAT:-}\" ] || [ \"\$1\" != cat ] || { echo 'Sorry, user is not allowed to execute cat' >&2; exit 1; }
 [ -n \"\${FAKE_ROOT_DIR:-}\" ] || exec \"\$@\"
 chmod 700 \"\$FAKE_ROOT_DIR\"
 \"\$@\"
@@ -431,6 +433,25 @@ for SHNAME in "${shells[@]}"; do
     chmod 000 "$RECDIR"
     EXTRA_ENV="FAKE_ROOT_DIR=$RECDIR" VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- uninstall --yes --package-only
     expect "uninstall with a record only root can read restores the recorded EVRs" has_log "dnf -y distro-sync kwin-6.7.5-1.fc44 kwin-common-6.7.5-1.fc44 kwin-libs-6.7.5-1.fc44"
+    chmod 755 "$RECDIR"
+    # a record that may be there and that sudo cannot read is no answer: the restore stops
+    # before it changes anything, instead of taking the failed read for "no record"
+    plant_record
+    chmod 000 "$RECDIR"
+    EXTRA_ENV="FAKE_ROOT_DIR=$RECDIR FAKE_SUDO_NO_CAT=1" VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --yes
+    expect "a record sudo cannot read stops the restore" [ "$RC" = 1 ]
+    expect "  saying so" has_out "could not read the restore record"
+    expect "  before the lock is touched" bash -c '! grep -q "^dnf -y versionlock delete" <<<"$0"' "$LOG"
+    expect "  and without a sync by the names" bash -c '! grep -q "^dnf -y distro-sync" <<<"$0"' "$LOG"
+    chmod 755 "$RECDIR"
+    expect "  the record is still there" [ -s "$RECDIR/full-restore.txt" ]
+    # a directory only root can enter and no record in it (a --full from before the record):
+    # sudo looks, finds none, and the restore goes by the names as it does without a record
+    rm -f "$RECDIR/full-restore.txt"
+    chmod 000 "$RECDIR"
+    EXTRA_ENV="FAKE_ROOT_DIR=$RECDIR" VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --yes
+    expect "a directory only root can enter without a record: the restore goes by the names" has_log "dnf -y distro-sync kwin kwin-common kwin-libs"
+    expect "  exiting 0" [ "$RC" = 0 ]
     chmod 755 "$RECDIR"
     # a record the user can read is read without sudo, as before
     plant_record
