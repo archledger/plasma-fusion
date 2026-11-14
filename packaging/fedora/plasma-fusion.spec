@@ -24,6 +24,7 @@
 # pass the bcond, so enabling the stock repository never offers a KWin replacement (the stock
 # Copr project and the full project are separate). The pin moves only through a release.
 %bcond full 0
+%global kwin_full_pin 6.8.2-3.fc44.pf5
 %global build_full 0
 # The full profile's own project builds --with full; anything else never emits the metapackage.
 # Inside a full build the pin must be set and must target this Fedora release - a wrong-series
@@ -39,7 +40,7 @@
 %endif
 
 Name:           plasma-fusion
-Version:        0.7.0
+Version:        0.8.0
 Release:        1%{?dist}
 Summary:        Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
 
@@ -597,6 +598,15 @@ grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
 %endif
 
 %changelog
+* Sat Nov 14 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.8.0-1
+- The full profile on Fedora 44: Plasma Fusion with the pinned KWin fork,
+  installed with install.sh --full and undone with --full-restore, and
+  plasma-fusion status naming the profile
+- Dynamic tiling on the full profile: a master-and-stack layout per
+  workspace (Plasma Fusion: Tile Workspace)
+- No KWin crash when the placement script goes during a tiling session,
+  and the Do Not Disturb week label right across the DST change
+
 * Tue Nov 10 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.7.0-1
 - Saved app pairs, the free-half app picker and drag-to-side in tablet posture
 - Directional window keys, secured Wi-Fi joining and the SDDM login screen

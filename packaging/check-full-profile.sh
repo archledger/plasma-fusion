@@ -7,9 +7,18 @@
 # build with a wrong-series pin fails; a full build without a pin fails. Keeps the %{with full}
 # gate exercised in CI without building the fork's RPMs. The pin's pf suffix carries any number
 # of digits (check-version.sh accepts pf10), so the two-digit gates mirror the one-digit ones.
+#
+# A release sets the pin in the spec itself (%global kwin_full_pin), and a %global in the spec
+# wins over a --define on the command line. The gates therefore run on a copy of the spec
+# without that line, and the spec as it is has checks of its own at the end.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-spec="$ROOT/packaging/fedora/plasma-fusion.spec"
+real="$ROOT/packaging/fedora/plasma-fusion.spec"
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+spec="$work/plasma-fusion.spec"
+sed '/^%global kwin_full_pin /d' "$real" >"$spec"
+own=$(sed -n 's/^%global kwin_full_pin *//p' "$real" | tr -d '[:space:]')
 rc=0
 query() { # DESC EXPECTED_COUNT ARGS...
   local desc=$1 expected=$2
@@ -72,5 +81,23 @@ if [ "$files" = 1 ]; then
 else
   echo "FAIL the metapackage ships the record: found x$files in its file list"
   rc=1
+fi
+# The spec as it is: with a pin of its own, the stock build still never emits the metapackage,
+# the full build emits it once with exact requires on that pin, and the record names it.
+if [ -n "$own" ]; then
+  spec=$real
+  query "the spec's own pin ($own): a stock build never emits the metapackage" 0
+  query "the spec's own pin: a full build emits it once" 1 --with full
+  requires=$(rpmspec --define 'fedora 44' --with full -q --requires "$real" 2>/dev/null |
+    grep -cxE "kwin(-common|-libs)? = ${own//./\\.}" || true)
+  if [ "$requires" = 3 ]; then
+    echo "ok   the metapackage requires kwin, kwin-common and kwin-libs at exactly $own"
+  else
+    echo "FAIL the metapackage's exact requires on $own: found x$requires of 3"
+    rc=1
+  fi
+  record "the spec's own pin: the record names it and its fork tag" "kwin=$own tag=v${own%%-*}-${own##*.} " --with full
+else
+  echo "ok   the spec sets no pin of its own (plasma-fusion-full is not built)"
 fi
 exit "$rc"

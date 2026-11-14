@@ -1,3 +1,16 @@
+plasma-fusion (0.8.0-1) unstable; urgency=medium
+
+  * The full profile on Fedora 44: Plasma Fusion with the pinned KWin
+    fork, installed with install.sh --full and undone with --full-restore,
+    and plasma-fusion status naming the profile.
+  * Dynamic tiling on the full profile: a master-and-stack layout per
+    workspace.
+  * No KWin crash when the placement script goes during a tiling
+    session, and the Do Not Disturb week label right across the DST
+    change.
+
+ -- Wisbendji Fimerlus <archledger236@gmail.com>  Sat, 14 Nov 2026 20:00:00 +0000
+
 plasma-fusion (0.7.0-1) unstable; urgency=medium
 
   * Saved app pairs, the free-half app picker and drag-to-side in tablet

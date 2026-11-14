@@ -54,6 +54,8 @@ your account can be undone (`plasma-fusion restore`).
 - App icons: 407 KDE, GNOME and common Linux apps redrawn as Plasma Fusion tiles that keep each app's
   own mark; every other installed app's own icon placed on a Plasma Fusion tile
 - A settings module, a lock screen, power tiers for battery life
+- On Fedora 44, the full profile (opt-in): Plasma Fusion with the maintained KWin fork, which adds
+  dynamic tiling, a master-and-stack layout per workspace
 
 Each part is described in `docs/parts/`; the overall plan and decisions are in `docs/PLAN.md`.
 
@@ -78,6 +80,12 @@ system, is in [`docs/parts/installer.md`](docs/parts/installer.md).
 | Kubuntu / Ubuntu 26.10 | PPA `ppa:archledger/plasma-fusion` |
 | KDE neon, Debian testing | the release's `.deb` packages |
 | NixOS (unstable) | the flake or module ([`docs/parts/nixos.md`](docs/parts/nixos.md)) |
+
+On Fedora 44, `... | sh -s -- --full` installs the full profile instead: Plasma Fusion with the
+maintained KWin fork, pinned at one version and kept there by a version lock, which adds dynamic
+tiling ("Plasma Fusion: Tile Workspace"). `--full-restore` goes back to Fedora's KWin
+([`docs/full-profile.md`](docs/full-profile.md)). The fork takes KWin's security fixes on its own
+cadence, which can lag Fedora by days.
 
 Afterwards, per account: `plasma-fusion setup` (other users), `plasma-fusion update` (after a
 package update; a notice tells you), `plasma-fusion status`, `plasma-fusion restore` (your desktop

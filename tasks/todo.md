@@ -20,14 +20,13 @@ That source is based on KWin 6.8.2.
   accessors and facade (fork PRs #17-#20). NT08 (unload and restart preservation) is
   qualified at the writer level at fork PR #21 (the persistence boundary the native side
   has); its session-lane verification - the isolated-session reload/restart comparison and
-  the facade-level script-teardown release in a live session - remains pending, recorded
-  with its re-entry in docs/DEFERRED.md.
-- What remains open is the complete tiling policy (the Fusion-side feature, PR #164), the
-  #115 re-entry tests, and ADR 0001's full-profile packaging.
-- Private request helpers still do not expose a usable production tiler, and the scripting
-  surface the policy rides is the fork's facade (fork PRs #17-#20), not an upstream API. The
-  provider bridge itself is not pending: NT07, the placement-provider port, is merged as #163.
-  The remaining work is the production tiling policy (PR #164) and its #115 qualification.
+  the script's teardown in a live session - ran on the fork's KWin on 2026-11-14 (the NT08
+  section below).
+- The tiling policy (#164, with #169, #170, #173 and #176), the #115 re-entry tests and ADR
+  0001's full-profile packaging are done: dynamic tiling ships with 0.8.0 in the full profile
+  (docs/DEFERRED.md, completed entries).
+- The scripting surface the policy rides is the fork's facade (fork PRs #17-#20, with #30 and
+  #32), not an upstream API: stock KWin has no tiler.
 
 The 6.7.5/6.7.91 commits, image identifiers and test counts in the design sections below remain
 historical evidence for their own baselines, not new results for this source.
@@ -598,15 +597,22 @@ Files: Fusion placement `contents/ui/{main.qml,Placement.js}`,
   build and a seeded container), and with it the facade-level script-teardown release in a live
   session. #115 stays open for the remaining tiler work (PR #164), the re-entry tests and the
   full-profile packaging.
-- [ ] The isolated-session reload/restart comparison on the fork's KWin, and with it the
-  facade-level script-teardown release in a live session: unsupported until a session lane
-  exists for the fork (the container seeds run stock KWin; the re-entry is the `v6.8.2-pf3`
-  tag, the RPM build and a seeded container, recorded in
-  [docs/DEFERRED.md](../docs/DEFERRED.md)). The rows above are the writer-level
-  qualification - the only persistence boundary the native side has; NT08's session
-  verification stays open on this row.
+- [x] The isolated-session reload/restart comparison on the fork's KWin, and with it the
+  script's teardown in a live session (2026-11-14, the full-profile Fedora 44 VM with the
+  fork's KWin from the Copr builds and the packaged script; the session pass `pass8.sh`).
+  Starting from a persisted P while the master stands on its automatic rectangle:
+  - An orderly restart (logout and login) and an interrupted compositor (`kill -9`, the
+    wrapper starting a new KWin): the placement file stays at P, the new KWin has no tree, no
+    core dump, the app opens again at P, and a toggle is accepted.
+  - The script disabled mid-session and enabled again: the script's own teardown crashed KWin
+    (it read a setting while KWin tore its context down; fixed in #173). After that fix the
+    master stayed off its float, its record held (#174; fixed in the fork's `v6.8.2-pf4`,
+    archledger/kwin#30). On `v6.8.2-pf4` the master lands on its float, the record clears and
+    the re-toggle is accepted. A record an earlier instance left is ended at the next start
+    (#175: `v6.8.2-pf5` and #176).
+  Evidence in the project ledger's artifacts (`nt08-session/`).
 Verification: writer-level suites (done - the rows above); isolated-session reload/restart
-comparison and full native/Fusion checks (pending the session lane, docs/DEFERRED.md); review.
+comparison and the script's teardown in a live session (done - the row above); review.
 Dependencies: NT07.
 Files: at most three isolated test/evidence files plus `docs/DEFERRED.md` and milestone report.
 
