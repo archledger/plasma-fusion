@@ -16,6 +16,9 @@
     A second scenario (scenario: "released") drives the master a native teardown released
     without restoring it - returned to its float, left where the user moved it, held while
     maximized, settled at the next toggle - and the admission's retries.
+    A third (scenario: "unload") unloads the script mid-session as KWin unloads a declarative
+    script: the driver makes it in a context of its own and deletes that context first
+    (KWinScript in tiling_lifecycle_test.py).
     Context properties from the driver: packagesRoot (a directory holding
     scripts/plasmafusion-placement), config prefill through the KWin context object.
 */
@@ -27,6 +30,17 @@ Item {
     id: harness
 
     property bool done: false
+    // The "unload" scenario (runUnload): the harness asks for the script with its URL
+    // (scriptWanted) and the driver makes it as KWin makes a declarative script (kwinScript);
+    // the harness asks for the unload (unloadWanted) and the driver unloads it as KWin does
+    // (unloaded).
+    property string scriptWanted: ""
+    property var kwinScript: null
+    property bool unloadWanted: false
+    property bool unloaded: false
+    // Set by the driver for the unload's second run: the native layer has released the master
+    // when the script goes (a detach-only release, the tree's end on its way).
+    property bool unloadVacated: false
     // Set by the driver for a second run: the fork's facade as an older build has it, without
     // restoreWindow.
     property bool legacyFacade: false
@@ -446,6 +460,15 @@ Item {
     }
 
     Component.onCompleted: {
+        if (scenario === "unload") {
+            try {
+                runUnload();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
         if (scenario === "released") {
             try {
                 runReleased();
@@ -525,6 +548,19 @@ Item {
 
     // The view, the three windows and the real script; the master's app key, or "" on failure.
     function setup() {
+        setupView();
+        // The real script (staged or checkout): its onCompleted adopts the open windows.
+        const base = "file://" + packagesRoot + "/scripts/plasmafusion-placement/contents/ui/";
+        const component = Qt.createComponent(base + "main.qml");
+        if (component.status !== Component.Ready) {
+            fail("main.qml did not load: " + component.errorString());
+            return "";
+        }
+        return adopt(component.createObject(harness));
+    }
+
+    // The view and the three windows, before any script.
+    function setupView() {
         const ws = KWinStubs.Workspace;
         // The view: desktop {id: 11}, activity "a", the stub's single screen.
         const desktop = { id: 11 };
@@ -556,15 +592,16 @@ Item {
         stackWindows = [winA, winB];
         ws.windows = [winB, winA, master];
         ws.activeWindow = master;
+    }
 
-        // The real script (staged or checkout): its onCompleted adopts the open windows.
-        const base = "file://" + packagesRoot + "/scripts/plasmafusion-placement/contents/ui/";
-        const component = Qt.createComponent(base + "main.qml");
-        if (component.status !== Component.Ready) {
-            fail("main.qml did not load: " + component.errorString());
+    // The script made: the three windows adopted and the Tile Workspace shortcut registered.
+    // The master's app key, or "" on failure.
+    function adopt(made) {
+        script = made;
+        if (!script) {
+            fail("the script was not made");
             return "";
         }
-        script = component.createObject(harness);
         const adopted = calls("trackWindow");
         if (adopted.length !== 3) {
             fail("the script adopted and tracked the three open windows (got " + adopted.length + ")");
@@ -583,6 +620,94 @@ Item {
             return "";
         }
         return masterKey;
+    }
+
+    // The script unloaded mid-session as KWin unloads a declarative script: the object that
+    // owns it goes, and with it, first, the script's own context with the KWin context
+    // property, so the script's Component.onDestruction runs while that context is being torn
+    // down. Nothing of the script may answer the session's end from there: in KWin the stack's
+    // float restore moved a window, the window's frameGeometryChanged reached the placement
+    // memory's handler, the handler read a setting through the KWin context property and the
+    // compositor crashed (2026-11-14). The session ends all the same - the stack back on its
+    // float, the master restored, the tree released - and afterwards nothing of the script
+    // answers a window or the facade. With unloadVacated the native layer has released the
+    // master in between: the teardown takes that release (the master back to its float, its
+    // record settled) and records nothing, the memory reading its settings to record.
+    function runUnload() {
+        setupView();
+        scriptWanted = "file://" + packagesRoot + "/scripts/plasmafusion-placement/contents/ui/main.qml";
+        const floatA = facade.plain(winA.frameGeometry);
+        const floatMaster = facade.plain(master.frameGeometry);
+        let cellA = null;
+        let asked = 0;
+        let toggledAt = 0;
+        steps = [
+            { name: "the script as KWin makes it", until: () => kwinScript !== null, run: function () {
+                if (adopt(kwinScript) === "") {
+                    throw "the script made as KWin makes it was not adopted";
+                }
+                tileShortcut.activated();
+                if (calls("admitTile").length !== 1 || !master.tile) {
+                    throw "unload: no session started (admissions " + calls("admitTile").length + ")";
+                }
+                cellA = facade.plain(winA.frameGeometry);
+                if (facade.same(cellA, floatA)) {
+                    throw "unload: the stack window was given no cell (at " + JSON.stringify(winA.frameGeometry) + ")";
+                }
+                toggledAt = Date.now();
+            } },
+            // Past the memory's quiet second after the toggle: a handler of the script that
+            // answered the teardown's writes would record them now (the old order did).
+            { name: "the quiet second after the toggle", until: () => Date.now() - toggledAt >= script.quietMillis + 200, run: function () {
+                // The memory has other places for the apps now (a second window of each was
+                // moved, say): a handler that answered the teardown's writes would record the
+                // frames they return the windows to. (A stack member is never recorded while
+                // its session lasts; the master is restored after the session's end.)
+                const apps = script.apps;
+                for (const id of ["a", "master"]) {
+                    apps[calls("trackWindow").find(c => c.window === id).key] = { x: 10, y: 40, width: 280, height: 300 };
+                }
+                script.apps = apps;
+                if (unloadVacated) {
+                    // The release that leaves the window where it stands and holds its record,
+                    // without the tree's end (facade.detach without its treeChanged).
+                    const held = facade.heldRecords;
+                    held.master = { target: facade.plain(master.frameGeometry), floating: floatMaster, placedByUser: false };
+                    facade.heldRecords = held;
+                    facade.vacate();
+                }
+                asked = facadeCalls.length;
+                unloadWanted = true;
+            } },
+            { name: "the script unloaded as KWin unloads it", until: () => unloaded, run: function () {
+                if (!facade.same(winA.frameGeometry, floatA)) {
+                    fail("unload: the stack window is back on its float (at " + JSON.stringify(winA.frameGeometry)
+                         + ", float " + JSON.stringify(floatA) + ")");
+                }
+                // The session's end and nothing else: no record (the floats are the memory's
+                // already, and recording reads the settings), no second release.
+                const ops = facadeCalls.slice(asked).map(c => c.op + (c.op === "settleWindow" ? "=" + c.result : ""));
+                const wanted = unloadVacated ? ["settleWindow=0", "releaseTile"] : ["restoreWindow", "releaseTile"];
+                if (JSON.stringify(ops) !== JSON.stringify(wanted)) {
+                    fail("unload" + (unloadVacated ? " (vacated)" : "") + ": the script's end asks the facade for its session's end"
+                         + " and nothing else (" + JSON.stringify(wanted) + "), got " + JSON.stringify(ops));
+                }
+                if (unloadVacated && !facade.same(master.frameGeometry, floatMaster)) {
+                    fail("unload (vacated): the released master went back to its float (at " + JSON.stringify(master.frameGeometry) + ")");
+                }
+                // Nothing of the script answers anything any more.
+                const gone = facadeCalls.length;
+                winA.frameGeometry = Qt.rect(floatA.x + 20, floatA.y + 20, floatA.width, floatA.height);
+                master.frameGeometry = Qt.rect(60, 90, 620, 420);
+                master.interactiveMoveResizeFinished();
+                facade.treeChanged();
+                if (facadeCalls.length !== gone) {
+                    fail("unload: a script that is gone answers nothing (calls " + JSON.stringify(facadeCalls.slice(gone)) + ")");
+                }
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
     }
 
     function run() {

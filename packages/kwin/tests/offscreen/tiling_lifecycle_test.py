@@ -19,7 +19,7 @@ import sys
 
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, QTimer, QUrl, Slot, qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtQml import QQmlComponent, QQmlEngine
+from PySide6.QtQml import QQmlComponent, QQmlContext, QQmlEngine
 
 from render import I18n
 
@@ -47,6 +47,34 @@ class ScriptConfig(QObject):
     @Slot(str, str, str, str)
     def callDBus(self, service, path, interface, method):
         self.calls.append([service, path, interface, method])
+
+
+class KWinScript(QObject):
+    """A declarative script as KWin makes and unloads one (src/scripting/scripting.cpp,
+    DeclarativeScript): one object owns, in this order, the script's own context (a child of
+    the engine's root context, carrying the KWin context property), the component, the KWin
+    object and the script's root object. Unloading is deleteLater() on that object, and its
+    children go in the order they came: the context first, so the script's
+    Component.onDestruction runs while the context it was made in is being torn down."""
+
+    def __init__(self, engine):
+        super().__init__()
+        self.context = QQmlContext(engine.rootContext(), self)
+        self.component = QQmlComponent(engine, self)
+        self.config = ScriptConfig()
+        self.config.setParent(self)
+        self.context.setContextProperty("KWin", self.config)
+
+    def make(self, url):
+        self.component.loadUrl(QUrl(url))
+        if self.component.status() != QQmlComponent.Ready:
+            print("FAIL tiling_lifecycle_test.py: the script did not load: "
+                  + "; ".join(e.toString() for e in self.component.errors()))
+            return None
+        made = self.component.create(self.context)
+        if made is not None:
+            made.setParent(self)
+        return made
 
 
 here = os.path.dirname(os.path.abspath(__file__))
@@ -108,13 +136,14 @@ def retire(instance, name):
 
     The script goes with a session live or just ended (its own untoggle on destruction): a
     throw on that path shows only as the engine's message, so the lines of the retirement
-    are read for one. (The engine's teardown reads the script's settings once more, which is
-    the one such line that is not the script's.)"""
+    are read for one. (Until 2026-11-14 one such line was let through, a readConfig of the
+    engine's teardown: it was the script's own handler answering its teardown's writes, the
+    path that crashed KWin, and no teardown reads a setting now.)"""
     before_retire = len(messages)
     instance.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     app.processEvents()
-    thrown = [message for message in messages[before_retire:] if "TypeError" in message and "readConfig" not in message]
+    thrown = [message for message in messages[before_retire:] if "TypeError" in message]
     check(not thrown, "%s: the script went without a throw, got %s" % (name, thrown))
 
 
@@ -215,10 +244,55 @@ check(sum("the tree was refused" in message for message in journal) == 1,
 # master's drag ended and a tree ended: a callback left connected to the window or to the facade
 # runs in a context that is gone and says so. And a reference to a destroyed window handed to
 # the facade does not convert: the mock throws as the compositor does, from inside a signal
-# handler, where only the engine's message shows it. (The engine's own teardown reads the
-# script's settings once more, which is the one such line that is neither.)
-errors = [message for message in journal if "TypeError" in message and "readConfig" not in message]
+# handler, where only the engine's message shows it.
+errors = [message for message in journal if "TypeError" in message]
 check(not errors, "released: no call into a destroyed script and no destroyed window handed to the facade, got %s" % errors)
+retire(released, "released")
+
+# A fourth run: the script unloaded mid-session as KWin unloads a declarative script
+# (KWinScript): its own context goes first, and the script's Component.onDestruction runs while
+# that context is being torn down. In KWin a handler of the dying script that ran then and read
+# a setting through the KWin context property crashed the compositor (2026-11-14); here the same
+# read throws (KWin is gone), or the process crashes. Nothing of the script may run there but
+# its own teardown: no TypeError and no ReferenceError at all, a readConfig one included. The
+# harness checks that the session ended all the same and that nothing answers afterwards.
+# The same with the master released by the native layer in between (unloadVacated): the
+# teardown goes through the released master's settle, which records once it is settled.
+
+
+def run_unload(name, initial):
+    before = len(messages)
+    holder = KWinScript(engine)
+    unload = component.createWithInitialProperties(initial)
+    state = {"made": False, "gone": False}
+
+    def drive():
+        if not state["made"] and unload.property("scriptWanted"):
+            state["made"] = True
+            unload.setProperty("kwinScript", holder.make(unload.property("scriptWanted")))
+        if state["made"] and not state["gone"] and unload.property("unloadWanted"):
+            state["gone"] = True
+            holder.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            app.processEvents()
+            unload.setProperty("unloaded", True)
+        if unload.property("done"):
+            QTimer.singleShot(300, app.quit)
+        else:
+            QTimer.singleShot(20, drive)
+
+    QTimer.singleShot(20, drive)
+    app.exec()
+    for problem in list(unload.property("problems").toVariant() or []):
+        failures.append(str(problem))
+    check(state["gone"], "%s: the harness asked for the unload and the driver unloaded the script" % name)
+    thrown = [message for message in messages[before:] if "TypeError" in message or "ReferenceError" in message]
+    check(not thrown, "%s: nothing of the script ran in its dying context but its own teardown, got %s" % (name, thrown))
+    retire(unload, name)
+
+
+run_unload("unload", {"scenario": "unload"})
+run_unload("unload (vacated)", {"scenario": "unload", "unloadVacated": True})
 
 if failures:
     for failure in failures:
