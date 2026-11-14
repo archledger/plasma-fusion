@@ -66,7 +66,9 @@ with an ordinary request, or leaves it where the user put it, and asks for the r
 settled. The native layer settles it only when all of these hold; any other answer changes
 nothing:
 
-- the caller is the provider that admitted the window, and it is still registered;
+- the caller is the provider that admitted the window, and it is still registered - or,
+  once that provider has retired, the writer's current provider (#175: a reloaded script
+  ends the records its predecessor left; nobody else ever could);
 - no restoration attempt is live (a live one completes at its own boundary);
 - the window is in an ordinary mode (not maximized, not full screen) and in no tile;
 - nothing of its native geometry is in flight, and its frame is its requested geometry;

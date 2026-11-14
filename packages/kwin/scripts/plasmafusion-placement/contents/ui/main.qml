@@ -1018,6 +1018,37 @@ Item {
             settleStep();
         }
 
+        // Windows the native layer still has a record for that this tiler holds nothing of,
+        // found when the script starts: an earlier instance released them and went before it
+        // ended their records (its teardown's restore never started, the user moved the
+        // window while the restore was in flight, or it stopped without its teardown;
+        // plasma-fusion#175). A fork build that lets the current provider settle such a
+        // record makes them this tiler's released masters: back to the floating frame unless
+        // the user put the window where it is, then settled, and the window can be tiled
+        // again. A fork that keeps the record to the provider that admitted the window
+        // answers 2 (another provider's): the entry goes and the window stays out of the
+        // tiling as before (nativeKeeps). A restoration still in flight answers 1 and
+        // completes by itself.
+        function adoptStranded(windows) {
+            if (!canSettle) {
+                return;
+            }
+            let found = 0;
+            for (let i = 0; i < windows.length; ++i) {
+                const w = windows[i];
+                if (!Tiling.alive(w) || w.deleted || holds(w) || !nativeKeeps(w)) {
+                    continue;
+                }
+                found += 1;
+                // No float of this tiler's own and no tile: the native record's floating
+                // frame is where the window goes back to (returnTarget).
+                releaseMaster(w, null, null, w.output);
+            }
+            if (found > 0) {
+                log("tiling: " + found + " window(s) still held by an earlier instance; ending their records");
+            }
+        }
+
         // Drop a released master's entry and its watch. The window may be destroyed by now:
         // its signals are gone with it.
         function forget(id) {
@@ -1963,6 +1994,12 @@ Item {
         }
         if (adopted > 0) {
             log("adopted " + adopted + " open window(s)");
+        }
+        // The records an earlier instance left (tiler.adoptStranded): after the provider's
+        // registration, which settling needs (nativeWriter stays true only once it is
+        // accepted), and the windows' adoption.
+        if (tiler.apiAvailable && nativeWriter) {
+            tiler.adoptStranded(windows);
         }
     }
 

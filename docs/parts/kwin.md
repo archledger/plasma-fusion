@@ -1696,10 +1696,17 @@ deliberately defers.
   build that cannot say what it keeps of a window (no `floatingFrame`) the toggle records
   nothing.
   Such a window is no stack member either (`nativeKeeps`), awake or minimized at the toggle:
-  a cell would be one more automatic rectangle for it, the frame it stands on would be
-  saved as its float, and only the provider that admitted it can end its record. This is
-  the script loaded again while a released master's record was held: the new tiler holds
-  nothing of it, and the window is left as it is until it closes.
+  a cell would be one more automatic rectangle for it, and the frame it stands on would be
+  saved as its float. This is the script loaded again while a released master's record was
+  held: the earlier instance went before it ended the record (its teardown's restore never
+  started, the user moved the window while the restore was in flight, it stopped without
+  its teardown). The script's start ends such records (`tiler.adoptStranded`, #175): every
+  window `nativeKeeps` finds becomes a released master of the new tiler - back to the
+  floating frame the record holds unless the user put it where it stands, then settled, as
+  after a native teardown - and can be tiled again. The fork's change for #175 lets the
+  current provider settle a record once the provider that admitted the window has retired;
+  on a fork without it the settle answers 2 (another provider's), the entry goes, and the
+  window is left exactly as it is until it closes.
   A window whose place the memory does not take is refused (8), as before: an ignored app's
   window that moved since its last record, a window with a sibling open, a window that
   stands on a cell the tiler took back (below).
