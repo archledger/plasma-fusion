@@ -36,11 +36,15 @@ tools/tests/release-vm/run-all.sh              # the VM tests, one after another
 tools/tests/release-vm/run-all.sh debian-testing:deb:sddm ubuntu2610:ppa:sddm arch:aur:sddm fedora44:copr:sddm
 # the boot splash on real boots, on every system with an installer lane (needs Pillow)
 tools/tests/release-vm/run-all.sh fedora44:copr:splash arch:aur:splash ubuntu2610:ppa:splash debian-testing:deb:splash neon:deb:splash
+# the full profile (ADR 0001), on the full Copr project's builds: a fresh install, the restore and
+# the uninstall; then the switch from the published stock profile
+tools/tests/release-vm/fulltest.sh fedora44
+tools/tests/release-vm/fulltest.sh fedora44 switch
 ```
 
 | Script | What |
 |---|---|
-| `vm.sh` | create, start (base or a fresh run overlay; QEMU's monitor on `mon.sock`, its QMP on `qmp.sock`), wait, ssh as `pf` with the test key, QEMU screendump, stop (over ssh, then ACPI) |
+| `vm.sh` | create, start (base or a fresh run overlay; QEMU's monitor on `mon.sock`, its QMP on `qmp.sock`; the display device is `virtio-vga`, or `PF_VM_VGA` where the QEMU build has none, for example `VGA,xres=1920,yres=1200,vgamem_mb=64`), wait, ssh as `pf` with the test key, QEMU screendump, stop (over ssh, then ACPI) |
 | `provision.sh`, `prov-*.sh` | the cloud image with cloud-init (user `pf`, sudo, the test key), Plasma (Fedora: updates and `@kde-desktop-environment`; Arch: `plasma-meta`; Ubuntu and Debian: `kde-plasma-desktop`, on Debian the generic kernel, whose virtio-gpu driver KWin needs; neon: neon's archive and `neon-desktop`), then `prov-common.sh`: getty logs `pf` in on tty1 and `startplasma-wayland` runs there (no display manager, the same on every system) |
 | `build-all.sh` | the candidate: `tools/tests/packages/` for Fedora, Arch, Debian testing, Ubuntu 26.10, neon and the shared `.deb`, each built, installed and checked (QML imports and QML parsing included) in a container of its system |
 | `channels.sh` | from the candidate: a dnf repository (Copr's place), an apt repository (the PPA's), a release directory with `SHA256SUMS` signed by a throwaway key (never the release key), the Arch source, and the installer, served on 127.0.0.1:8088 |
@@ -50,7 +54,10 @@ tools/tests/release-vm/run-all.sh fedora44:copr:splash arch:aur:splash ubuntu261
 | `greeter-compare.py SHOT` | a greeter screenshot against `design/previews/Login.webp` where the board shows only its background (four regions: mid-left, the sun, the far right, the hills between the session pill and the power buttons), the board scaled and cropped to the screen as the theme fills it: each region's mean colour within 4/255 (`--expect match`) or some region more than 12/255 off (`--expect differ`, another theme). Needs Pillow (on NixOS `nix-shell -p python3Packages.pillow`) |
 | `splashtest.sh NAME LANE` | the boot splash on real boots, in one VM from its base: the kernel arguments of a desktop's boot through the system's boot loader (`quiet splash`; `plymouth.ignore-serial-consoles`, since the VMs also log to a serial console and Plymouth then shows only its text splash; `plymouth.debug` for Plymouth's log; Fedora's `grubby`, a drop-in in `/etc/default/grub.d` on Debian, Ubuntu and neon, `/etc/default/grub` on Arch); the installer as `vmtest.sh` runs it, which must offer the boot splash step; a reboot with the system's own splash (installing the package never changes it), which must not look like the Splash board; `plymouth-install.sh --select`, which must select the theme, with its installed packages recorded; a reboot with it: one frame must match the board (`splash-capture.py`), Plymouth's log must show a pixel display (not the text splash) and the script plugin; no crash; the installer's `uninstall`, which leaves no theme, state or recorded package, and the exact original theme selected again (on Arch, no Plymouth); a reboot without the board's look. Each captured boot runs without the tty1 log-in, since Plasma Fusion's log-in splash (KSplash) looks like the board too: the lane sets the base's autologin drop-in aside before the reboot and logs in after the capture, and the desktop must start. Results in `NAME-splash/` (`steps.log`, each boot's command line, Plymouth's log and capture: `frames.tsv`, the closest frame, the first match, the last frame and a sheet of every frame) |
 | `splash-capture.py QMP OUT -- CMD` | runs `CMD` (the reboot), waits for QEMU's `RESET` event, then a screendump every 0.3 s for 60 s (`PF_SPLASH_SECONDS` in `splashtest.sh`), only the frames that changed kept in order; each measured against `design/previews/Splash.webp`: the logo's three circles where the theme centres its 1440x900 frame at the scale its script picks, the wallpaper where the script scales it to cover the screen (the sun, a plain area, the lower middle, the top): every region within 6/255 in some frame (`--expect match`) or more than 18/255 off in every frame (`--expect differ`). Needs Pillow |
-| `lane-env.sh` | the installer and its test-mode environment for one lane (sourced by `vmtest.sh`, `sddmtest.sh` and `splashtest.sh`) |
+| `fulltest.sh NAME [fresh\|switch]` | the full profile in one Fedora VM from its base (below, "The full profile's lane"): the installer stamped as a release stamps it, `--full` (dry run, packages, lock, record, setup), a new login (status, both gated features, the tiler, no crash), `--full-restore` and the fallbacks on stock KWin, uninstall; `switch`: the published stock profile first, `--full` on top, uninstall on the full system |
+| `full-guest.sh` | the guest's side of `fulltest.sh`, copied into the VM: the package facts (`pkg`, `lock`, `record`, `pin`, `tag`, `repo`, `recordfile` lines), the journal of the session's KWin, the active window (a moment's KWin script), the test windows, the gesture lock as quick settings writes it, the tiler's shortcut |
+| `vm-keys.py QMP STEP...` | keys on the VM's keyboard with screenshots in between, through QEMU's QMP socket (`down:alt tap:tab sleep:2 shot:FILE up:alt`): a switcher is on the screen only while its modifier is held, which a shortcut called over the bus cannot do; keys still down at the end are released |
+| `lane-env.sh` | the installer and its test-mode environment for one lane (sourced by `vmtest.sh`, `sddmtest.sh` and `splashtest.sh`; `fulltest.sh` takes the published installer through it) |
 | `refresh.sh NAME...` | each base updated the way its system updates itself (Fedora: `dnf upgrade`, with the RPM database verified, and rebuilt if it fails, before the upgrade and after it; Arch: `pacman -Syu`; KDE neon: `apt-get full-upgrade --allow-downgrades`, as neon's updater; Ubuntu, Debian: `apt-get full-upgrade`; on the apt systems `apt-get update --error-on=any`, since without it an index that failed to download is only a warning and the update exits 0; NixOS: nothing), the Plasma versions after; a failed update, or a VM that cannot be stopped after it, fails it |
 | `run-all.sh` | `channels.sh`, then `vmtest.sh` for each VM (`sddmtest.sh` for a `NAME:LANE:sddm` entry, `splashtest.sh` for `NAME:LANE:splash`) |
 
@@ -147,6 +154,48 @@ matched the board on each (after the fade-in).
 
 Evidence: the project ledger's artifacts, `plasma-fusion/2026-10-21-splash-vm-lane/`
 (`candidate-5ac4240/` and `final-f1c0597/`).
+
+## The full profile's lane
+
+`fulltest.sh` is ADR 0001's virtual-machine lane ([`../full-profile.md`](../full-profile.md)). It
+is not part of `run-all.sh`: the full profile has one channel, its own Copr project
+(`archledger/plasma-fusion-full`), and the installer knows no other place for the fork, so the
+lane runs on that project's builds (the fork tag's KWin and the metapackage) and needs no served
+channel. The installer is the tree's own, stamped by `packaging/stamp-installer.sh` with
+`--full-fedora` (`PF_FULL_FEDORA`, default `44`); `PF_PUBLIC=1` takes the published one instead,
+after a release. Results: `$PF_VM_HOME/results/NAME-full/` and `NAME-full-switch/`.
+
+Every check is a line in `steps.log` (`ok` or `FAIL`, with what was found); a phase fails at its
+end, with all of its checks known. `fresh`, on a system without Plasma Fusion:
+
+| Phase | Checks |
+|---|---|
+| the base | the three KWin packages are stock ones (no `pf` distag), no full profile, no Plasma Fusion |
+| `--full --dry-run` | the plan records the stock KWin, enables the full project, names the packages it replaces, locks the set and states the security cadence; the package facts are the same file as before |
+| `--full` | `kwin`, `kwin-common`, `kwin-libs` at the pin the metapackage's record names, each locked there, the restore record with each one's stock version; the six packages at the metapackage's own version; the repository enabled; a `distro-sync` to Fedora's KWin with the full project left out finds nothing to do; status before the new login: the full profile with its pin and tag, and the note that the session still runs the KWin from before |
+| the new login | status: the full profile, the three capabilities, no note, the login check switched nothing off |
+| the features on the fork | the navigation effect is not idle and follows the gesture lock (its two journal lines); the switcher, held open by a real Alt, is on the screenshot and another window is in front afterwards; the tiler's shortcut starts a session and ends it; no script error in KWin's journal; no crash |
+| `--full-restore` | the dry run names the recorded KWin and changes nothing; then the three packages at the recorded versions, no lock, no metapackage, no repository, no record, the six packages unchanged; status before the new login: the stock profile and the note to log in again, not the one about a fork installed by hand |
+| the new login on stock KWin | status: the stock profile, none of the fork's capabilities, no note; the session is still Plasma Fusion's; the navigation effect stays idle and says why, and nothing follows the gesture lock; the switcher as above; the tiler's shortcut is refused ("the tiler needs the fork"); no script error, no crash |
+| uninstall | the stock KWin, no lock, no repository, no package; the previous desktop after the login; no crash |
+
+`switch` installs the stock profile first, with the published installer from the public Copr
+project, checks that it left KWin alone, then runs the same `--full` phases on top (the six
+packages move to the full project's builds) and ends with `uninstall` on the full system, which
+returns the stock KWin before it removes the packages.
+
+What the lane shows of the two gated features is that the fork advertises them, that the features
+run on it, and that they work by their fallbacks on stock KWin with the same packages. What each
+does with its property is the subject of the parts' own tests (kwin.md, navigation-cpp.md).
+
+`test-fulltest.py` (CI `build`) runs the lane against a stand-in VM: both modes pass, and each
+gate fails the run, stops the VM and keeps the overlay (fifteen faults, from a dry run that
+changes something to an uninstall that leaves the lock).
+
+The first run (2026-11-14, on the first candidate builds) found one defect, in status: between
+`--full-restore` and the next login it called the session's KWin "a fork installed by hand". The
+packages are the distribution's by then and only the session still runs the fork; status now
+tells the two apart (system.md).
 
 ## Final round
 
