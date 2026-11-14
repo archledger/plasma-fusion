@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-snap", "contents", "ui", "Groups.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { groupOf, leave, join, partners, fillOrder, inZone, zoneOccupied, prune, joined, left, sameRect, sharedActivity, holds, fillValid } = globalThis;
+const { groupOf, leave, join, partners, fillOrder, inZone, zoneOccupied, prune, joined, left, sameRect, sharedActivity, holds, fillValid, alive } = globalThis;
 
 // Windows are opaque objects compared by identity.
 const a = { n: "a" };
@@ -130,5 +130,13 @@ assert.ok(sameRect(area, { x: 0, y: 34, width: 1440, height: 866 }) && !sameRect
 assert.ok(sharedActivity([], ["a"]) && sharedActivity(["a"], []), "on all activities");
 assert.ok(sharedActivity(["a", "b"], ["b"]));
 assert.ok(!sharedActivity(["a"], ["b"]), "only another activity");
+
+// ---- a window reference the script still holds: KWin destroys a closed window a moment after
+// marking it deleted, and every property of the destroyed one reads undefined - deleted too
+assert.ok(alive({ deleted: false }), "an open window");
+assert.ok(!alive({ deleted: true }), "a closing window");
+assert.ok(!alive({}), "a destroyed window: every property undefined, \"not deleted\" is true of it");
+assert.ok(!alive(null));
+assert.ok(!alive(undefined));
 
 console.log("snap-groups.test.js: ok");

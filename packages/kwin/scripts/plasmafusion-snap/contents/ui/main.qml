@@ -279,7 +279,7 @@ Item {
     }
 
     function movable(win) {
-        return win && !win.deleted && win.normalWindow && !win.popupWindow && win.moveable
+        return Groups.alive(win) && win.normalWindow && !win.popupWindow && win.moveable
             && !win.fullScreen && !win.specialWindow;
     }
 
@@ -655,7 +655,7 @@ Item {
 
     function offerOtherHalf(win) {
         pendingSnap = null;
-        if (!win || win.deleted || win.move || win.resize || flyoutLoader.active || pickerLoader.active) {
+        if (!Groups.alive(win) || win.move || win.resize || flyoutLoader.active || pickerLoader.active) {
             return;
         }
         // A flyout choice fills its whole layout (startFill) instead.
@@ -797,7 +797,7 @@ Item {
             return;
         }
         Workspace.activeWindow = win;
-        if (snapped && !snapped.deleted && setting("PairWindows", true)) {
+        if (Groups.alive(snapped) && setting("PairWindows", true)) {
             joinGroup(snapped, win, tile, zoneRect);
         }
         // A fill sequence goes on with its next zone once KWin has settled.
@@ -883,7 +883,7 @@ Item {
     // Whether the sequence still stands (Groups.fillValid): its first window holds the chosen
     // zone, on the desktop, activity, work area and layout family the sequence started with.
     function fillStillValid(f, moveEnded) {
-        if (!f || !f.anchor || f.anchor.deleted) {
+        if (!f || !Groups.alive(f.anchor)) {
             return false;
         }
         const now = snapshotOf(f.anchor, f.startedAt, moveEnded);
@@ -935,7 +935,7 @@ Item {
             const w = order[i];
             // A popup is no arranged window - and KWin reports its own internal windows, this
             // script's picker included (it covers the offered zone), as normal ones.
-            if (!w || w === anchor || w.deleted || !w.normalWindow || w.popupWindow) {
+            if (!Groups.alive(w) || w === anchor || !w.normalWindow || w.popupWindow) {
                 continue;
             }
             let here = w.onAllDesktops;
@@ -1024,7 +1024,7 @@ Item {
             return false;
         }
         const e = f.filledBy[i];
-        return !!e.win && !e.win.deleted && Groups.holds(e.zone, snapshotOf(e.win, e.at, false));
+        return Groups.alive(e.win) && Groups.holds(e.zone, snapshotOf(e.win, e.at, false));
     }
 
     function offerNextZone() {
@@ -1108,7 +1108,7 @@ Item {
     // script) leaves its zone too: its geometry is asked on every change once its placement has
     // settled. (A move within the settle is asked at the group's next use, validateGroupOf.)
     function geometryChangedMember(win) {
-        const zone = win && !win.deleted ? memberZones[keyOf(win)] : undefined;
+        const zone = Groups.alive(win) ? memberZones[keyOf(win)] : undefined;
         if (zone && zone.rect) {
             checkMember(win, false);
         }
@@ -1135,7 +1135,7 @@ Item {
     // plain-geometry zone not tiled and in the rectangle once settled; on the screen, desktops and
     // activities it was placed on; not maximized or full screen.
     function checkMember(win, moveEnded) {
-        if (!win || win.deleted || Groups.groupOf(groups, win) < 0) {
+        if (!Groups.alive(win) || Groups.groupOf(groups, win) < 0) {
             return;
         }
         const zone = memberZones[keyOf(win)];
@@ -1168,7 +1168,7 @@ Item {
         }
         syncing = true;
         for (let i = 0; i < others.length; ++i) {
-            if (!others[i].deleted && others[i].minimized !== win.minimized) {
+            if (Groups.alive(others[i]) && others[i].minimized !== win.minimized) {
                 others[i].minimized = win.minimized;
             }
         }
@@ -1187,7 +1187,7 @@ Item {
                 return;
             }
             for (let i = 0; i < others.length; ++i) {
-                if (!others[i].deleted && !others[i].minimized) {
+                if (Groups.alive(others[i]) && !others[i].minimized) {
                     Workspace.raiseWindow(others[i]);
                 }
             }
@@ -1247,7 +1247,7 @@ Item {
         let moved = 0;
         for (let i = 0; i < list.length; ++i) {
             const w = list[i];
-            if (!w || w.deleted || !w.normalWindow || w.fullScreen || w.minimized || w.tile || w.maximizeMode !== 0
+            if (!Groups.alive(w) || !w.normalWindow || w.fullScreen || w.minimized || w.tile || w.maximizeMode !== 0
                     || !w.moveable) {
                 continue;
             }
