@@ -70,6 +70,13 @@ paths and everything only a compositor can prove.
   scale at that size on that output's pixels (560.25x521.25 becomes 560x521 from 133% to
   100%); that frame is recorded; a later toggle on it there is admitted.
 
+### 1h. A window the user put on the tile's own rectangle
+- Move a window by hand so that it stands exactly on the master tile's rectangle, outside any
+  session; toggle on with it as the master
+- **Expect**: the toggle is accepted. Where a window stands says nothing about whether the
+  native layer holds it: this one floats there by the user's choice, so its frame is recorded
+  as its app's place and it is admitted like any other.
+
 ## 2. Placement-memory matrices
 
 ### 2a. Managed windows' rectangles never enter the memory
@@ -239,3 +246,14 @@ paths and everything only a compositor can prove.
   itself; the runs before that date were evaluated again from their snapshots.)
 - The kwinrc is read before and after to verify no tree was written.
 - Evidence: screenshots or programmatic geometry reads for each assert; the full session log.
+
+## Results (0.8.0)
+
+On the ThinkPad X13 Yoga (Fedora 44, 133%), with the full profile installed by `install.sh
+--full` from the Copr builds (KWin `v6.8.2-pf3`) and the packaged script, the six-pass matrix
+passed on 2026-11-14: every scenario above but 6b, which stays VM-only (a scale change on the
+device's panel). KWin's saved layouts and the `[kwin]` shortcuts were compared before and
+after: unchanged, and identical in all 196 entries. The changes since (the fork's `v6.8.2-pf4`
+and `pf5`, #173 and #176) touch the script's start and teardown and the native restore's
+completion; they were checked in the full-profile VM (NT08's session pass and the unload
+experiment, tasks/todo.md). The evidence is in the project ledger's artifacts.

@@ -13,7 +13,8 @@ are welcome in GitHub Discussions; the way decisions are made is in
   each release also in virtual machines of Arch, Ubuntu 26.10, Debian testing, KDE neon and NixOS
   ([`parts/release-tests.md`](parts/release-tests.md)), Plasma 6.8.0 among them since 0.6.0.
 - Released since 0.2.0 (2026-10-03); 0.4.0 on 2026-10-10, 0.5.0 on 2026-10-13, 0.6.0 on
-  2026-10-18 and 0.7.0 on 2026-11-10 ([`CHANGELOG.md`](../CHANGELOG.md),
+  2026-10-18, 0.7.0 on 2026-11-10 and 0.8.0 on 2026-11-14, with the full profile and dynamic
+  tiling on Fedora 44 ([`CHANGELOG.md`](../CHANGELOG.md),
   [`RELEASING.md`](RELEASING.md)). This plan was written before the first release; the items
   below keep their wording of 2026-10-02 with what has happened since noted.
 - One maintainer.

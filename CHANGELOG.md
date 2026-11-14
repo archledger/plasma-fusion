@@ -7,6 +7,58 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
+## 0.8.0 (2026-11-14)
+
+Tested with Plasma 6.7 and 6.8. Fedora 44, the ThinkPad X13 Yoga Gen 4 and the ASUS Zenbook run
+Plasma 6.8.2; the release test matrix covers Arch, Ubuntu 26.10, Debian testing, KDE neon and
+NixOS. Packaged as before for Fedora 44 and 45 (Copr), Arch (AUR), Ubuntu 26.10 (PPA), Debian
+testing and KDE neon (.deb) and NixOS (flake), as six packages. New: the full profile, opt-in and
+on Fedora 44 only, which adds the maintained KWin fork and dynamic tiling. The stock profile is
+unchanged by it. Thanks to @viewv for the Do Not Disturb report.
+
+- **The full profile (Fedora 44):** `install.sh --full` installs Plasma Fusion together with the
+  maintained KWin fork (archledger/kwin `v6.8.2-pf5`, built as `kwin-6.8.2-3.fc44.pf5`) from the
+  Copr project `archledger/plasma-fusion-full`. The `plasma-fusion-full` metapackage pins `kwin`,
+  `kwin-common` and `kwin-libs` at that exact version, and the installer locks them (`dnf
+  versionlock`), so a system update never half-upgrades the set. It records the stock KWin first,
+  and `install.sh --full-restore` returns to exactly those versions; the record is read through
+  sudo where only root can read it, as after the login screen's setup. `install.sh update` moves
+  the whole set in one transaction (the lock off, `dnf upgrade` with the metapackage, the lock
+  on). `plasma-fusion status` names the profile and its pin, and what the running KWin
+  advertises; after a profile switch it says to log out and in. The fork takes KWin's security
+  fixes on its own cadence, which can lag Fedora by days; the installer's plan says so (ADR 0001).
+  On stock KWin nothing changes. The Arch, Debian-family and NixOS lanes are packaging scaffolding
+  and do not ship.
+
+- **Dynamic tiling (full profile):** "Plasma Fusion: Tile Workspace" turns a master-and-stack
+  layout on and off for the current workspace (issue #115). The active window becomes the master
+  (half the width by default, `MasterFraction` 0.25-0.75), and the workspace's other windows
+  stack beside it (`StackGap`, 8 px). Windows that open there join the stack, and closed or
+  minimized ones leave it. Turning it off returns every window to its exact floating position and
+  size. "Tile Focus Master", "Next" and "Previous" move the focus; the four shortcuts ship
+  without keys. KWin's own saved tile layouts and your shortcuts are never changed. One workspace
+  is tiled at a time (a press on another one moves the tiling there), and the master must be a
+  Wayland window. On stock KWin the shortcut does nothing, and the journal says the tiler needs
+  the fork. The compositor side is the fork's transient tile ownership: KWin itself holds the
+  master's tile and its exact floating frame, so turning the layout off restores it bit for bit,
+  and the tile's rectangle never reaches the window placement memory.
+  Known limits: one layout and one master; no swap, no resizing the master and no auto-tiling yet.
+  The toggle is refused while the master's app has a second window open, because the placement
+  memory works per app. A master moved by hand keeps the tile's size, and a second window of the
+  master's app opens at its sibling's size.
+
+- **The placement script going during a tiling session:** disabling, reloading or unloading the
+  script while a workspace was tiled crashed KWin. The script's teardown read a setting while
+  KWin was tearing its context down. It now reads none and answers nothing while it goes, and
+  the session still ends, every window back on its float (#173). The master's restore in that
+  teardown completes as the shortcut's does, even though the script is gone by the time the app
+  answers (#174), and a record an earlier instance of the script left is ended at the script's
+  next start, so the window can be tiled again (#175).
+
+- **Do Not Disturb across the DST change:** the "Until" label switches between the time, the day
+  and the date at the right clock time when the period spans a daylight saving change; it was an
+  hour off (#158).
+
 ## 0.7.0 (2026-11-10)
 
 Tested with Plasma 6.7 and 6.8. Fedora 44, the ThinkPad X13 Yoga Gen 4 and the ASUS Zenbook run

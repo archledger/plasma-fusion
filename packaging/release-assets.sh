@@ -16,15 +16,18 @@
 #
 # The Copr, AUR and Nix builds come from the tag itself (.packit.yaml, packaging/arch/PKGBUILD,
 # flake.nix). Environment: PF_COPR_FEDORA (default "44 45"), PF_PPA_SERIES (default "stonking"),
-# PF_DEB_TARGETS (default "neon testing"), PF_FULL_FEDORA (default empty: this release has no
-# full profile; the Fedora releases the full Copr builds when it goes live): stamped into
-# install.sh.
+# PF_DEB_TARGETS (default "neon testing"), PF_FULL_FEDORA (default: the Fedora release of the
+# spec's full-profile pin, %global kwin_full_pin, e.g. 44 for 6.8.2-3.fc44.pf5; empty without a
+# pin: the release has no full profile): stamped into install.sh.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TAG=${1:?usage: release-assets.sh vX.Y.Z OUTDIR}
 OUT=$(mkdir -p "${2:?usage: release-assets.sh vX.Y.Z OUTDIR}" && realpath "$2")
 COPR=${PF_COPR_FEDORA:-44 45} PPA=${PF_PPA_SERIES:-stonking} DEBT=${PF_DEB_TARGETS:-neon testing}
-FULLF=${PF_FULL_FEDORA:-}
+pin=$(sed -n 's/^%global kwin_full_pin *//p' "$ROOT/packaging/fedora/plasma-fusion.spec" | tr -d '[:space:]')
+pinned_fedora=
+[[ $pin =~ \.fc([0-9]+)\.pf[0-9]+$ ]] && pinned_fedora=${BASH_REMATCH[1]}
+FULLF=${PF_FULL_FEDORA:-$pinned_fedora}
 git=(git -C "$ROOT")
 [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a release tag: $TAG" >&2; exit 2; }
 version=${TAG#v}

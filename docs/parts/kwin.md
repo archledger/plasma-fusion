@@ -1782,10 +1782,12 @@ deliberately defers.
   `treeChanged`), and only then does the session end as the shortcut ends it - the stack on
   its saved floats, the master's `restoreWindow`, `releaseTile` (`tiler.teardown`). A
   released master's record settled in that teardown is not recorded: recording reads the
-  settings. In KWin the master then came back at its floating size but at the tile's
-  corner, and a new instance's admission of it answered busy until it closed; why the
-  native restore does not complete once the script is gone is open (the shortcut's
-  untoggle, with the same calls, lands it on its float).
+  settings. On the fork's `v6.8.2-pf3` the master then came back at its floating size but
+  at the tile's corner, and a new instance's admission of it answered busy until it closed:
+  the fork's restore did not complete once its provider was gone (#174). From `v6.8.2-pf4`
+  on it completes, and the master lands on its float as after the shortcut's untoggle (the
+  VM's NT08 pass: the re-toggle after the script came back is accepted). Other ways a record
+  can be left after its provider is gone still last until the window closes (#175).
   The window whose arrival ends the session is no member of it. The native layer has
   released the master by the time the script sees the app's second window, the tree's end
   follows in a queued call, and in between the session still reads active (`vacated`: the

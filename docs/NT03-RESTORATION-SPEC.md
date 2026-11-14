@@ -137,7 +137,11 @@ Keep checkpoints stack-bounded or in external result carriers. Never put a Windo
 `TileAssignmentFence` inside that Window's own ownership record: that creates a retention cycle.
 After callbacks, revalidate the original authority rather than minting fresh authority from the
 current state. Writer loss, identity loss, close and unsupported context changes stop the attempt;
-none permits re-adoption through a replacement writer or automatic retry.
+none permits re-adoption through a replacement writer or automatic retry. A provider that
+retires after the attempt's request returned current does not stop it: the configure is the
+client's to answer, its target is A, and the writer keeps the restoring reservation, so it
+completes at its own boundary (#174, fork tag `v6.8.2-pf4`). A retirement while the request is
+being made still supersedes it.
 
 ### Target and mode policy
 
