@@ -180,6 +180,19 @@ check(any("the native facade has no restoreWindow" in message for message in mes
 
 retire(older, "older facade")
 
+# A run against the facade of a fork build that restores but has neither floatingFrame nor
+# settleWindow: the toggle records nothing of the window (the harness checks it), and a session
+# starts and ends where the memory has the window's own place.
+interim = run_harness({"interimFacade": True})
+for problem in list(interim.property("problems").toVariant() or []):
+    failures.append("interim facade: " + str(problem))
+interim_counts = interim.property("snapshot")
+interim_counts = interim_counts.toVariant() if hasattr(interim_counts, "toVariant") else interim_counts
+check((interim_counts or {}).get("createTile") == 2 and (interim_counts or {}).get("admitTile") == 2
+      and (interim_counts or {}).get("restoreWindow") == 1,
+      "interim facade: one refused admission, one session started and restored, got %s" % interim_counts)
+retire(interim, "interim facade")
+
 # A third run: the master a native teardown released without restoring it (a removed desktop, a
 # second window of its app, a move of the master). The harness asserts the geometry, the settle
 # answers and the records step by step; the journal lines are checked here.

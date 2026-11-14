@@ -1020,7 +1020,9 @@ Offline (laptop):
    `restoreWindow`, `releaseTile` with the admitted generation, and no second teardown when
    the release reports the tree's end), a refused admission (its tree released), a cell
    landing a fraction of a pixel off on a 133% output (still the tiler's own), a facade
-   without `restoreWindow` (the tiler off, the memory's transport intact), the native
+   without `restoreWindow` (the tiler off, the memory's transport intact), a facade with it
+   but without `floatingFrame` and `settleWindow` (no record for the toggle; a session where
+   the memory has the window's own place), the native
    `treeChanged`
    teardown (floats back, no release of an ended tree, the next toggle lays out again) and a
    refused tree (no admission, no geometry write); a further run (`scenario: "released"`)
@@ -1046,8 +1048,10 @@ Offline (laptop):
    a window only from the app's entry, refuses a key two tracked windows share and a window
    of another output: the toggle records the master's own place first; nothing is recorded
    beside another window of the app - one the writer holds under the key included -, of a
-   window on the tile's rectangle or the last session's, without the tile's rectangle, or
-   in the quiet second), a press with the active window
+   window the native layer keeps a record of (by the first attempt or a retry), or in the
+   quiet second; a window the user put on the tile's rectangle is recorded there and
+   admitted), a late cell after the user's move (back to where the window was moved, not to
+   a frame in flight), a press with the active window
    on a screen other than KWin's active one (that window's screen is tiled), a master sent
    to another output
    (returned to the float the record carried there), a float on a display that is gone
@@ -1674,9 +1678,12 @@ deliberately defers.
   unsettled window. Not while another window of the app is open: the native layer refuses a
   key two windows share (8) and the memory stays as it is - a window counts as the app's by
   the key the writer holds it under as well as by what it calls itself now. And not a window
-  that stands on the tile's own rectangle, this tree's or the last session's (an earlier
-  release left it there; that is no floating placement); where the native layer does not say
-  where the tile is, nothing is recorded.
+  the native layer still has a record for (`floatingFrame(window)` answers): a release left
+  it where it stands and nobody has returned it, its admission answers busy, and where it
+  stands is nobody's choice. A rectangle is no such evidence: a window the user put on the
+  tile's own rectangle floats there, and is recorded and admitted like any other. On a fork
+  build that cannot say what it keeps of a window (no `floatingFrame`) the toggle records
+  nothing.
   A window whose place the memory does not take is refused (8), as before: an ignored app's
   window that moved since its last record, a window with a sibling open, a window that
   stands on a cell the tiler took back (below).
@@ -1766,6 +1773,10 @@ deliberately defers.
   after the five seconds too, and for one the float did not follow; the entry goes when the
   window stands somewhere else, once the float has been asked again or the five seconds are
   over and the window has settled where it is.
+  A window that has settled somewhere else since its float came back - the user moved it,
+  the app moved itself - is taken back to that place when the cell's answer still lands (a
+  slow client's can, after the move), not to the float the session saved. A frame KWin's
+  request has not reached yet is no such place.
   The other way round, an off and an on in quick succession: the window still stands on its
   cell while the float's configure is in flight, and the new session would save the cell as
   its float - where every later untoggle would put it. A member's float is where the window

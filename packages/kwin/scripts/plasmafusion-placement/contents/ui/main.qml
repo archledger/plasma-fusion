@@ -896,8 +896,6 @@ Item {
         // answer to that cell is taken back (returnFromStaleCell); for as long as the window
         // stands on it the cell is no placement of the window (onStaleCell).
         property var returning: ({})
-        // The tile's rectangle of the last session, as the native layer had it.
-        property var lastTile: null
         // The window inside the native admission call, if any: managed from that moment for
         // the memory's purposes (record()), before the session exists.
         property var admitting: null
@@ -1326,15 +1324,17 @@ Item {
                 const key = appIdOf(w);
                 // The place the native layer admits the window from is the one the memory has
                 // for its app: this window's, from here on (recordForAdmission). Not a window
-                // that stands on the tile's own rectangle, this tree's or the last session's:
-                // an earlier release left it there (a fork build that cannot settle its
-                // record), and that is no floating placement of anyone's choosing. Where the
-                // native layer does not say where the tile is, nothing is recorded.
-                const tileNow = api.masterWindowRect();
-                if (tileNow && tileNow.width > 0
-                        && !Tiling.onMasterTile(tileNow, masterFloat, output.devicePixelRatio)
-                        && !Tiling.onMasterTile(lastTile, masterFloat, output.devicePixelRatio)) {
-                    root.recordForAdmission(w);
+                // the native layer still has a record for: a release left it where it stands
+                // and nobody has returned it (this script was not there, or could not), its
+                // admission answers busy, and where it stands is nobody's choice. A rectangle
+                // says nothing about that - a window the user put on the tile's own rectangle
+                // floats there. A fork build that cannot say (no floatingFrame) gets no
+                // record at all.
+                if (typeof api.floatingFrame === "function") {
+                    const kept = api.floatingFrame(w);
+                    if (!(kept && kept.width > 0)) {
+                        root.recordForAdmission(w);
+                    }
                 }
                 let admitResult = -1;
                 admitting = w;
@@ -1437,7 +1437,9 @@ Item {
         // recorded while it does (onStaleCell). Anywhere else: the entry goes once the float
         // has been asked again, or once the bound has passed and the window has settled where
         // it stands - until then the cell's answer may still land, and it stays no placement
-        // however late it does.
+        // however late it does. A window that has settled somewhere else in the meantime (the
+        // user moved it, the app moved itself) is taken back to that place, not to the float
+        // the session saved: the cell's answer of a slow client can land after the move.
         // True when the change is the cell's: it is no placement.
         function returnFromStaleCell(w) {
             const id = String(w.internalId);
@@ -1446,9 +1448,13 @@ Item {
                 return false;
             }
             const expired = Date.now() > pending.until;
-            if (!Tiling.isOwnCell(pending.cell, frameRect(w), landingSlack())) {
-                if (pending.asked || (expired && Placement.settled(requestedRect(w), frameRect(w)))) {
+            const frame = frameRect(w);
+            if (!Tiling.isOwnCell(pending.cell, frame, landingSlack())) {
+                const settled = Placement.settled(requestedRect(w), frame);
+                if (pending.asked || (expired && settled)) {
                     delete returning[id];
+                } else if (settled) {
+                    pending.float = frame;
                 }
                 return false;
             }
@@ -1571,7 +1577,6 @@ Item {
             const tile = apiAvailable && api ? api.masterWindowRect() : null;
             if (tile && tile.width > 0) {
                 session.masterTile = { x: tile.x, y: tile.y, width: tile.width, height: tile.height };
-                lastTile = session.masterTile;
             }
             const gap = tilingStackGap();
             const result = Tiling.layoutStack(session.stack, area, session.dividerX, gap);
