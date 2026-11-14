@@ -69,12 +69,13 @@ case ${1:-} in
     ;;
   active)
     dir=$(mktemp -d) || exit 1
-    # This call's own answer: the line carries the directory's name.
+    # This call's own script and answer: both carry the directory's name. A name used twice
+    # would have to wait for the first script's removal, which KWin only schedules.
     nonce=$(basename "$dir")
+    script=pf-full-active-$nonce
     echo "console.info(\"pf-full-active $nonce \" + (workspace.activeWindow ? workspace.activeWindow.resourceClass : \"none\"));" >"$dir/active.js"
     since=$(($(date +%s) - 1))
-    busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s pf-full-active >/dev/null 2>&1
-    id=$(busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting loadScript ss "$dir/active.js" pf-full-active | awk '{print $2}')
+    id=$(busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting loadScript ss "$dir/active.js" "$script" | awk '{print $2}')
     case $id in '' | *[!0-9]*) rm -rf "$dir"; echo "KWin did not load the script" >&2; exit 1 ;; esac
     busctl --user call org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script run >/dev/null
     answer=
@@ -83,7 +84,7 @@ case ${1:-} in
       [ -z "$answer" ] || break
       sleep 0.3
     done
-    busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s pf-full-active >/dev/null 2>&1
+    busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s "$script" >/dev/null 2>&1
     rm -rf "$dir"
     [ -n "$answer" ] || { echo "KWin did not answer" >&2; exit 1; }
     echo "${answer#pf-full-active "$nonce" }"
