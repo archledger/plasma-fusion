@@ -305,8 +305,11 @@ configure is published as the rectangle the configure was sent for wherever it i
 rectangle on the output's pixels: a restoration returns A bit for bit.
 
 Root/module unload leaves Restoring in the surviving compositor/window record. Reload cannot
-adopt over it. A client that never commits stays suppressed; no timeout declares restoration
-successful. A later manual action supersedes the expected target/generation so an old restore
+adopt over it. Once that record holds no live restoration (the restoration was superseded or
+never started), it is a released record: the reloaded provider may settle it under the settle
+operation's evidence rules, as the provider that admitted the window could (#175), but never
+admits the window over a record. A client that never commits stays suppressed; no timeout
+declares restoration successful. A later manual action supersedes the expected target/generation so an old restore
 cannot overwrite it. On close, A stays protected through close dispatch as defined above.
 
 On compositor restart, transient ownership is not restored from `kwinrc`. Newly mapped windows

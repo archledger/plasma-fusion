@@ -294,6 +294,33 @@ def run_unload(name, initial):
 run_unload("unload", {"scenario": "unload"})
 run_unload("unload (vacated)", {"scenario": "unload", "unloadVacated": True})
 
+# Windows an earlier instance left with a native record (plasma-fusion#175), found when the
+# script starts: where the fork lets the current provider end the record, it does - back to
+# the floating frame unless the user put the window where it stands - and the window is
+# tileable again; where it does not, the window is left alone and stays out of the tiling.
+for name, initial, settled in (
+        ("stranded", {"strandedSuccessor": True, "strandedPlaced": False}, True),
+        ("stranded (placed by the user)", {"strandedSuccessor": True, "strandedPlaced": True}, True),
+        ("stranded (old fork)", {"strandedSuccessor": False, "strandedPlaced": False}, False)):
+    before = len(messages)
+    initial = dict(initial, scenario="stranded")
+    instance = run_harness(initial)
+    for problem in list(instance.property("problems").toVariant() or []):
+        failures.append("%s: %s" % (name, problem))
+    journal = messages[before:]
+    check(sum("still held by an earlier instance" in m for m in journal) == 1
+          and any("tiling: 1 window(s) still held by an earlier instance" in m for m in journal),
+          "%s: the start says it found the one window, once" % name)
+    if settled:
+        check(sum("a released master's record is settled" in m for m in journal) == 1,
+              "%s: the record is settled once" % name)
+    else:
+        check(sum("a released master's record was not settled (2)" in m for m in journal) == 1,
+              "%s: the old fork's refusal is said once" % name)
+    thrown = [m for m in journal if "TypeError" in m or "ReferenceError" in m]
+    check(not thrown, "%s: nothing threw, got %s" % (name, thrown))
+    retire(instance, name)
+
 if failures:
     for failure in failures:
         print("FAIL tiling_lifecycle_test.py: " + failure)

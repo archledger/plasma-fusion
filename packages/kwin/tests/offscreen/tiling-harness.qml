@@ -41,6 +41,11 @@ Item {
     // Set by the driver for the unload's second run: the native layer has released the master
     // when the script goes (a detach-only release, the tree's end on its way).
     property bool unloadVacated: false
+    // The "stranded" scenario (runStranded): whether the fork lets the current provider settle
+    // a record an earlier one admitted (plasma-fusion#175), and whether the user moved the
+    // stranded window where it stands.
+    property bool strandedSuccessor: true
+    property bool strandedPlaced: false
     // Set by the driver for a second run: the fork's facade as an older build has it, without
     // restoreWindow.
     property bool legacyFacade: false
@@ -107,10 +112,14 @@ Item {
         // The native restore raises and focuses the restored window, which carries the active
         // window and screen to its view; onRestore lets a scenario add to that.
         property var onRestore: null
-        // window internalId -> {target, floating, placedByUser}: the records of masters the
-        // native layer released without restoring them (detach). A window with one cannot be
-        // admitted (busy).
+        // window internalId -> {target, floating, placedByUser, provider}: the records of
+        // masters the native layer released without restoring them (detach). A window with one
+        // cannot be admitted (busy). provider: the token of the provider that admitted the
+        // window, when that was an earlier one (a record the script finds at its start).
         property var heldRecords: ({})
+        // Whether the current provider may settle a record an earlier, retired provider
+        // admitted (the fork from plasma-fusion#175 on); without, only the admitting one may.
+        property bool successorSettle: true
         // window internalId -> the frame a window had when it was admitted: its record's
         // floating frame, until the record ends.
         property var floatings: ({})
@@ -208,6 +217,8 @@ Item {
                 result = 1;
             } else if (token !== "harness-token") {
                 result = 2;
+            } else if (held.provider !== undefined && held.provider !== token && !successorSettle) {
+                result = 2; // a fork that keeps the record to the provider that admitted the window
             } else if (unsettledAnswers > 0) {
                 unsettledAnswers -= 1;
                 result = 3;
@@ -460,6 +471,15 @@ Item {
     }
 
     Component.onCompleted: {
+        if (scenario === "stranded") {
+            try {
+                runStranded();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
         if (scenario === "unload") {
             try {
                 runUnload();
@@ -703,6 +723,93 @@ Item {
                 facade.treeChanged();
                 if (facadeCalls.length !== gone) {
                     fail("unload: a script that is gone answers nothing (calls " + JSON.stringify(facadeCalls.slice(gone)) + ")");
+                }
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
+
+    // A window an earlier instance of the script left with a native record (plasma-fusion#175):
+    // the record of a master the native layer released, held for a provider that is gone. The
+    // new instance finds it when it starts. On a fork that lets the current provider settle
+    // it, the window is the new instance's released master: back to its floating frame
+    // (unless the user put it where it stands), settled, and a toggle can admit it again. On a
+    // fork that keeps the record to the admitting provider the settle answers 2: the window
+    // is left exactly where it stands, out of the tiling, and its admission stays busy.
+    function runStranded() {
+        setupView();
+        const floatA = facade.plain(winA.frameGeometry);
+        const managed = facade.plain(facade.masterRect);
+        const placedAt = { x: 320, y: 200, width: floatA.width, height: floatA.height };
+        const standing = strandedPlaced ? placedAt : managed;
+        winA.frameGeometry = Qt.rect(standing.x, standing.y, standing.width, standing.height);
+        const held = facade.heldRecords;
+        held.a = { target: managed, floating: floatA, placedByUser: strandedPlaced, provider: "earlier-token" };
+        facade.heldRecords = held;
+        const floats = facade.floatings;
+        floats.a = floatA;
+        facade.floatings = floats;
+        facade.successorSettle = strandedSuccessor;
+        const base = "file://" + packagesRoot + "/scripts/plasmafusion-placement/contents/ui/";
+        const component = Qt.createComponent(base + "main.qml");
+        if (component.status !== Component.Ready) {
+            fail("main.qml did not load: " + component.errorString());
+            done = true;
+            return;
+        }
+        if (adopt(component.createObject(harness)) === "") {
+            done = true;
+            return;
+        }
+        const settlesOfA = () => facadeCalls.filter(c => c.op === "settleWindow" && c.window === "a").map(c => c.result);
+        const admitsOfA = () => facadeCalls.filter(c => c.op === "admitTile" && c.window === "a");
+        const where = () => JSON.stringify(facade.plain(winA.frameGeometry));
+        const wanted = strandedSuccessor ? (strandedPlaced ? "[0]" : "[4,0]") : "[2]";
+        steps = [
+            { name: "the record found at the start answered", until: () => JSON.stringify(settlesOfA()) === wanted, run: function () {
+                if (strandedSuccessor) {
+                    if (facade.heldRecords.a !== undefined) {
+                        fail("stranded: the record is settled");
+                    }
+                    if (!facade.same(winA.frameGeometry, strandedPlaced ? placedAt : floatA)) {
+                        fail("stranded: the window stands " + (strandedPlaced ? "where the user put it" : "on its floating frame")
+                             + " (at " + where() + ")");
+                    }
+                } else {
+                    if (facade.heldRecords.a === undefined) {
+                        fail("stranded (old fork): the record is still held");
+                    }
+                    if (!facade.same(winA.frameGeometry, managed)) {
+                        fail("stranded (old fork): the window is left where it stands (at " + where() + ")");
+                    }
+                }
+                if (admitsOfA().length !== 0) {
+                    fail("stranded: nothing is admitted at the start");
+                }
+                // A toggle with it as the active window.
+                KWinStubs.Workspace.activeWindow = winA;
+                tileShortcut.activated();
+            } },
+            { name: "the toggle answered", until: () => strandedSuccessor ? !!winA.tile : admitsOfA().length >= 1 + script.admitRetryLimit, run: function () {
+                const answers = JSON.stringify(admitsOfA().map(c => c.token === "harness-token"));
+                if (strandedSuccessor) {
+                    if (!winA.tile || calls("admitTile").length !== 1) {
+                        fail("stranded: the window is admitted at the first toggle (admissions " + calls("admitTile").length + ")");
+                    }
+                    tileShortcut.activated();
+                } else {
+                    if (winA.tile) {
+                        fail("stranded (old fork): the window with a record it cannot end is not admitted");
+                    }
+                    if (!facade.same(winA.frameGeometry, managed)) {
+                        fail("stranded (old fork): the toggle moved nothing (at " + where() + ")");
+                    }
+                }
+            } },
+            { name: "the session ended", until: () => !winA.tile, run: function () {
+                if (strandedSuccessor && !facade.same(winA.frameGeometry, strandedPlaced ? placedAt : floatA)) {
+                    fail("stranded: the untoggle returns the window to the place it was settled at (at " + where() + ")");
                 }
             } }
         ];
