@@ -116,7 +116,8 @@ usable outside the stamp and through the Plasma-version gate, for the same reaso
 to return KWin to stock) runs the same restore first, then the normal uninstall.
 The installer's `status` reports the profile (`full` with the pinned
 KWin, or `stock`); the packaged
-`plasma-fusion status` learns the profile with the capability reporting that follows the channel.
+`plasma-fusion status` reports the profile, the pin, the fork tag and what the running KWin
+advertises (system.md, "The profile and the compositor's capabilities").
 
 ## Checks before anything changes
 

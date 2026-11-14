@@ -45,6 +45,65 @@ Qt it was built with); `plasma-fusion status` compares it with the running KWin.
 `packages` builds, lints, installs and checks every channel in a container of its system
 (`tools/tests/packages/`); ci.md.
 
+## The profile and the compositor's capabilities
+
+`plasma-fusion status` says which profile this is and what the running KWin can do
+([ADR 0001](../adr/0001-two-profile-distribution.md)):
+
+```
+  profile: full (the maintained KWin fork, pinned at 6.8.2-3.fc44.pf3, fork tag v6.8.2-pf3)
+  the running KWin's capabilities:
+    thumbnail source lifecycle: version 1
+    offscreen opacity: version 1
+    transient tiling (dynamic tiling): yes
+```
+
+* **The profile** is read from `share/plasma-fusion/full-profile`, which only the
+  `plasma-fusion-full` metapackage installs (`kwin=` the pinned KWin's exact package version,
+  `tag=` the fork tag it is built from; the Fedora spec writes both from `kwin_full_pin`, and
+  `packaging/check-full-profile.sh` checks what it writes). Without the file the profile is
+  `stock (the distribution's KWin)`. When the pin's upstream version is not the running
+  KWin's (a system upgrade to another Plasma with the lock holding KWin back) a note names
+  both and the way back (`install.sh --full-restore`).
+* **The capabilities** are asked of the running compositor, because a version string does
+  not tell the fork from stock KWin (both say 6.8.2):
+  * offscreen opacity (`plasmaFusionOffscreenOpacityVersion`) is a property of every scene
+    effect, and KWin's support information (`org.kde.KWin /KWin supportInformation`) lists
+    the properties of the effects it has loaded;
+  * the thumbnail source lifecycle (`plasmaFusionThumbnailSourceLifecycleVersion`, a property
+    of the `WindowThumbnail` item) and the tiling facade (`Workspace.transientTiling`) are
+    visible only from inside KWin's scripting. A probe script is loaded for a moment
+    (`loadDeclarativeScript`, run, unloaded; its file removed), says what it sees in one
+    line, and the command reads that line from the session's journal. The file has a
+    directory of its own under `$XDG_RUNTIME_DIR`, made for the call: KWin's QML loader
+    reads a directory once and keeps what it found for as long as KWin runs, so a file made
+    later in a directory it has read fails to load ("File name case mismatch") - with the
+    probes side by side, only the first call of a session got an answer.
+    Where KWin does not log to the journal the two lines say that they could not be asked.
+  Stock KWin answers `none of the fork's (every feature uses its stock fallback)`. Outside a
+  Plasma session nothing is asked.
+* Three notes name a mismatch. The full profile installed while the running KWin advertises
+  nothing: the session still runs the KWin from before; log out and in. Capabilities without
+  the full profile, the KWin on the disk put there after the session's KWin started: the
+  state between `--full-restore` and the next login, where the packages are the
+  distribution's again and the session keeps the fork until it ends; log out and in.
+  Capabilities without the full profile otherwise: a fork installed by hand.
+  The second is told from the third by times, not by the program's link in `/proc`, which
+  cannot be read (`kwin_wayland` carries a file capability): the boot time plus the process's
+  start in clock ticks against the installed program's change time (`kwin_replaced`). The
+  start read this way is up to two seconds early, since the boot time and the ticks are both
+  rounded down; the program counts as replaced only from two whole seconds after it on, so a
+  KWin started right after its program was written is never taken for an older one, and a
+  program replaced within two seconds of KWin's start may be missed. The change time also
+  moves with the file's attributes and links and with the clock, so the note says what the
+  times say (the KWin on the disk was put there after this session's KWin started) and names
+  `--full-restore` as the usual way there. Without `getconf` the clock ticks are taken as a
+  hundred a second. Without an answer the note is the third.
+
+`tools/tests/status-unit.sh` (CI `build`) runs the command against stand-ins for
+`kwin_wayland`, `busctl` and `journalctl` through those cases, and checks the probe KWin is
+given.
+
 ## 1. The RPMs
 
 ### Build

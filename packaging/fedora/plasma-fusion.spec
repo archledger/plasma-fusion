@@ -356,6 +356,13 @@ done
 bash packaging/install-tree.sh --stage _stage --plymouth _plymouth/plasma-fusion --sddm _sddm/plasmafusion \
   --destdir %{buildroot} --prefix %{_prefix} --libexecdir %{_libexecdir}
 mkdir -p %{buildroot}%{_datadir}/plasma-fusion/built-against
+%if %{build_full}
+# The full profile's record, read by "plasma-fusion status": the pinned KWin's exact version and
+# the fork tag it is built from (6.8.2-3.fc44.pf3 is built from v6.8.2-pf3).
+pin='%{kwin_full_pin}'
+printf 'kwin=%%s\ntag=v%%s-%%s\n' "$pin" "${pin%%%%-*}" "${pin##*.}" \
+  >%{buildroot}%{_datadir}/plasma-fusion/full-profile
+%endif
 %if %{with compiled}
 for part in decoration settings navigation quicklook copytext; do
   DESTDIR=%{buildroot} %__cmake --install _build/$part
@@ -581,10 +588,11 @@ grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
 %{_datadir}/dbus-1/services/org.plasmafusion.CopyTextOverlay.service
 %{_datadir}/plasma-fusion/built-against/copytext
 
-# A metapackage: the license only; the exact-EVR requires are its whole content.
+# A metapackage: the license and the profile's record; the exact-EVR requires are its content.
 %if %{build_full}
 %files full
 %license LICENSES/GPL-2.0-or-later.txt
+%{_datadir}/plasma-fusion/full-profile
 %endif
 %endif
 

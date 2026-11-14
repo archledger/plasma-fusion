@@ -9,7 +9,8 @@
 #   plasma-fusion update             apply this version's settings again after a package update,
 #                                    keeping your light, dark or automatic choice and your own
 #                                    settings (setup without options)
-#   plasma-fusion status             version, installed parts, tested Plasma series, login check
+#   plasma-fusion status             version, profile, installed parts, tested Plasma series,
+#                                    what the running KWin advertises, login check
 #   plasma-fusion restore [OPTIONS]  undo setup from a backup (--list shows them; see --help)
 #   plasma-fusion drop-user-copy     move a per-user copy in ~/.local that hides the package aside
 #   plasma-fusion version
@@ -104,8 +105,211 @@ login_screen() {
   return 0
 }
 
+# The full profile's record (ADR 0001, docs/full-profile.md): the plasma-fusion-full metapackage
+# installs it next to this package (or in another data directory). kwin=<the pinned KWin's exact
+# package version>, tag=<the fork tag it is built from>. Without it this is the stock profile.
+full_profile() {
+  local d
+  IFS=: read -r -a dirs <<<"$SHARE:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+  for d in "${dirs[@]}"; do
+    [ -f "$d/plasma-fusion/full-profile" ] && { echo "$d/plasma-fusion/full-profile"; return 0; }
+  done
+  return 1
+}
+
+profile_lines() { # KWIN (the running compositor's version, or empty)
+  local f pin tag series
+  if f=$(full_profile); then
+    pin=$(sed -n 's/^kwin=//p' "$f" | head -1)
+    tag=$(sed -n 's/^tag=//p' "$f" | head -1)
+    echo "  profile: full (the maintained KWin fork, pinned at ${pin:-?}, fork tag ${tag:-?})"
+    # The pin holds KWin at one upstream version (6.8.2-3.fc44.pf3 pins 6.8.2). A system
+    # upgrade to another Plasma leaves the two apart (ADR 0001): say so, and the way back.
+    series=${pin%%-*}
+    if [ -n "$1" ] && [ -n "$series" ] && [ "$series" != "$1" ]; then
+      echo "  note: the full profile pins KWin $series and the running KWin is $1: restore the stock KWin"
+      echo "        (install.sh --full-restore) or wait for this Plasma's pinned release"
+    fi
+  else
+    echo "  profile: stock (the distribution's KWin)"
+  fi
+}
+
+# The probe a moment's script inside KWin runs: what the scripting side of the compositor has.
+probe_script() { # NONCE
+  cat <<EOF
+import QtQuick
+import org.kde.kwin
+
+Item {
+    WindowThumbnail {
+        id: thumbnail
+    }
+    Component.onCompleted: {
+        const version = function (value) {
+            return Number.isInteger(value) && value >= 1 ? value : 0;
+        };
+        let tiling = 0;
+        try {
+            tiling = typeof Workspace.transientTiling === "function" ? 1 : 0;
+        } catch (e) {
+            tiling = 0;
+        }
+        console.info("plasma-fusion-probe $1 thumbnail="
+                     + version(thumbnail["plasmaFusionThumbnailSourceLifecycleVersion"]) + " tiling=" + tiling);
+    }
+}
+EOF
+}
+
+# What the running compositor advertises of the fork's guarantees (ADR 0001's capability
+# properties), asked of KWin itself in this session:
+#   - offscreen opacity is a property of every scene effect, and KWin's support information
+#     lists the properties of the effects it has loaded;
+#   - the thumbnail source lifecycle is a property of a QML item and the tiling facade a
+#     function of the scripting Workspace: only a script inside KWin sees them, so a probe is
+#     loaded for a moment and says what it sees in the session's journal.
+# A version string does not tell the fork from stock KWin (both say 6.8.2); these do.
+# Prints "KEY VALUE" lines (thumbnail, opacity, tiling: a version, 0 = not advertised, ? = could
+# not be asked), or nothing when KWin cannot be asked at all.
+capability_values() {
+  local dir probe nonce since id line info opacity try
+  [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] || return 0
+  command -v busctl >/dev/null 2>&1 || return 0
+  busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus NameHasOwner s org.kde.KWin 2>/dev/null |
+    grep -q true || return 0
+  info=$(busctl --user call org.kde.KWin /KWin org.kde.KWin supportInformation 2>/dev/null) || info=
+  opacity=$(printf '%s' "$info" | grep -o 'plasmaFusionOffscreenOpacityVersion: [0-9][0-9]*' | head -1 | awk '{print $2}')
+  if [ -n "$opacity" ]; then
+    echo "opacity $opacity"
+  elif [ -n "$info" ]; then
+    echo "opacity 0"
+  else
+    echo "opacity ?"
+  fi
+  line=
+  # The probe has a directory of its own. KWin's QML loader reads a directory once and keeps
+  # what it found for as long as KWin runs; a file made later in a directory it has read does
+  # not exist for it ("File name case mismatch"), so a second probe next to the first, or next
+  # to anything KWin has loaded QML from, would never run.
+  if command -v journalctl >/dev/null 2>&1 &&
+    dir=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/plasma-fusion-probe-XXXXXXXX" 2>/dev/null) && [ -n "$dir" ]; then
+    nonce=$(basename "$dir")
+    probe=$dir/probe.qml
+    probe_script "$nonce" >"$probe"
+    since=$(($(date +%s) - 1))
+    id=$(busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting loadDeclarativeScript ss "$probe" "$nonce" 2>/dev/null |
+      awk '{print $2}') || id=
+    if [ -n "$id" ] && [ -z "${id//[0-9]/}" ]; then
+      busctl --user call org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script run >/dev/null 2>&1 || true
+      for try in 1 2 3 4 5 6 7 8 9 10; do
+        line=$(journalctl --user --no-pager -o cat --since "@$since" 2>/dev/null |
+          grep -a -m1 -F "plasma-fusion-probe $nonce" || true)
+        [ -z "$line" ] || break
+        sleep 0.3
+      done
+      : "$try"
+      busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s "$nonce" >/dev/null 2>&1 || true
+    fi
+    rm -f "$probe"
+    rmdir "$dir" 2>/dev/null || true
+  fi
+  if [ -n "$line" ]; then
+    echo "thumbnail $(printf '%s' "$line" | sed -n 's/.* thumbnail=\([0-9][0-9]*\).*/\1/p')"
+    echo "tiling $(printf '%s' "$line" | sed -n 's/.* tiling=\([0-9][0-9]*\).*/\1/p')"
+  else
+    echo "thumbnail ?"
+    echo "tiling ?"
+  fi
+}
+
+# Whether the KWin on the disk was put there after the session's KWin started: a package
+# transaction replaced the program while the session ran, and the session keeps the one from
+# before until the next login. kwin_wayland's own link in /proc cannot be read (the program
+# carries a file capability), its start can: the boot time plus the process's start in clock
+# ticks, against the installed program's change time, all in whole seconds. The boot time and
+# the ticks are both rounded down, so the start read this way is up to two seconds early: the
+# program counts as replaced only from two whole seconds after it on, which is what the
+# numbers can prove (a KWin started right after its program was written is not taken for an
+# older one; a program replaced within two seconds of KWin's start may be missed). The change
+# time also moves when the file's attributes or links do, and with the clock: what is known
+# is that the program on the disk was put there, or touched, after the session's KWin
+# started. No answer (no such process, no /proc, no stat) counts as not replaced.
+kwin_replaced() {
+  local pid ticks boot hz changed program value
+  pid=$(busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus GetConnectionUnixProcessID s org.kde.KWin 2>/dev/null |
+    awk '{print $2}') || return 1
+  case $pid in '' | *[!0-9]*) return 1 ;; esac
+  # After the program's name, which may hold spaces and brackets: the 20th field is the start.
+  ticks=$(sed 's/^.*) //' "/proc/$pid/stat" 2>/dev/null | awk '{print $20}') || ticks=
+  boot=$(awk '/^btime / {print $2}' /proc/stat 2>/dev/null) || boot=
+  # The kernel counts a process's start in hundredths of a second on every architecture a
+  # desktop runs on; getconf says so where there is one.
+  hz=$(getconf CLK_TCK 2>/dev/null) || hz=100
+  program=$(command -v kwin_wayland 2>/dev/null) || return 1
+  changed=$(stat -L -c %Z "$program" 2>/dev/null) || changed=
+  for value in "$ticks" "$boot" "$hz" "$changed"; do
+    case $value in '' | *[!0-9]*) return 1 ;; esac
+  done
+  [ "$hz" -gt 0 ] || return 1
+  [ "$changed" -ge $((boot + ticks / hz + 2)) ]
+}
+
+# One capability's answer in words: VALUE YES NO.
+capability_word() {
+  if [ -z "$1" ] || [ "$1" = "?" ]; then
+    echo "could not be asked (the answer is read from this session's journal)"
+  elif [ "$1" = 0 ]; then
+    echo "$3"
+  else
+    echo "$2"
+  fi
+}
+
+capability_lines() { # FULL (yes when the full profile is installed)
+  local values thumbnail opacity tiling any=no unknown=no value
+  values=$(capability_values)
+  if [ -z "$values" ]; then
+    echo "  the running KWin's capabilities: run this in a terminal inside your Plasma session to see them"
+    return 0
+  fi
+  thumbnail=$(printf '%s\n' "$values" | sed -n 's/^thumbnail //p')
+  opacity=$(printf '%s\n' "$values" | sed -n 's/^opacity //p')
+  tiling=$(printf '%s\n' "$values" | sed -n 's/^tiling //p')
+  for value in "$thumbnail" "$opacity" "$tiling"; do
+    if [ -z "$value" ] || [ "$value" = "?" ]; then
+      unknown=yes
+    elif [ "$value" != 0 ]; then
+      any=yes
+    fi
+  done
+  if [ "$any" = no ] && [ "$unknown" = no ]; then
+    echo "  the running KWin's capabilities: none of the fork's (every feature uses its stock fallback)"
+  else
+    echo "  the running KWin's capabilities:"
+    echo "    thumbnail source lifecycle: $(capability_word "$thumbnail" "version $thumbnail" "not advertised")"
+    echo "    offscreen opacity: $(capability_word "$opacity" "version $opacity" "not advertised by a loaded effect")"
+    echo "    transient tiling (dynamic tiling): $(capability_word "$tiling" yes no)"
+  fi
+  if [ "$1" = yes ] && [ "$any" = no ] && [ "$unknown" = no ]; then
+    echo "  note: the full profile is installed and the running KWin advertises none of its capabilities:"
+    echo "        log out and in (the session still runs the KWin from before the profile)"
+  elif [ "$1" != yes ] && [ "$any" = yes ]; then
+    # After --full-restore the packages are the distribution's again and the session still
+    # runs the fork until the next login; a fork that is the installed KWin was put there by
+    # hand. The note says what is known (the times), and names the restore as the usual way
+    # there.
+    if kwin_replaced; then
+      echo "  note: the full profile is not installed and the running KWin still advertises the fork's capabilities:"
+      echo "        log out and in (the KWin on the disk was put there after this session's KWin started, as after --full-restore)"
+    else
+      echo "  note: this KWin advertises the fork's capabilities without the full profile (a fork installed by hand)"
+    fi
+  fi
+}
+
 status() {
-  local p f series kwin built
+  local p f series kwin built full=no
   echo "Plasma Fusion $VERSION ($PF)"
   for p in decoration settings navigation quicklook copytext; do
     if f=$(built_record "$p"); then
@@ -119,6 +323,9 @@ status() {
   echo "  tested with Plasma: ${series:-?}"
   kwin=$(kwin_wayland --version 2>/dev/null | awk '{print $2}' || true)
   [ -z "$kwin" ] || echo "  running KWin: $kwin"
+  profile_lines "$kwin"
+  ! full_profile >/dev/null || full=yes
+  capability_lines "$full"
   for p in decoration navigation; do
     f=$(built_record "$p") && [ -n "$kwin" ] || continue
     built=$(sed -n 's/^kwin=//p;s/^kdecoration=//p' "$f" | head -1)
