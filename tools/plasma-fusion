@@ -223,6 +223,30 @@ capability_values() {
   fi
 }
 
+# Whether the KWin on the disk was put there after the session's KWin started: a package
+# transaction replaced the program while the session ran, and the session keeps the one from
+# before until the next login. kwin_wayland's own link in /proc cannot be read (the program
+# carries a file capability), its start can: the boot time plus the process's start in clock
+# ticks, against the installed program's change time, both in whole seconds. No answer (no
+# such process, no /proc, no stat) counts as not replaced.
+kwin_replaced() {
+  local pid ticks boot hz changed program value
+  pid=$(busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus GetConnectionUnixProcessID s org.kde.KWin 2>/dev/null |
+    awk '{print $2}') || return 1
+  case $pid in '' | *[!0-9]*) return 1 ;; esac
+  # After the program's name, which may hold spaces and brackets: the 20th field is the start.
+  ticks=$(sed 's/^.*) //' "/proc/$pid/stat" 2>/dev/null | awk '{print $20}')
+  boot=$(awk '/^btime / {print $2}' /proc/stat 2>/dev/null)
+  hz=$(getconf CLK_TCK 2>/dev/null) || hz=
+  program=$(command -v kwin_wayland 2>/dev/null) || return 1
+  changed=$(stat -L -c %Z "$program" 2>/dev/null) || changed=
+  for value in "$ticks" "$boot" "$hz" "$changed"; do
+    case $value in '' | *[!0-9]*) return 1 ;; esac
+  done
+  [ "$hz" -gt 0 ] || return 1
+  [ "$changed" -gt $((boot + ticks / hz)) ]
+}
+
 # One capability's answer in words: VALUE YES NO.
 capability_word() {
   if [ -z "$1" ] || [ "$1" = "?" ]; then
@@ -263,7 +287,15 @@ capability_lines() { # FULL (yes when the full profile is installed)
     echo "  note: the full profile is installed and the running KWin advertises none of its capabilities:"
     echo "        log out and in (the session still runs the KWin from before the profile)"
   elif [ "$1" != yes ] && [ "$any" = yes ]; then
-    echo "  note: this KWin advertises the fork's capabilities without the full profile (a fork installed by hand)"
+    # After --full-restore the packages are the distribution's again and the session still
+    # runs the fork until the next login; a fork that is the installed KWin was put there by
+    # hand.
+    if kwin_replaced; then
+      echo "  note: the full profile is not installed and the running KWin still advertises the fork's capabilities:"
+      echo "        log out and in (the session still runs the KWin from before the restore)"
+    else
+      echo "  note: this KWin advertises the fork's capabilities without the full profile (a fork installed by hand)"
+    fi
   fi
 }
 

@@ -16,7 +16,11 @@
 #   9. the probe KWin is given reads the properties and the function ADR 0001 names;
 #  10. every call's probe is found by the compositor: KWin's QML loader keeps the listing of a
 #      directory it has read for as long as it runs, and a file made there later does not exist
-#      for it (the stand-in keeps the same list).
+#      for it (the stand-in keeps the same list);
+#  11. the fork's capabilities without the full profile, the KWin on the disk put there after
+#      the session's KWin started (after --full-restore, before the next login): the note to
+#      log in again, not the one about a fork installed by hand;
+#  12. the same with a KWin whose start cannot be read: the note about a fork installed by hand.
 # Test tooling only, not installed.
 #
 #   status-unit.sh BASE
@@ -53,7 +57,7 @@ export XDG_RUNTIME_DIR=$BASE/run PF_GREETER_ROOT=$BASE/root
 
 # The stand-ins, first in PATH. $T/mode says which compositor answers: stock, fork, silent
 # (the fork, its probe's answer never written) or absent (no KWin on the bus). $T/kwin is the
-# version kwin_wayland reports.
+# version kwin_wayland reports, $T/pid the process the bus names as KWin (none: no answer).
 BIN=$BASE/bin
 mkdir -p "$BIN"
 cat >"$BIN/kwin_wayland" <<'EOF'
@@ -71,6 +75,9 @@ printf '%s\n' "$*" >>"$T/busctl.calls"
 case "$*" in
   *NameHasOwner*)
     if [ "$mode" = absent ]; then echo "b false"; else echo "b true"; fi ;;
+  *GetConnectionUnixProcessID*)
+    [ -s "$T/pid" ] || exit 1
+    echo "u $(cat "$T/pid")" ;;
   *supportInformation*)
     if [ "$mode" = stock ]; then
       printf 's "KWin Support Information:\\nLoaded Effects:\\noverview:\\nlayout: 1\\n"\n'
@@ -113,6 +120,12 @@ run() { # MODE [KWIN VERSION]: the command's output in OUT
   rm -f "$T/journal" "$T/busctl.calls" "$T/unloaded" "$T/nonce" "$T/probe.qml"
   OUT=$(bash "$CLI" status 2>&1) || { bad "status exits 0 ($1)"; OUT=; }
 }
+# The session's KWin, for the process the bus names: a process of this test, started now.
+# The program status compares it with is the kwin_wayland stand-in above, written before.
+sleep 600 &
+KWIN_PID=$!
+trap 'kill "$KWIN_PID" 2>/dev/null || true' EXIT
+echo "$KWIN_PID" >"$T/pid"
 record() { # the metapackage's record, or none
   if [ "${1:-}" = none ]; then
     rm -f "$SHARE/plasma-fusion/full-profile"
@@ -149,7 +162,8 @@ has "3 the stock profile" "  profile: stock (the distribution's KWin)"
 has "3 the thumbnail lifecycle" "    thumbnail source lifecycle: version 1"
 has "3 offscreen opacity" "    offscreen opacity: version 1"
 has "3 the tiling facade" "    transient tiling (dynamic tiling): yes"
-has "3 the fork without the profile is named" "note: this KWin advertises the fork's capabilities without the full profile"
+has "3 the fork without the profile is named" "note: this KWin advertises the fork's capabilities without the full profile (a fork installed by hand)"
+hasnot "3 no note to log in again" "log out and in"
 
 # 4. the full profile
 record
@@ -200,6 +214,27 @@ if [ "$(sort "$T/read-directories" | uniq -d | wc -l)" -eq 0 ] && [ "$(wc -l <"$
 else
   bad "10 every probe had a directory of its own"
 fi
+
+# 11. after a restore, before the next login: the program on the disk is newer than the
+# session's KWin. A second and more apart: both times are whole seconds.
+record none
+sleep 1.2
+chmod +x "$BIN/kwin_wayland"
+run fork
+has "11 the stock profile" "  profile: stock (the distribution's KWin)"
+has "11 the capabilities of the KWin that still runs" "    offscreen opacity: version 1"
+has "11 the note names the state" "note: the full profile is not installed and the running KWin still advertises the fork's capabilities:"
+has "11 the note to log in again" "log out and in (the session still runs the KWin from before the restore)"
+hasnot "11 no note about a fork by hand" "a fork installed by hand"
+
+# 12. a KWin whose start cannot be read
+rm -f "$T/pid"
+run fork
+has "12 a fork installed by hand" "note: this KWin advertises the fork's capabilities without the full profile (a fork installed by hand)"
+hasnot "12 no note to log in again" "log out and in"
+echo 999999999 >"$T/pid"
+run fork
+has "12 no such process: a fork installed by hand" "(a fork installed by hand)"
 
 echo "status-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

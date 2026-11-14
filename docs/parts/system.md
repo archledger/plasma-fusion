@@ -82,9 +82,16 @@ Qt it was built with); `plasma-fusion status` compares it with the running KWin.
     Where KWin does not log to the journal the two lines say that they could not be asked.
   Stock KWin answers `none of the fork's (every feature uses its stock fallback)`. Outside a
   Plasma session nothing is asked.
-* Two notes name a mismatch: the full profile installed while the running KWin advertises
-  nothing (the session still runs the KWin from before; log out and in), and capabilities
-  without the full profile (a fork installed by hand).
+* Three notes name a mismatch. The full profile installed while the running KWin advertises
+  nothing: the session still runs the KWin from before; log out and in. Capabilities without
+  the full profile, the KWin on the disk put there after the session's KWin started: the
+  state between `--full-restore` and the next login, where the packages are the
+  distribution's again and the session keeps the fork until it ends; log out and in.
+  Capabilities without the full profile otherwise: a fork installed by hand.
+  The second is told from the third by times, not by the program's link in `/proc`, which
+  cannot be read (`kwin_wayland` carries a file capability): the boot time plus the process's
+  start in clock ticks against the installed program's change time (`kwin_replaced`). Without
+  an answer the note is the third.
 
 `tools/tests/status-unit.sh` (CI `build`) runs the command against stand-ins for
 `kwin_wayland`, `busctl` and `journalctl` through those cases, and checks the probe KWin is
