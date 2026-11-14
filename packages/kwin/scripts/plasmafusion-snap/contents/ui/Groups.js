@@ -136,6 +136,15 @@ function zoneOccupied(zone, frames) {
 // saw (an app or a script moving a window, a switch in the settle between two offers) still
 // counts. The values are plain snapshots taken by main.qml.
 
+// Whether a window reference can still be used. KWin marks a closing window deleted and
+// destroys it a moment later; a script's reference to the destroyed window is neither null nor
+// falsy, every property of it reads undefined (deleted too, so "not deleted" is true of it), and
+// reading its geometry gives undefined. A live window's deleted is the boolean false. The same
+// rule as the placement script's Tiling.alive.
+function alive(win) {
+    return !!win && win.deleted === false;
+}
+
 function sameRect(a, b) {
     return !!a && !!b && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
