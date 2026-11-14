@@ -1050,8 +1050,11 @@ Offline (laptop):
    beside another window of the app - one the writer holds under the key included -, of a
    window the native layer keeps a record of (by the first attempt or a retry), or in the
    quiet second; a window the user put on the tile's rectangle is recorded there and
-   admitted), a late cell after the user's move (back to where the window was moved, not to
-   a frame in flight), a press with the active window
+   admitted), a window the native layer keeps a record of left out of the stack (awake, and
+   restored from minimized during the session), a late cell after the user's move (back to
+   where the window was moved, not to a frame in flight), a new window of the app not
+   restored onto the float a returning window is going back to, a press with the active
+   window
    on a screen other than KWin's active one (that window's screen is tiled), a master sent
    to another output
    (returned to the float the record carried there), a float on a display that is gone
@@ -1684,6 +1687,11 @@ deliberately defers.
   tile's own rectangle floats there, and is recorded and admitted like any other. On a fork
   build that cannot say what it keeps of a window (no `floatingFrame`) the toggle records
   nothing.
+  Such a window is no stack member either (`nativeKeeps`), awake or minimized at the toggle:
+  a cell would be one more automatic rectangle for it, the frame it stands on would be
+  saved as its float, and only the provider that admitted it can end its record. This is
+  the script loaded again while a released master's record was held: the new tiler holds
+  nothing of it, and the window is left as it is until it closes.
   A window whose place the memory does not take is refused (8), as before: an ignored app's
   window that moved since its last record, a window with a sibling open, a window that
   stands on a cell the tiler took back (below).
@@ -1777,6 +1785,9 @@ deliberately defers.
   the app moved itself - is taken back to that place when the cell's answer still lands (a
   slow client's can, after the move), not to the float the session saved. A frame KWin's
   request has not reached yet is no such place.
+  While the entry lasts the window counts where it is going (`floatOf`): a new window of
+  its app is not restored onto the float it is returning to, though it still stands on the
+  cell.
   The other way round, an off and an on in quick succession: the window still stands on its
   cell while the float's configure is in flight, and the new session would save the cell as
   its float - where every later untoggle would put it. A member's float is where the window

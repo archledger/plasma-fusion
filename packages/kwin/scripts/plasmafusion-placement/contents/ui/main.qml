@@ -1063,7 +1063,10 @@ Item {
         }
 
         // Where a window the tiler holds at an automatic rectangle floats: the master's and
-        // the stack's saved floats, a released master's return. Null for any other window.
+        // the stack's saved floats, a released master's return, and the float a stack window
+        // was given back for as long as it may still stand on its cell (returning: the
+        // float's configure in flight, or a late answer to the cell). Null for any other
+        // window.
         function floatOf(w) {
             if (!w) {
                 return null;
@@ -1078,7 +1081,24 @@ Item {
             if (session.active && session.savedFloats[id] !== undefined) {
                 return session.savedFloats[id];
             }
+            if (returning[id] !== undefined) {
+                return returning[id].float;
+            }
             return null;
+        }
+
+        // Whether the native layer still has a record for a window this tiler holds nothing
+        // of: a release left it where it stands and nobody has returned it (the script was
+        // loaded afterwards, or could not). Where it stands is nobody's choice, and only the
+        // provider that admitted it can end its record: it is no master (its admission
+        // answers busy), no stack member, and nothing of it is recorded for a toggle. False
+        // on a fork build that cannot say.
+        function nativeKeeps(w) {
+            if (!apiAvailable || !api || typeof api.floatingFrame !== "function" || !Tiling.alive(w)) {
+                return false;
+            }
+            const kept = api.floatingFrame(w);
+            return !!kept && kept.width > 0;
         }
 
         // Give a released master its floating frame back: an ordinary request, under placing
@@ -1299,7 +1319,7 @@ Item {
             // A released master whose record is not settled yet is left alone: it is on its
             // way back to its float, and a cell would be one more automatic rectangle for it.
             const candidates = Tiling.stackCandidates(Workspace.stackingOrder, w, desktop, activity, output)
-                .filter(c => !holds(c));
+                .filter(c => !holds(c) && !nativeKeeps(c));
             // The master's float, as it is before the admission: where the tiler returns it
             // after a native teardown that did not, on a fork build that does not say where
             // (releaseMaster).
@@ -1330,11 +1350,8 @@ Item {
                 // says nothing about that - a window the user put on the tile's own rectangle
                 // floats there. A fork build that cannot say (no floatingFrame) gets no
                 // record at all.
-                if (typeof api.floatingFrame === "function") {
-                    const kept = api.floatingFrame(w);
-                    if (!(kept && kept.width > 0)) {
-                        root.recordForAdmission(w);
-                    }
+                if (typeof api.floatingFrame === "function" && !nativeKeeps(w)) {
+                    root.recordForAdmission(w);
                 }
                 let admitResult = -1;
                 admitting = w;
@@ -1390,7 +1407,7 @@ Item {
             // windowAdded - it was there all along - and without a watch it would float over
             // the managed layout until the next relayout never comes for it.
             const dormant = Tiling.dormantCandidates(Workspace.stackingOrder, w, desktop, activity, output)
-                .filter(c => !holds(c));
+                .filter(c => !holds(c) && !nativeKeeps(c));
             for (let i = 0; i < dormant.length; ++i) {
                 const g = floatEntering(dormant[i]);
                 session.savedFloats[String(dormant[i].internalId)] =

@@ -1282,6 +1282,31 @@ Item {
                 let recorded = 0;
                 let admissions = 0;
                 master.frameGeometry = Qt.rect(40, 80, 620, 420);
+                // Nor is such a window a member of anyone's stack: a cell would be one more
+                // automatic rectangle for it, the frame it stands on would be saved as its
+                // float, and its record would stay as it is.
+                const standing = facade.plain(winA.frameGeometry);
+                facade.keepRecord(winA, Qt.rect(300, 300, 300, 320));
+                tileShortcut.activated();
+                if (!master.tile || !inColumn(winB) || !facade.same(winA.frameGeometry, standing)) {
+                    fail("released: a window the native layer keeps a record of is left out of the stack (master "
+                         + (master.tile ? "admitted" : "not admitted") + ", the window at " + JSON.stringify(winA.frameGeometry) + ")");
+                }
+                tileShortcut.activated();
+                if (!facade.same(winA.frameGeometry, standing)) {
+                    fail("released: and the untoggle leaves it where it stands (at " + JSON.stringify(winA.frameGeometry) + ")");
+                }
+                // Minimized at the toggle, it is not waited for either.
+                winA.minimized = true;
+                master.frameGeometry = Qt.rect(40, 80, 620, 420);
+                tileShortcut.activated();
+                winA.minimized = false;
+                if (!master.tile || !facade.same(winA.frameGeometry, standing)) {
+                    fail("released: restored from minimized during the session, it joins no stack (at " + JSON.stringify(winA.frameGeometry) + ")");
+                }
+                tileShortcut.activated();
+                facade.dropRecord(winA);
+                master.frameGeometry = Qt.rect(40, 80, 620, 420);
                 // With another window of the app open the memory is left as it is: the native
                 // layer refuses a key two windows share, and the record would be for nothing.
                 const other = mk({ internalId: "twin2", resourceClass: "org.fusion.terminal",
@@ -1434,6 +1459,31 @@ Item {
                 if (!facade.same(winA.frameGeometry, floatA)) {
                     fail("released: a frame in flight is no place to take the window back to (at " + JSON.stringify(winA.frameGeometry) + ")");
                 }
+                winA.requestedGeometry = null;
+                // ---- a window on its way back counts where it is going ----
+                // A new window of an app is not restored onto a spot one of the app's windows
+                // holds. A stack window whose float is still on its way stands on its cell,
+                // and the spot it holds is the float it is going back to.
+                tileShortcut.activated();
+                tileShortcut.activated();
+                winA.requestedGeometry = Qt.rect(floatA.x, floatA.y, floatA.width, floatA.height);
+                winA.frameGeometry = Qt.rect(cellA.x, cellA.y, cellA.width, cellA.height);
+                facade.entries["org.fusion.editor"] = facade.image(floatA);
+                const sibling = mk({ internalId: "a2", resourceClass: "org.fusion.editor",
+                                     desktopFileName: "org.fusion.editor.desktop",
+                                     frameGeometry: Qt.rect(200, 300, 300, 320) });
+                sibling.desktops = [firstDesktop];
+                sibling.output = ws.activeScreen;
+                ws.windows = [sibling, winB, winA, master];
+                ws.windowAdded(sibling);
+                if (!rectIs(sibling.frameGeometry, 200, 300, 300, 320)) {
+                    fail("released: a window is not restored onto the place a returning window of its app is going back to (at "
+                         + JSON.stringify(sibling.frameGeometry) + ")");
+                }
+                sibling.deleted = true;
+                ws.windows = [winB, winA, master];
+                ws.windowRemoved(sibling);
+                winA.frameGeometry = Qt.rect(floatA.x, floatA.y, floatA.width, floatA.height);
                 winA.requestedGeometry = null;
                 // ---- the next session's floats: where a window is going, not a cell ----
                 // An off and an on in quick succession: the float's configure is in flight and
