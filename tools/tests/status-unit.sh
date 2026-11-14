@@ -23,7 +23,8 @@
 #  12. the same with a KWin whose start cannot be read: the note about a fork installed by hand;
 #  13. a program put on the disk just before KWin started is never taken for a later one: the
 #      start read from /proc is up to two seconds early (the boot time and the clock ticks are
-#      both rounded down), so the times must be further apart than that.
+#      both rounded down), so the times must be further apart than that;
+#  14. without getconf the clock ticks are taken as the kernel's usual hundred a second.
 # Test tooling only, not installed.
 #
 #   status-unit.sh BASE
@@ -114,7 +115,14 @@ case "$*" in
     echo "${*: -1}" >>"$T/unloaded" ;;
 esac
 EOF
-chmod +x "$BIN/kwin_wayland" "$BIN/journalctl" "$BIN/busctl"
+# getconf, as it is; with $T/no-getconf, a system without one.
+REAL_GETCONF=$(command -v getconf)
+cat >"$BIN/getconf" <<EOF
+#!/bin/bash
+[ ! -e "\$T/no-getconf" ] || exit 127
+exec "$REAL_GETCONF" "\$@"
+EOF
+chmod +x "$BIN/kwin_wayland" "$BIN/journalctl" "$BIN/busctl" "$BIN/getconf"
 export PATH=$BIN:$PATH
 
 run() { # MODE [KWIN VERSION]: the command's output in OUT
@@ -219,15 +227,15 @@ else
 fi
 
 # 11. after a restore, before the next login: the program on the disk is newer than the
-# session's KWin, by more than the three seconds the times are certain to tell apart.
+# session's KWin, by more than the two seconds from which the times are certain to tell.
 record none
-sleep 3.2
+sleep 2.2
 chmod +x "$BIN/kwin_wayland"
 run fork
 has "11 the stock profile" "  profile: stock (the distribution's KWin)"
 has "11 the capabilities of the KWin that still runs" "    offscreen opacity: version 1"
 has "11 the note names the state" "note: the full profile is not installed and the running KWin still advertises the fork's capabilities:"
-has "11 the note to log in again" "log out and in (the session still runs the KWin from before the restore)"
+has "11 the note to log in again" "log out and in (the KWin on the disk was put there after this session's KWin started, as after --full-restore)"
 hasnot "11 no note about a fork by hand" "a fork installed by hand"
 
 # 12. a KWin whose start cannot be read
@@ -259,6 +267,12 @@ else
   bad "13 a program from just before KWin's start is never taken for a later one ($wrong of 24 starts were)"
 fi
 echo "$KWIN_PID" >"$T/pid"
+
+# 14. no getconf: the first process again, older than the program by now
+touch "$T/no-getconf"
+run fork
+has "14 the note to log in again without getconf" "log out and in (the KWin on the disk was put there after this session's KWin started"
+rm -f "$T/no-getconf"
 
 echo "status-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

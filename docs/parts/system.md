@@ -94,8 +94,11 @@ Qt it was built with); `plasma-fusion status` compares it with the running KWin.
   start read this way is up to two seconds early, since the boot time and the ticks are both
   rounded down; the program counts as replaced only from two whole seconds after it on, so a
   KWin started right after its program was written is never taken for an older one, and a
-  program replaced within three seconds of KWin's start may be missed. Without an answer the
-  note is the third.
+  program replaced within two seconds of KWin's start may be missed. The change time also
+  moves with the file's attributes and links and with the clock, so the note says what the
+  times say (the KWin on the disk was put there after this session's KWin started) and names
+  `--full-restore` as the usual way there. Without `getconf` the clock ticks are taken as a
+  hundred a second. Without an answer the note is the third.
 
 `tools/tests/status-unit.sh` (CI `build`) runs the command against stand-ins for
 `kwin_wayland`, `busctl` and `journalctl` through those cases, and checks the probe KWin is
