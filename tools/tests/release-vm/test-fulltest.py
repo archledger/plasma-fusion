@@ -4,7 +4,8 @@
 """fulltest.sh against a stand-in VM: the full profile's lane passes on a system that behaves as
 the installer promises (fresh and switch), and every gate of it fails the run, stops the VM and
 keeps the overlay when the system does not: a dry run that changes something, a set that is half
-the fork or not locked, a lock that does not hold, a status that does not see the fork, an idle
+the fork or not locked, a repository that is there and switched off, a lock that does not hold, a
+status that does not see the fork, an idle
 navigation effect, a switcher that does not switch, a tiler without a session, a restore that
 leaves the fork or takes the packages, a status that takes the session after the restore for a
 fork installed by hand, a fallback that is not one, a crash, an uninstall that leaves the lock,
@@ -49,10 +50,12 @@ facts() {
       [ "$FAULT" = no-lock ] && [ "$p" = kwin-libs ] || echo "lock $p $PIN"
     done
     for p in kwin kwin-common kwin-libs; do echo "record $p $STOCK"; done
-    echo "pin $PIN"; echo "tag v6.8.2-pf3"; echo "repo yes"; echo "recordfile yes"
+    echo "pin $PIN"; echo "tag v6.8.2-pf3"; echo "recordfile yes"
+    if [ "$FAULT" = repo-disabled ]; then echo "repo disabled"; else echo "repo enabled"; fi
   else
     [ "$FAULT" = uninstall-leaves-lock ] && [ "$installed" = gone ] && echo "lock kwin $PIN"
-    echo "repo no"; echo "recordfile no"
+    echo "recordfile no"
+    if [ "$FAULT" = restore-leaves-repo ] && [ "$installed" = restored ]; then echo "repo disabled"; else echo "repo no"; fi
   fi
 }
 status() {
@@ -228,6 +231,14 @@ class FullLaneTest(unittest.TestCase):
     def test_set_not_locked(self):
         result = self.rejected("no-lock", "FAIL: the full profile's packages")
         self.assertIn("FAIL kwin-libs is locked at the pin", result.stdout)
+
+    def test_repository_that_is_switched_off(self):
+        result = self.rejected("repo-disabled", "FAIL: the full profile's packages")
+        self.assertIn("FAIL the full profile's repository is enabled: 'disabled'", result.stdout)
+
+    def test_restore_that_leaves_the_repository_behind(self):
+        result = self.rejected("restore-leaves-repo", "FAIL: the stock KWin after --full-restore")
+        self.assertIn("FAIL the full profile's repository is gone: 'disabled'", result.stdout)
 
     def test_lock_that_does_not_hold(self):
         result = self.rejected("lock-loose", "FAIL: the full profile's packages")

@@ -161,7 +161,7 @@ check_full_packages() {
     want "the restore record keeps the stock $p" "$(fact "$f" record "$p")" "${STOCK[$p]}"
   done
   for p in $SIX; do want "$p is the metapackage's build" "$(fact "$f" pkg "$p")" "$meta"; done
-  want "the full profile's repository is enabled" "$(fact "$f" repo)" yes
+  want "the full profile's repository is enabled" "$(fact "$f" repo)" enabled
 }
 # The package side after the way back. FILE: facts; SIX_EVR: what the six packages must be
 # (none after an uninstall).

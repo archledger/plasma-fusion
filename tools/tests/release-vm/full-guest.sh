@@ -8,7 +8,8 @@
 #   full-guest.sh facts            what the package system holds of the full profile, one
 #                                  "KEY VALUE..." line each: pkg NAME EVR|none, lock NAME EVR,
 #                                  record NAME EVR (the restore record), pin EVR and tag TAG (the
-#                                  metapackage's record), repo yes|no, recordfile yes|no
+#                                  metapackage's record), repo enabled|disabled|no (the full
+#                                  profile's repository as dnf sees it), recordfile yes|no
 #   full-guest.sh kwinlog          the journal of the KWin this session runs
 #   full-guest.sh active           the resource class of the active window (none without one)
 #   full-guest.sh windows          opens Konsole, Dolphin and KWrite, one after the other
@@ -38,7 +39,15 @@ case ${1:-} in
       awk '/^Package name: / { name = $3 } /^evr = / { print "lock " name " " $3 }'
     sed -n 's/^\(kwin[a-z-]*\)=\(.*\)$/record \1 \2/p' "$RECORD" 2>/dev/null
     sed -n 's/^kwin=/pin /p; s/^tag=/tag /p' "$PROFILE" 2>/dev/null
-    if grep -qs 'plasma-fusion-full' /etc/yum.repos.d/*.repo; then echo "repo yes"; else echo "repo no"; fi
+    # The repository as dnf sees it: a file left with enabled=0 is no place updates come from,
+    # and no repository that is gone either.
+    if dnf -q repo list --enabled 2>/dev/null | grep -q 'plasma-fusion-full'; then
+      echo "repo enabled"
+    elif dnf -q repo list --all 2>/dev/null | grep -q 'plasma-fusion-full' || grep -qs 'plasma-fusion-full' /etc/yum.repos.d/*.repo; then
+      echo "repo disabled"
+    else
+      echo "repo no"
+    fi
     if [ -e "$RECORD" ]; then echo "recordfile yes"; else echo "recordfile no"; fi
     ;;
   kwinlog)
