@@ -6,7 +6,9 @@
 # commands that talk to KWin: in the session's environment).
 #
 #   full-guest.sh facts            what the package system holds of the full profile, one
-#                                  "KEY VALUE..." line each: pkg NAME EVR|none, lock NAME EVR,
+#                                  "KEY VALUE..." line each: pkg NAME EVR|none|error (error:
+#                                  rpm could not say), locklist ok|failed (failed: dnf could
+#                                  not list the locks), lock NAME EVR,
 #                                  record NAME EVR (the restore record), pin EVR and tag TAG (the
 #                                  metapackage's record), repo enabled|disabled|no (the full
 #                                  profile's repository as dnf sees it), recordfile yes|no
@@ -27,16 +29,25 @@ APPS="konsole dolphin kwrite"
 
 case ${1:-} in
   facts)
+    # A package rpm cannot answer for is not one that is not installed, and a package
+    # installed for two architectures has both versions named.
     for p in kwin kwin-common kwin-libs plasma-fusion-full $SIX; do
-      if rpm -q "$p" >/dev/null 2>&1; then
-        echo "pkg $p $(rpm -q --qf '%{VERSION}-%{RELEASE}' "$p")"
-      else
+      if out=$(rpm -q --qf '%{VERSION}-%{RELEASE}\n' "$p" 2>&1); then
+        echo "pkg $p $(printf '%s\n' "$out" | sort -u | paste -sd, -)"
+      elif printf '%s' "$out" | grep -q 'is not installed'; then
         echo "pkg $p none"
+      else
+        echo "pkg $p error"
       fi
     done
-    # dnf5: "Package name: kwin" and, below it, "evr = 6.8.2-3.fc44.pf3"
-    sudo dnf versionlock list 2>/dev/null |
-      awk '/^Package name: / { name = $3 } /^evr = / { print "lock " name " " $3 }'
+    # dnf5: "Package name: kwin" and, below it, "evr = 6.8.2-3.fc44.pf3". A list that could not
+    # be read is not an empty one.
+    if locks=$(sudo dnf versionlock list 2>/dev/null); then
+      echo "locklist ok"
+      printf '%s\n' "$locks" | awk '/^Package name: / { name = $3 } /^evr = / { print "lock " name " " $3 }'
+    else
+      echo "locklist failed"
+    fi
     sed -n 's/^\(kwin[a-z-]*\)=\(.*\)$/record \1 \2/p' "$RECORD" 2>/dev/null
     sed -n 's/^kwin=/pin /p; s/^tag=/tag /p' "$PROFILE" 2>/dev/null
     # The repository as dnf sees it: a file left with enabled=0 is no place updates come from,
@@ -51,13 +62,16 @@ case ${1:-} in
     if [ -e "$RECORD" ]; then echo "recordfile yes"; else echo "recordfile no"; fi
     ;;
   kwinlog)
-    pid=$(pgrep -u "$(id -u)" -x kwin_wayland | head -n 1)
+    # The newest: a session that is on its way out may still have its own.
+    pid=$(pgrep -n -u "$(id -u)" -x kwin_wayland) || pid=
     [ -n "$pid" ] || { echo "no kwin_wayland" >&2; exit 1; }
     journalctl --user -b --no-pager -o cat "_PID=$pid"
     ;;
   active)
     dir=$(mktemp -d) || exit 1
-    echo 'console.info("pf-full-active " + (workspace.activeWindow ? workspace.activeWindow.resourceClass : "none"));' >"$dir/active.js"
+    # This call's own answer: the line carries the directory's name.
+    nonce=$(basename "$dir")
+    echo "console.info(\"pf-full-active $nonce \" + (workspace.activeWindow ? workspace.activeWindow.resourceClass : \"none\"));" >"$dir/active.js"
     since=$(($(date +%s) - 1))
     busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s pf-full-active >/dev/null 2>&1
     id=$(busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting loadScript ss "$dir/active.js" pf-full-active | awk '{print $2}')
@@ -65,14 +79,14 @@ case ${1:-} in
     busctl --user call org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script run >/dev/null
     answer=
     for _ in 1 2 3 4 5 6 7 8 9 10; do
-      answer=$(journalctl --user --no-pager -o cat --since "@$since" | grep -a -o 'pf-full-active .*' | tail -n 1)
+      answer=$(journalctl --user --no-pager -o cat --since "@$since" | grep -a -o "pf-full-active $nonce .*" | tail -n 1)
       [ -z "$answer" ] || break
       sleep 0.3
     done
     busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s pf-full-active >/dev/null 2>&1
     rm -rf "$dir"
     [ -n "$answer" ] || { echo "KWin did not answer" >&2; exit 1; }
-    echo "${answer#pf-full-active }"
+    echo "${answer#pf-full-active "$nonce" }"
     ;;
   windows)
     for a in $APPS; do

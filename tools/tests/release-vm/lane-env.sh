@@ -2,9 +2,10 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# The installer for one release-VM test (vmtest.sh, sddmtest.sh), sourced. lane_installer puts the
-# installer (and the lane's test key or sources) into the VM and sets env, the environment it runs
-# with, and lane_env, the lane or "public" (PF_PUBLIC=1). It expects name, lane, C and HERE, and the
+# The installer for one release-VM test (vmtest.sh, sddmtest.sh, splashtest.sh; fulltest.sh for
+# the published one), sourced. lane_installer puts the installer (and the lane's test key or
+# sources) into the VM and sets env, the environment it runs with, and lane_env, the lane or
+# "public" (PF_PUBLIC=1). It expects name, lane, C and HERE, and the
 # functions vm and log; it returns 1 when the AUR lane's prerequisites cannot be prepared (pacman
 # tries three times: it has no retries of its own, and the mirrors time out now and then from QEMU's
 # user network).

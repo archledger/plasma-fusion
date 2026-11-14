@@ -73,12 +73,18 @@ insession() {
     $1"
 }
 guest() { insession "bash ~/full-guest.sh $*"; }
-wait_plasma() { # wait for a settled desktop
-  local _
+# A Plasma session runs for the test user: its shell and its KWin.
+session_runs() { vm ssh "$name" 'pgrep -u pf -x plasmashell >/dev/null && pgrep -u pf -x kwin_wayland >/dev/null'; }
+wait_plasma() { # wait for a settled desktop; none within five minutes fails the run
+  local _ up=no
   for _ in $(seq 1 60); do
-    vm ssh "$name" 'pgrep -u pf -x plasmashell >/dev/null' && break
+    if session_runs; then
+      up=yes
+      break
+    fi
     sleep 5
   done
+  [ "$up" = yes ] || { log "FAIL: no Plasma session came up"; exit 1; }
   sleep 25
   # Plasma's welcome app opens on a first login; it would cover the desktop in the screenshots.
   vm ssh "$name" 'for p in $(pgrep -u pf -x plasma-welcome); do kill "$p"; done' 2>/dev/null || true
@@ -97,7 +103,11 @@ relogin() {
     now=$(vm ssh "$name" "$TTY1 tty1_session" 2>/dev/null)
     [ -n "$now" ] && [ "$now" != "$before" ] && break
   done
-  log "relogin: session $before -> ${now:-none}"
+  if [ -z "$now" ] || [ "$now" = "$before" ]; then
+    log "FAIL: no new session on tty1 after the logout (was ${before:-none}, is ${now:-none})"
+    exit 1
+  fi
+  log "relogin: session $before -> $now"
   wait_plasma
 }
 shot() { vm shot "$name" "$OUT/$1.png" >/dev/null && log "screenshot $1"; }
@@ -118,6 +128,9 @@ same() { # WHAT FILE FILE: the two files say the same
 has() { # WHAT FILE PATTERN: the file has a line that matches (grep -E)
   if grep -a -q -E -- "$3" "$OUT/$2"; then log "  ok   $1"; else log "  FAIL $1 (no such line in $2)"; bad=1; fi
 }
+hasf() { # WHAT FILE TEXT: the file has the text, letter for letter
+  if grep -a -q -F -- "$3" "$OUT/$2"; then log "  ok   $1"; else log "  FAIL $1 (no '$3' in $2)"; bad=1; fi
+}
 hasnot() { # WHAT FILE PATTERN: no line of the file matches
   if grep -a -q -E -- "$3" "$OUT/$2"; then
     log "  FAIL $1 (in $2: $(grep -a -m 1 -E -- "$3" "$OUT/$2" | cut -c1-120))"
@@ -137,6 +150,11 @@ crashes() { # WHEN: this boot's crashes; a collector that cannot say is not zero
   want "crashes $1" "$n" 0
 }
 is_fork() { case $1 in *.pf[0-9]*) return 0 ;; esac; return 1; }
+# The journal of the session's KWin, with the gesture lock written on and off first.
+kwinlog() { # FILE
+  guest gesturelock || { log "FAIL: the gesture lock could not be written"; exit 1; }
+  guest kwinlog >"$OUT/$1" 2>&1 || { log "FAIL: the journal of the session's KWin could not be read ($1)"; exit 1; }
+}
 
 # The package side of the full profile. FILE: facts; the stock KWin it replaced: STOCK[].
 declare -A STOCK
@@ -161,12 +179,15 @@ check_full_packages() {
     want "the restore record keeps the stock $p" "$(fact "$f" record "$p")" "${STOCK[$p]}"
   done
   for p in $SIX; do want "$p is the metapackage's build" "$(fact "$f" pkg "$p")" "$meta"; done
+  want "the lock list could be read" "$(fact "$f" locklist)" ok
   want "the full profile's repository is enabled" "$(fact "$f" repo)" enabled
 }
 # The package side after the way back. FILE: facts; SIX_EVR: what the six packages must be
 # (none after an uninstall).
 check_stock_packages() {
   local f=$1 six=$2 p
+  # No lock line means no lock only when the list itself was read.
+  want "the lock list could be read" "$(fact "$f" locklist)" ok
   for p in $KWIN; do
     want "$p is the recorded stock one" "$(fact "$f" pkg "$p")" "${STOCK[$p]}"
     want "$p is not locked" "$(fact "$f" lock "$p")" ""
@@ -177,7 +198,8 @@ check_stock_packages() {
   for p in $SIX; do want "$p" "$(fact "$f" pkg "$p")" "$six"; done
 }
 # The switcher, held open by a real Alt (a shortcut called over the bus shows none): three
-# windows, the cards on the screen, and another window in front once Alt is released.
+# windows, a screenshot while it is held (for the eye; nothing reads it), and another of the
+# three in front once Alt is released.
 switcher() { # PREFIX
   local before after
   guest windows >"$OUT/$1-windows.log" 2>&1 || { log "FAIL: the test windows did not open"; exit 1; }
@@ -186,12 +208,11 @@ switcher() { # PREFIX
     >"$OUT/$1-keys.log" 2>&1 || { log "FAIL: the keys for the switcher ($(tail -n 1 "$OUT/$1-keys.log"))"; exit 1; }
   log "screenshot $1-switcher"
   after=$(guest active) || { log "FAIL: KWin did not name the active window"; exit 1; }
-  if [ -n "$after" ] && [ "$after" != none ] && [ "$after" != "$before" ]; then
-    log "  ok   the switcher went from $before to $after"
-  else
-    log "  FAIL the switcher did not switch (before: $before, after: $after)"
-    bad=1
-  fi
+  case $after in
+    "$before") log "  FAIL the switcher did not switch (before: $before, after: $after)"; bad=1 ;;
+    org.kde.konsole | org.kde.dolphin | org.kde.kwrite) log "  ok   the switcher went from $before to $after" ;;
+    *) log "  FAIL the switcher did not switch to a test window (before: $before, after: $after)"; bad=1 ;;
+  esac
 }
 # The tiler's shortcut twice, with one of the test windows active, and what KWin's journal has
 # of it since: on the fork a session and its end, on stock the script's own refusal.
@@ -300,14 +321,17 @@ log "  rc=$rc"
 [ "$rc" = 0 ] || { log "FAIL: install --full"; tail -n 30 "$OUT/11-install.log"; exit "$rc"; }
 facts 12-facts.txt
 check_full_packages 12-facts.txt
-# The set holds against the distribution's own packages: with the full profile's repository
-# out of the question, a sync to what Fedora offers finds nothing it may do.
+# The set holds against the distribution's own packages, and by the lock: with the full
+# profile's repository out of the question, a sync to what Fedora offers finds nothing it may
+# do, and no conflict it has to skip. Without the lock dnf ends with the same words, after a
+# "Problem:" report that the metapackage's exact requires stand in the way.
 vm ssh "$name" "sudo dnf -q --assumeno --disablerepo='copr:*plasma-fusion-full*' distro-sync $KWIN" >"$OUT/12-lock-holds.log" 2>&1
 has "a sync to the distribution's KWin finds nothing to do" 12-lock-holds.log '^Nothing to do'
+hasnot "the lock leaves the solver nothing to skip" 12-lock-holds.log 'Problem|Skipping packages|No matching repositories'
 # Before the new login the session still runs the KWin from before: status says so.
 status 13-status-before-login.log
 has "status: the full profile, its pin and tag" 13-status-before-login.log "profile: full \(the maintained KWin fork, pinned at $(fact 12-facts.txt pin), fork tag $(fact 12-facts.txt tag)\)"
-has "status: the running KWin is still the one from before" 13-status-before-login.log 'log out and in'
+hasf "status: the session still runs the KWin from before" 13-status-before-login.log 'log out and in (the session still runs the KWin from before the profile)'
 shot 13-after-setup
 phase "the full profile's packages"
 
@@ -318,13 +342,14 @@ has "status: the full profile" 21-status.log "profile: full \(the maintained KWi
 has "status: thumbnail source lifecycle, version 1" 21-status.log 'thumbnail source lifecycle: version 1'
 has "status: offscreen opacity, version 1" 21-status.log 'offscreen opacity: version 1'
 has "status: transient tiling" 21-status.log 'transient tiling \(dynamic tiling\): yes'
-hasnot "status: no note about another KWin" 21-status.log 'log out and in|restore the stock KWin'
+hasnot "status: no note" 21-status.log '^  note:'
 has "the login check switched nothing off" 21-status.log 'switched off: nothing'
+vm ssh "$name" 'grep -h LookAndFeelPackage ~/.config/kdeglobals' >"$OUT/21-theme.txt" 2>&1
+has "the session is Plasma Fusion's" 21-theme.txt 'org\.plasmafusion\.'
 phase "status on the full profile"
 
 log "the gated features on the fork"
-guest gesturelock
-guest kwinlog >"$OUT/22-kwin.log" 2>&1
+kwinlog 22-kwin.log
 hasnot "navigation: the effect is not idle" 22-kwin.log 'plasmafusion-navigation: .*the effect stays idle'
 has "navigation: the effect follows the gesture lock (on)" 22-kwin.log 'plasmafusion-navigation: gesture lock on'
 has "navigation: the effect follows the gesture lock (off)" 22-kwin.log 'plasmafusion-navigation: gesture lock off'
@@ -333,8 +358,8 @@ tiler 24-full
 has "the tiler: a session on the fork" 24-full-tiler.log 'tiling: on \('
 has "the tiler: and its end" 24-full-tiler.log 'tiling: off'
 guest close
-guest kwinlog >"$OUT/25-kwin.log" 2>&1
-hasnot "no script error in KWin" 25-kwin.log 'TypeError|ReferenceError|SyntaxError'
+guest kwinlog >"$OUT/25-kwin.log" 2>&1 || { log "FAIL: the journal of the session's KWin could not be read (25-kwin.log)"; exit 1; }
+hasnot "no script error in KWin's journal" 25-kwin.log 'TypeError|ReferenceError|SyntaxError'
 vm ssh "$name" 'tail -n 5 ~/.local/state/plasma-fusion/gate.log' >"$OUT/26-gate.log" 2>&1
 crashes "on the full profile"
 phase "the full profile's session"
@@ -346,7 +371,7 @@ if [ "$mode" = fresh ]; then
   rc=$?
   log "  rc=$rc"
   [ "$rc" = 0 ] || { log "FAIL: --full-restore dry run"; exit "$rc"; }
-  has "the plan names the recorded stock KWin" 30-restore-dry-run.log "kwin=${STOCK[kwin]}"
+  hasf "the plan names the recorded stock KWin" 30-restore-dry-run.log "(recorded: kwin=${STOCK[kwin]},kwin-common=${STOCK[kwin-common]},kwin-libs=${STOCK[kwin-libs]})"
   facts 30-facts.txt
   same "the dry run changed nothing" 30-facts.txt 12-facts.txt
   log "installer: --full-restore"
@@ -360,7 +385,7 @@ if [ "$mode" = fresh ]; then
   # it for a fork installed by hand.
   status 33-status-before-login.log
   has "status: the stock profile, before the new login too" 33-status-before-login.log 'profile: stock \(the distribution.s KWin\)'
-  has "status: the running KWin is still the fork from before" 33-status-before-login.log 'log out and in \(the session still runs the KWin from before the restore\)'
+  hasf "status: the session still runs the KWin from before" 33-status-before-login.log "log out and in (the KWin on the disk was put there after this session's KWin started, as after --full-restore)"
   hasnot "status: not taken for a fork installed by hand" 33-status-before-login.log 'a fork installed by hand'
   phase "the stock KWin after --full-restore"
 
@@ -369,15 +394,14 @@ if [ "$mode" = fresh ]; then
   status 41-status.log
   has "status: the stock profile" 41-status.log 'profile: stock \(the distribution.s KWin\)'
   has "status: none of the fork's capabilities" 41-status.log "capabilities: none of the fork's \(every feature uses its stock fallback\)"
-  hasnot "status: no note about another KWin" 41-status.log 'log out and in|a fork installed by hand'
+  hasnot "status: no note" 41-status.log '^  note:'
   has "the login check switched nothing off" 41-status.log 'switched off: nothing'
   vm ssh "$name" 'grep -h LookAndFeelPackage ~/.config/kdeglobals' >"$OUT/41-theme.txt" 2>&1
   has "the session is still Plasma Fusion's" 41-theme.txt 'org\.plasmafusion\.'
   phase "status after the restore"
 
   log "the features' fallbacks on stock KWin"
-  guest gesturelock
-  guest kwinlog >"$OUT/42-kwin.log" 2>&1
+  kwinlog 42-kwin.log
   has "navigation: the effect stays idle and says why" 42-kwin.log 'plasmafusion-navigation: compositor lacks offscreen opacity capability version 1; the effect stays idle'
   hasnot "navigation: nothing follows the gesture lock" 42-kwin.log 'plasmafusion-navigation: gesture lock'
   switcher 43-stock
@@ -385,8 +409,8 @@ if [ "$mode" = fresh ]; then
   has "the tiler: refused, it needs the fork" 44-stock-tiler.log 'tiling: the native facade is not available; the tiler needs the fork'
   hasnot "the tiler: no session on stock KWin" 44-stock-tiler.log 'tiling: on \('
   guest close
-  guest kwinlog >"$OUT/45-kwin.log" 2>&1
-  hasnot "no script error in KWin" 45-kwin.log 'TypeError|ReferenceError|SyntaxError'
+  guest kwinlog >"$OUT/45-kwin.log" 2>&1 || { log "FAIL: the journal of the session's KWin could not be read (45-kwin.log)"; exit 1; }
+  hasnot "no script error in KWin's journal" 45-kwin.log 'TypeError|ReferenceError|SyntaxError'
   crashes "after the restore"
   phase "Plasma Fusion on stock KWin after the restore"
 fi
