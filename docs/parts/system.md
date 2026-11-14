@@ -90,8 +90,12 @@ Qt it was built with); `plasma-fusion status` compares it with the running KWin.
   Capabilities without the full profile otherwise: a fork installed by hand.
   The second is told from the third by times, not by the program's link in `/proc`, which
   cannot be read (`kwin_wayland` carries a file capability): the boot time plus the process's
-  start in clock ticks against the installed program's change time (`kwin_replaced`). Without
-  an answer the note is the third.
+  start in clock ticks against the installed program's change time (`kwin_replaced`). The
+  start read this way is up to two seconds early, since the boot time and the ticks are both
+  rounded down; the program counts as replaced only from two whole seconds after it on, so a
+  KWin started right after its program was written is never taken for an older one, and a
+  program replaced within three seconds of KWin's start may be missed. Without an answer the
+  note is the third.
 
 `tools/tests/status-unit.sh` (CI `build`) runs the command against stand-ins for
 `kwin_wayland`, `busctl` and `journalctl` through those cases, and checks the probe KWin is

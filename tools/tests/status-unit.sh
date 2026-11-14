@@ -20,7 +20,10 @@
 #  11. the fork's capabilities without the full profile, the KWin on the disk put there after
 #      the session's KWin started (after --full-restore, before the next login): the note to
 #      log in again, not the one about a fork installed by hand;
-#  12. the same with a KWin whose start cannot be read: the note about a fork installed by hand.
+#  12. the same with a KWin whose start cannot be read: the note about a fork installed by hand;
+#  13. a program put on the disk just before KWin started is never taken for a later one: the
+#      start read from /proc is up to two seconds early (the boot time and the clock ticks are
+#      both rounded down), so the times must be further apart than that.
 # Test tooling only, not installed.
 #
 #   status-unit.sh BASE
@@ -216,9 +219,9 @@ else
 fi
 
 # 11. after a restore, before the next login: the program on the disk is newer than the
-# session's KWin. A second and more apart: both times are whole seconds.
+# session's KWin, by more than the three seconds the times are certain to tell apart.
 record none
-sleep 1.2
+sleep 3.2
 chmod +x "$BIN/kwin_wayland"
 run fork
 has "11 the stock profile" "  profile: stock (the distribution's KWin)"
@@ -235,6 +238,27 @@ hasnot "12 no note to log in again" "log out and in"
 echo 999999999 >"$T/pid"
 run fork
 has "12 no such process: a fork installed by hand" "(a fork installed by hand)"
+
+# 13. the program first, KWin right after it, at 24 points across a second and a half
+wrong=0
+for _ in $(seq 1 24); do
+  chmod +x "$BIN/kwin_wayland"
+  sleep 30 &
+  later=$!
+  echo "$later" >"$T/pid"
+  run fork
+  kill "$later" 2>/dev/null || true
+  if ! grep -qF "(a fork installed by hand)" <<<"$OUT" || grep -qF "log out and in" <<<"$OUT"; then
+    wrong=$((wrong + 1))
+  fi
+  sleep 0.06
+done
+if [ "$wrong" = 0 ]; then
+  ok "13 a program from just before KWin's start is never taken for a later one (24 starts)"
+else
+  bad "13 a program from just before KWin's start is never taken for a later one ($wrong of 24 starts were)"
+fi
+echo "$KWIN_PID" >"$T/pid"
 
 echo "status-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

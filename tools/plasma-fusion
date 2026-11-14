@@ -227,8 +227,12 @@ capability_values() {
 # transaction replaced the program while the session ran, and the session keeps the one from
 # before until the next login. kwin_wayland's own link in /proc cannot be read (the program
 # carries a file capability), its start can: the boot time plus the process's start in clock
-# ticks, against the installed program's change time, both in whole seconds. No answer (no
-# such process, no /proc, no stat) counts as not replaced.
+# ticks, against the installed program's change time, all in whole seconds. The boot time and
+# the ticks are both rounded down, so the start read this way is up to two seconds early: the
+# program counts as replaced only from two whole seconds after it on, which is what the
+# numbers can prove (a KWin started right after its program was written is not taken for an
+# older one; a program replaced within three seconds of KWin's start may be missed). No
+# answer (no such process, no /proc, no stat) counts as not replaced.
 kwin_replaced() {
   local pid ticks boot hz changed program value
   pid=$(busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus GetConnectionUnixProcessID s org.kde.KWin 2>/dev/null |
@@ -244,7 +248,7 @@ kwin_replaced() {
     case $value in '' | *[!0-9]*) return 1 ;; esac
   done
   [ "$hz" -gt 0 ] || return 1
-  [ "$changed" -gt $((boot + ticks / hz)) ]
+  [ "$changed" -ge $((boot + ticks / hz + 2)) ]
 }
 
 # One capability's answer in words: VALUE YES NO.
