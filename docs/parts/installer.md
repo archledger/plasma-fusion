@@ -100,7 +100,12 @@ repositories offer now. Fedora keeps only a package's newest build, so a stock t
 while the machine was on the fork can no longer be reinstalled: the fallback says so out loud
 and takes the current stock — but only after verifying the recorded EVRs are really gone
 (`dnf -q repoquery`); a transient repository or solver failure stops instead of quietly
-becoming that fallback. The restore then **verifies the distag is gone** — a repository
+becoming that fallback. The record's directory, `/var/lib/plasma-fusion`, can be root's alone:
+`greeter-apply.sh` keeps the login screen's backups there and makes it `0700`, before `--full`
+or after it. The installer runs as the user, so the restore reads the record through sudo
+where the user cannot, and the plan, which asks for nothing, says "the recorded versions, which
+sudo reads" in place of the versions (found on the ThinkPad, where a plain read had found
+nothing and the restore had gone by the names alone). The restore then **verifies the distag is gone** — a repository
 left enabled would win the sync, so the check catches it and says what to do. The six Plasma
 Fusion packages stay installed; they run on stock KWin. `uninstall` on a full system (also
 usable outside the stamp and through the Plasma-version gate, for the same reason: its job is

@@ -133,11 +133,30 @@ kwin_is_fork() {
 }
 full_meta_installed() { [ -n "$(pf_installed plasma-fusion-full)" ]; }
 full_restore_file() { printf '%s/var/lib/plasma-fusion/full-restore.txt' "$TEST_ROOT"; }
-# What --full recorded, for the plan; empty when the record is gone or unreadable.
+# Whether the record may be there without this user being able to read it. Its directory can
+# be root's alone: greeter-apply.sh keeps the login screen's backups in it and makes it 0700,
+# before --full or after it. The installer runs as the user, so a plain read then finds
+# nothing where the record is.
+full_record_hidden() {
+  rf=$(full_restore_file)
+  [ ! -r "$rf" ] && { [ -e "$rf" ] || { [ -d "${rf%/*}" ] && [ ! -x "${rf%/*}" ]; }; }
+}
+# The record's lines: as the user where the user can read them, through sudo where only root
+# can (the restore has sudo by then; the plan, which asks for nothing, does not come here).
+full_record_lines() {
+  rf=$(full_restore_file)
+  if [ -r "$rf" ]; then
+    cat "$rf"
+  elif full_record_hidden; then
+    $SUDO cat "$rf" 2>/dev/null || true
+  fi
+}
+# What --full recorded, for the plan; empty when the record is gone or this user cannot read
+# it (full_record_hidden tells the two apart).
 full_recorded() { grep -E "^(kwin|kwin-common|kwin-libs)=" "$(full_restore_file)" 2>/dev/null | paste -sd, - ; }
 # The recorded EVRs as dnf specs (kwin-6.7.5-1.fc44): the restore's target, per the contract -
 # the machine returns to the stock KWin it had, not to whatever the repositories offer now.
-full_recorded_specs() { sed -n 's/^\([a-z-]*\)=\([0-9][0-9.]*-[0-9][^ ]*\)$/\1-\2/p' "$(full_restore_file)" 2>/dev/null | paste -sd' ' -; }
+full_recorded_specs() { full_record_lines | sed -n 's/^\([a-z-]*\)=\([0-9][0-9.]*-[0-9][^ ]*\)$/\1-\2/p' | paste -sd' ' -; }
 
 # The full profile's package step: record the stock KWin this system runs, swap in the pinned fork
 # through the full profile's own repository, then lock the set so a distribution update can never
@@ -861,7 +880,11 @@ main() {
 
   if [ "$MODE" = full-restore ]; then
     rec=$(full_recorded)
-    [ -n "$rec" ] && rec=" (recorded: $rec)"
+    if [ -n "$rec" ]; then
+      rec=" (recorded: $rec)"
+    elif full_record_hidden; then
+      rec=": the recorded versions, which sudo reads"
+    fi
     say "Plan:"
     echo "  sudo dnf -y versionlock delete $FULL_KWIN_PKGS   (the pin goes)" >&2
     full_meta_installed && echo "  sudo dnf -y remove --no-autoremove plasma-fusion-full   (the metapackage)" >&2
