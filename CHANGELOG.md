@@ -59,6 +59,10 @@ unchanged by it. Thanks to @viewv for the Do Not Disturb report.
   and the date at the right clock time when the period spans a daylight saving change; it was an
   hour off (#158).
 
+- **Snap groups and a window closed during the fill:** when a window that the fill sequence
+  (Meta+Z, then a layout) had just placed closed right away, the remaining zones were no longer
+  offered. The script read the closed window after KWin had destroyed it (#181).
+
 ## 0.7.0 (2026-11-10)
 
 Tested with Plasma 6.7 and 6.8. Fedora 44, the ThinkPad X13 Yoga Gen 4 and the ASUS Zenbook run
