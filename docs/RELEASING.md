@@ -18,11 +18,17 @@ key in the AUR package's `validpgpkeys` and the installer.
 3. `CHANGELOG.md`: the new version on top (newest first), with the tested Plasma series, the
    supported and refused systems, and "Thanks to @user" for outside reporters and contributors.
 4. The `build`, `compiled` and `packages` workflows are green on the pull request.
-5. A release with the full profile ([full-profile.md](full-profile.md)) pins one fork tag. The
-   tag is built in the full Copr project first, from archledger/kwin in the fork's CI image:
-   `SRPM=1 packaging/fedora/build-fork-rpm.sh v<upstream>-pf<N> OUT`, then
-   `copr-cli build archledger/plasma-fusion-full OUT/SRPMS/kwin-*.src.rpm`. The spec's
-   `%global kwin_full_pin` is that build's exact EVR (`6.8.2-3.fc44.pf5`);
+5. A release with the full profile ([full-profile.md](full-profile.md)) pins one fork tag. A new
+   tag is built first, from archledger/kwin in the fork's CI image:
+   `SRPM=1 packaging/fedora/build-fork-rpm.sh v<upstream>-pf<N> OUT`, and the same source
+   package goes to the candidates project and to the live one:
+   `copr-cli build archledger/plasma-fusion-full-candidates OUT/SRPMS/kwin-*.src.rpm`, then the
+   same with `archledger/plasma-fusion-full`. Plasma Fusion's `--with full` build compiles
+   against its project's own KWin (`cmake(KWin)` resolves to the fork's `kwin-devel` there), so
+   each project needs the tag before a candidate or the release is built in it. In the live
+   project the new KWin waits: the current metapackage requires the old pin exactly, and the
+   version lock holds every full-profile machine at the old one. The spec's `%global kwin_full_pin`
+   is the builds' exact EVR (the same in both projects: `6.8.2-3.fc44.pf5`);
    `packaging/check-version.sh` checks its shape and `packaging/check-full-profile.sh` the
    gates with it. Both need `rpmspec`: run them in a Fedora container.
 
@@ -44,16 +50,22 @@ splash, `plymouth-install.sh --select`, the boot captured from the reset on and 
 Splash board, `uninstall` and the system's own splash again.
 Every system must pass; the evidence goes to the ledger's artifacts.
 
-With a pin, the full profile too:
-- A candidate of the release branch goes to the full Copr project: `packaging/build-rpm.sh`'s
-  source package, then `copr-cli build archledger/plasma-fusion-full`. Its version,
+With a pin, the full profile too, in the candidates project
+(`archledger/plasma-fusion-full-candidates`, unlisted, test builds only). The live project has
+users, and a candidate there would reach them: its version sorts above the last release.
+- A candidate of the release branch goes to the candidates project: `packaging/build-rpm.sh`'s
+  source package, then `copr-cli build archledger/plasma-fusion-full-candidates`. Its version,
   `X.Y.Z~N.gitHASH`, sorts above every earlier snapshot and below the release.
-- `tools/tests/release-vm/fulltest.sh fedora44lane fresh` and `... switch` run against it
-  (docs/parts/release-tests.md).
-- So does the update from the previous pin: a full-profile VM on that pin updates with
-  `install.sh update`. That must be one dnf transaction (the KWin packages, the metapackage and
-  the six packages together), ending with the version lock at the new pin: ADR 0001's
-  security-cadence round.
+- `PF_FULL_REPO=archledger/plasma-fusion-full-candidates tools/tests/release-vm/fulltest.sh
+  fedora44lane fresh` and `... switch` run against it (docs/parts/release-tests.md): the
+  installer they stamp enables that project, and the lane checks that it is the one enabled.
+- So does the update from the previous pin: a VM with the last release's full profile (the
+  published installer, from the live project) moves to the candidates project
+  (`sudo dnf copr remove archledger/plasma-fusion-full`, then
+  `sudo dnf copr enable archledger/plasma-fusion-full-candidates fedora-44-x86_64`) and updates
+  with the candidate's `install.sh update`. That must be one dnf transaction (the KWin packages,
+  the metapackage and the six packages together), ending with the version lock at the new pin:
+  ADR 0001's security-cadence round.
 
 Then the depth features' check on the merged commit's HOME tree, on the test host and on the
 Plasma beta container (`tools/tests/depth/run.sh`, docs/parts/testing.md "Depth features"): window
@@ -96,24 +108,36 @@ the installer from the draft's URL with `--dry-run` on one system.
 
 1. Publish the release. `releases/latest/download/install.sh` now serves the new installer.
 2. **Copr** (Packit, on the release): read each chroot's result back (`copr-cli list-builds
-   archledger/plasma-fusion`; Fedora 44 and 45 must succeed; rawhide is informational).
+   archledger/plasma-fusion`; Fedora 44 and 45 must succeed; rawhide is informational). Packit
+   can miss a release (it missed 0.8.0, while its service was down): when no build of the tag
+   has started a few minutes after publishing, build the source package at the tag in a Fedora
+   container (`packaging/build-rpm.sh --topdir DIR`) and submit it by hand:
+   `copr-cli build archledger/plasma-fusion DIR/SRPMS/plasma-fusion-X.Y.Z-1.fc44.src.rpm`.
 3. **Copr, full profile** (with a pin): the release's source package is built in
    `archledger/plasma-fusion-full` as well, which builds `--with full` and so adds the
    metapackage: `copr-cli build archledger/plasma-fusion-full plasma-fusion-X.Y.Z-1.fc44.src.rpm`
    (the source package of Packit's build, or `packaging/build-rpm.sh` at the tag). Read the
    result back; fedora-44 must succeed. A full-profile machine then updates with
    `install.sh update`.
-4. **AUR** (owner pushes): a fresh clone of `ssh://aur@aur.archlinux.org/plasma-fusion.git`, copy
+4. **The fork's release** (with a new fork tag; owner): a GitHub release of archledger/kwin for
+   the tag (`Plasma Fusion KWin v<upstream>-pf<N>`), with notes and no files: the fork's only
+   channel is the full project (ADR 0001). The notes name the KWin package's EVR and the Plasma
+   Fusion release that pins it, what the tag adds to KDE's release, how to get it (the installer's
+   `--full`), the security cadence and how to verify the signed tag. Then read the full project's
+   page back: unlisted, with instructions (the install line, the Fedora releases) that still hold
+   for the release; change them with `copr-cli modify --instructions` (copr-cli has no homepage
+   option: python-copr's `project_proxy.edit` sets that).
+5. **AUR** (owner pushes): a fresh clone of `ssh://aur@aur.archlinux.org/plasma-fusion.git`, copy
    `packaging/arch/PKGBUILD` (it builds the signed tag; the pacman hook comes from the source), run
    `makepkg --printsrcinfo > .SRCINFO` and `makepkg` once, commit "plasma-fusion X.Y.Z" and push.
    Check the package page and the RPC (it lags by minutes).
-5. **PPA** (owner signs): `debsign -k F35053398E3C80FE20891B82C10B8492BD7F30C6 ppa/*_source.changes`,
+6. **PPA** (owner signs): `debsign -k F35053398E3C80FE20891B82C10B8492BD7F30C6 ppa/*_source.changes`,
    then `dput ppa:archledger/plasma-fusion ppa/<file>_source.changes`. The lane is done when
    Launchpad shows the amd64 build published for each series (a build failure leaves users on the
    old version).
-6. **NixOS**: nothing to build; the flake and the module are in the tag. Users move their input or
+7. **NixOS**: nothing to build; the flake and the module are in the tag. Users move their input or
    `fetchGit` pin.
-7. Ledger: the release, every channel's result and the evidence.
+8. Ledger: the release, every channel's result and the evidence.
 
 ## 6. After a KWin update in a distribution
 

@@ -29,7 +29,9 @@
 # the fork advertises them, that the features run on it and that they still work, by their
 # fallbacks, on stock KWin with the same packages.
 #
-# PF_PUBLIC=1: after a release, the published installer for --full too. Results:
+# PF_PUBLIC=1: after a release, the published installer for --full too. PF_FULL_REPO: the full
+# profile's Copr project the installer is stamped with (default archledger/plasma-fusion-full; a
+# candidate's own project, issue #178, for a candidate: docs/RELEASING.md). Results:
 # ~/pf-vm/results/NAME-full/ (switch: NAME-full-switch/).
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -44,6 +46,15 @@ case $mode in
   switch) OUT=$H/results/$name-full-switch ;;
   *) echo "usage: fulltest.sh NAME [fresh|switch]" >&2; exit 2 ;;
 esac
+FULL_REPO=${PF_FULL_REPO:-archledger/plasma-fusion-full}
+# OWNER/NAME, as the stamp takes it: it goes into commands the guest's shell runs.
+[[ $FULL_REPO =~ ^[a-z0-9._-]+/[a-z0-9._-]+$ ]] || { echo "PF_FULL_REPO is not a Copr project (OWNER/NAME): '$FULL_REPO'" >&2; exit 2; }
+# dnf's id of the project's repository, whole: the live project's name is a prefix of others.
+FULL_ID="copr:copr.fedorainfracloud.org:${FULL_REPO%%/*}:${FULL_REPO#*/}"
+if [ "${PF_PUBLIC:-}" = 1 ] && [ "$FULL_REPO" != archledger/plasma-fusion-full ]; then
+  echo "PF_PUBLIC=1 takes the published installer, which names the live project, not $FULL_REPO" >&2
+  exit 2
+fi
 rm -rf "$OUT" && mkdir -p "$OUT"
 SIX="plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation"
 SIX="$SIX plasma-fusion-quicklook plasma-fusion-copytext"
@@ -143,7 +154,7 @@ hasnot() { # WHAT FILE PATTERN: no line of the file matches
   fi
 }
 phase() { [ "$bad" = 0 ] || { log "FAIL: $1"; exit 1; }; }
-facts() { vm ssh "$name" 'bash ~/full-guest.sh facts' >"$OUT/$1" 2>&1 || { log "FAIL: could not read the package facts ($1)"; exit 1; }; }
+facts() { vm ssh "$name" "bash ~/full-guest.sh facts $FULL_REPO" >"$OUT/$1" 2>&1 || { log "FAIL: could not read the package facts ($1)"; exit 1; }; }
 fact() { # FILE KEY [NAME]: "pin EVR" -> EVR; "pkg kwin EVR" -> EVR
   awk -v k="$2" -v n="${3:-}" '$1 == k && (n == "" || $2 == n) { print (n == "" ? $2 : $3); exit }' "$OUT/$1"
 }
@@ -248,7 +259,8 @@ published() { # TARGET in the VM's home
 log "start $name (full profile, $mode)"
 if [ "${PF_PUBLIC:-}" != 1 ]; then
   "$ROOT/packaging/stamp-installer.sh" --copr "${PF_COPR_FEDORA:-44 45}" --ppa "${PF_PPA_SERIES:-stonking}" \
-    --deb "${PF_DEB_TARGETS:-neon testing}" --full-fedora "${PF_FULL_FEDORA:-44}" "$OUT/install.sh" >"$OUT/00-stamp.log" 2>&1 ||
+    --deb "${PF_DEB_TARGETS:-neon testing}" --full-fedora "${PF_FULL_FEDORA:-44}" --full-repo "$FULL_REPO" \
+    "$OUT/install.sh" >"$OUT/00-stamp.log" 2>&1 ||
     { log "FAIL: could not stamp the installer"; exit 1; }
 fi
 vm start "$name" run >/dev/null || { log "FAIL: the VM did not start"; exit 1; }
@@ -307,7 +319,7 @@ if [ "${PF_PUBLIC:-}" = 1 ]; then
   published install.sh || { log "FAIL: could not fetch the published installer"; exit 1; }
 else
   vm ssh "$name" 'cat >~/install.sh' <"$OUT/install.sh" || { log "FAIL: could not copy the installer into the VM"; exit 1; }
-  log "installer: this tree's, $(grep -m 1 '^PF_VERSION=' "$OUT/install.sh") $(grep -m 1 '^PF_FULL_FEDORA=' "$OUT/install.sh")"
+  log "installer: this tree's, $(grep -m 1 '^PF_VERSION=' "$OUT/install.sh") $(grep -m 1 '^PF_FULL_FEDORA=' "$OUT/install.sh") $(grep -m 1 '^PF_FULL_REPO=' "$OUT/install.sh")"
 fi
 log "installer: --full --dry-run"
 insession "sh ~/install.sh --full --dry-run" >"$OUT/10-dry-run.log" 2>&1
@@ -315,7 +327,7 @@ rc=$?
 log "  rc=$rc $(grep -c . "$OUT/10-dry-run.log") lines"
 [ "$rc" = 0 ] || { log "FAIL: dry run"; exit "$rc"; }
 has "the plan records the stock KWin" 10-dry-run.log 'full-restore\.txt'
-has "the plan enables the full profile's repository" 10-dry-run.log 'dnf -y copr enable archledger/plasma-fusion-full'
+hasf "the plan enables the full profile's repository" 10-dry-run.log "dnf -y copr enable $FULL_REPO fedora-"
 has "the plan names the packages it replaces" 10-dry-run.log 'dnf -y install plasma-fusion-full .*replaces the stock KWin'
 has "the plan locks the set" 10-dry-run.log 'dnf -y versionlock add kwin kwin-common kwin-libs'
 has "the plan states the security cadence" 10-dry-run.log 'security fixes on its weekly cadence'
@@ -334,7 +346,7 @@ check_full_packages 12-facts.txt
 # profile's repository out of the question, a sync to what Fedora offers finds nothing it may
 # do, and no conflict it has to skip. Without the lock dnf ends with the same words, after a
 # "Problem:" report that the metapackage's exact requires stand in the way.
-vm ssh "$name" "sudo dnf -q --assumeno --disablerepo='copr:*plasma-fusion-full*' distro-sync $KWIN" >"$OUT/12-lock-holds.log" 2>&1
+vm ssh "$name" "sudo dnf -q --assumeno --disablerepo='$FULL_ID' distro-sync $KWIN" >"$OUT/12-lock-holds.log" 2>&1
 has "a sync to the distribution's KWin finds nothing to do" 12-lock-holds.log '^Nothing to do'
 hasnot "the lock leaves the solver nothing to skip" 12-lock-holds.log 'Problem|Skipping packages|No matching repositories'
 if [ "$mode" = switch ]; then

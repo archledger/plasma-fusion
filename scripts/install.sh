@@ -45,9 +45,11 @@ PF_PPA_SERIES='@PF_PPA_SERIES@'
 PF_DEB_TARGETS='@PF_DEB_TARGETS@'
 # The Fedora releases the full profile builds (empty: this release has none yet; ADR 0001).
 PF_FULL_FEDORA='@PF_FULL_FEDORA@'
+# The full profile's Copr project (OWNER/NAME): the live one in a release; the release tests stamp
+# a candidate's own project, so the live one never carries a candidate (issue #178).
+PF_FULL_REPO='@PF_FULL_REPO@'
 
 REPO=archledger/plasma-fusion
-FULL_REPO=archledger/plasma-fusion-full
 PKGS="plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation"
 PKGS="$PKGS plasma-fusion-quicklook plasma-fusion-copytext"
 # The KWin set the fork replaces (the full profile's metapackage requires and the lock pins).
@@ -753,6 +755,7 @@ main() {
       PF_VERSION=${PLASMA_FUSION_DEV_VERSION:?} PF_PLASMA_SERIES=${PLASMA_FUSION_DEV_SERIES:-6.7}
       PF_COPR_FEDORA=${PLASMA_FUSION_DEV_COPR_FEDORA:-44} PF_PPA_SERIES=${PLASMA_FUSION_DEV_PPA_SERIES:-stonking}
       PF_DEB_TARGETS=${PLASMA_FUSION_DEV_DEB_TARGETS:-neon testing} PF_FULL_FEDORA=${PLASMA_FUSION_DEV_FULL_FEDORA:-}
+      PF_FULL_REPO=${PLASMA_FUSION_DEV_FULL_REPO:-archledger/plasma-fusion-full}
       DEV_DNF_REPO=${PLASMA_FUSION_DEV_DNF_REPO:-} DEV_APT_REPO=${PLASMA_FUSION_DEV_APT_REPO:-}
       DEV_AUR_SRC=${PLASMA_FUSION_DEV_AUR_SRC:-} RELEASE_BASE=${PLASMA_FUSION_DEV_RELEASE_BASE:-}
       TEST_ROOT=${PLASMA_FUSION_DEV_ROOT:-}
@@ -762,6 +765,13 @@ main() {
       warn "test mode (unstamped installer, PLASMA_FUSION_DEV=1)" ;;
   esac
   RELEASE_BASE=${RELEASE_BASE:-https://github.com/$REPO/releases/download/v$PF_VERSION}
+  # The full profile's project, OWNER/NAME only: it is handed to dnf copr and shown in the plan.
+  FULL_REPO=$PF_FULL_REPO
+  case $FULL_REPO in
+    */*/* | /* | */ | *[!a-z0-9._/-]*) refuse "the full profile's Copr project '$FULL_REPO' is not OWNER/NAME." ;;
+    */*) : ;;
+    *) refuse "the full profile's Copr project '$FULL_REPO' is not OWNER/NAME." ;;
+  esac
 
   [ "$(id -u)" != 0 ] || refuse "run it as your own user, not as root (or with sudo): it asks for sudo when it needs it."
   has curl || die "this installer needs curl."

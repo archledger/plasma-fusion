@@ -13,9 +13,11 @@ whose plan names another KWin, that leaves the fork or the repository, or takes 
 switch mode a record directory that is not root's alone; a
 status that takes the session after the restore for a fork installed by hand; a fallback that is
 not one; a crash; an uninstall that leaves the lock or a package, or the theme; a VM that does
-not come up. Not every check of the lane has a fault: its plumbing (the stamp, the copies into
-the VM, a collector that cannot count) and the plan's wording are covered by the passing runs
-only."""
+not come up; a plan that enables another Copr project than the stamped one. Not every check of
+the lane has a fault: its plumbing (the copies into the VM, a collector that cannot count) and
+the plan's wording are covered by the passing runs only. Of the stamp, the tests check the Copr
+project it is given (the live one by default, a candidate's own when named: issue #178) and that
+the lock check leaves out that project's repository by its exact id."""
 import os
 from pathlib import Path
 import shutil
@@ -144,7 +146,7 @@ case "$cmd" in
       *'install.sh --full --dry-run'*)
         [ "$FAULT" != dry-changes ] || put installed full
         echo "  sudo tee /var/lib/plasma-fusion/full-restore.txt   (records the stock KWin for --full-restore)"
-        echo "  sudo dnf -y copr enable archledger/plasma-fusion-full fedora-44-x86_64"
+        echo "  sudo dnf -y copr enable ${PLAN_REPO:-archledger/plasma-fusion-full} fedora-44-x86_64"
         echo "  sudo dnf -y install plasma-fusion-full   (the six packages + the pinned KWin; replaces the stock KWin)"
         echo "  sudo dnf -y versionlock add kwin kwin-common kwin-libs   (the pin)"
         echo "  note: the fork takes KWin security fixes on its weekly cadence, which can lag Fedora by days." ;;
@@ -163,6 +165,7 @@ case "$cmd" in
       *'pgrep -u pf -x kwin_wayland >/dev/null'*)
         [ "$FAULT" != no-desktop ] || [ "$(get installed stock)" != gone ] ;;
       *'distro-sync'*)
+        echo "distro-sync $*" >>"$PF_VM_HOME/calls"
         if [ "$FAULT" = lock-loose ]; then
           echo "Downgrading: kwin"; echo "Operation aborted by the user."
         elif [ "$FAULT" = held-without-lock ]; then
@@ -192,8 +195,13 @@ case "$cmd" in
 esac
 '''
 STAMP = r'''#!/bin/sh
-for out in "$@"; do :; done
-printf "PF_VERSION='0.8.0'\nPF_FULL_FEDORA='44'\n" >"$out"
+echo "stamp $*" >>"$PF_VM_HOME/calls"
+repo=archledger/plasma-fusion-full
+while [ $# -gt 1 ]; do
+  case $1 in --full-repo) repo=$2; shift ;; esac
+  shift
+done
+printf "PF_VERSION='0.8.0'\nPF_FULL_FEDORA='44'\nPF_FULL_REPO='%s'\n" "$repo" >"$1"
 '''
 KEYS = r'''#!/usr/bin/env python3
 import sys
@@ -204,7 +212,7 @@ for step in sys.argv[2:]:
 
 
 class FullLaneTest(unittest.TestCase):
-    def run_lane(self, fault, mode="fresh"):
+    def run_lane(self, fault, mode="fresh", env_extra=None):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             root = home / "repo/tools/tests/release-vm"
@@ -223,14 +231,14 @@ class FullLaneTest(unittest.TestCase):
             sleep.chmod(0o755)
             result = subprocess.run(["bash", str(root / "fulltest.sh"), "test", mode], capture_output=True, text=True,
                 env={**os.environ, "PF_VM_HOME": directory, "PF_PUBLIC": "", "FAULT": fault,
-                     "PATH": str(root / "bin") + ":" + os.environ["PATH"]})
+                     "PATH": str(root / "bin") + ":" + os.environ["PATH"], **(env_extra or {})})
             calls = (home / "calls").read_text().splitlines()
             self.locked = (home / "vms/test/run.qcow2").exists()
             self.preserved = list((home / "vms/test").glob("failed-full-run-*.qcow2"))
             return result, calls
 
-    def rejected(self, fault, message, mode="fresh"):
-        result, calls = self.run_lane(fault, mode)
+    def rejected(self, fault, message, mode="fresh", env_extra=None):
+        result, calls = self.run_lane(fault, mode, env_extra)
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn(message, result.stdout)
         self.assertIn("stop", calls)
@@ -264,6 +272,58 @@ class FullLaneTest(unittest.TestCase):
     def test_switch_whose_record_directory_was_not_made_root_s(self):
         result = self.rejected("record-readable", "FAIL: the full profile's packages", "switch")
         self.assertIn("FAIL the record is where the user cannot read it, and read all the same: 'readable 6.8.2-3.fc44'", result.stdout)
+
+    def test_candidates_project_reaches_the_stamp_and_the_plan(self):
+        # A candidate is tested from a Copr project of its own (issue #178): the lane stamps the
+        # project it is given, and the plan it checks enables exactly that one.
+        cand = "archledger/plasma-fusion-full-candidates"
+        result, calls = self.run_lane("none", env_extra={"PF_FULL_REPO": cand, "PLAN_REPO": cand})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("FAIL", result.stdout)
+        self.assertTrue([c for c in calls if c.startswith("stamp ") and "--full-repo " + cand in c], calls)
+
+    def test_live_project_is_stamped_by_default(self):
+        result, calls = self.run_lane("none")
+        self.assertTrue([c for c in calls if c.startswith("stamp ") and "--full-repo archledger/plasma-fusion-full " in c], calls)
+
+    def test_plan_enabling_another_project_than_the_stamped_one_fails(self):
+        # The candidates' project stamped, the plan naming the live one: the lane must not pass,
+        # although one name is a prefix of the other.
+        self.rejected("none", "the plan enables the full profile's repository",
+                      env_extra={"PF_FULL_REPO": "archledger/plasma-fusion-full-candidates"})
+
+    def test_lock_check_leaves_out_exactly_the_stamped_project(self):
+        # The sync that shows the lock holding leaves the stamped project out by its whole Copr
+        # repository id: a pattern that missed it would let dnf find the fork there and pass.
+        cand = "archledger/plasma-fusion-full-candidates"
+        for project, env in (("archledger/plasma-fusion-full", {}),
+                             (cand, {"PF_FULL_REPO": cand, "PLAN_REPO": cand})):
+            with self.subTest(project=project):
+                result, calls = self.run_lane("none", env_extra=env)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                syncs = [c for c in calls if c.startswith("distro-sync ")]
+                self.assertTrue(syncs, calls)
+                owner, name = project.split("/")
+                for c in syncs:
+                    self.assertIn("--disablerepo='copr:copr.fedorainfracloud.org:%s:%s' " % (owner, name), c)
+
+    def test_malformed_project_is_refused_before_a_vm_starts(self):
+        for value in ("archledger", "archledger/x y", "archledger/x;reboot", "a/b/c"):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
+                result = subprocess.run(["bash", str(HERE / "fulltest.sh"), "test", "fresh"], capture_output=True,
+                                        text=True, env={**os.environ, "PF_VM_HOME": directory, "PF_PUBLIC": "",
+                                                        "PF_FULL_REPO": value})
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertFalse((Path(directory) / "results").exists())
+
+    def test_public_run_with_another_project_is_refused_before_a_vm_starts(self):
+        # The published installer names the live project: a public run cannot test another one.
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run(["bash", str(HERE / "fulltest.sh"), "test", "fresh"], capture_output=True,
+                                    text=True, env={**os.environ, "PF_VM_HOME": directory, "PF_PUBLIC": "1",
+                                                    "PF_FULL_REPO": "archledger/plasma-fusion-full-candidates"})
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertFalse((Path(directory) / "results").exists())
 
     def test_unknown_mode_is_refused_before_a_vm_starts(self):
         with tempfile.TemporaryDirectory() as directory:

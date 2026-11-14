@@ -5,13 +5,14 @@
 # The guest's side of fulltest.sh, copied into the VM and run there as the test user (the
 # commands that talk to KWin: in the session's environment).
 #
-#   full-guest.sh facts            what the package system holds of the full profile, one
+#   full-guest.sh facts [OWNER/NAME]  what the package system holds of the full profile, one
 #                                  "KEY VALUE..." line each: pkg NAME EVR|none|error (error:
 #                                  rpm could not say), locklist ok|failed (failed: dnf could
 #                                  not list the locks), lock NAME EVR,
 #                                  record NAME EVR (the restore record), pin EVR and tag TAG (the
 #                                  metapackage's record), repo enabled|disabled|no (the full
-#                                  profile's repository as dnf sees it), recordfile yes|no
+#                                  profile's repository as dnf sees it: OWNER/NAME's Copr project,
+#                                  default archledger/plasma-fusion-full), recordfile yes|no
 #   full-guest.sh kwinlog          the journal of the KWin this session runs
 #   full-guest.sh active           the resource class of the active window (none without one)
 #   full-guest.sh windows          opens Konsole, Dolphin and KWrite, one after the other
@@ -53,10 +54,14 @@ case ${1:-} in
     sudo sed -n 's/^\(kwin[a-z-]*\)=\(.*\)$/record \1 \2/p' "$RECORD" 2>/dev/null
     sed -n 's/^kwin=/pin /p; s/^tag=/tag /p' "$PROFILE" 2>/dev/null
     # The repository as dnf sees it: a file left with enabled=0 is no place updates come from,
-    # and no repository that is gone either.
-    if dnf -q repo list --enabled 2>/dev/null | grep -q 'plasma-fusion-full'; then
+    # and no repository that is gone either. The project is the one the installer was stamped
+    # with (OWNER/NAME, the argument), matched by its whole Copr repository id: the live project's
+    # name is a prefix of a candidates project's.
+    repo=${2:-archledger/plasma-fusion-full}
+    id="copr:copr.fedorainfracloud.org:${repo%%/*}:${repo#*/}"
+    if dnf -q repo list --enabled 2>/dev/null | awk '{print $1}' | grep -qxF "$id"; then
       echo "repo enabled"
-    elif dnf -q repo list --all 2>/dev/null | grep -q 'plasma-fusion-full' || grep -qs 'plasma-fusion-full' /etc/yum.repos.d/*.repo; then
+    elif dnf -q repo list --all 2>/dev/null | awk '{print $1}' | grep -qxF "$id" || grep -qsF "[$id]" /etc/yum.repos.d/*.repo; then
       echo "repo disabled"
     else
       echo "repo no"
