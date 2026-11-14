@@ -282,6 +282,28 @@ must not clear it. Copy needed metadata before callbacks can invalidate configur
 Exercise actual serial wrap in integration tests; an internal generation does not by itself fix
 the baseline compositor's serial ordering.
 
+A release that is not the explicit restore leaves the window where it stands with its record
+in Restoring. The policy that admitted the window ends that record through the settle
+operation once the window stands on a frame that is known not to be automatic: back on A by
+the policy's own ordinary request, or where the user's own interactive move or resize left
+it. The native layer settles only for the admitting provider, with the window's geometry
+settled, in an ordinary mode outside every tile. A frame of unknown origin is treated as
+automatic (the tile's rectangle a work-area re-check put the window on, the tile's size
+carried to another output), so no automatic rectangle reaches the memory
+(`NT03-RESTORATION-SPEC.md`, "Intent and dispatch").
+
+The window's frame in the tile is the tile's rectangle where the window reaches it. A tile's
+rectangle is whole logical pixels; on a fractional-scale output a frame is on the output's
+device pixels over a client size on the client's own grid, and most whole rectangles are
+neither. The window then takes the tile's corner and the largest size it reaches inside the
+tile, short of it by less than a step of the client's grid and two device pixels on an axis.
+A rectangle with no reachable size inside it (the client's size limits) refuses the
+adoption. Sizes are compared as counts of the output's pixels, not number by number: where
+the pixel is not a binary fraction (125%, 150%, 175%), a size read back from a rectangle
+differs from the grid's number in its last bits. For the same reason a frame that answers a
+configure is published as the rectangle the configure was sent for wherever it is that
+rectangle on the output's pixels: a restoration returns A bit for bit.
+
 Root/module unload leaves Restoring in the surviving compositor/window record. Reload cannot
 adopt over it. A client that never commits stays suppressed; no timeout declares restoration
 successful. A later manual action supersedes the expected target/generation so an old restore

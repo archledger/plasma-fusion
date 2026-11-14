@@ -57,10 +57,13 @@ function feasibleInCell(minSize, cell) {
 
 // The tiler's session state (one at a time; the controller holds one tree).
 // { active: bool, generation: int, master: Window, masterKey: string,
+//   masterFloat: {x,y,width,height} (the master's frame before the admission),
+//   masterTile: {x,y,width,height} (the native tile's rectangle at the last layout),
 //   stack: [Window], savedFloats: { internalId -> {x,y,width,height} },
 //   dividerX: real, output: Output, desktop: VirtualDesktop, activity: string }
 function createSession() {
     return { active: false, generation: 0, master: null, masterKey: "",
+             masterFloat: null, masterTile: null,
              stack: [], savedFloats: {}, dividerX: 0, output: null, desktop: null,
              activity: "" };
 }
@@ -217,6 +220,101 @@ function isOwnCell(cell, frame, slack) {
     const allowed = (Number(slack) || 0) + 1e-6;
     return Math.abs(frame.x - cell.x) <= allowed && Math.abs(frame.y - cell.y) <= allowed
         && Math.abs(frame.width - cell.width) <= allowed && Math.abs(frame.height - cell.height) <= allowed;
+}
+
+// How far inside its tile the master's frame can be, on width and on height, for a pixel grid
+// of the given scale. On a whole scale every whole-pixel rectangle is on the output's pixels
+// and the frame is the tile's rectangle. On a fractional one the native layer gives the window
+// the tile's corner and the largest size it reaches inside the tile (the fork's
+// transientTileFrame): short of the tile by less than a step of the client's own grid (a
+// logical pixel at most) and two device pixels.
+function tileFitShort(scale) {
+    const s = Number(scale);
+    return s > 0 && !Number.isInteger(s) ? 1 + 2 / s : 0;
+}
+
+// Whether the master still stands where the native layer put it: at its tile's corner, at the
+// tile's size or the fit inside it (tileFitShort). The tiler reads it while the release's own
+// configure is still unanswered, to return the master at once; once the window's geometry has
+// settled the native layer's answer decides (settleAgain).
+function onMasterTile(tile, frame, scale) {
+    if (!tile || !frame) {
+        return false;
+    }
+    const short = tileFitShort(scale) + 1e-6;
+    const fits = function (size, extent) {
+        return size <= extent + 1e-6 && extent - size <= short;
+    };
+    return Math.abs(frame.x - tile.x) <= 1e-6 && Math.abs(frame.y - tile.y) <= 1e-6
+        && fits(frame.width, tile.width) && fits(frame.height, tile.height);
+}
+
+// What the tiler does with the native layer's answer to settleWindow (the fork's
+// Window::TransientSettleResult): 0 settled, 1 nothing to settle (a live restoration completes
+// by itself), 2 another provider's and 5 refused end the matter; 3 (the window's geometry is
+// not settled, or it is maximized, full screen or tiled) and 4 (it stands neither on its
+// floating frame nor where the user's own move left it) are asked again.
+function settleAgain(result) {
+    return result === 3 || result === 4;
+}
+
+// Whether a rectangle shows on a screen the session has: the frame a released master is
+// returned to is where it floated, half off an edge included, but never on a display that is
+// gone.
+function touchesScreen(rect, screens) {
+    if (!rect) {
+        return false;
+    }
+    for (let i = 0; i < screens.length; ++i) {
+        const s = screens[i];
+        if (rect.x < s.x + s.width && rect.x + rect.width > s.x
+                && rect.y < s.y + s.height && rect.y + rect.height > s.y) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Whether a window reference can still be used. KWin marks a closing window deleted and
+// destroys it a moment later; a script's reference to the destroyed window is neither null
+// nor falsy, every property of it reads undefined (deleted too, so "not deleted" is true of
+// it), and handing it to the compositor throws. A live window's deleted is the boolean false.
+function alive(w) {
+    return !!w && w.deleted === false;
+}
+
+// Whether the frame a window just took is the late answer to a cell the tiler has already
+// taken back, with nothing on its way to its float any more. KWin applies a request for the
+// size a window already has at once and sends no configure; when the float is given back
+// while the cell's configure is still in flight (a second press of the shortcut within a few
+// milliseconds, a native teardown right after a window joined), the client's answer to the
+// cell lands afterwards, KWin takes it as the window's request, and the window stays on a
+// cell no session owns. pending is {float, cell}; requested is KWin's request where the
+// window has one to read (null otherwise): while it is still the float the window is on its
+// way there and is left alone.
+function staleCellLanding(pending, frame, requested, slack) {
+    if (!pending || !pending.cell || !pending.float || !isOwnCell(pending.cell, frame, slack)) {
+        return false;
+    }
+    if (!requested) {
+        return true;
+    }
+    const f = pending.float;
+    return !(Math.abs(requested.x - f.x) < 1 && Math.abs(requested.y - f.y) < 1
+             && Math.abs(requested.width - f.width) < 1 && Math.abs(requested.height - f.height) < 1);
+}
+
+// The same rectangle, to the last bits of a frame's arithmetic.
+function sameRect(a, b) {
+    return !!a && !!b && Math.abs(a.x - b.x) < 1e-3 && Math.abs(a.y - b.y) < 1e-3
+        && Math.abs(a.width - b.width) < 1e-3 && Math.abs(a.height - b.height) < 1e-3;
+}
+
+// An admission refusal that passes: 3 (busy: the window's released record is being settled)
+// and 7 (ineligible: a configure the client has not answered yet, as right after an
+// activation or the previous session's restore). Every other refusal is final.
+function admitAgain(result) {
+    return result === 3 || result === 7;
 }
 
 // Layout the stack: feasible windows get cells; infeasible windows float (the safe state).

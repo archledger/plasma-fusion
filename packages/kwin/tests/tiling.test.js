@@ -18,7 +18,8 @@ vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m,
 const { masterFraction, masterTileRect, stackRects, feasibleInCell, createSession,
         eligibleForMaster, stackCandidates, dormantCandidates, eligibleDormant, layoutStack,
         focusOrder, nextInCycle, previousInCycle, saveFloats, onWorkspace, desktopMatches,
-        sameView, floatRestores, isOwnCell, cellSlack } = globalThis;
+        sameView, floatRestores, isOwnCell, cellSlack, onMasterTile, tileFitShort, settleAgain,
+        admitAgain, touchesScreen, sameRect, alive, staleCellLanding } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const windowWith = (over) => Object.assign({
@@ -341,6 +342,87 @@ assert.ok(Math.abs(cellSlack(4 / 3) - 1.25) < 1e-9);
 assert.ok(Math.abs(cellSlack(0.75) - (0.5 + 4 / 3)) < 1e-9, "a scale below 1 has a coarser grid, not none");
 assert.strictEqual(cellSlack(undefined), 0, "an output without a scale is a scale of 1");
 assert.strictEqual(cellSlack(0), 0);
+
+// Whether a released master still stands on its tile: the tile's corner, at the tile's size or
+// the fit the native layer gave it inside the tile. The tiler then returns it at once, without
+// waiting for the client to answer the release's configure.
+{
+    const masterTile = rect(4, 38, 714, 858);
+    assert.ok(onMasterTile(masterTile, rect(4, 38, 714, 858), 1), "the tile's rectangle");
+    assert.ok(onMasterTile(masterTile, rect(4, 38, 714, 858), 4 / 3), "a tile on the output's pixels at 133%");
+    assert.ok(!onMasterTile(masterTile, rect(4, 38, 713, 858), 1), "no fit on a scale of 1: a pixel narrower was resized");
+    // The fork's fit at a fractional scale: a 654x892 tile at 133% holds a 654x891.75 frame,
+    // or 654x891 under a title bar; at 125% a 652.8x891.2 one.
+    assert.ok(onMasterTile(rect(4, 4, 654, 892), rect(4, 4, 654, 891.75), 4 / 3), "the fit at 133%");
+    assert.ok(onMasterTile(rect(4, 4, 654, 892), rect(4, 4, 654, 891), 4 / 3), "the fit under a title bar");
+    assert.ok(onMasterTile(rect(4, 4, 654, 892), rect(4, 4, 652.8, 891.2), 1.25), "the fit at 125%");
+    assert.ok(!onMasterTile(rect(4, 4, 654, 892), rect(4, 4, 654, 889), 4 / 3), "three pixels short is not a fit");
+    assert.ok(!onMasterTile(rect(4, 4, 654, 892), rect(4, 4, 654.75, 892), 4 / 3), "larger than the tile is not one either");
+    assert.ok(!onMasterTile(rect(4, 4, 654, 892), rect(4.75, 4, 654, 891.75), 4 / 3), "the fit keeps the tile's corner");
+    assert.ok(!onMasterTile(masterTile, rect(300, 200, 600, 400), 4 / 3), "a master the user moved");
+    assert.ok(!onMasterTile(masterTile, rect(0, 34, 1440, 866), 4 / 3), "a maximized master");
+    assert.ok(!onMasterTile(null, rect(4, 38, 714, 858), 1), "no tile known");
+    assert.ok(!onMasterTile(masterTile, null, 1));
+    assert.strictEqual(tileFitShort(1), 0);
+    assert.strictEqual(tileFitShort(undefined), 0);
+    assert.strictEqual(tileFitShort(2), 0, "every whole pixel is on a whole scale's grid: no fit there");
+    assert.ok(!onMasterTile(masterTile, rect(4, 38, 713, 858), 2), "a pixel narrower at 200% was resized");
+    assert.ok(Math.abs(tileFitShort(4 / 3) - 2.5) < 1e-9);
+    assert.ok(Math.abs(tileFitShort(1.5) - (1 + 2 / 1.5)) < 1e-9);
+}
+
+// Where a released master may be returned to: a frame that shows on a live screen, half off an
+// edge included (it floated there), never one on a display that is gone.
+{
+    const screens = [rect(0, 0, 1440, 900)];
+    assert.ok(touchesScreen(rect(100, 100, 600, 400), screens));
+    assert.ok(touchesScreen(rect(1100, 100, 600, 400), screens), "more than half off the right edge");
+    assert.ok(touchesScreen(rect(-500, -300, 600, 400), screens), "off the top-left corner");
+    assert.ok(!touchesScreen(rect(1500, 60, 620, 520), screens), "on a display that is gone");
+    assert.ok(!touchesScreen(rect(1440, 0, 600, 400), screens), "touching the edge from outside shows nothing");
+    assert.ok(touchesScreen(rect(1500, 60, 620, 520), screens.concat([rect(1440, 0, 1280, 800)])));
+    assert.ok(!touchesScreen(null, screens));
+    assert.ok(!touchesScreen(rect(100, 100, 600, 400), []));
+    assert.ok(sameRect(rect(40, 80, 620, 420), rect(40, 80, 620, 420)));
+    assert.ok(sameRect(rect(102, 102, 200.8, 100.8), rect(102, 102, 200.79999999999995, 100.80000000000001)), "the last bits of a frame");
+    assert.ok(!sameRect(rect(40, 80, 620, 420), rect(40, 80, 620, 420.25)), "a quarter pixel is another frame");
+    assert.ok(!sameRect(null, rect(40, 80, 620, 420)));
+}
+
+// A window reference the tiler may still use. KWin's closing window has deleted === true; a
+// reference to a destroyed window is a truthy object whose every property reads undefined, so
+// "not deleted" would be true of it.
+assert.ok(alive(windowWith({})), "an open window");
+assert.ok(!alive(windowWith({ deleted: true })), "a closing window");
+assert.ok(!alive({}), "a destroyed window: every property undefined");
+assert.ok(!alive(null));
+assert.ok(!alive(undefined));
+
+// A float given back while the cell's configure was in flight: the client's answer to the cell
+// lands afterwards. It is that when the frame is the cell and KWin is not (any longer) asking
+// for the float; a window whose request is still the float is on its way there.
+{
+    const pending = { float: rect(660, 120, 560.25, 521.25), cell: rect(722, 34, 718, 866) };
+    const landed = rect(722, 34, 717.75, 866.25); // the cell on a 133% output's pixels
+    const slack = cellSlack(4 / 3);
+    assert.ok(staleCellLanding(pending, landed, rect(722, 34, 717.75, 866.25), slack), "the cell landed and is KWin's request now");
+    assert.ok(staleCellLanding(pending, landed, null, slack), "the cell landed, no request to read");
+    assert.ok(!staleCellLanding(pending, landed, rect(660, 120, 560.25, 521.25), slack), "KWin still asks for the float");
+    assert.ok(!staleCellLanding(pending, rect(660, 120, 560.25, 521.25), rect(660, 120, 560.25, 521.25), slack), "the float landed");
+    assert.ok(!staleCellLanding(pending, rect(300, 200, 500, 400), rect(300, 200, 500, 400), slack), "another frame: the user's or the app's own");
+    assert.ok(!staleCellLanding(null, landed, null, slack), "nothing pending");
+    assert.ok(!staleCellLanding({ float: pending.float }, landed, null, slack), "no cell remembered");
+}
+
+// The native layer's answers the tiler asks again about, and no others: an unsettled window
+// or one still on its tile (settleWindow), a busy or not-yet-eligible one (admitTile).
+assert.deepStrictEqual([0, 1, 2, 3, 4, 5, -1].filter(settleAgain), [3, 4]);
+assert.deepStrictEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, -1].filter(admitAgain), [3, 7]);
+{
+    const s = createSession();
+    assert.strictEqual(s.masterFloat, null, "no master float before a session");
+    assert.strictEqual(s.masterTile, null, "no master tile before a layout");
+}
 
 // The toggle's view comparison: the desktop AND the activity AND the output. The session is
 // per-workspace and per-screen everywhere else (onWorkspace); the toggle must read the same
