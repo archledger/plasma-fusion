@@ -9,7 +9,8 @@ repository that is there and switched off; a set that holds without the lock; a 
 cannot be read; a status that does not see the fork or carries a note; no new session after the
 logout, or no desktop after it; an idle navigation effect; a journal that cannot be read; a
 switcher that does not switch, or lands on no test window; a tiler without a session; a restore
-whose plan names another KWin, that leaves the fork or the repository, or takes the packages; a
+whose plan names another KWin, that leaves the fork or the repository, or takes the packages; in
+switch mode a record directory that is not root's alone; a
 status that takes the session after the restore for a fork installed by hand; a fallback that is
 not one; a crash; an uninstall that leaves the lock or a package, or the theme; a VM that does
 not come up. Not every check of the lane has a fault: its plumbing (the stamp, the copies into
@@ -129,6 +130,9 @@ case "$cmd" in
           echo org.kde.dolphin
         fi ;;
       *'full-guest.sh '*) exit 0 ;;
+      *'install -d -m 0700 /var/lib/plasma-fusion'*) put hidden yes ;;
+      *'cat /var/lib/plasma-fusion/full-restore.txt'*)
+        if [ "$(get hidden no)" = no ] || [ "$FAULT" = record-readable ]; then echo readable; else echo hidden; fi ;;
       *"plasmafusion-placement: tiling"*)
         if [ "$(get running stock)" = fork ]; then
           [ "$FAULT" = tiler ] || echo "plasmafusion-placement: tiling: on (2 stack window(s))"
@@ -253,7 +257,13 @@ class FullLaneTest(unittest.TestCase):
         self.assertIn("plasma-fusion is the metapackage's build: 0.8.0-1.fc44", result.stdout)
         self.assertNotIn("--full-restore", result.stdout)
         self.assertIn("plasma-fusion-full is gone: none", result.stdout)
+        self.assertIn("the restore record's directory is root's alone", result.stdout)
+        self.assertIn("ok   the record is where the user cannot read it, and read all the same: hidden 6.8.2-3.fc44", result.stdout)
         self.assertFalse(self.preserved)
+
+    def test_switch_whose_record_directory_was_not_made_root_s(self):
+        result = self.rejected("record-readable", "FAIL: the full profile's packages", "switch")
+        self.assertIn("FAIL the record is where the user cannot read it, and read all the same: 'readable 6.8.2-3.fc44'", result.stdout)
 
     def test_unknown_mode_is_refused_before_a_vm_starts(self):
         with tempfile.TemporaryDirectory() as directory:

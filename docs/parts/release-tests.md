@@ -184,14 +184,20 @@ Fusion:
 `switch` installs the stock profile first, with the published installer from the public Copr
 project, checks that it left KWin alone, then runs the same `--full` phases on top (the six
 packages move to the full project's builds) and ends with `uninstall` on the full system, which
-returns the stock KWin before it removes the packages.
+returns the stock KWin before it removes the packages. In this mode the restore record's
+directory, `/var/lib/plasma-fusion`, is made root's alone before `--full`, as
+`greeter-apply.sh` leaves it (mode `0700`): the installer runs as the user, writes the record
+with sudo and has to read it through sudo again (installer.md). The lane checks that the user
+cannot read the record and that it is there with the stock versions, read as root; it cannot
+tell whether the uninstall then synced to the recorded versions or to the names alone, since
+both are the same KWin in the VM. The installer's own tests tell the two apart.
 
 What the lane shows of the two gated features is that the fork advertises them, that the features
 run on it, and that they work by their fallbacks on stock KWin with the same packages. What each
 does with its property is the subject of the parts' own tests (kwin.md, navigation-cpp.md).
 
 `test-fulltest.py` (CI `build`) runs the lane against a stand-in VM: both modes pass, and
-twenty-nine faults, one test each, fail the run, stop the VM and keep the overlay (from a dry
+thirty faults, one test each, fail the run, stop the VM and keep the overlay (from a dry
 run that changes something to an uninstall that leaves the theme; the file's first lines name
 them). Not every check has a fault: the lane's plumbing (the stamp, the copies into the VM, a
 crash collector that cannot count) and the wording of the `--full` plan are covered by the
@@ -201,6 +207,12 @@ The first run (2026-11-14, on the first candidate builds) found one defect, in s
 `--full-restore` and the next login it called the session's KWin "a fork installed by hand". The
 packages are the distribution's by then and only the session still runs the fork; status now
 tells the two apart (system.md).
+
+The same checks on the ThinkPad found a second one, which no VM had: its
+`/var/lib/plasma-fusion` was root's alone, from the login screen's setup weeks before, and the
+installer did not find the restore record it had just written there. The VMs' directory was
+always the installer's own, readable by all. `switch` now runs with the directory as the
+ThinkPad's was.
 
 ## Final round
 

@@ -48,7 +48,9 @@ case ${1:-} in
     else
       echo "locklist failed"
     fi
-    sed -n 's/^\(kwin[a-z-]*\)=\(.*\)$/record \1 \2/p' "$RECORD" 2>/dev/null
+    # The record's directory can be root's alone (greeter-apply.sh keeps the login screen's
+    # backups there and makes it 0700): the record is read, and looked for, as root.
+    sudo sed -n 's/^\(kwin[a-z-]*\)=\(.*\)$/record \1 \2/p' "$RECORD" 2>/dev/null
     sed -n 's/^kwin=/pin /p; s/^tag=/tag /p' "$PROFILE" 2>/dev/null
     # The repository as dnf sees it: a file left with enabled=0 is no place updates come from,
     # and no repository that is gone either.
@@ -59,7 +61,7 @@ case ${1:-} in
     else
       echo "repo no"
     fi
-    if [ -e "$RECORD" ]; then echo "recordfile yes"; else echo "recordfile no"; fi
+    if sudo test -e "$RECORD"; then echo "recordfile yes"; else echo "recordfile no"; fi
     ;;
   kwinlog)
     # The newest: a session that is on its way out may still have its own.

@@ -17,7 +17,10 @@
 #                    project (lane-env.sh) - then install.sh --full on top of it (the six
 #                    packages move to the full project's builds; the setup is updated, not
 #                    redone), the same checks on the fork, and uninstall on the full system,
-#                    which returns the stock KWin before it removes the packages.
+#                    which returns the stock KWin before it removes the packages. The
+#                    restore record's directory is root's alone here, as the login screen's
+#                    setup leaves it (greeter-apply.sh): the installer runs as the user and
+#                    has to read its record through sudo.
 #
 # The gated features (ADR 0001): the switcher's thumbnails (plasmaFusionThumbnailSourceLifecycle-
 # Version: a hidden card lets go of its window; on stock it keeps it) and the navigation effect
@@ -290,6 +293,12 @@ if [ "$mode" = switch ]; then
   want "no full profile on the stock profile" "$(fact 06-facts.txt pkg plasma-fusion-full) $(fact 06-facts.txt repo) $(fact 06-facts.txt recordfile)" "none no no"
   crashes "on the stock profile"
   phase "the stock profile before the switch"
+  # /var/lib/plasma-fusion as greeter-apply.sh leaves it, whether it runs before --full or
+  # after: mode 0700, root's. The ThinkPad's was (2026-11-14), and the installer, which runs
+  # as the user, did not find the record it had written there.
+  vm ssh "$name" 'sudo install -d -m 0700 /var/lib/plasma-fusion' || { log "FAIL: could not make the record's directory root's alone"; exit 1; }
+  log "the restore record's directory is root's alone (as greeter-apply.sh leaves it)"
+  facts 06-facts.txt
   before=06-facts.txt
 fi
 
@@ -328,6 +337,10 @@ check_full_packages 12-facts.txt
 vm ssh "$name" "sudo dnf -q --assumeno --disablerepo='copr:*plasma-fusion-full*' distro-sync $KWIN" >"$OUT/12-lock-holds.log" 2>&1
 has "a sync to the distribution's KWin finds nothing to do" 12-lock-holds.log '^Nothing to do'
 hasnot "the lock leaves the solver nothing to skip" 12-lock-holds.log 'Problem|Skipping packages|No matching repositories'
+if [ "$mode" = switch ]; then
+  want "the record is where the user cannot read it, and read all the same" \
+    "$(vm ssh "$name" 'cat /var/lib/plasma-fusion/full-restore.txt >/dev/null 2>&1 && echo readable || echo hidden') $(fact 12-facts.txt record kwin)" "hidden ${STOCK[kwin]}"
+fi
 # Before the new login the session still runs the KWin from before: status says so.
 status 13-status-before-login.log
 has "status: the full profile, its pin and tag" 13-status-before-login.log "profile: full \(the maintained KWin fork, pinned at $(fact 12-facts.txt pin), fork tag $(fact 12-facts.txt tag)\)"
