@@ -162,6 +162,28 @@ reviewed update (README).
 
   Failures that also happen on stock, and functions that failed in only some attempts, are listed
   in the job summary as passed.
+
+  The two stacking tests fail on a race in KWin itself (#188). KWin gives an X11 window that sets no
+  user time the X server's time at its creation (`_KDE_NET_WM_USER_CREATION_TIME`, in
+  milliseconds; `events.cpp`), and grants an application's raise request in full when the request
+  is not older than the active window's user time (`Workspace::allowFullClientRaising`:
+  `time >= user_time`). When a test creates its windows within one millisecond, the two times are
+  equal and the window goes above the other application's window too, which the test does not
+  expect: the faster the runner, the more often (KWin 6.7.5 and 6.8.2; the tests are unchanged in
+  KWin's master). The two builds run on different runners, so one can land on a fast runner and
+  fail in all three attempts while the other passes all ten: in runs 43570629043, 43661256399 and
+  43665657830 the backport did, and in 43590522888 stock failed once. The comparison reads KWin's
+  own record of each decision (kwin_core: `Raising, compared: TIME : USER_TIME : true|false`) and
+  of each window's user time (`User timestamp, final: ... : TIME`). A failed row (`FAIL!`) of one
+  of the two stacking tests is the race when its last raise decision before the failure was
+  granted on equal times, and that time is a real one (not 0 or 2^32 - 1, which windows without a
+  creation time would share on every runner) that KWin gave at least two of the row's windows. An
+  attempt in which every failed row of a function is the race does not count against the function,
+  and a function that failed only on the race passes, listed with that reason. A stock attempt that
+  failed a function only on the race does not count as a failure on stock either, so it cannot
+  excuse a backport failure. A tied raise in any other test, a raise granted to a newer request, a
+  refused one, a fatal row and backported tests get no such allowance. In those six runs all 13
+  granted raises were ties on two windows' creation time, and they were exactly the 13 failed rows.
   Every attempt must first record successful compositor initialization. Missing initialization
   evidence or a failed startup is a setup failure on either side, never a tolerated baseline
   failure. The native entry point enables the corresponding debug log category.
