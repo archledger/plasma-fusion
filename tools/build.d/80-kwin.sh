@@ -17,9 +17,10 @@
 # tools/build-lib/shared-qml.sh) in contents/ui. The placement script's pure rules (contents/ui/
 # Placement.js) are tested by packages/kwin/tests/placement.test.js, the snap script's snap groups
 # (contents/ui/Groups.js) by packages/kwin/tests/snap-groups.test.js, its touchpad gestures
-# (contents/ui/Gestures.js) by packages/kwin/tests/gestures.test.js and the dynamic workspaces'
-# rules (contents/ui/Workspaces.js) by packages/kwin/tests/workspaces.test.js, when node is
-# installed.
+# (contents/ui/Gestures.js) by packages/kwin/tests/gestures.test.js, the dynamic workspaces'
+# rules (contents/ui/Workspaces.js) by packages/kwin/tests/workspaces.test.js and the attached
+# dialogs' script (contents/code/main.js, run whole against a model of KWin's scripting) by
+# packages/kwin/tests/attach.test.js, when node is installed.
 set -euo pipefail
 : "${ROOT:?}" "${STAGE:?}"
 
@@ -63,9 +64,9 @@ test -f "$SRC/scripts/plasmafusion-placement/contents/ui/main.qml"
 test -f "$SRC/scripts/plasmafusion-workspaces/contents/ui/main.qml"
 
 # The placement rules, snap groups, directional keys, legacy snap cycle, ensure-topbars.js's answer,
-# dynamic workspaces, touchpad gestures and the tiling layout (Placement.js, Groups.js, Directional.js,
-# Cycle.js, Panels.js, Workspaces.js, Gestures.js, Tiling.js) against their node suites, when node
-# is installed.
+# dynamic workspaces, touchpad gestures, the tiling layout and the attached dialogs (Placement.js,
+# Groups.js, Directional.js, Cycle.js, Panels.js, Workspaces.js, Gestures.js, Tiling.js, the attach
+# script's main.js) against their node suites, when node is installed.
 if command -v node >/dev/null 2>&1; then
   node "$ROOT/packages/kwin/tests/placement.test.js" >/dev/null
   node "$ROOT/packages/kwin/tests/tiling.test.js" >/dev/null
@@ -75,6 +76,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/packages/kwin/tests/panels.test.js" >/dev/null
   node "$ROOT/packages/kwin/tests/workspaces.test.js" >/dev/null
   node "$ROOT/packages/kwin/tests/gestures.test.js" >/dev/null
+  node "$ROOT/packages/kwin/tests/attach.test.js" >/dev/null
 fi
 
 install_package "$SRC/switcher/org.plasmafusion.switcher" "$STAGE/.local/share/kwin/tabbox/org.plasmafusion.switcher"

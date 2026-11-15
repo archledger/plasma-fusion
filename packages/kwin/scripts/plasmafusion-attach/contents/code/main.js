@@ -39,16 +39,24 @@ const children = new Map();
 // every window we watch for modal/transient changes -> handlers
 const watched = new Map();
 
+// Whether a window reference is still a window. KWin marks a closing window deleted and destroys
+// it a moment later; after that every property of a kept reference reads undefined, deleted
+// included, so a bare "not deleted" is true of it. Only a window whose deleted is the boolean false
+// is live (the snap, placement and tablet scripts' rule).
+function alive(win) {
+    return !!win && win.deleted === false;
+}
+
 function titleBarHeight(win) {
     return Math.max(0, win.clientGeometry.y - win.frameGeometry.y);
 }
 
 function eligible(dialog) {
-    if (!dialog || dialog.deleted || !dialog.modal || !dialog.moveable || dialog.fullScreen) {
+    if (!alive(dialog) || !dialog.modal || !dialog.moveable || dialog.fullScreen) {
         return false;
     }
     const parent = dialog.transientFor;
-    if (!parent || parent.deleted || parent.desktopWindow || parent.dock || parent.fullScreen) {
+    if (!alive(parent) || parent.desktopWindow || parent.dock || parent.fullScreen) {
         return false;
     }
     return titleBarHeight(parent) > 0;
@@ -64,7 +72,7 @@ function place(dialog) {
         return;
     }
     const parent = entry.parent;
-    if (parent.deleted || dialog.deleted) {
+    if (!alive(parent) || !alive(dialog)) {
         detach(dialog);
         return;
     }
@@ -162,7 +170,9 @@ function detach(dialog) {
             // the window is already gone
         }
     }
-    if (entry.hidTitleBar && !dialog.deleted) {
+    // A destroyed dialog cannot be written to: the write would throw here, before the parent's
+    // entry below is cleaned up.
+    if (entry.hidTitleBar && alive(dialog)) {
         dialog.noBorder = false;
     }
     const set = children.get(entry.parent);

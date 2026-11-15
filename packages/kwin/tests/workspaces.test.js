@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
 // Tests of the dynamic workspaces script's contents/ui/Workspaces.js (which desktops come and go,
-// when, and what they are called).
+// when, and what they are called), and a check that no file of the script reads a window's deleted
+// outside Workspaces.alive (#184).
 // Run: node packages/kwin/tests/workspaces.test.js (80-kwin.sh runs it).
 "use strict";
 const fs = require("fs");
@@ -13,10 +14,11 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-workspaces", "contents", "ui", "Workspaces.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { candidate, counts, occupancy, keepCount, plan, canAdd, decide, numberOf, nameFor, renames } = globalThis;
+const { alive, candidate, counts, occupancy, keepCount, plan, canAdd, decide, numberOf, nameFor, renames } = globalThis;
 
-// A counted window on the given desktops; overrides switch single properties.
-const win = (desktops, overrides) => ({ managed: true, deleted: false, allDesktops: false, skipPager: false, special: false, popup: false, desktops, ...overrides });
+// A counted window's view (main.qml's windowView) on the given desktops; overrides switch single
+// properties.
+const win = (desktops, overrides) => ({ managed: true, alive: true, allDesktops: false, skipPager: false, special: false, popup: false, desktops, ...overrides });
 const ids = (n) => Array.from({ length: n }, (_, i) => "d" + i);
 // plan() over occupancy given as a string: "x" occupied, "." empty.
 const planOf = (pattern, current, keepFirst) => {
@@ -31,11 +33,52 @@ assert.ok(!counts(win([], { allDesktops: true })), "on every desktop (KWin's own
 assert.ok(!counts(win(["d0"], { skipPager: true })), "kept out of the pager");
 assert.ok(!counts(win(["d0"], { special: true })), "a panel, notification, OSD, applet popup or tooltip");
 assert.ok(!counts(win(["d0"], { popup: true })), "a popup menu");
-assert.ok(!counts(win(["d0"], { deleted: true })), "a window that is closing");
+assert.ok(!counts(win(["d0"], { alive: false })), "a window that is closing");
+assert.ok(!counts(win(["d0"], { alive: undefined })), "only a view that says alive counts");
 assert.ok(!counts(win(["d0"], { managed: false })), "an unmanaged (override-redirect) window");
 assert.ok(!counts(null));
-assert.ok(candidate(win([], { allDesktops: true, skipPager: true, deleted: true })), "the kind of window is what is watched: its desktops and pager flag can change");
+assert.ok(candidate(win([], { allDesktops: true, skipPager: true, alive: false })), "the kind of window is what is watched: its desktops and pager flag can change");
 assert.ok(!candidate(win(["d0"], { special: true })) && !candidate(win(["d0"], { popup: true })) && !candidate(win(["d0"], { managed: false })));
+
+// ---- a window reference: only a window whose deleted is the boolean false is live. KWin marks a
+// closing window deleted and destroys it a moment later; a reference to a destroyed window is a
+// truthy object whose every property reads undefined, so "not deleted" is true of it.
+const destroyed = new Proxy({}, { get: () => undefined });
+assert.strictEqual(alive({ deleted: false }), true, "an open window");
+assert.strictEqual(alive({ deleted: true }), false, "a closing window");
+assert.strictEqual(alive(destroyed), false, "a destroyed window: every property undefined");
+assert.strictEqual(alive(null), false);
+assert.strictEqual(alive(undefined), false);
+// The view main.qml's windowView makes of a destroyed window (every read undefined, desktops
+// through "|| []") neither holds a desktop nor is watched.
+const gone = {
+    managed: destroyed.managed, alive: alive(destroyed), allDesktops: destroyed.onAllDesktops,
+    skipPager: destroyed.skipPager, special: destroyed.specialWindow, popup: destroyed.popupWindow,
+    desktops: [],
+};
+assert.ok(!counts(gone) && !candidate(gone), "a destroyed window's view");
+assert.deepStrictEqual(occupancy(ids(1), [gone, win(["d0"], { alive: false })]), [false],
+                       "neither a destroyed nor a closing window holds its desktop");
+
+// Every read of a window's deleted in the script (main.qml and Workspaces.js) goes through alive();
+// comments aside, alive() itself is the one place that reads it (#184; the snap, placement and
+// tablet scripts' rule, #181 and #182).
+{
+    const dir = path.join(__dirname, "..", "scripts", "plasmafusion-workspaces", "contents", "ui");
+    const blank = (text) => text.replace(/[^\n]/g, " ");
+    const reads = [];
+    for (const name of fs.readdirSync(dir).filter((n) => /\.(qml|js)$/.test(n)).sort()) {
+        const text = fs.readFileSync(path.join(dir, name), "utf8")
+            .replace(/\/\*[\s\S]*?\*\//g, blank)
+            .replace(/function alive\(\w*\) \{[^}]*\}/, blank);
+        text.split("\n").forEach((line, i) => {
+            if (/\.deleted\b/.test(line.replace(/\/\/.*$/, ""))) {
+                reads.push(name + ":" + (i + 1));
+            }
+        });
+    }
+    assert.deepStrictEqual(reads, [], "a window's deleted read outside alive()");
+}
 
 // ---- KeepFirst as a count
 assert.strictEqual(keepCount(3), 3);
