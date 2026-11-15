@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Plasma Fusion dynamic tiling: the node tests for Tiling.js.
+// Plasma Fusion dynamic tiling: the node tests for Tiling.js, and a check that no file of the
+// placement script reads a window's deleted outside Tiling.alive.
 // Run with: node packages/kwin/tests/tiling.test.js
 // The assertions run inline (the placement suite's pattern): node exits non-zero on the
 // first failure, and 80-kwin.sh runs this file with the other KWin node suites.
@@ -229,7 +230,7 @@ assert.deepStrictEqual(focusOrder({ master: "M", stack: ["S1", "S2"] }), ["M", "
 // output only - a same-desktop window on another screen is not this session's to place.
 {
     const out = { name: "eDP" };
-    const win = (id, over) => Object.assign({ internalId: id, normalWindow: true, transient: false, modal: false,
+    const win = (id, over) => Object.assign({ internalId: id, normalWindow: true, deleted: false, transient: false, modal: false,
         minimized: false, maximizeMode: 0, moveable: true, resizeable: true, onAllDesktops: false,
         desktops: ["2"], activities: [], output: out }, over);
     const master = win("M");
@@ -249,7 +250,7 @@ assert.deepStrictEqual(focusOrder({ master: "M", stack: ["S1", "S2"] }), ["M", "
 // during the session - so its float is saved and it is watched from the start, not first when
 // a restore finds no listener (windowAdded does not fire for it: it was there all along).
 {
-    const win = (over) => Object.assign({ internalId: "x", normalWindow: true, transient: false, modal: false,
+    const win = (over) => Object.assign({ internalId: "x", normalWindow: true, deleted: false, transient: false, modal: false,
         minimized: false, maximizeMode: 0, moveable: true, resizeable: true, onAllDesktops: false,
         desktops: ["2"], activities: [] }, over);
     const minimized = win({ internalId: "m1", minimized: true, caption: "m1" });
@@ -397,6 +398,27 @@ assert.ok(!alive(windowWith({ deleted: true })), "a closing window");
 assert.ok(!alive({}), "a destroyed window: every property undefined");
 assert.ok(!alive(null));
 assert.ok(!alive(undefined));
+
+// Every read of a window's deleted in the placement script (main.qml, Tiling.js, Placement.js) goes through alive(): KWin marks a closing
+// window deleted and destroys it a moment later, and every property of the destroyed one reads
+// undefined - deleted too, so a bare "not deleted" is true of it (#182; snap groups' race, #181).
+// Comments aside, alive() itself is the one place that reads it.
+{
+    const dir = path.join(__dirname, "..", "scripts", "plasmafusion-placement", "contents", "ui");
+    const blank = (text) => text.replace(/[^\n]/g, " ");
+    const reads = [];
+    for (const name of fs.readdirSync(dir).filter((n) => /\.(qml|js)$/.test(n)).sort()) {
+        const text = fs.readFileSync(path.join(dir, name), "utf8")
+            .replace(/\/\*[\s\S]*?\*\//g, blank)
+            .replace(/function alive\(\w*\) \{[^}]*\}/, blank);
+        text.split("\n").forEach((line, i) => {
+            if (/\.deleted\b/.test(line.replace(/\/\/.*$/, ""))) {
+                reads.push(name + ":" + (i + 1));
+            }
+        });
+    }
+    assert.deepStrictEqual(reads, [], "a window's deleted read outside alive()");
+}
 
 // A float given back while the cell's configure was in flight: the client's answer to the cell
 // lands afterwards. It is that when the frame is the cell and KWin is not (any longer) asking

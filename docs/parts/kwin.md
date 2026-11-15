@@ -1956,7 +1956,9 @@ released master's tile test (`onMasterTile`, with `tileFitShort` for how
 far inside its tile a fit can be), the native answers the tiler asks again about
 (`settleAgain`, `admitAgain`), the screens a returned master may show on
 (`touchesScreen`), a rectangle's equality to the last bits (`sameRect`) and whether a window
-reference is still a window (`alive`). The eligibility predicates (`eligibleForMaster`, `eligibleForStack`) mirror
+reference is still a window (`alive`). Every guard of the script on a window reference uses
+`alive`, in `main.qml` as here, and the suite checks that no file of the script reads a window's
+`deleted` outside it: a reference to a destroyed window reads "not deleted" (#182). The eligibility predicates (`eligibleForMaster`, `eligibleForStack`) mirror
 the snap script's `usable()` guards and leave out a window that keeps itself off the taskbar
 or the window switcher (`userWindow`: the XWayland Video Bridge's invisible window took a
 stack cell on hardware). The QML path is covered too:

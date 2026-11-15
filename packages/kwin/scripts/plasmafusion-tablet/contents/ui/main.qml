@@ -156,7 +156,7 @@ Item {
     }
 
     function eligible(w) {
-        return w && !w.deleted && w.normalWindow && w.maximizable && !w.fullScreen && !w.minimized
+        return Snap.alive(w) && w.normalWindow && w.maximizable && !w.fullScreen && !w.minimized
             && !w.skipTaskbar && !w.transient && !w.modal && internalOutput(w.output);
     }
 
@@ -255,7 +255,7 @@ Item {
         const width = Math.round(area.width * 0.7), height = Math.round(area.height * 0.7);
         let cx = area.x + area.width / 2, cy = area.y + area.height / 2;
         const parent = w.transient ? w.transientFor : null;
-        if (parent && !parent.deleted) {
+        if (Snap.alive(parent)) {
             const g = parent.frameGeometry;
             cx = g.x + g.width / 2;
             cy = g.y + g.height / 2;
@@ -274,7 +274,7 @@ Item {
         // un-maximize only while the option is set.
         for (let i = 0; i < ws.length; ++i) {
             const w = ws[i];
-            if (!w || w.deleted) {
+            if (!Snap.alive(w)) {
                 continue;
             }
             const k = key(w);
@@ -321,7 +321,7 @@ Item {
         if (!laptopBorderless) {
             for (let i = 0; i < ws.length; ++i) {
                 const w = ws[i];
-                if (w && !w.deleted && w.maximizeMode === 3 && w.noBorder
+                if (Snap.alive(w) && w.maximizeMode === 3 && w.noBorder
                     && !unmaximizedNow[key(w)]) {
                     w.noBorder = false;
                 }
@@ -374,7 +374,7 @@ Item {
     function unfollowAll() {
         for (const k in tileHandlers) {
             const entry = tileHandlers[k];
-            if (entry[0] && !entry[0].deleted) {
+            if (Snap.alive(entry[0])) {
                 entry[0].tileChanged.disconnect(entry[1]);
                 entry[0].maximizedChanged.disconnect(entry[2]);
                 entry[0].decorationPolicyChanged.disconnect(entry[3]);
@@ -424,7 +424,7 @@ Item {
         id: ruleRegex
     }
     function tileChanged(w) {
-        if (!applied || !w || w.deleted) {
+        if (!applied || !Snap.alive(w)) {
             return;
         }
         const k = key(w);
@@ -463,7 +463,7 @@ Item {
     // un-maximizes first) has its tile by then and enter()/leave() are over.
     property var unmaximized: [] // windows un-maximized outside enter()/leave()
     function maximizeChanged(w) {
-        if (!applied || busy || !w || w.deleted) {
+        if (!applied || busy || !Snap.alive(w)) {
             return;
         }
         if (w.maximizeMode === 3) {
@@ -511,7 +511,7 @@ Item {
         unmaximized = [];
         for (let i = 0; i < list.length; ++i) {
             const w = list[i];
-            if (!applied || !w || w.deleted || w.maximizeMode === 3 || w.tile) {
+            if (!applied || !Snap.alive(w) || w.maximizeMode === 3 || w.tile) {
                 continue;
             }
             const k = key(w);

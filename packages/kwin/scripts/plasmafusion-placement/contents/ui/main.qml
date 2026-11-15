@@ -509,7 +509,7 @@ Item {
         const windows = Workspace.stackingOrder;
         for (let i = 0; i < windows.length; ++i) {
             const o = windows[i];
-            if (o === w || o.deleted || !o.normalWindow || appIdOf(o) !== id) {
+            if (o === w || !Tiling.alive(o) || !o.normalWindow || appIdOf(o) !== id) {
                 continue;
             }
             if (!Placement.sameDesktop(desktopView(w), desktopView(o)) || !Placement.sameActivity(activityView(w), activityView(o))) {
@@ -650,7 +650,7 @@ Item {
     // the settling pass reads the window then instead).
     function geometryChanged(key) {
         const entry = watched[key];
-        if (!entry || !entry.w || entry.w.deleted) {
+        if (!entry || !Tiling.alive(entry.w)) {
             return;
         }
         // The late answer to a cell the tiler took back is neither the window's place nor the
@@ -833,7 +833,7 @@ Item {
     Connections {
         target: Workspace
         function onWindowAdded(w) {
-            if (!w || w.deleted || !w.normalWindow || w.transient || w.modal) {
+            if (!Tiling.alive(w) || !w.normalWindow || w.transient || w.modal) {
                 return;
             }
             root.windowOpened(w, true);
@@ -863,7 +863,7 @@ Item {
             root.settling = [];
             for (let i = 0; i < list.length; ++i) {
                 const w = list[i];
-                if (!w || w.deleted) {
+                if (!Tiling.alive(w)) {
                     continue;
                 }
                 const entry = root.watched[String(w.internalId)];
@@ -1036,7 +1036,7 @@ Item {
             let found = 0;
             for (let i = 0; i < windows.length; ++i) {
                 const w = windows[i];
-                if (!Tiling.alive(w) || w.deleted || holds(w) || !nativeKeeps(w)) {
+                if (!Tiling.alive(w) || holds(w) || !nativeKeeps(w)) {
                     continue;
                 }
                 found += 1;
@@ -1338,7 +1338,7 @@ Item {
                 if (!same) {
                     start(invoked);
                 }
-                if (invoked.window && !invoked.window.deleted && Workspace.activeWindow !== invoked.window) {
+                if (Tiling.alive(invoked.window) && Workspace.activeWindow !== invoked.window) {
                     Workspace.activeWindow = invoked.window;
                 }
                 return;
@@ -1606,7 +1606,7 @@ Item {
                 const id = list[i].id;
                 const w = list[i].w;
                 const saved = session.savedFloats[id];
-                if (w && !w.deleted && saved && Placement.onScreen(saved, screens)) {
+                if (Tiling.alive(w) && saved && Placement.onScreen(saved, screens)) {
                     w.frameGeometry = Qt.rect(saved.x, saved.y, saved.width, saved.height);
                     expectReturn(id, saved);
                 }
@@ -1689,7 +1689,7 @@ Item {
             // commit of it), not a manual move.
             for (let i = 0; i < result.placed.length; ++i) {
                 const p = result.placed[i];
-                if (!p.window.deleted) {
+                if (Tiling.alive(p.window)) {
                     p.window.frameGeometry = Qt.rect(p.rect.x, p.rect.y, p.rect.width, p.rect.height);
                 }
                 cellRects[String(p.window.internalId)] = p.rect;
@@ -1702,7 +1702,7 @@ Item {
             // drag it back to a rectangle it left before the session.
             const restores = Tiling.floatRestores(result.floated, session.savedFloats, cellRects);
             for (let i = 0; i < restores.length; ++i) {
-                if (!restores[i].window.deleted) {
+                if (Tiling.alive(restores[i].window)) {
                     restores[i].window.frameGeometry =
                         Qt.rect(restores[i].rect.x, restores[i].rect.y, restores[i].rect.width, restores[i].rect.height);
                     expectReturn(String(restores[i].window.internalId), restores[i].rect);
@@ -1915,7 +1915,7 @@ Item {
         }
 
         function focusMaster() {
-            if (session.active && session.master && !session.master.deleted) {
+            if (session.active && Tiling.alive(session.master)) {
                 Workspace.activeWindow = session.master;
             }
         }
@@ -1925,7 +1925,7 @@ Item {
                 return;
             }
             const next = Tiling.nextInCycle(session, Workspace.activeWindow);
-            if (next && !next.deleted) {
+            if (Tiling.alive(next)) {
                 Workspace.activeWindow = next;
             }
         }
@@ -1935,7 +1935,7 @@ Item {
                 return;
             }
             const prev = Tiling.previousInCycle(session, Workspace.activeWindow);
-            if (prev && !prev.deleted) {
+            if (Tiling.alive(prev)) {
                 Workspace.activeWindow = prev;
             }
         }
@@ -1984,7 +1984,7 @@ Item {
         let adopted = 0;
         for (let i = 0; i < windows.length; ++i) {
             const w = windows[i];
-            if (!w || w.deleted || !w.normalWindow || w.transient || w.modal) {
+            if (!Tiling.alive(w) || !w.normalWindow || w.transient || w.modal) {
                 continue;
             }
             if (!watched[String(w.internalId)]) {
