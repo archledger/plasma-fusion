@@ -70,6 +70,14 @@ before anything changes (the other channels and Fedora Atomic keep the stock pro
 states the fork's honest limit: KWin security fixes arrive on the fork's weekly integration
 cadence, which can lag Fedora by days.
 
+Without `--full`, a fresh install on such a Fedora release asks which profile, before the plan
+(#179). Stock is the default (Enter or `1`), `2` is the full profile, and any other answer stays
+stock and says so. The full option says what it does: KWin replaced by the fork and locked at its
+version, security fixes that can lag Fedora's by days, and `--full-restore` to undo it. The question
+reads the terminal as the consent question does, so it works under `curl | sh`. Nothing else asks:
+not `--yes` (a scripted install stays stock), not without a terminal, not an installed system or
+`update`, and not another Fedora release or system.
+
 `--full` (an install choice; a plain stock install never gets near the fork):
 
 1. refuses to take over a KWin the user already pins themselves (`dnf versionlock` holding
@@ -144,8 +152,9 @@ All of them read only, and all come before the question:
   (downloaded into a temporary directory, each against its sum), no downgrade, and apt's dry run of
   their install (below), all before the plan is shown, so `--dry-run` runs them too.
 
-Then it shows the plan with its commands and asks once on the terminal (`--yes` answers; without a
-terminal and without `--yes` it stops). `sudo -v` comes before the first change.
+Then it shows the plan with its commands and asks to go ahead on the terminal (`--yes` answers;
+without a terminal and without `--yes` it stops). Where there is a choice of profile, the profile
+question comes before the plan (the full profile, above). `sudo -v` comes before the first change.
 
 On the apt channels apt is first asked for a dry run of the install (`apt-get -s install`): for the
 release `.deb`s before the plan (above), on the PPA in the package step, after the PPA is added and
@@ -229,7 +238,8 @@ With `PLASMA_FUSION_DEV=1` an unstamped copy runs with test values: `PLASMA_FUSI
 `_SERIES`, `_COPR_FEDORA`, `_PPA_SERIES`, `_DEB_TARGETS`, `_FULL_FEDORA`, `_FULL_REPO` (default
 `archledger/plasma-fusion-full`), test channels
 (`PLASMA_FUSION_DEV_DNF_REPO` a dnf base URL, `_APT_REPO` an apt line, `_AUR_SRC` a directory with a
-PKGBUILD, `_RELEASE_BASE` a release URL), `_ROOT` (a directory with `etc/os-release`) and `_KEY`,
+PKGBUILD, `_RELEASE_BASE` a release URL), `_ROOT` (a directory with `etc/os-release`), `_TTY` (a
+file the profile question reads its answer from, instead of the terminal) and `_KEY`,
 `_KEY_FP` (a test signing key). A stamped copy reads none of these.
 
 `tools/tests/installer/run.sh` runs the installer under dash and bash against fake systems (one
@@ -244,7 +254,10 @@ as dnf5 does; 236 with the apt dry run, whose fake apt-get -s prints a set simul
 (also with `--dry-run`), the PPA and a PPA update behind the release's Plasma refused, a failed dry
 run stopping it, an install that upgrades nothing of Plasma let through; 268 with the lock wait on
 every apt install and remove and `apt-get update` tried again, 2026-10-21; the full profile's
-Copr project from the stamp or `_FULL_REPO`, never from a stamped copy's environment, 2026-11-14).
+Copr project from the stamp or `_FULL_REPO`, never from a stamped copy's environment, 2026-11-14;
+the profile question with Enter, `1`, `2` and another answer, and no question without a terminal,
+with `--full` or `--yes`, on an installed system or `update`, without the full profile for that
+Fedora, or on Arch, 2026-11-15).
 The `packages` workflow runs it with ShellCheck, `dash -n` and `busybox sh -n`.
 
 The release-test VMs (docs/RELEASING.md) run it for real on Fedora 44, Arch, Ubuntu 26.10, KDE neon

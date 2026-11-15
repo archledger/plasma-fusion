@@ -67,8 +67,9 @@ In a terminal of your Plasma session (as yourself; it asks for sudo for the pack
 curl -fsSL https://github.com/archledger/plasma-fusion/releases/latest/download/install.sh | sh
 ```
 
-It finds your system's channel, shows what it will do and asks once, installs the packages, then
-applies Plasma Fusion to your account (a backup is taken first). Log out and back in once.
+It finds your system's channel, shows what it will do and asks you to confirm it, installs the
+packages, then applies Plasma Fusion to your account (a backup is taken first); on Fedora 44 a fresh
+install first asks which profile (below). Log out and back in once.
 `... | sh -s -- --dry-run` shows the plan without changing anything; `update`, `uninstall` and
 `status` work the same way. How to check the script's signature first, and what it does on each
 system, is in [`docs/parts/installer.md`](docs/parts/installer.md).
@@ -81,11 +82,12 @@ system, is in [`docs/parts/installer.md`](docs/parts/installer.md).
 | KDE neon, Debian testing | the release's `.deb` packages |
 | NixOS (unstable) | the flake or module ([`docs/parts/nixos.md`](docs/parts/nixos.md)) |
 
-On Fedora 44, `... | sh -s -- --full` installs the full profile instead: Plasma Fusion with the
-maintained KWin fork, pinned at one version and kept there by a version lock, which adds dynamic
-tiling ("Plasma Fusion: Tile Workspace"). `--full-restore` goes back to Fedora's KWin
-([`docs/full-profile.md`](docs/full-profile.md)). The fork takes KWin's security fixes on its own
-cadence, which can lag Fedora by days.
+On Fedora 44, a fresh install from a terminal asks which profile to install: the stock one (the
+default) or the full profile, Plasma Fusion with the maintained KWin fork, pinned at one version and
+kept there by a version lock, which adds dynamic tiling ("Plasma Fusion: Tile Workspace").
+`... | sh -s -- --full` chooses the full profile without asking, and `--yes` alone stays stock.
+`--full-restore` goes back to Fedora's KWin ([`docs/full-profile.md`](docs/full-profile.md)). The
+fork takes KWin's security fixes on its own cadence, which can lag Fedora by days.
 
 Afterwards, per account: `plasma-fusion setup` (other users), `plasma-fusion update` (after a
 package update; a notice tells you), `plasma-fusion status`, `plasma-fusion restore` (your desktop

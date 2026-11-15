@@ -9,7 +9,8 @@
 #   ... | sh -s -- update | uninstall | status
 #   ... | sh -s -- --dry-run          check everything, print the plan, change nothing
 #   ... | sh -s -- --full             Fedora: the full profile - the six packages with the pinned
-#                                    KWin fork from its own Copr repository (ADR 0001)
+#                                    KWin fork from its own Copr repository (ADR 0001); without
+#                                    it, a fresh install there asks which profile (Enter: stock)
 #   ... | sh -s -- --full-restore     back to stock KWin; the six packages stay (they run on stock)
 #
 # Channels:
@@ -629,6 +630,28 @@ Then run this installer again in your Plasma session for the setup step.
 EOF
 }
 
+# The profile question (#179), before the plan: on a fresh install, on a Fedora release this
+# release builds the full profile for. Stock is the default (ADR 0001: the full profile is opt-in).
+# Never with --yes (a scripted install stays stock) or without a terminal; it reads the terminal as
+# consent() does, so it works under curl | sh. 2 sets FULL, as --full does.
+ask_profile() {
+  [ "$YES" != 1 ] && [ "$LANE" = copr ] && [ -n "$PF_FULL_FEDORA" ] && in_list "$FEDORA" "$PF_FULL_FEDORA" || return 0
+  # In a subshell: on dash a failed redirection of a special builtin would end the script.
+  (: <"$ASK_TTY") 2>/dev/null || return 0
+  say "Two ways to install on Fedora $FEDORA:"
+  echo "  1) Stock (default): Plasma Fusion on Fedora's own KWin." >&2
+  echo "  2) Full: also replaces KWin with Plasma Fusion's maintained fork, for dynamic tiling." >&2
+  echo "     KWin is locked at the fork's version, and its security fixes can lag Fedora's by days." >&2
+  echo "     Undo it later with --full-restore." >&2
+  printf '[plasma-fusion] Which one? [1/2] (Enter: 1) ' >&2
+  read -r answer <"$ASK_TTY" || answer=
+  case $answer in
+    2) FULL=1 ;;
+    '' | 1) : ;;
+    *) say "'$answer' is not 1 or 2: the stock profile." ;;
+  esac
+}
+
 consent() {
   [ "$YES" = 1 ] && return 0
   # In a subshell: on dash a failed redirection of a special builtin would end the script.
@@ -748,7 +771,7 @@ main() {
 
   # An unstamped copy (the repository's) runs only for tests, with the endpoints they give; a
   # release copy takes none of these from the environment.
-  DEV_DNF_REPO='' DEV_APT_REPO='' DEV_AUR_SRC='' RELEASE_BASE='' TEST_ROOT=''
+  DEV_DNF_REPO='' DEV_APT_REPO='' DEV_AUR_SRC='' RELEASE_BASE='' TEST_ROOT='' ASK_TTY=/dev/tty
   case $PF_VERSION in
     @*)
       [ "${PLASMA_FUSION_DEV:-}" = 1 ] || refuse "this copy of the installer is not from a release: use the release URL (docs/parts/installer.md)."
@@ -758,7 +781,7 @@ main() {
       PF_FULL_REPO=${PLASMA_FUSION_DEV_FULL_REPO:-archledger/plasma-fusion-full}
       DEV_DNF_REPO=${PLASMA_FUSION_DEV_DNF_REPO:-} DEV_APT_REPO=${PLASMA_FUSION_DEV_APT_REPO:-}
       DEV_AUR_SRC=${PLASMA_FUSION_DEV_AUR_SRC:-} RELEASE_BASE=${PLASMA_FUSION_DEV_RELEASE_BASE:-}
-      TEST_ROOT=${PLASMA_FUSION_DEV_ROOT:-}
+      TEST_ROOT=${PLASMA_FUSION_DEV_ROOT:-} ASK_TTY=${PLASMA_FUSION_DEV_TTY:-/dev/tty}
       if [ -n "${PLASMA_FUSION_DEV_KEY:-}" ]; then
         KEY_ASC=$(cat "$PLASMA_FUSION_DEV_KEY") KEY_FP=${PLASMA_FUSION_DEV_KEY_FP:?}
       fi
@@ -807,6 +830,7 @@ main() {
   installed=$(pf_installed plasma-fusion)
   case $MODE in
     install)
+      [ "$FULL" = 1 ] || [ -n "$installed" ] || ask_profile
       if [ "$FULL" = 1 ]; then
         full_meta_installed && { say "the full profile is already installed (KWin $(pkg_evr kwin)); --full-restore returns to stock KWin."; exit 0; }
         kwin_is_fork &&

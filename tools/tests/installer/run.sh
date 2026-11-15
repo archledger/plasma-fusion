@@ -312,6 +312,56 @@ for SHNAME in "${shells[@]}"; do
   expect "  records the stock KWin for --full-restore" has_out "/var/lib/plasma-fusion/full-restore.txt"
   expect "  states the security-update lag" has_out "can lag Fedora by days"
   expect "  and changes nothing" no_change
+  # The profile question (#179): a fresh install on the Fedora release the stamp builds the full
+  # profile for asks which one, before the plan, on the terminal (in test mode: a file).
+  ANS=$CASE/answer
+  FULLQ="PLASMA_FUSION_DEV_FULL_FEDORA=44 PLASMA_FUSION_DEV_TTY=$ANS"
+  noq() { bash -c '! grep -q "Two ways to install" <<<"$0"' "$OUT"; }
+  nofull() { bash -c '! grep -qF "dnf -y copr enable archledger/plasma-fusion-full fedora-44-x86_64" <<<"$0$1"' "$OUT" "$LOG"; }
+  printf '\n' >"$ANS"
+  EXTRA_ENV="$FULLQ" run "$sh" $FED -- --dry-run
+  expect "a fresh Fedora 44 install asks which profile" has_out "Two ways to install on Fedora 44"
+  expect "  before the plan" bash -c 'q=$(grep -n "Two ways to install" <<<"$0" | head -1 | cut -d: -f1); p=$(grep -n "Plan:" <<<"$0" | head -1 | cut -d: -f1); [ -n "$q" ] && [ -n "$p" ] && [ "$q" -lt "$p" ]' "$OUT"
+  expect "  saying what the full one does" has_out "KWin is locked at the fork's version, and its security fixes can lag Fedora's by days"
+  expect "  and how to undo it" has_out "Undo it later with --full-restore"
+  expect "Enter: the stock profile" has_out "dnf -y copr enable archledger/plasma-fusion fedora-44-x86_64"
+  expect "  and not the full one" nofull
+  printf '1\n' >"$ANS"
+  EXTRA_ENV="$FULLQ" run "$sh" $FED -- --dry-run
+  expect "1: the stock profile" has_out "dnf -y copr enable archledger/plasma-fusion fedora-44-x86_64"
+  expect "  and not the full one" nofull
+  printf '2\n' >"$ANS"
+  EXTRA_ENV="$FULLQ" run "$sh" $FED -- --dry-run
+  expect "2: the full profile's plan" has_out "dnf -y copr enable archledger/plasma-fusion-full fedora-44-x86_64"
+  expect "  with the version lock" has_out "dnf -y versionlock add kwin kwin-common kwin-libs"
+  expect "  and the stock KWin's record" has_out "/var/lib/plasma-fusion/full-restore.txt"
+  expect "  a dry run changes nothing" no_change
+  printf 'full\n' >"$ANS"
+  EXTRA_ENV="$FULLQ" run "$sh" $FED -- --dry-run
+  expect "any other answer: the stock profile" has_out "dnf -y copr enable archledger/plasma-fusion fedora-44-x86_64"
+  expect "  and not the full one" nofull
+  expect "  saying so" has_out "is not 1 or 2"
+  # Nothing else asks.
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $FED -- --dry-run
+  expect "no terminal: no question" noq
+  expect "  the stock profile" has_out "dnf -y copr enable archledger/plasma-fusion fedora-44-x86_64"
+  printf '1\n' >"$ANS"
+  EXTRA_ENV="$FULLQ" run "$sh" $FED -- --full --dry-run
+  expect "--full: no question" noq
+  expect "  the full profile" has_out "dnf -y copr enable archledger/plasma-fusion-full fedora-44-x86_64"
+  printf '2\n' >"$ANS"
+  EXTRA_ENV="$FULLQ" run "$sh" $FED -- --yes
+  expect "--yes: no question" noq
+  expect "  the stock profile installed" has_log "sudo dnf -y copr enable archledger/plasma-fusion fedora-44-x86_64"
+  expect "  and not the full one" nofull
+  EXTRA_ENV="$FULLQ" VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- --dry-run
+  expect "an installed system: no question" noq
+  EXTRA_ENV="$FULLQ" VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- update --dry-run
+  expect "update: no question" noq
+  EXTRA_ENV="PLASMA_FUSION_DEV_TTY=$ANS" run "$sh" $FED -- --dry-run
+  expect "a release without the full profile: no question" noq
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=45 PLASMA_FUSION_DEV_TTY=$ANS" run "$sh" $FED -- --dry-run
+  expect "a Fedora release the full profile is not built for: no question" noq
   EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $FED -- --full update --yes
   expect "--full is an install choice only" [ "$RC" = 2 ]
   EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $FED -- --full --full-restore
@@ -697,6 +747,8 @@ for SHNAME in "${shells[@]}"; do
   expect "a stamped copy takes no full project from the environment" bash -c '! grep -q evil <<<"$0$1"' "$OUT" "$LOG"
   # Arch
   osr arch "" "" "" "Arch Linux"
+  EXTRA_ENV="$FULLQ" run "$sh" $AUR -- --dry-run
+  expect "Arch: no profile question" noq
   run "$sh" $AUR -- --yes
   expect "Arch builds the AUR packages with yay" has_log "yay -S --needed --noconfirm plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation plasma-fusion-quicklook plasma-fusion-copytext"
   expect "  without sudo around yay" bash -c '! grep -q "^sudo yay" <<<"$0"' "$LOG"
