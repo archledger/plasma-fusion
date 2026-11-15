@@ -30,11 +30,12 @@ raise request in full when the request's time is not older than the active windo
 USER_TIME : true|false"). When a test creates its windows within one millisecond the two times are
 equal, the raise is granted in full instead of within the application, and testX11Window's
 stacking tests fail on either build; how often depends on the runner's speed, and the two builds
-run on different runners. A failed row (FAIL!) whose last raise decision before the failure was
-granted on equal times is that race. An attempt in which every failed row of a function is the
-race does not count against the function; the rules above judge it on its other attempts, and a
-function that failed only on the race passes, listed as such. Backported tests get no such
-allowance: they must be stable.
+run on different runners. A failed row (FAIL!) of one of those two tests (RACE_TESTS) whose last
+raise decision before the failure was granted on equal times is that race. An attempt in which
+every failed row of a function is the race does not count against the function; the rules above
+judge it on its other attempts, and a function that failed only on the race passes, listed as
+such. A tied raise in any other test gives no allowance, and neither do backported tests: they
+must be stable.
 Writes OUT_DIR/native-summary.md and native-summary.json. Exit 0 no failure, 1 a failure, 2 usage.
 """
 
@@ -49,6 +50,10 @@ FAILED = {"FAIL!", "XPASS", "QFATAL"}
 # KWin's raise decision for an X11 window, logged in the row (function and data tag) that caused it.
 RAISE = re.compile(r"^QDEBUG\s*:\s+([A-Za-z_][\w:]*::\w+)\(([^)]*)\)\s+kwin_core: "
                    r"Raising, compared:\s*(\d+)\s*:\s*(\d+)\s*:\s*(true|false)\s*$")
+# The tests whose failure the race explains (#188): an application's stacking request, where a full
+# raise also puts the window above another application's window. Another test that logs a tied
+# raise and then fails is judged like any other failure.
+RACE_TESTS = {"X11WindowTest::testStackTopIfFromApplication", "X11WindowTest::testStackAboveFromApplication"}
 RENDERER_READY = re.compile(
     r"^QDEBUG\s*:\s+[\w:]+::initTestCase\(\).*"
     r"(?:OpenGL|QPainter) compositing has been successfully initialized", re.MULTILINE)
@@ -83,7 +88,7 @@ def attempt(text):
             if m.group(1) in FAILED:
                 failed.add(function)
                 time, user_time, granted = last_raise.get(row, (None, None, False))
-                race = m.group(1) == "FAIL!" and granted and time == user_time
+                race = m.group(1) == "FAIL!" and function in RACE_TESTS and granted and time == user_time
                 (on_race if race else otherwise).add(function)
             last_raise.pop(row, None)
     return {"ran": ran, "failed": failed, "race": on_race - otherwise,

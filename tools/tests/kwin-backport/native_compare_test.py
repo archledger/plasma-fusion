@@ -40,11 +40,19 @@ OK = [("initTestCase", "", "pass"), ("testA", "normal", "pass"), ("testA", "scal
 TIE = "Raising, compared: 1058756 : 1058756 : true"
 NEWER = "Raising, compared: 1058755 : 1058756 : false"
 
+# testX11Window's two stacking tests that the race makes fail, as in #188's runs.
+X11 = "X11WindowTest"
+TOP_IF = "testStackTopIfFromApplication"
+ABOVE = "testStackAboveFromApplication"
+X11_OK = [("initTestCase", "", "pass"), (TOP_IF, "normal", "pass"), (TOP_IF, "scaled2x", "pass"),
+          (ABOVE, "normal", "pass"), (ABOVE, "scaled2x", "pass"), ("testMinimize", "", "pass")]
+RACE_NOTE = "each on KWin's timestamp race (a full raise granted on equal user timestamps)"
 
-def raced(row="normal", messages=(TIE,)):
-    """testA failing in ROW after the given raise decisions, every other row passing."""
-    results = [r if r[:2] != ("testA", row) else ("testA", row, "fail") for r in OK]
-    return log("T", results, debug={("testA", row): list(messages)})
+
+def raced(row="normal", messages=(TIE,), function=TOP_IF, cls=X11, base=X11_OK):
+    """FUNCTION failing in ROW after the given raise decisions, every other row passing."""
+    results = [r if r[:2] != (function, row) else (function, row, "fail") for r in base]
+    return log(cls, results, debug={(function, row): list(messages)})
 
 
 class CompareTest(unittest.TestCase):
@@ -163,105 +171,131 @@ class CompareTest(unittest.TestCase):
         # #188's runs: testStackTopIfFromApplication failed in every backport attempt on a fast
         # runner, each time after a full raise granted on equal user timestamps; stock ran on
         # another runner and passed.
-        self.suite(self.stock, "testX", [log("T", OK)] * 10)
-        self.suite(self.backport, "testX", [raced(), raced("scaled2x"), raced()])
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)] * 10)
+        self.suite(self.backport, "testX11Window", [raced(), raced("scaled2x"), raced()])
         rc, rows, out = self.compare()
         self.assertEqual(rc, 0, out)
-        self.assertEqual(rows["testX"]["tolerated"], [
-            "T::testA: failed in 3 of 3 attempts, each on KWin's timestamp race "
-            "(a full raise granted on equal user timestamps)"])
+        self.assertEqual(rows["testX11Window"]["tolerated"],
+                         [f"{X11}::{TOP_IF}: failed in 3 of 3 attempts, {RACE_NOTE}"])
 
-    def test_a_raise_on_a_newer_user_time_is_no_race(self):
+    def test_the_other_stacking_test_is_covered(self):
+        # Run 43665657830: testStackAboveFromApplication failed in one of three attempts on a tie.
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)] * 10)
+        self.suite(self.backport, "testX11Window", [raced("scaled2x", function=ABOVE), log(X11, X11_OK), log(X11, X11_OK)])
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(rows["testX11Window"]["tolerated"], [f"{X11}::{ABOVE}: failed in 1 of 3 attempts, {RACE_NOTE}"])
+
+    def test_a_tie_in_another_test_is_no_race(self):
+        # Another test can log a tied raise and then fail for its own reason: only the two stacking
+        # tests whose failure the race explains get the allowance.
         self.suite(self.stock, "testX", [log("T", OK)] * 10)
-        self.suite(self.backport, "testX", [raced(messages=[NEWER])] * 3)
+        self.suite(self.backport, "testX", [raced(function="testA", cls="T", base=OK)] * 3)
         rc, rows, out = self.compare()
         self.assertEqual(rc, 1, out)
         self.assertIn("T::testA: failed in 3 of 3 attempts, passed in every stock attempt (10)", rows["testX"]["failed"])
+
+    def test_a_tie_in_another_x11_test_is_no_race(self):
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)] * 10)
+        self.suite(self.backport, "testX11Window", [raced("", function="testMinimize")] * 3)
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+        self.assertIn(f"{X11}::testMinimize: failed in 3 of 3 attempts, passed in every stock attempt (10)",
+                      rows["testX11Window"]["failed"])
+
+    def test_a_raise_on_a_newer_user_time_is_no_race(self):
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)] * 10)
+        self.suite(self.backport, "testX11Window", [raced(messages=[NEWER])] * 3)
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+        self.assertIn(f"{X11}::{TOP_IF}: failed in 3 of 3 attempts, passed in every stock attempt (10)",
+                      rows["testX11Window"]["failed"])
 
     def test_a_raise_granted_to_a_newer_request_is_no_race(self):
         # A full raise because the request was newer than the active window's user time: not a tie,
         # so something else (the activation order) decided it.
         granted = "Raising, compared: 1058757 : 1058756 : true"
-        self.suite(self.stock, "testX", [log("T", OK)] * 10)
-        self.suite(self.backport, "testX", [raced(messages=[granted])] * 3)
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)] * 10)
+        self.suite(self.backport, "testX11Window", [raced(messages=[granted])] * 3)
         rc, rows, out = self.compare()
         self.assertEqual(rc, 1, out)
 
     def test_only_a_failed_assertion_can_be_the_race(self):
-        results = OK[:1] + [("testA", "normal", "fatal")]
-        fatal = log("T", results, complete=False, debug={("testA", "normal"): [TIE]})
-        self.suite(self.stock, "testX", [log("T", OK)] * 10)
-        self.suite(self.backport, "testX", [fatal] * 3, exit_status=134)
+        results = X11_OK[:1] + [(TOP_IF, "normal", "fatal")]
+        fatal = log(X11, results, complete=False, debug={(TOP_IF, "normal"): [TIE]})
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)] * 10)
+        self.suite(self.backport, "testX11Window", [fatal] * 3, exit_status=134)
         rc, rows, out = self.compare()
         self.assertEqual(rc, 1, out)
-        self.assertTrue(any("T::testA: failed in 3 of 3 attempts, passed in every stock attempt" in line
-                            for line in rows["testX"]["failed"]), rows)
+        self.assertTrue(any(f"{X11}::{TOP_IF}: failed in 3 of 3 attempts, passed in every stock attempt" in line
+                            for line in rows["testX11Window"]["failed"]), rows)
 
     def test_a_refused_raise_on_a_tie_is_no_race(self):
         refused = "Raising, compared: 1058756 : 1058756 : false"
-        self.suite(self.stock, "testX", [log("T", OK)] * 10)
-        self.suite(self.backport, "testX", [raced(messages=[refused])] * 3)
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)] * 10)
+        self.suite(self.backport, "testX11Window", [raced(messages=[refused])] * 3)
         rc, rows, out = self.compare()
         self.assertEqual(rc, 1, out)
 
     def test_only_the_last_raise_before_the_failure_counts(self):
-        self.suite(self.stock, "testX", [log("T", OK)] * 10)
-        self.suite(self.backport, "testX", [raced(messages=[TIE, NEWER])] * 3)
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)] * 10)
+        self.suite(self.backport, "testX11Window", [raced(messages=[TIE, NEWER])] * 3)
         rc, rows, out = self.compare()
         self.assertEqual(rc, 1, out)
 
     def test_a_failure_without_a_raise_is_no_race(self):
-        self.suite(self.stock, "testX", [log("T", OK)] * 10)
-        self.suite(self.backport, "testX", [raced(messages=[])] * 3)
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)] * 10)
+        self.suite(self.backport, "testX11Window", [raced(messages=[])] * 3)
         rc, rows, out = self.compare()
         self.assertEqual(rc, 1, out)
 
     def test_a_tie_in_another_row_does_not_count(self):
-        # The tie in testA(normal), which passed; testA(scaled2x) failed without one.
-        results = OK[:2] + [("testA", "scaled2x", "fail")] + OK[3:]
-        bad = log("T", results, debug={("testA", "normal"): [TIE]})
-        self.suite(self.stock, "testX", [log("T", OK)] * 10)
-        self.suite(self.backport, "testX", [bad] * 3)
+        # The tie in the normal row, which passed; the scaled2x row failed without one.
+        results = X11_OK[:2] + [(TOP_IF, "scaled2x", "fail")] + X11_OK[3:]
+        bad = log(X11, results, debug={(TOP_IF, "normal"): [TIE]})
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)] * 10)
+        self.suite(self.backport, "testX11Window", [bad] * 3)
         rc, rows, out = self.compare()
         self.assertEqual(rc, 1, out)
 
     def test_an_attempt_with_another_failed_row_is_no_race(self):
         # Both rows failed in each attempt, only one of them on a tie.
-        results = OK[:1] + [("testA", "normal", "fail"), ("testA", "scaled2x", "fail")] + OK[3:]
-        bad = log("T", results, debug={("testA", "normal"): [TIE], ("testA", "scaled2x"): [NEWER]})
-        self.suite(self.stock, "testX", [log("T", OK)] * 10)
-        self.suite(self.backport, "testX", [bad] * 3)
+        results = X11_OK[:1] + [(TOP_IF, "normal", "fail"), (TOP_IF, "scaled2x", "fail")] + X11_OK[3:]
+        bad = log(X11, results, debug={(TOP_IF, "normal"): [TIE], (TOP_IF, "scaled2x"): [NEWER]})
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)] * 10)
+        self.suite(self.backport, "testX11Window", [bad] * 3)
         rc, rows, out = self.compare()
         self.assertEqual(rc, 1, out)
-        self.assertIn("T::testA: failed in 3 of 3 attempts, passed in every stock attempt (10)", rows["testX"]["failed"])
+        self.assertIn(f"{X11}::{TOP_IF}: failed in 3 of 3 attempts, passed in every stock attempt (10)",
+                      rows["testX11Window"]["failed"])
 
     def test_race_does_not_hide_a_failure_in_the_other_attempts(self):
         # Two attempts on the race, the third failed otherwise: judged on the one the race did not
         # decide, where it failed and stock never did.
-        self.suite(self.stock, "testX", [log("T", OK)] * 10)
-        self.suite(self.backport, "testX", [raced(), raced(), raced(messages=[NEWER])])
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)] * 10)
+        self.suite(self.backport, "testX11Window", [raced(), raced(), raced(messages=[NEWER])])
         rc, rows, out = self.compare()
         self.assertEqual(rc, 1, out)
-        self.assertIn("T::testA: failed in 3 of 3 attempts (2 on KWin's timestamp race), passed in every stock attempt (10)",
-                      rows["testX"]["failed"])
+        self.assertIn(f"{X11}::{TOP_IF}: failed in 3 of 3 attempts (2 on KWin's timestamp race), passed in every stock attempt (10)",
+                      rows["testX11Window"]["failed"])
 
     def test_race_and_a_passing_attempt(self):
-        self.suite(self.stock, "testX", [log("T", OK)] * 10)
-        self.suite(self.backport, "testX", [raced(), raced(messages=[NEWER]), log("T", OK)])
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)] * 10)
+        self.suite(self.backport, "testX11Window", [raced(), raced(messages=[NEWER]), log(X11, X11_OK)])
         rc, rows, out = self.compare()
         self.assertEqual(rc, 0, out)
-        self.assertEqual(rows["testX"]["tolerated"],
-                         ["T::testA: failed in 2 of 3 attempts (1 on KWin's timestamp race), passed in the others"])
+        self.assertEqual(rows["testX11Window"]["tolerated"],
+                         [f"{X11}::{TOP_IF}: failed in 2 of 3 attempts (1 on KWin's timestamp race), passed in the others"])
 
     def test_backported_test_gets_no_race_tolerance(self):
-        new = OK + [("requestedGeometryNew", "", "fail")]
-        bad = log("T", new, debug={("requestedGeometryNew", ""): [TIE]})
-        self.suite(self.stock, "testX", [log("T", OK)])
-        self.suite(self.backport, "testX", [bad] * 3)
+        new = X11_OK + [("requestedGeometryNew", "", "fail")]
+        bad = log(X11, new, debug={("requestedGeometryNew", ""): [TIE]})
+        self.suite(self.stock, "testX11Window", [log(X11, X11_OK)])
+        self.suite(self.backport, "testX11Window", [bad] * 3)
         rc, rows, out = self.compare()
         self.assertEqual(rc, 1, out)
-        self.assertIn("T::requestedGeometryNew: a backported test, failed in 3 of 3 attempts (3 on KWin's timestamp race)",
-                      rows["testX"]["failed"])
+        self.assertIn(f"{X11}::requestedGeometryNew: a backported test, failed in 3 of 3 attempts",
+                      rows["testX11Window"]["failed"])
 
     def test_flaky_passes(self):
         bad = log("T", OK[:3] + [("testB", "", "fail")])
