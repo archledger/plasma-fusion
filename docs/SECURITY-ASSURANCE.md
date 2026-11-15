@@ -63,7 +63,7 @@ the session or run before the desktop starts; those are what this case is about.
 - **Review by more than one person.** One maintainer writes and reviews every change
   ([`GOVERNANCE.md`](../GOVERNANCE.md)). There has been no outside security audit.
 - **Support outside the tested platform.** Plasma Fusion is experimental and tested on Fedora 44
-  with Plasma 6.8.2 only ([`README.md`](../README.md), "Status").
+  with Plasma 6.8.2 and 6.8.3 only ([`README.md`](../README.md), "Status").
 - **Fixes for KDE's own code.** Security problems in Plasma, KWin, kscreenlocker, PAM or Plymouth
   belong to their projects ([`SECURITY.md`](../SECURITY.md)).
 

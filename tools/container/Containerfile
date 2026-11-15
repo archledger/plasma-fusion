@@ -6,9 +6,20 @@
 # Pinned to the Plasma, Frameworks and Qt versions of the test device so the plugins load there.
 #
 #   podman build -t localhost/plasma-fusion-build:f44-6.7.5 tools/container
+# A Plasma still in Fedora's updates-testing (a plasma-update issue, docs/parts/ci.md): PLASMA set
+# to its version and UPDATES_TESTING=1, which leaves the repository enabled in the image, so a test
+# image built from it (tools/container/test) installs the same versions:
+#   podman build --build-arg PLASMA=6.8.3-1.fc44 --build-arg UPDATES_TESTING=1 \
+#     -t localhost/plasma-fusion-build:f44-6.8.3 tools/container
 FROM registry.fedoraproject.org/fedora:44
 ARG PLASMA=6.7.5-1.fc44
 ARG QT=6.11.2
+ARG UPDATES_TESTING=0
+RUN if [ "$UPDATES_TESTING" = 1 ]; then \
+      dnf -y --setopt=install_weak_deps=False install dnf5-plugins \
+      && dnf config-manager setopt updates-testing.enabled=1 \
+      && dnf clean all; \
+    fi
 RUN dnf -y --setopt=install_weak_deps=False install \
       gcc-c++ cmake ninja-build extra-cmake-modules gettext rpm-build rpmdevtools \
       "kdecoration-devel-${PLASMA}" "kwin-devel-${PLASMA}" "libplasma-devel-${PLASMA}" \

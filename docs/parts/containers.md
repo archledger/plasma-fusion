@@ -1,10 +1,10 @@
 # Plasma test containers (PLASMA-68, 2026-10-01)
 
 Private test sessions (`tools/vsession`) normally run on the ThinkPad. These containers run the same
-sessions on the laptop, against any Plasma release Fedora packages: the ThinkPad's Plasma 6.8.2
-(or the laptop's 6.7.5 until its hold is lifted), or a
-pre-release from the Fedora KDE SIG's `@kdesig/kde-beta` COPR. Same scenarios, same helpers, so a
-scenario can run on two Plasma versions side by side and the results compared line by line.
+sessions on the laptop, against any Plasma release Fedora packages: the test machines' Plasma
+6.8.2, a release still in Fedora's updates-testing, or a pre-release from the Fedora KDE SIG's
+`@kdesig/kde-beta` COPR. Same scenarios, same helpers, so a scenario can run on two Plasma versions
+side by side and the results compared line by line.
 
 ## Images
 
@@ -13,6 +13,14 @@ scenario can run on two Plasma versions side by side and the results compared li
 | `localhost/plasma-fusion-build:f44-6.7.5` | `tools/container/Containerfile` | build tools + Plasma 6.7.5 devel (also used for the RPMs) |
 | `localhost/plasma-fusion-build:f44-6.8beta` | `tools/container/beta/Containerfile` | the same against the COPR's Plasma (6.7.91 on 2026-10-01) |
 | `localhost/plasma-fusion-test:<tag>` | `tools/container/test/build.sh BASE TAG` | the BASE image's Plasma desktop, apps the scenarios use, Mesa, and Plasma Fusion's compiled parts (decoration, settings module, navigation effect) built and installed against it |
+
+A Plasma still in Fedora's updates-testing (a `plasma-update` issue, ci.md): the build image with
+`--build-arg PLASMA=<its version> --build-arg UPDATES_TESTING=1`, which leaves updates-testing
+enabled in the image, so the test image built from it gets the same versions. These are Fedora's
+own builds (vendor "Fedora Project"); the COPR can carry the same version numbers in builds of its
+own. With the repository on, the image also takes every other testing update of that day. Fedora's
+6.8.3 was tested this way (#191): `localhost/plasma-fusion-build:f44-6.8.3` and
+`localhost/plasma-fusion-test:f44-6.8.3`.
 
 ## Runs
 

@@ -491,8 +491,8 @@ Checked on 2026-10-02 in Fedora 44 containers.
   `Signed-off-by`: reword the commit (a plain message saying what moved and why, one trailer),
   force-push the pull request branch, merge when green.
 - **A `plasma-update` issue**: Fedora 44 has a newer Plasma or Qt than Plasma Fusion is tested on.
-  The laptop still holds Plasma at 6.7.x (`/etc/dnf/libdnf5.conf.d/90-plasma-fusion-hold-plasma-6.8.conf`);
-  the ThinkPad runs 6.8.2. Build the compiled parts against the new version, run the depth features
+  Build the compiled parts against the new version (one still in updates-testing: the build image
+  with `--build-arg UPDATES_TESTING=1`, docs/parts/containers.md), run the depth features
   (docs/parts/testing.md), fix, then raise the lines in `packaging/tested-versions.txt` and lift
   each machine's hold with an approved install. The issue is closed by hand.
 - **The `compiled` beta job fails**: the next Plasma release breaks a compiled part. Not urgent
