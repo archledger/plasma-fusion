@@ -67,8 +67,9 @@ In a terminal of your Plasma session (as yourself; it asks for sudo for the pack
 curl -fsSL https://github.com/archledger/plasma-fusion/releases/latest/download/install.sh | sh
 ```
 
-It finds your system's channel, shows what it will do and asks once, installs the packages, then
-applies Plasma Fusion to your account (a backup is taken first). Log out and back in once.
+It finds your system's channel, shows what it will do and asks you to confirm it, installs the
+packages, then applies Plasma Fusion to your account (a backup is taken first); on Fedora 44 a fresh
+install first asks which profile (below). Log out and back in once.
 `... | sh -s -- --dry-run` shows the plan without changing anything; `update`, `uninstall` and
 `status` work the same way. How to check the script's signature first, and what it does on each
 system, is in [`docs/parts/installer.md`](docs/parts/installer.md).

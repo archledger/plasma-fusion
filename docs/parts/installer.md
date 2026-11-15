@@ -152,8 +152,9 @@ All of them read only, and all come before the question:
   (downloaded into a temporary directory, each against its sum), no downgrade, and apt's dry run of
   their install (below), all before the plan is shown, so `--dry-run` runs them too.
 
-Then it shows the plan with its commands and asks once on the terminal (`--yes` answers; without a
-terminal and without `--yes` it stops). `sudo -v` comes before the first change.
+Then it shows the plan with its commands and asks to go ahead on the terminal (`--yes` answers;
+without a terminal and without `--yes` it stops). Where there is a choice of profile, the profile
+question comes before the plan (the full profile, above). `sudo -v` comes before the first change.
 
 On the apt channels apt is first asked for a dry run of the install (`apt-get -s install`): for the
 release `.deb`s before the plan (above), on the PPA in the package step, after the PPA is added and
