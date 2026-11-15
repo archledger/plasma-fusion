@@ -4,10 +4,21 @@
 
     Full screen off in tablet posture (board TabletSnap.dc.html): a window always has a place, so
     one taken out of full screen takes a half instead of floating where a finger cannot move it.
-    Tested by packages/kwin/tests/tablet-snap.test.js (node).
+    Also the script's rule for a window reference it keeps (alive). Tested by
+    packages/kwin/tests/tablet-snap.test.js (node).
 */
 
 .pragma library
+
+// Whether a window reference can still be used. KWin marks a closing window deleted and destroys
+// it a moment later; a script's reference to the destroyed window is neither null nor falsy, every
+// property of it reads undefined (deleted too, so "not deleted" is true of it), and reading its
+// geometry gives undefined. A live window's deleted is the boolean false. The same rule as the
+// placement script's Tiling.alive and snap groups' Groups.alive; main.qml and SplitDivider.qml
+// guard every window they keep with it.
+function alive(w) {
+    return !!w && w.deleted === false;
+}
 
 // Which half a quick tile is, from its geometry relative to the work area (the split divider's
 // test, SplitDivider.qml).
@@ -24,7 +35,7 @@ function isRight(g) {
 function occupiedTiles(w, windows, desktop, activity) {
     const tiles = [];
     for (const o of windows) {
-        if (!o || o === w || o.deleted || !o.normalWindow || o.minimized || !o.tile || o.output !== w.output) {
+        if (!alive(o) || o === w || !o.normalWindow || o.minimized || !o.tile || o.output !== w.output) {
             continue;
         }
         if (!(o.onAllDesktops || Array.from(o.desktops || []).indexOf(desktop) >= 0)) {

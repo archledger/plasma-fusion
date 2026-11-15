@@ -9,6 +9,7 @@ import QtQuick.Window
 // QtQuick's Window after the unqualified import below; create QtQuick's by its own name.
 import QtQuick.Window as QtQuickWindow
 import org.kde.kwin
+import "Snap.js" as Snap
 
 // Two apps side by side in tablet posture (TABLET2 M1): a handle on the split between a window
 // quick-tiled left and one tiled right, as on iPadOS. Drag it to resize both (KWin's quick-tile
@@ -28,8 +29,8 @@ Item {
 
     property var leftWindow: null
     property var rightWindow: null
-    readonly property var leftTile: leftWindow && !leftWindow.deleted ? leftWindow.tile : null
-    readonly property bool paired: leftTile !== null && rightWindow !== null && !rightWindow.deleted
+    readonly property var leftTile: Snap.alive(leftWindow) ? leftWindow.tile : null
+    readonly property bool paired: leftTile !== null && Snap.alive(rightWindow)
     readonly property bool shown: paired && script.applied
     property rect area: Qt.rect(0, 0, 1, 1)
     readonly property bool portrait: area.height > area.width
@@ -49,7 +50,7 @@ Item {
         return g !== null && g.x > 0.01 && g.x + g.width > 0.99 && g.height > 0.99;
     }
     function visibleOnDesktop(w): bool {
-        return w && !w.deleted && w.normalWindow && !w.minimized && script.internalOutput(w.output)
+        return Snap.alive(w) && w.normalWindow && !w.minimized && script.internalOutput(w.output)
             && (w.onAllDesktops || w.desktops.indexOf(Workspace.currentDesktop) >= 0);
     }
     function refresh(): void {

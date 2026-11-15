@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
 // Tests of occupiedTiles() and placeFor() in plasmafusion-tablet's Snap.js: the half a window takes
-// when Full screen is switched off in tablet posture (board TabletSnap.dc.html).
+// when Full screen is switched off in tablet posture (board TabletSnap.dc.html). And of alive(), the
+// script's rule for a window reference, with a check that no file of the script reads deleted
+// outside it.
 // Run: node tests/tablet-snap.test.js
 "use strict";
 const fs = require("fs");
@@ -13,7 +15,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-tablet", "contents", "ui", "Snap.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { placeFor, occupiedTiles, isLeft, isRight } = globalThis;
+const { placeFor, occupiedTiles, isLeft, isRight, alive } = globalThis;
 assert.strictEqual(typeof placeFor, "function", "Snap.js does not define placeFor");
 
 const LEFT = { x: 0, y: 0, width: 0.5, height: 1 };
@@ -59,7 +61,7 @@ assert.ok(!isLeft(TOP) && !isRight(TOP) && !isLeft(null) && !isRight(undefined))
 // Which windows' tiles count: shown with the window on its screen, desktop and activity.
 const SCREEN = { name: "eDP-1" }, OTHER_SCREEN = { name: "HDMI-A-1" };
 const w = { output: SCREEN };
-const win = (tile, more) => Object.assign({ normalWindow: true, output: SCREEN, desktops: ["d1"], activities: [], tile: tile ? { relativeGeometry: tile } : null }, more || {});
+const win = (tile, more) => Object.assign({ normalWindow: true, deleted: false, output: SCREEN, desktops: ["d1"], activities: [], tile: tile ? { relativeGeometry: tile } : null }, more || {});
 const list = [
     w,                                                            // the window itself
     win(LEFT),                                                    // counts
@@ -69,6 +71,7 @@ const list = [
     win(RIGHT, { minimized: true }),                              // minimized
     win(RIGHT, { normalWindow: false }),                          // a panel or a dialog
     win(RIGHT, { deleted: true }),                                // closing
+    {},                                                           // destroyed: every property undefined
     win(null),                                                    // not tiled
 ];
 assert.deepStrictEqual(occupiedTiles(w, list, "d1", "a1"), [LEFT]);
@@ -77,4 +80,35 @@ assert.deepStrictEqual(occupiedTiles(w, [win(RIGHT, { onAllDesktops: true, deskt
 assert.deepStrictEqual(occupiedTiles(w, [win(RIGHT, { activities: ["a1", "other"] })], "d1", "a1"), [RIGHT]);
 // The reviewer's case: a right tile here, a left one on another activity - the free left half.
 near(placeFor(occupiedTiles(w, [win(RIGHT, { activities: ["a1"] }), win(LEFT, { activities: ["other"] })], "d1", "a1"), 300, 1440), "left", 0.5, false);
+
+// A window reference the script may still use: the placement script's Tiling.alive and snap
+// groups' Groups.alive. KWin's closing window has deleted === true; a reference to a destroyed
+// window is a truthy object whose every property reads undefined, so "not deleted" is true of it.
+assert.ok(alive({ deleted: false }), "an open window");
+assert.ok(!alive({ deleted: true }), "a closing window");
+assert.ok(!alive({}), "a destroyed window: every property undefined");
+assert.ok(!alive(null));
+assert.ok(!alive(undefined));
+
+// Every read of a window's deleted in the tablet script (main.qml, SplitDivider.qml and its libraries) goes through alive(): KWin marks a closing
+// window deleted and destroys it a moment later, and every property of the destroyed one reads
+// undefined - deleted too, so a bare "not deleted" is true of it (#182; snap groups' race, #181).
+// Comments aside, alive() itself is the one place that reads it.
+{
+    const dir = path.join(__dirname, "..", "scripts", "plasmafusion-tablet", "contents", "ui");
+    const blank = (text) => text.replace(/[^\n]/g, " ");
+    const reads = [];
+    for (const name of fs.readdirSync(dir).filter((n) => /\.(qml|js)$/.test(n)).sort()) {
+        const text = fs.readFileSync(path.join(dir, name), "utf8")
+            .replace(/\/\*[\s\S]*?\*\//g, blank)
+            .replace(/function alive\(\w*\) \{[^}]*\}/, blank);
+        text.split("\n").forEach((line, i) => {
+            if (/\.deleted\b/.test(line.replace(/\/\/.*$/, ""))) {
+                reads.push(name + ":" + (i + 1));
+            }
+        });
+    }
+    assert.deepStrictEqual(reads, [], "a window's deleted read outside alive()");
+}
+
 console.log("tablet-snap.test.js: ok");

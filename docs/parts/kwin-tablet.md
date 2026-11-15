@@ -405,10 +405,12 @@ Tests: `packages/kwin/tests/tablet-snap.test.js` (node, in `81-kwin-tablet.sh`):
 nothing tiled, the other side free on either side, the divider's 1/3 and 2/3 on either side (the
 share that side has), both taken, tiles that are not a side (a top half, a quarter), minimum
 widths over and at a half, a third and two thirds; `occupiedTiles()` with the window itself,
-another activity, screen or desktop, a minimized, a non-normal, a closing and an untiled window
-(none count), a window on every desktop, on this activity among others or on every activity (they
+another activity, screen or desktop, a minimized, a non-normal, a closing, a destroyed and an
+untiled window (none count), a window on every desktop, on this activity among others or on every activity (they
 count), and the case of a right tile here and a left one on another activity (the left side is
-free). `tests/vsession/scenario-fullscreen-off.sh` (private session on the ThinkPad, 1440 x 900,
+free); `alive()` with an open, a closing and a destroyed window and `null` (the rule every guard on
+a window reference in `main.qml` and `SplitDivider.qml` uses, as the placement script's
+`Tiling.alive`), and that no file of the script reads a window's `deleted` outside it (#182). `tests/vsession/scenario-fullscreen-off.sh` (private session on the ThinkPad, 1440 x 900,
 the window card's switch tapped with pfinput; 2026-10-18, fo-5): all 13 checks pass - Dolphin
 alone takes the right half (723, 717) without a title bar and the home screen offers the apps in
 the left half; beside KWrite on the left it takes the right half, beside KWrite on the right the

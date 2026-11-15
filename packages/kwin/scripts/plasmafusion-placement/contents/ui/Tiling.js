@@ -79,7 +79,7 @@ function userWindow(w) {
 
 // Toggle on: the eligibility checks, then the layout.
 function eligibleForMaster(w) {
-    return w && !w.deleted && w.normalWindow && !w.transient && !w.modal
+    return alive(w) && w.normalWindow && !w.transient && !w.modal
         && w.moveable && w.resizeable && !w.fullScreen && !w.tile
         && !w.minimized && w.maximizeMode === 0 && userWindow(w);
 }
@@ -163,7 +163,7 @@ function sameView(session, desktop, activity, output) {
 // no windowAdded). A window that is full-screen or manually tiled keeps that state through a
 // restore, and a relayout must never overwrite it, so those are strangers too.
 function eligibleDormant(w) {
-    return w && !w.deleted && w.normalWindow && !w.transient && !w.modal && w.moveable
+    return alive(w) && w.normalWindow && !w.transient && !w.modal && w.moveable
         && w.resizeable && w.minimized && !w.fullScreen && !w.tile && userWindow(w);
 }
 
