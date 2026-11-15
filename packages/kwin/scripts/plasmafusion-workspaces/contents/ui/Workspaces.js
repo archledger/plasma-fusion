@@ -42,6 +42,13 @@ function counts(view) {
     return candidate(view) && view.alive === true && view.allDesktops !== true && view.skipPager !== true;
 }
 
+// Whether a window that just closed held its desktops right before. KWin marks a closing window
+// deleted before windowRemoved, so its view is no longer alive; everything else about it still
+// reads as it was. The view given is not changed.
+function heldBefore(view) {
+    return !!view && counts(Object.assign({}, view, { alive: true }));
+}
+
 // desktopIds (in KWin's order) -> one boolean each: does a counted window list that desktop. Windows
 // of every activity count - KWin's desktops are shared by the activities, and removing one would
 // move another activity's windows.

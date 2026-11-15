@@ -14,7 +14,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-workspaces", "contents", "ui", "Workspaces.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { alive, candidate, counts, occupancy, keepCount, plan, canAdd, decide, numberOf, nameFor, renames } = globalThis;
+const { alive, candidate, counts, heldBefore, occupancy, keepCount, plan, canAdd, decide, numberOf, nameFor, renames } = globalThis;
 
 // A counted window's view (main.qml's windowView) on the given desktops; overrides switch single
 // properties.
@@ -59,6 +59,17 @@ const gone = {
 assert.ok(!counts(gone) && !candidate(gone), "a destroyed window's view");
 assert.deepStrictEqual(occupancy(ids(1), [gone, win(["d0"], { alive: false })]), [false],
                        "neither a destroyed nor a closing window holds its desktop");
+// A watched window that closed (main.qml's unwatch, at windowRemoved: KWin has marked it deleted,
+// everything else reads as it was): did it hold its desktops right before? Only then does the
+// grace after a close start.
+assert.ok(heldBefore(win(["d0"], { alive: false })), "a closing window that held its desktop");
+assert.ok(!heldBefore(win(["d0"], { alive: false, skipPager: true })), "kept out of the pager: it held nothing");
+assert.ok(!heldBefore(win([], { alive: false, allDesktops: true })), "on every desktop: it held nothing");
+assert.ok(!heldBefore(gone), "a destroyed window's view");
+assert.ok(!heldBefore(null));
+const closing = win(["d0"], { alive: false });
+heldBefore(closing);
+assert.strictEqual(closing.alive, false, "the view it was given is left as it was");
 
 // Every read of a window's deleted in the script (main.qml and Workspaces.js) goes through alive();
 // comments aside, alive() itself is the one place that reads it (#184; the snap, placement and

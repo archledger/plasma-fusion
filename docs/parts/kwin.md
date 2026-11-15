@@ -49,7 +49,7 @@ sources) plus `org.kde.plasma.core` (Dialog), Kirigami (theme colours, icons) an
 | `.../contents/config/main.xml`, `contents/ui/config.ui` | `RememberSize` and `IgnoreApps` (System Settings > Window Management > KWin Scripts) |
 | `packages/kwin/scripts/plasmafusion-workspaces/metadata.json` | KPackage metadata (KWin/Script, declarativescript, config KCM, `EnabledByDefault: false`) |
 | `.../contents/ui/main.qml` | the script: reads the desktops and windows, carries out a pass, watches the windows' desktop moves |
-| `.../contents/ui/Workspaces.js` | the pure rules (which windows hold a workspace, the plan, the timing, the numbered names); node-tested |
+| `.../contents/ui/Workspaces.js` | the pure rules (which windows hold a workspace and whether a closed one held it, the plan, the timing, the numbered names); node-tested |
 | `.../contents/config/main.xml`, `contents/ui/config.ui` | `KeepFirst` (System Settings > Window Management > KWin Scripts) |
 | `tools/build.d/80-kwin.sh` | checks metadata ids/structures and XML, copies the five packages into the stage, runs the placement rules', snap groups', snap cycle's, `Panels.js`'s, touchpad gestures', dynamic workspaces' and attached dialogs' node suites when node is installed, generates `ensureTopBars.js`, compiles the preview shader with `qsb` when it is installed (else the committed `.qsb` file is used) |
 | `packages/kwin/tests/` | test tooling only, not installed (see Verification) |
@@ -398,8 +398,9 @@ it. Client-side-decorated parents (GTK/libadwaita) keep KWin's placement. The sc
 or parent it keeps only while `alive()` says it is still a window - its `deleted` is the boolean
 false, the snap, placement and tablet scripts' rule: KWin marks a closing window deleted and
 destroys it a moment later, after which every property of a kept reference reads undefined and a
-write to it throws. A dialog whose parent or itself is gone is let go without being placed or
-written to (#184). With `sheetEnabled` the stock sheet effect animates the dialog out of the
+write to it throws. A dialog whose parent or itself is gone is let go: it is never placed from a
+gone parent, and nothing is written to a gone dialog (a live one gets its title bar back, as when
+it is dragged away; #184). With `sheetEnabled` the stock sheet effect animates the dialog out of the
 parent's top edge and the stock dialogparent effect dims the parent (Windows board's dimmed
 parent).
 
@@ -988,18 +989,20 @@ Offline (laptop):
   kept or the trailing empty workspace removed, one always left, a second pass a no-op), the
   timing gates, the numbered names and their ownership (a user's "Workspace 3", a name changed
   since, another desktop's id); `alive()` with an open, a closing and a destroyed window and
-  `null`, the view of a destroyed window (neither counted nor watched), and that no file of the
-  script reads a window's `deleted` outside `alive()` (#184).
+  `null`, the view of a destroyed window (neither counted nor watched), `heldBefore()` (whether a
+  window that closed held its desktops, which starts the grace after a close), and that no file of
+  the script reads a window's `deleted` outside `alive()` (#184).
 - `node packages/kwin/tests/attach.test.js` (the build runs it when node is installed): the attached
-  dialogs' `main.js` run whole against a model of KWin's scripting (`readConfig`, `workspace`,
-  windows whose reference, once destroyed, reads every property as undefined and fails every write,
-  as Qt 6.11's QObject wrapper does in strict code): a modal dialog placed centred under its
-  parent's title bar; a parent destroyed while its dialog is attached (the dialog is let go, not
-  placed from undefined geometry); a dialog with its title bar hidden that is destroyed before its
-  parent closes (nothing written to it, the parent's entry and handler still removed); a closing
-  dialog and one dragged away; `eligible()` with a destroyed dialog or parent; `alive()`; and that
-  no file of the script reads `deleted` outside `alive()` (#184). Five reverted guards each fail
-  it (2026-11-15).
+  dialogs' `main.js` run whole against a model of KWin's scripting (`readConfig`, `workspace`, and
+  windows whose reference, once destroyed, reads every property as undefined, fails every write
+  and has signals that refuse connect and disconnect, as Qt 6.11's QObject wrapper does in strict
+  code): a modal dialog placed centred under its parent's title bar; a parent destroyed while its
+  dialog is attached (the dialog is let go, not placed from undefined geometry); a dialog with its
+  title bar hidden that is destroyed before its parent closes (its disconnects fail and are caught,
+  nothing is written to it, the parent's entry and handler are still removed); a closing dialog and
+  one dragged away; `eligible()` with a destroyed dialog or parent; `alive()`; and that no file of
+  the script reads `deleted` outside `alive()` (#184). Each of the five guards put back to a bare
+  `deleted`, and `detach()` without its catch, fails it (2026-11-15).
 - `node packages/kwin/tests/snap-groups.test.js` (the build runs it when node is installed): snap
   groups - forming a group from the picks, a window in one group at most (joining another
   arrangement moves it), membership and zones changing together (a window left alone by a transfer

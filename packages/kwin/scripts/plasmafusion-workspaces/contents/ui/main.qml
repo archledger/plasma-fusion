@@ -203,9 +203,7 @@ Item {
         return true;
     }
 
-    // A watched window closed: true when it held its desktops right before (KWin marks a closing
-    // window deleted before windowRemoved, so it is no longer alive; everything else about it still
-    // reads as it was).
+    // A watched window closed: true when it held its desktops right before (Workspaces.heldBefore).
     function unwatch(w) {
         const key = String(w.internalId);
         const entry = watched[key];
@@ -215,9 +213,7 @@ Item {
         w.desktopsChanged.disconnect(entry.onChange);
         w.skipPagerChanged.disconnect(entry.onChange);
         delete watched[key];
-        const view = windowView(w);
-        view.alive = true;
-        return Workspaces.counts(view);
+        return Workspaces.heldBefore(windowView(w));
     }
 
     Connections {

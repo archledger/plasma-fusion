@@ -18,15 +18,23 @@ const dir = path.join(__dirname, "..", "scripts", "plasmafusion-attach", "conten
 const file = path.join(dir, "main.js");
 const source = fs.readFileSync(file, "utf8");
 
-// A signal: handlers connected and disconnected by identity; disconnecting one that is not
-// connected throws, as Qt's disconnect does.
-function signal() {
+// A signal of a window: handlers connected and disconnected by identity. Disconnecting one that is
+// not connected throws, and so do connect and disconnect once the window is destroyed (Qt 6.11.2,
+// QObjectWrapper::method_connect and method_disconnect: "cannot disconnect from deleted QObject").
+function signal(destroyed) {
     const handlers = [];
+    const check = (what) => {
+        if (destroyed && destroyed()) {
+            throw new Error(`Function.prototype.${what}: cannot ${what} a deleted QObject's signal`);
+        }
+    };
     return {
         connect(fn) {
+            check("connect");
             handlers.push(fn);
         },
         disconnect(fn) {
+            check("disconnect");
             const i = handlers.indexOf(fn);
             if (i < 0) {
                 throw new Error("disconnect: the function is not connected");
@@ -49,19 +57,21 @@ function signal() {
 // undefined (deleted too), and a write fails: Qt's QObjectWrapper::virtualPut returns false for a
 // deleted object and strict code (the script's "use strict") turns that into a TypeError
 // (qtdeclarative 6.11.2, qv4qobjectwrapper.cpp and qv4runtime.cpp, SetLookupStrict); a Proxy whose
-// set trap answers false does the same here.
+// set trap answers false does the same here. Its signals, kept by the script, refuse connect and
+// disconnect (signal()).
 function window(props) {
+    let destroyed = false;
+    const gone = () => destroyed;
     const state = Object.assign({
         deleted: false, modal: false, dialog: false, transient: false, transientFor: null,
         moveable: true, fullScreen: false, desktopWindow: false, dock: false, noBorder: false,
         move: false, resize: false,
         frameGeometry: { x: 0, y: 0, width: 100, height: 100 },
         clientGeometry: { x: 0, y: 0, width: 100, height: 100 },
-        frameGeometryChanged: signal(), interactiveMoveResizeStarted: signal(),
-        interactiveMoveResizeFinished: signal(), closed: signal(), modalChanged: signal(),
-        transientChanged: signal(),
+        frameGeometryChanged: signal(gone), interactiveMoveResizeStarted: signal(gone),
+        interactiveMoveResizeFinished: signal(gone), closed: signal(gone), modalChanged: signal(gone),
+        transientChanged: signal(gone),
     }, props);
-    let destroyed = false;
     const ref = new Proxy(state, {
         get: (target, key) => (destroyed ? undefined : target[key]),
         set: (target, key, value) => {
@@ -146,8 +156,9 @@ function load(settings) {
 }
 
 // A dialog whose title bar the script hid (HideDialogTitleBar) destroyed before its parent closes.
-// Nothing is written to it, and the rest of detach() still runs: the parent's entry and handler go.
-// The guard used to pass, and the write to the destroyed dialog threw in the middle of detach().
+// Its signals refuse disconnect (detach() catches that), nothing is written to it, and the rest of
+// detach() still runs: the parent's entry and handler go. The guard used to pass, and the write to
+// the destroyed dialog threw in the middle of detach().
 {
     const script = load({ HideDialogTitleBar: true });
     const parent = parentWindow(), dialog = dialogFor(parent);
