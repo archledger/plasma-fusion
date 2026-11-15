@@ -173,13 +173,17 @@ reviewed update (README).
   KWin's master). The two builds run on different runners, so one can land on a fast runner and
   fail in all three attempts while the other passes all ten: in runs 43570629043, 43661256399 and
   43665657830 the backport did, and in 43590522888 stock failed once. The comparison reads KWin's
-  own record of each decision (kwin_core: `Raising, compared: TIME : USER_TIME : true|false`). A
-  failed row (`FAIL!`) of one of the two stacking tests whose last raise decision before the
-  failure was granted on equal times is the race. An attempt in which every failed row of a
-  function is the race does not count against the function, and a function that failed only on the
-  race passes, listed with that reason. A tied raise in any other test, a raise granted to a newer
-  request, a refused one, a fatal row and backported tests get no such allowance. In those six runs
-  all 13 granted raises were ties, and they were exactly the 13 failed rows.
+  own record of each decision (kwin_core: `Raising, compared: TIME : USER_TIME : true|false`) and
+  of each window's user time (`User timestamp, final: ... : TIME`). A failed row (`FAIL!`) of one
+  of the two stacking tests is the race when its last raise decision before the failure was
+  granted on equal times, and that time is a real one (not 0 or 2^32 - 1, which windows without a
+  creation time would share on every runner) that KWin gave at least two of the row's windows. An
+  attempt in which every failed row of a function is the race does not count against the function,
+  and a function that failed only on the race passes, listed with that reason. A stock attempt that
+  failed a function only on the race does not count as a failure on stock either, so it cannot
+  excuse a backport failure. A tied raise in any other test, a raise granted to a newer request, a
+  refused one, a fatal row and backported tests get no such allowance. In those six runs all 13
+  granted raises were ties on two windows' creation time, and they were exactly the 13 failed rows.
   Every attempt must first record successful compositor initialization. Missing initialization
   evidence or a failed startup is a setup failure on either side, never a tolerated baseline
   failure. The native entry point enables the corresponding debug log category.
