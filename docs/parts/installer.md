@@ -54,8 +54,11 @@ apart; the AUR and the release `.deb`s install the whole set either way.
 The release stamps the lists: `PF_COPR_FEDORA` (Fedora releases), `PF_PPA_SERIES`, `PF_DEB_TARGETS`
 (`neon testing`), `PF_PLASMA_SERIES` (`packaging/tested-plasma.txt`) and `PF_FULL_FEDORA` (the
 Fedora releases the full profile builds; empty until the full Copr project goes live, and then
-`--full` refuses), with `packaging/stamp-installer.sh` (`--full-fedora`). An unstamped copy (the
-repository's) refuses to run outside test mode.
+`--full` refuses), and the full profile's Copr project, `PF_FULL_REPO` (OWNER/NAME: the live
+`archledger/plasma-fusion-full` in a release; the release tests stamp a candidate's own project,
+docs/RELEASING.md), with `packaging/stamp-installer.sh` (`--full-fedora`, `--full-repo`). The
+installer refuses a project that is not OWNER/NAME (exit 3); the stamp never writes one. An
+unstamped copy (the repository's) refuses to run outside test mode.
 
 ## The full profile (`--full`, `--full-restore`)
 
@@ -75,8 +78,9 @@ cadence, which can lag Fedora by days.
    point;
 2. records the installed stock KWin EVRs (`kwin`, `kwin-common`, `kwin-libs`) to
    `/var/lib/plasma-fusion/full-restore.txt`;
-3. enables `archledger/plasma-fusion-full` and installs `plasma-fusion-full` — the metapackage
-   whose exact-EVR requires pull the six packages and the pinned fork in one transaction;
+3. enables the full project (`PF_FULL_REPO`: `archledger/plasma-fusion-full` in a release) and
+   installs `plasma-fusion-full` — the metapackage whose exact-EVR requires pull the six packages
+   and the pinned fork in one transaction;
 4. locks the KWin set (`dnf versionlock add kwin kwin-common kwin-libs`; dnf5 pins each package at
    its just-installed version), so a distribution update can never half-upgrade the set;
 5. runs the unchanged per-user setup. On a stock install it switches only the compositor: no setup
@@ -222,7 +226,8 @@ Exit codes: 0 done or nothing to do, 1 error, 2 usage, 3 refused (nothing change
 ## Test mode and tests
 
 With `PLASMA_FUSION_DEV=1` an unstamped copy runs with test values: `PLASMA_FUSION_DEV_VERSION`,
-`_SERIES`, `_COPR_FEDORA`, `_PPA_SERIES`, `_DEB_TARGETS`, test channels
+`_SERIES`, `_COPR_FEDORA`, `_PPA_SERIES`, `_DEB_TARGETS`, `_FULL_FEDORA`, `_FULL_REPO` (default
+`archledger/plasma-fusion-full`), test channels
 (`PLASMA_FUSION_DEV_DNF_REPO` a dnf base URL, `_APT_REPO` an apt line, `_AUR_SRC` a directory with a
 PKGBUILD, `_RELEASE_BASE` a release URL), `_ROOT` (a directory with `etc/os-release`) and `_KEY`,
 `_KEY_FP` (a test signing key). A stamped copy reads none of these.
@@ -238,8 +243,9 @@ before Quick Look and copy text, whose fake dnf refuses to upgrade a package tha
 as dnf5 does; 236 with the apt dry run, whose fake apt-get -s prints a set simulation or fails: neon
 (also with `--dry-run`), the PPA and a PPA update behind the release's Plasma refused, a failed dry
 run stopping it, an install that upgrades nothing of Plasma let through; 268 with the lock wait on
-every apt install and remove and `apt-get update` tried again, 2026-10-21). The `packages` workflow
-runs it with ShellCheck, `dash -n` and `busybox sh -n`.
+every apt install and remove and `apt-get update` tried again, 2026-10-21; the full profile's
+Copr project from the stamp or `_FULL_REPO`, never from a stamped copy's environment, 2026-11-14).
+The `packages` workflow runs it with ShellCheck, `dash -n` and `busybox sh -n`.
 
 The release-test VMs (docs/RELEASING.md) run it for real on Fedora 44, Arch, Ubuntu 26.10, KDE neon
 and Debian testing, with the channels served from the test host.

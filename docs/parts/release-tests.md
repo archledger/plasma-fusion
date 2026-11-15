@@ -158,12 +158,16 @@ Evidence: the project ledger's artifacts, `plasma-fusion/2026-10-21-splash-vm-la
 ## The full profile's lane
 
 `fulltest.sh` is ADR 0001's virtual-machine lane ([`../full-profile.md`](../full-profile.md)). It
-is not part of `run-all.sh`: the full profile has one channel, its own Copr project
-(`archledger/plasma-fusion-full`), and the installer knows no other place for the fork, so the
-lane runs on that project's builds (the fork tag's KWin and the metapackage) and needs no served
-channel. The installer is the tree's own, stamped by `packaging/stamp-installer.sh` with
-`--full-fedora` (`PF_FULL_FEDORA`, default `44`); `PF_PUBLIC=1` takes the published one instead,
-after a release. Results: `$PF_VM_HOME/results/NAME-full/` and `NAME-full-switch/`.
+is not part of `run-all.sh`: the full profile has one channel, its own Copr project, and the
+installer knows no other place for the fork, so the lane runs on a Copr project's builds (the
+fork tag's KWin and the metapackage) and needs no served channel. The installer is the tree's
+own, stamped by `packaging/stamp-installer.sh` with `--full-fedora` (`PF_FULL_FEDORA`, default
+`44`) and `--full-repo` (`PF_FULL_REPO`, default the live `archledger/plasma-fusion-full`). A
+candidate runs with `PF_FULL_REPO=archledger/plasma-fusion-full-candidates`: the live project has
+users and never carries a candidate (RELEASING.md, step 2). `PF_PUBLIC=1` takes the published
+installer instead, after a release, and that one names the live project. Before a VM starts, the
+lane refuses a `PF_FULL_REPO` that is not OWNER/NAME, and `PF_PUBLIC=1` with any project but the
+live one. Results: `$PF_VM_HOME/results/NAME-full/` and `NAME-full-switch/`.
 
 Every check is a line in `steps.log` (`ok` or `FAIL`, with what was found); a phase fails at its
 end, with all of its checks known. Every login must bring a new session on tty1 and a running
@@ -173,8 +177,8 @@ Fusion:
 | Phase | Checks |
 |---|---|
 | the base | the three KWin packages are stock ones (no `pf` distag), no full profile, no Plasma Fusion |
-| `--full --dry-run` | the plan records the stock KWin, enables the full project, names the packages it replaces, locks the set and states the security cadence; the package facts are the same file as before |
-| `--full` | `kwin`, `kwin-common`, `kwin-libs` at the pin the metapackage's record names, each locked there, the restore record with each one's stock version; the six packages at the metapackage's own version; the repository enabled for dnf (a file with `enabled=0` does not count); a `distro-sync` to Fedora's KWin with the full project left out finds nothing to do and reports no conflict it skipped (without the lock dnf ends with the same words, after a "Problem:" report: the metapackage's exact requires hold the set then, checked by hand in the VM); status before the new login: the full profile with its pin and tag, and the note that the session still runs the KWin from before |
+| `--full --dry-run` | the plan records the stock KWin, enables the stamped project (by its whole name: the live one's is a prefix of the candidates'), names the packages it replaces, locks the set and states the security cadence; the package facts are the same file as before |
+| `--full` | `kwin`, `kwin-common`, `kwin-libs` at the pin the metapackage's record names, each locked there, the restore record with each one's stock version; the six packages at the metapackage's own version; the stamped project's repository enabled for dnf, found by its whole Copr id (a file with `enabled=0` does not count); a `distro-sync` to Fedora's KWin with that repository left out, by the same id, finds nothing to do and reports no conflict it skipped (without the lock dnf ends with the same words, after a "Problem:" report: the metapackage's exact requires hold the set then, checked by hand in the VM); status before the new login: the full profile with its pin and tag, and the note that the session still runs the KWin from before |
 | the new login | status: the full profile, the three capabilities, no note of any kind, the login check switched nothing off; the look-and-feel is Plasma Fusion's |
 | the features on the fork | the navigation effect is not idle and follows the gesture lock (its two journal lines); the switcher is held open by a real Alt (a screenshot is taken then, for the eye: nothing reads it) and another of the three test windows is in front afterwards; the tiler's shortcut starts a session and ends it; no script error in the journal of the session's KWin (KWin's own QML included); no crash |
 | `--full-restore` | the dry run names the three recorded versions and changes nothing; then the three packages at the recorded versions, no lock (in a lock list that was read), no metapackage, no repository, no record, the six packages unchanged; status before the new login: the stock profile and the note to log in again, not the one about a fork installed by hand |
@@ -183,7 +187,7 @@ Fusion:
 
 `switch` installs the stock profile first, with the published installer from the public Copr
 project, checks that it left KWin alone, then runs the same `--full` phases on top (the six
-packages move to the full project's builds) and ends with `uninstall` on the full system, which
+packages move to the stamped project's builds) and ends with `uninstall` on the full system, which
 returns the stock KWin before it removes the packages. In this mode the restore record's
 directory, `/var/lib/plasma-fusion`, is made root's alone before `--full`, as
 `greeter-apply.sh` leaves it (mode `0700`): the installer runs as the user, writes the record
@@ -197,11 +201,13 @@ run on it, and that they work by their fallbacks on stock KWin with the same pac
 does with its property is the subject of the parts' own tests (kwin.md, navigation-cpp.md).
 
 `test-fulltest.py` (CI `build`) runs the lane against a stand-in VM: both modes pass, and
-thirty faults, one test each, fail the run, stop the VM and keep the overlay (from a dry
-run that changes something to an uninstall that leaves the theme; the file's first lines name
-them). Not every check has a fault: the lane's plumbing (the stamp, the copies into the VM, a
-crash collector that cannot count) and the wording of the `--full` plan are covered by the
-passing runs only.
+thirty-one faults, one test each, fail the run, stop the VM and keep the overlay (from a dry
+run that changes something to a plan that enables another project than the stamped one; the
+file's first lines name them). Not every check has a fault: the lane's plumbing (the copies into
+the VM, a crash collector that cannot count) and the wording of the `--full` plan are covered by
+the passing runs only. Of the stamp, the tests check the project it is given (the live one by
+default, the candidates' when named) and that the lock check leaves out that project's
+repository by its exact id.
 
 The first run (2026-11-14, on the first candidate builds) found one defect, in status: between
 `--full-restore` and the next login it called the session's KWin "a fork installed by hand". The

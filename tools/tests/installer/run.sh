@@ -325,6 +325,17 @@ for SHNAME in "${shells[@]}"; do
   expect "  locks the KWin set after the transaction" bash -c 'i=$(grep -n "^dnf -y install plasma-fusion-full" <<<"$0" | cut -d: -f1); l=$(grep -n "^dnf -y versionlock add kwin" <<<"$0" | cut -d: -f1); [ -n "$i" ] && [ -n "$l" ] && [ "$l" -gt "$i" ]' "$LOG"
   expect "  records the stock KWin EVRs" bash -c 'grep -qx "kwin=6.7.5-1.fc44" "$0" && grep -qx "kwin-common=6.7.5-1.fc44" "$0" && grep -qx "kwin-libs=6.7.5-1.fc44" "$0"' "$CASE/root/var/lib/plasma-fusion/full-restore.txt"
   expect "  and runs the setup" has_log "plasma-fusion setup"
+  # The full profile's Copr project comes from the stamp (issue #178): a candidate is tested from a
+  # project of its own, so the live one never carries a candidate. Test mode names it the same way.
+  CAND=archledger/plasma-fusion-full-candidates
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44 PLASMA_FUSION_DEV_FULL_REPO=$CAND" run "$sh" $FED -- --full --dry-run
+  expect "a candidates project is the repository the --full plan enables" has_out "dnf -y copr enable $CAND fedora-44-x86_64"
+  expect "  and the live project is not" bash -c '! grep -q "copr enable archledger/plasma-fusion-full fedora-" <<<"$0"' "$OUT"
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44 PLASMA_FUSION_DEV_FULL_REPO=$CAND" VERSIONS="$P675 kwin-common=6.7.5 kwin-libs=6.7.5" \
+    run "$sh" $FED -- --full --yes
+  expect "--full enables the candidates project" has_log "sudo dnf -y copr enable $CAND fedora-44-x86_64"
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44 PLASMA_FUSION_DEV_FULL_REPO=archledger/x;reboot" run "$sh" $FED -- --full --dry-run
+  expect "a full project name that is not OWNER/NAME is refused" [ "$RC" = 3 ]
   # a KWin the user already pins themselves: the full profile must not take the pin over
   # (dnf's versionlock delete works by name only, so a pre-existing entry could not be given
   # back at restore time)
@@ -398,6 +409,9 @@ for SHNAME in "${shells[@]}"; do
   expect "  then the repository" has_log "dnf -y copr remove archledger/plasma-fusion-full"
   expect "  then syncs KWin back to the recorded EVRs" has_log "dnf -y distro-sync kwin-6.7.5-1.fc44 kwin-common-6.7.5-1.fc44 kwin-libs-6.7.5-1.fc44"
   expect "  in that order" bash -c 'v=$(grep -n "^dnf -y versionlock delete" <<<"$0" | cut -d: -f1); m=$(grep -n "^dnf -y remove --no-autoremove plasma-fusion-full" <<<"$0" | cut -d: -f1); s=$(grep -n "^dnf -y distro-sync" <<<"$0" | cut -d: -f1); [ -n "$v" ] && [ "$v" -lt "$m" ] && [ "$m" -lt "$s" ]' "$LOG"
+  plant_record
+  VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 EXTRA_ENV="PLASMA_FUSION_DEV_FULL_REPO=$CAND" run "$sh" $FED -- --full-restore --yes
+  expect "--full-restore removes the candidates project when that is the one it was given" has_log "dnf -y copr remove $CAND"
   expect "  and reports the stock KWin" has_out "stock again (6.8.2-3.fc44)"
   expect "  the six stay installed" has_out "stay"
   expect "  exits 0" [ "$RC" = 0 ]
@@ -661,6 +675,26 @@ for SHNAME in "${shells[@]}"; do
   grep -qx "PF_FULL_FEDORA='44'" "$STAMPED_FULL" &&
     ok "$SHNAME: a stamp with --full-fedora carries the full profile's Fedora list" ||
     bad "$SHNAME: a stamp with --full-fedora carries the full profile's Fedora list"
+  grep -qx "PF_FULL_REPO='archledger/plasma-fusion-full'" "$STAMPED_FULL" &&
+    ok "$SHNAME: a stamp without --full-repo names the live full project" ||
+    bad "$SHNAME: a stamp without --full-repo names the live full project"
+  STAMPED_CAND=$CASE/install-stamped-cand.sh
+  "$ROOT/packaging/stamp-installer.sh" --copr "44" --ppa stonking --deb "neon testing" --full-fedora 44 \
+    --full-repo archledger/plasma-fusion-full-candidates "$STAMPED_CAND" >/dev/null 2>&1
+  grep -qx "PF_FULL_REPO='archledger/plasma-fusion-full-candidates'" "$STAMPED_CAND" 2>/dev/null &&
+    ok "$SHNAME: --full-repo stamps the candidates project" ||
+    bad "$SHNAME: --full-repo stamps the candidates project"
+  if "$ROOT/packaging/stamp-installer.sh" --copr "44" --ppa stonking --deb "neon testing" --full-fedora 44 \
+    --full-repo "archledger/x y" "$CASE/install-stamped-bad.sh" >/dev/null 2>&1; then
+    bad "$SHNAME: --full-repo refuses a name that is not OWNER/NAME"
+  else
+    ok "$SHNAME: --full-repo refuses a name that is not OWNER/NAME"
+  fi
+  # A stamped copy stops at the real os-release before any plan off Fedora, but it checks the
+  # project's shape before any system check: a copy that took this malformed one from the
+  # environment would name it in its refusal on every system the tests run on.
+  DEV='' SCRIPT=$STAMPED_FULL EXTRA_ENV="PLASMA_FUSION_DEV_FULL_REPO=evil" run "$sh" $FED -- --full --dry-run
+  expect "a stamped copy takes no full project from the environment" bash -c '! grep -q evil <<<"$0$1"' "$OUT" "$LOG"
   # Arch
   osr arch "" "" "" "Arch Linux"
   run "$sh" $AUR -- --yes
