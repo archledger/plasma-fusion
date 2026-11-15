@@ -58,7 +58,15 @@ src=$work/plasma-fusion-$UPSTREAM
 [ "$top" = "$src" ] || mv "$top" "$src"
 cp "$TARBALL" "$work/plasma-fusion_$UPSTREAM.orig.tar.gz"
 cp -a "$src/packaging/debian" "$src/debian"
-# The changelog of this build: the target's version above the release entries.
+# The changelog of this build: the target's version above the release entries. Its entry is dated
+# from the source (SOURCE_DATE_EPOCH, else VERSION's mtime: the commit's time in a make-source.sh
+# tarball), and a second after the newest release entry when that one is as late or later: a
+# release entry is dated when the release is written, which can be after its commit, and the
+# newest entry of a changelog must be newer than the one below it (#180).
+stamp=${SOURCE_DATE_EPOCH:-$(stat -c %Y "$src/VERSION")}
+newest=$(dpkg-parsechangelog -l "$src/packaging/debian/changelog" -S Timestamp)
+[[ $newest =~ ^[0-9]+$ ]] || { echo "packaging/debian/changelog: no date in its newest entry" >&2; exit 1; }
+[ "$stamp" -gt "$newest" ] || stamp=$((newest + 1))
 {
   printf 'plasma-fusion (%s) %s; urgency=medium\n\n' "$version" "$dist"
   if [ "$UPSTREAM" != "$(tr -d '[:space:]' <"$src/VERSION")" ]; then
@@ -66,7 +74,7 @@ cp -a "$src/packaging/debian" "$src/debian"
   else
     printf '  * Plasma Fusion %s for %s.\n' "$UPSTREAM" "${TARGET/:/ }"
   fi
-  printf '\n -- Wisbendji Fimerlus <archledger236@gmail.com>  %s\n\n' "$(date -R -u -d "@${SOURCE_DATE_EPOCH:-$(stat -c %Y "$src/VERSION")}")"
+  printf '\n -- Wisbendji Fimerlus <archledger236@gmail.com>  %s\n\n' "$(date -R -u -d "@$stamp")"
   cat "$src/packaging/debian/changelog"
 } >"$src/debian/changelog"
 echo "== plasma-fusion $version ($dist)"

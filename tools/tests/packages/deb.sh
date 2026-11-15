@@ -21,7 +21,14 @@ echo "== built against kwin-dev $(dpkg-query -W -f '${Version}' kwin-dev), Qt $(
 bash "$ROOT/packaging/build-deb.sh" --tarball "$TARBALL" --target "$TARGET" ${UPSTREAM:+--upstream "$UPSTREAM"} --output "$OUT" >"$bd/build.log" 2>&1 ||
   { tail -80 "$bd/build.log"; exit 1; }
 echo "== lintian errors"
-lintian "$OUT"/*.changes 2>&1 | grep -E '^E: ' || echo none
+lintian "$OUT"/*.changes >"$bd/lintian.log" 2>&1 || true
+grep -E '^E: ' "$bd/lintian.log" || echo none
+# The build's own changelog entry is newer than the release entry below it (#180); lintian's other
+# findings are listed for the record.
+if grep -q 'latest-changelog-entry-without-new-date' "$bd/lintian.log"; then
+  echo "the build's changelog entry is not newer than the release entry below it" >&2
+  exit 1
+fi
 echo "== install"
 debs=()
 for f in "$OUT"/plasma-fusion*.deb; do [[ $f == *dbgsym* ]] || debs+=("$f"); done
