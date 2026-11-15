@@ -22,6 +22,19 @@ is only whether the backport adds a failure. A suite fails here when:
     not, or the suite failed without a reason above (an exit status with no failed function).
 Failures that also happen on stock, and functions that failed in only some backport attempts
 (KWin's own CI repeats a failing test up to three times), pass and are listed as such.
+
+KWin's timestamp race (#188) is upstream's and is judged apart. KWin gives an X11 window that sets
+no user time the X server's time at its creation, in milliseconds, and grants an application's
+raise request in full when the request's time is not older than the active window's user time
+(Workspace::allowFullClientRaising: time >= user_time; kwin_core logs "Raising, compared: TIME :
+USER_TIME : true|false"). When a test creates its windows within one millisecond the two times are
+equal, the raise is granted in full instead of within the application, and testX11Window's
+stacking tests fail on either build; how often depends on the runner's speed, and the two builds
+run on different runners. A failed row (FAIL!) whose last raise decision before the failure was
+granted on equal times is that race. An attempt in which every failed row of a function is the
+race does not count against the function; the rules above judge it on its other attempts, and a
+function that failed only on the race passes, listed as such. Backported tests get no such
+allowance: they must be stable.
 Writes OUT_DIR/native-summary.md and native-summary.json. Exit 0 no failure, 1 a failure, 2 usage.
 """
 
@@ -30,8 +43,12 @@ import os
 import re
 import sys
 
-LINE = re.compile(r"^(PASS|FAIL!|XPASS|XFAIL|SKIP|BPASS|BFAIL|BXPASS|BXFAIL|QFATAL)\s*:\s+([A-Za-z_][\w:]*::\w+)")
+LINE = re.compile(r"^(PASS|FAIL!|XPASS|XFAIL|SKIP|BPASS|BFAIL|BXPASS|BXFAIL|QFATAL)\s*:\s+([A-Za-z_][\w:]*::\w+)"
+                  r"(?:\(([^)]*)\))?")
 FAILED = {"FAIL!", "XPASS", "QFATAL"}
+# KWin's raise decision for an X11 window, logged in the row (function and data tag) that caused it.
+RAISE = re.compile(r"^QDEBUG\s*:\s+([A-Za-z_][\w:]*::\w+)\(([^)]*)\)\s+kwin_core: "
+                   r"Raising, compared:\s*(\d+)\s*:\s*(\d+)\s*:\s*(true|false)\s*$")
 RENDERER_READY = re.compile(
     r"^QDEBUG\s*:\s+[\w:]+::initTestCase\(\).*"
     r"(?:OpenGL|QPainter) compositing has been successfully initialized", re.MULTILINE)
@@ -50,15 +67,27 @@ def read(path):
 
 
 def attempt(text):
-    """The functions an attempt ran and those that failed, and whether it ran to its totals."""
-    ran, failed = set(), set()
+    """The functions an attempt ran and those that failed, those whose every failed row was KWin's
+    timestamp race (see above), and whether it ran to its totals."""
+    ran, failed, on_race, otherwise = set(), set(), set(), set()
+    last_raise = {}  # (function, tag) -> (time, user time, granted): the row's newest decision
     for line in text.splitlines():
+        r = RAISE.match(line)
+        if r:
+            last_raise[(r.group(1), r.group(2))] = (r.group(3), r.group(4), r.group(5) == "true")
+            continue
         m = LINE.match(line)
         if m:
-            ran.add(m.group(2))
+            function, row = m.group(2), (m.group(2), m.group(3) or "")
+            ran.add(function)
             if m.group(1) in FAILED:
-                failed.add(m.group(2))
-    return {"ran": ran, "failed": failed, "complete": any(line.startswith("Totals:") for line in text.splitlines()),
+                failed.add(function)
+                time, user_time, granted = last_raise.get(row, (None, None, False))
+                race = m.group(1) == "FAIL!" and granted and time == user_time
+                (on_race if race else otherwise).add(function)
+            last_raise.pop(row, None)
+    return {"ran": ran, "failed": failed, "race": on_race - otherwise,
+            "complete": any(line.startswith("Totals:") for line in text.splitlines()),
             "renderer_ready": bool(RENDERER_READY.search(text)),
             "renderer_failed": bool(RENDERER_FAILED.search(text))}
 
@@ -113,9 +142,17 @@ def judge(suite, backport, stock):
         fails = sum(f in a["failed"] for a in runs)
         if not fails:
             continue
-        where = f"{fails} of {len(runs)} attempts"
+        # Attempts that KWin's timestamp race decided say nothing about the backport. A function
+        # that failed only on the race passes; otherwise the rules below judge it on the attempts
+        # the race did not decide (failing in all of those is failing in all its attempts).
+        races = sum(f in a["race"] for a in runs)
+        counted = f"{fails} of {len(runs)} attempts"
+        where = counted + (f" ({races} on KWin's timestamp race)" if races else "")
         if f not in stock_ran:
             failed.append(f"{f}: a backported test, failed in {where}")
+        elif races == fails:
+            tolerated.append(f"{f}: failed in {counted}, each on KWin's timestamp race "
+                             "(a full raise granted on equal user timestamps)")
         elif fails == len(runs) and f not in stock_failed:
             failed.append(f"{f}: failed in {where}, passed in every stock attempt ({len(s)})")
         elif f in stock_failed:

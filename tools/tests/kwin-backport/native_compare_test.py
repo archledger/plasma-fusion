@@ -13,12 +13,15 @@ import unittest
 COMPARE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "native_compare.py")
 
 
-def log(cls, results, complete=True, renderer=True):
-    """QtTest text output: results is [(function, tag, outcome), ...]."""
+def log(cls, results, complete=True, renderer=True, debug=None):
+    """QtTest text output: results is [(function, tag, outcome), ...]; debug maps (function, tag) to
+    kwin_core debug messages that row prints before its result."""
     lines = [f"********* Start testing of {cls} *********"]
     if renderer:
         lines.append(f"QDEBUG : {cls}::initTestCase() kwin_core: OpenGL compositing has been successfully initialized")
     for function, tag, outcome in results:
+        for message in (debug or {}).get((function, tag), []):
+            lines.append(f"QDEBUG : {cls}::{function}({tag}) kwin_core: {message}")
         label = {"pass": "PASS   ", "fail": "FAIL!  ", "skip": "SKIP   ", "xfail": "XFAIL  ", "xpass": "XPASS  ",
                  "fatal": "QFATAL "}[outcome]
         lines.append(f"{label}: {cls}::{function}({tag})" + (" Compared values are not the same" if outcome == "fail" else ""))
@@ -30,6 +33,18 @@ def log(cls, results, complete=True, renderer=True):
 
 
 OK = [("initTestCase", "", "pass"), ("testA", "normal", "pass"), ("testA", "scaled2x", "pass"), ("testB", "", "pass")]
+
+# KWin's raise decision for an X11 window (Workspace::allowFullClientRaising, kwin_core debug): the
+# request's time, the active window's user time, and whether a full raise is granted (time >= user
+# time). A tie is upstream's timestamp race (#188): the test's windows got the same millisecond.
+TIE = "Raising, compared: 1058756 : 1058756 : true"
+NEWER = "Raising, compared: 1058755 : 1058756 : false"
+
+
+def raced(row="normal", messages=(TIE,)):
+    """testA failing in ROW after the given raise decisions, every other row passing."""
+    results = [r if r[:2] != ("testA", row) else ("testA", row, "fail") for r in OK]
+    return log("T", results, debug={("testA", row): list(messages)})
 
 
 class CompareTest(unittest.TestCase):
@@ -143,6 +158,110 @@ class CompareTest(unittest.TestCase):
         rc, rows, out = self.compare()
         self.assertEqual(rc, 0, out)
         self.assertEqual(rows["testX"]["tolerated"], ["T::testB: failed in 3 of 3 attempts; also on stock (1 of 10)"])
+
+    def test_timestamp_race_passes(self):
+        # #188's runs: testStackTopIfFromApplication failed in every backport attempt on a fast
+        # runner, each time after a full raise granted on equal user timestamps; stock ran on
+        # another runner and passed.
+        self.suite(self.stock, "testX", [log("T", OK)] * 10)
+        self.suite(self.backport, "testX", [raced(), raced("scaled2x"), raced()])
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(rows["testX"]["tolerated"], [
+            "T::testA: failed in 3 of 3 attempts, each on KWin's timestamp race "
+            "(a full raise granted on equal user timestamps)"])
+
+    def test_a_raise_on_a_newer_user_time_is_no_race(self):
+        self.suite(self.stock, "testX", [log("T", OK)] * 10)
+        self.suite(self.backport, "testX", [raced(messages=[NEWER])] * 3)
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("T::testA: failed in 3 of 3 attempts, passed in every stock attempt (10)", rows["testX"]["failed"])
+
+    def test_a_raise_granted_to_a_newer_request_is_no_race(self):
+        # A full raise because the request was newer than the active window's user time: not a tie,
+        # so something else (the activation order) decided it.
+        granted = "Raising, compared: 1058757 : 1058756 : true"
+        self.suite(self.stock, "testX", [log("T", OK)] * 10)
+        self.suite(self.backport, "testX", [raced(messages=[granted])] * 3)
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+
+    def test_only_a_failed_assertion_can_be_the_race(self):
+        results = OK[:1] + [("testA", "normal", "fatal")]
+        fatal = log("T", results, complete=False, debug={("testA", "normal"): [TIE]})
+        self.suite(self.stock, "testX", [log("T", OK)] * 10)
+        self.suite(self.backport, "testX", [fatal] * 3, exit_status=134)
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+        self.assertTrue(any("T::testA: failed in 3 of 3 attempts, passed in every stock attempt" in line
+                            for line in rows["testX"]["failed"]), rows)
+
+    def test_a_refused_raise_on_a_tie_is_no_race(self):
+        refused = "Raising, compared: 1058756 : 1058756 : false"
+        self.suite(self.stock, "testX", [log("T", OK)] * 10)
+        self.suite(self.backport, "testX", [raced(messages=[refused])] * 3)
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+
+    def test_only_the_last_raise_before_the_failure_counts(self):
+        self.suite(self.stock, "testX", [log("T", OK)] * 10)
+        self.suite(self.backport, "testX", [raced(messages=[TIE, NEWER])] * 3)
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+
+    def test_a_failure_without_a_raise_is_no_race(self):
+        self.suite(self.stock, "testX", [log("T", OK)] * 10)
+        self.suite(self.backport, "testX", [raced(messages=[])] * 3)
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+
+    def test_a_tie_in_another_row_does_not_count(self):
+        # The tie in testA(normal), which passed; testA(scaled2x) failed without one.
+        results = OK[:2] + [("testA", "scaled2x", "fail")] + OK[3:]
+        bad = log("T", results, debug={("testA", "normal"): [TIE]})
+        self.suite(self.stock, "testX", [log("T", OK)] * 10)
+        self.suite(self.backport, "testX", [bad] * 3)
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+
+    def test_an_attempt_with_another_failed_row_is_no_race(self):
+        # Both rows failed in each attempt, only one of them on a tie.
+        results = OK[:1] + [("testA", "normal", "fail"), ("testA", "scaled2x", "fail")] + OK[3:]
+        bad = log("T", results, debug={("testA", "normal"): [TIE], ("testA", "scaled2x"): [NEWER]})
+        self.suite(self.stock, "testX", [log("T", OK)] * 10)
+        self.suite(self.backport, "testX", [bad] * 3)
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("T::testA: failed in 3 of 3 attempts, passed in every stock attempt (10)", rows["testX"]["failed"])
+
+    def test_race_does_not_hide_a_failure_in_the_other_attempts(self):
+        # Two attempts on the race, the third failed otherwise: judged on the one the race did not
+        # decide, where it failed and stock never did.
+        self.suite(self.stock, "testX", [log("T", OK)] * 10)
+        self.suite(self.backport, "testX", [raced(), raced(), raced(messages=[NEWER])])
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("T::testA: failed in 3 of 3 attempts (2 on KWin's timestamp race), passed in every stock attempt (10)",
+                      rows["testX"]["failed"])
+
+    def test_race_and_a_passing_attempt(self):
+        self.suite(self.stock, "testX", [log("T", OK)] * 10)
+        self.suite(self.backport, "testX", [raced(), raced(messages=[NEWER]), log("T", OK)])
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(rows["testX"]["tolerated"],
+                         ["T::testA: failed in 2 of 3 attempts (1 on KWin's timestamp race), passed in the others"])
+
+    def test_backported_test_gets_no_race_tolerance(self):
+        new = OK + [("requestedGeometryNew", "", "fail")]
+        bad = log("T", new, debug={("requestedGeometryNew", ""): [TIE]})
+        self.suite(self.stock, "testX", [log("T", OK)])
+        self.suite(self.backport, "testX", [bad] * 3)
+        rc, rows, out = self.compare()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("T::requestedGeometryNew: a backported test, failed in 3 of 3 attempts (3 on KWin's timestamp race)",
+                      rows["testX"]["failed"])
 
     def test_flaky_passes(self):
         bad = log("T", OK[:3] + [("testB", "", "fail")])
