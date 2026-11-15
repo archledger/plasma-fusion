@@ -19,6 +19,15 @@ const SETTLE_MILLIS = 1000;
 const GRACE_MILLIS = 1000;
 const START_MILLIS = 10000;
 
+// Whether a window reference is still a window: the one rule here that main.qml asks of a KWin
+// window rather than a view (it reads a single property, so a plain object does as well). KWin
+// marks a closing window deleted and destroys it a moment later; after that every property of a
+// kept reference reads undefined, deleted included, so a bare "not deleted" is true of it. Only a
+// window whose deleted is the boolean false is live (the snap, placement and tablet scripts' rule).
+function alive(w) {
+    return !!w && w.deleted === false;
+}
+
 // Whether a window is of the kind that can hold a desktop, which does not change while it is open:
 // a managed window of the user's, not a panel, notification, OSD, applet popup or tooltip (KWin's
 // special windows) and not a popup menu. main.qml watches these windows only.
@@ -26,11 +35,18 @@ function candidate(view) {
     return !!view && view.managed === true && view.special !== true && view.popup !== true;
 }
 
-// Whether a window holds its desktops now: a candidate that is not closing, not on every desktop
-// (KWin's own internal windows are) and not kept out of the pager. Minimized windows count: they
-// are still on their desktop.
+// Whether a window holds its desktops now: a candidate that is alive (not closing), not on every
+// desktop (KWin's own internal windows are) and not kept out of the pager. Minimized windows count:
+// they are still on their desktop.
 function counts(view) {
-    return candidate(view) && view.deleted !== true && view.allDesktops !== true && view.skipPager !== true;
+    return candidate(view) && view.alive === true && view.allDesktops !== true && view.skipPager !== true;
+}
+
+// Whether a window that just closed held its desktops right before. KWin marks a closing window
+// deleted before windowRemoved, so its view is no longer alive; everything else about it still
+// reads as it was. The view given is not changed.
+function heldBefore(view) {
+    return !!view && counts(Object.assign({}, view, { alive: true }));
 }
 
 // desktopIds (in KWin's order) -> one boolean each: does a counted window list that desktop. Windows

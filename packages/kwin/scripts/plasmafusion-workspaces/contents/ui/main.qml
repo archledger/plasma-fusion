@@ -67,7 +67,7 @@ Item {
     function windowView(w) {
         return {
             managed: w.managed,
-            deleted: w.deleted,
+            alive: Workspaces.alive(w),
             allDesktops: w.onAllDesktops,
             skipPager: w.skipPager,
             special: w.specialWindow,
@@ -187,7 +187,7 @@ Item {
     // Only windows of the kind that can hold a desktop are watched (Workspaces.candidate); tooltips
     // and popups come and go all the time and never change a desktop's state.
     function watch(w) {
-        if (!w || w.deleted || !Workspaces.candidate(windowView(w))) {
+        if (!Workspaces.alive(w) || !Workspaces.candidate(windowView(w))) {
             return false;
         }
         const key = String(w.internalId);
@@ -203,8 +203,7 @@ Item {
         return true;
     }
 
-    // A watched window closed: true when it held its desktops right before (KWin marks a closing
-    // window deleted before windowRemoved; everything else about it still reads as it was).
+    // A watched window closed: true when it held its desktops right before (Workspaces.heldBefore).
     function unwatch(w) {
         const key = String(w.internalId);
         const entry = watched[key];
@@ -214,9 +213,7 @@ Item {
         w.desktopsChanged.disconnect(entry.onChange);
         w.skipPagerChanged.disconnect(entry.onChange);
         delete watched[key];
-        const view = windowView(w);
-        view.deleted = false;
-        return Workspaces.counts(view);
+        return Workspaces.heldBefore(windowView(w));
     }
 
     Connections {
