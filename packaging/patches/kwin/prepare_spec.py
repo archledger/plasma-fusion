@@ -8,19 +8,22 @@ from pathlib import Path
 import re
 import sys
 
+# KWin 6.8.3 changed none of the files the two 6.8.2 patches change: they apply to it as they are.
+PATCHES_6_8 = (
+    "0001-window-expose-requested-geometry-6.8.2.patch",
+    "0002-initialize-startup-flags-6.8.2.patch",
+)
 PATCHES = {
     "6.7.5": ("0001-window-expose-requested-geometry.patch",),
-    "6.8.2": (
-        "0001-window-expose-requested-geometry-6.8.2.patch",
-        "0002-initialize-startup-flags-6.8.2.patch",
-    ),
+    "6.8.2": PATCHES_6_8,
+    "6.8.3": PATCHES_6_8,
 }
 
 
 def prepare(text, version_release, today):
-    match = re.fullmatch(r"(6\.7\.5|6\.8\.2)-([0-9]+)\.fc44", version_release)
+    match = re.fullmatch(r"(6\.7\.5|6\.8\.2|6\.8\.3)-([0-9]+)\.fc44", version_release)
     if not match:
-        raise ValueError("only Fedora 44 KWin 6.7.5 and 6.8.2 source builds are supported")
+        raise ValueError("only Fedora 44 KWin 6.7.5, 6.8.2 and 6.8.3 source builds are supported")
     version, release = match.groups()
     patches = PATCHES[version]
     checks = (
@@ -54,7 +57,7 @@ def prepare(text, version_release, today):
         f"* {date} Wisbendji Fimerlus <archledger236@gmail.com> - {version_release}.pf1\n"
         "- Expose requestedGeometry to scripts (KDE MR !10225)\n"
     )
-    if version == "6.8.2":
+    if "0002-initialize-startup-flags-6.8.2.patch" in patches:
         entry += "- Initialize startup flags before their first read\n"
     return text.replace("%changelog\n", "%changelog\n" + entry + "\n", 1)
 

@@ -72,7 +72,7 @@ WANT=${built[0]%.rpm}
 VERSION=${BASH_REMATCH[1]}
 IMAGE=${IMAGE:-localhost/plasma-fusion-test:f44-$VERSION}
 SOFTWARE_DEVICE=0
-[[ $VERSION != 6.8.2 || $DRI != 0 ]] || SOFTWARE_DEVICE=1
+[[ $VERSION != 6.8.* || $DRI != 0 ]] || SOFTWARE_DEVICE=1
 STAGE=$(realpath -m -- "$STAGE")
 [ -d "$STAGE/.local/share/plasma" ] || { echo "no built HOME tree at $STAGE (run tools/build.sh)" >&2; exit 2; }
 BACKPORT=$IMAGE-pf1

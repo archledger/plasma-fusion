@@ -4,25 +4,28 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 -->
 # Optional KWin backport
 
-Fedora 44's KWin 6.7.5 or 6.8.2, rebuilt with a scripting property that KDE declined upstream: the merge
-request was closed without merging on 2026-10-26. It is a downstream patch, maintained here for
-those two exact versions only. Stock KWin remains supported. These packages are separate from Plasma
-Fusion and are never installed by its installer. Plasma Fusion does not publish them: they exist
-only where someone builds them with the script below. The property exists only where this patch is
-installed, so consumers must detect it at runtime.
+Fedora 44's KWin 6.7.5, 6.8.2 or 6.8.3, rebuilt with a scripting property that KDE declined
+upstream: the merge request was closed without merging on 2026-10-26. It is a downstream patch,
+maintained here for those three exact versions only. Stock KWin remains supported. These packages
+are separate from Plasma Fusion and are never installed by its installer. Plasma Fusion does not
+publish them: they exist only where someone builds them with the script below. The property exists
+only where this patch is installed, so consumers must detect it at runtime.
 
 | Patch | What it provides | Upstream | When to drop |
 |---|---|---|---|
 | `0001-window-expose-requested-geometry.patch` | Read-only `Window.requestedGeometry` and `requestedGeometryChanged`, so scripts can distinguish the committed frame from geometry KWin has requested. | KDE [MR !10225](https://invent.kde.org/plasma/kwin/-/merge_requests/10225), proposed commit `3fd6cdb85cc2b7d562fbb403c035709462c0068a`; [bug 527821](https://bugs.kde.org/show_bug.cgi?id=527821). Closed without merging on 2026-10-26: upstream KWin will not take this change. | When Fedora's KWin provides the same information through an API of its own (update the consumers with it), or when the patch no longer applies to Fedora 44's KWin. There is no upstream version to follow. |
 
 The spec preparer selects `0001-window-expose-requested-geometry.patch` for 6.7.5 and
-`0001-window-expose-requested-geometry-6.8.2.patch` for 6.8.2. They provide the same API and
-are alternatives, never stacked. The 6.8.2 patch refreshes the source context and documents
+`0001-window-expose-requested-geometry-6.8.2.patch` for 6.8.2 and 6.8.3. They provide the same API
+and are alternatives, never stacked. The 6.8.2 patch refreshes the source context and documents
 that version's synchronization rules; it retains the five regression tests and layout safeguard.
-The 6.8.2 stack also includes `0002-initialize-startup-flags-6.8.2.patch`: it initializes the
+The 6.8 stack also includes `0002-initialize-startup-flags-6.8.2.patch`: it initializes the
 existing screen-corner option before configuration loading, and the virtual test device's
 relative-tablet flag before input setup. These two indeterminate reads were reproduced in both
-stock and backport Memcheck runs. The fixes add no members and do not change configured values.
+stock and backport Memcheck runs on 6.8.2. The fixes add no members and do not change configured
+values. KDE's 6.8.3 changed none of the files the two 6.8.2 patches change, so 6.8.3 takes both
+as they are: they apply without offset or fuzz, and 6.8.3 still lacks the two initializers
+(Fedora's `kwin-6.8.3-1.fc44` source package, 2026-11-15).
 
 This adds an observable property; it does not change how KWin configures or tiles windows. It does
 not enable automatic tiling or solve its remaining lifecycle requirements. Its consumer is the
@@ -41,7 +44,9 @@ In 6.7.5 the shared geometry handler synchronizes the requested rectangle when n
 geometry-changing configure remains. In 6.8.2, xdg-toplevel and picture-in-picture handlers
 require no queued or scheduled configure at all, including state-only configures. Other window
 types, including popups, do not promise that synchronization. Consumers must not interpret
-rectangle equality as a universal completion flag.
+rectangle equality as a universal completion flag. What this section says of 6.8.2 holds for 6.8.3:
+`src/xdgshellwindow.cpp` is unchanged there, and the picture-in-picture handler
+(`src/xxpipv1window.cpp`) keeps its synchronization condition.
 
 The last-notified rectangle is kept outside `Window` and removed when the window is destroyed.
 This avoids adding a member to an exported class that stock-built plugins access through inline
@@ -65,18 +70,18 @@ Requires Podman and access to Fedora 44's package repositories. The default sour
 installed `kwin` package; specify it when building from another system:
 
 ```sh
-packaging/patches/kwin/build.sh build/kwin-rpms 6.8.2-3.fc44
+packaging/patches/kwin/build.sh build/kwin-rpms 6.8.3-1.fc44
 ```
 
-The output directory must be empty. Only `6.7.5-N.fc44` and `6.8.2-N.fc44` source packages are
-accepted; other KWin versions need a reviewed backport rather than an automatic rebuild.
-Builds use a Fedora 44 container,
+The output directory must be empty. Only `6.7.5-N.fc44`, `6.8.2-N.fc44` and `6.8.3-N.fc44` source
+packages are accepted; other KWin versions need a reviewed backport rather than an automatic
+rebuild. Builds use a Fedora 44 container,
 four CPUs and an 8 GiB memory limit. The builder:
 
 1. Runs the offline packaging checks, then downloads Fedora's exact source RPM and retains it as
    `fedora-kwin-*.src.rpm`.
-2. Adds `Patch9001` (and the initializer prerequisite as `Patch9002` on 6.8.2), preserving Fedora's
-   existing patches and `%autosetup -p1`.
+2. Adds `Patch9001` (and the initializer prerequisite as `Patch9002` on 6.8.2 and 6.8.3),
+   preserving Fedora's existing patches and `%autosetup -p1`.
 3. Appends `.pf1` to `Release`, adds a changelog entry, installs build dependencies inside the
    container and runs `rpmbuild -ba` without disabling Fedora's checks.
 4. Copies the binary RPMs, rebuilt source RPM, prepared spec and logs to the output directory.
@@ -92,8 +97,8 @@ without the patch, for comparison: some upstream tests fail in this configuratio
 (`tools/tests/kwin-backport/native_compare.py` judges the two):
 
 ```sh
-packaging/patches/kwin/native-tests.sh build/kwin-tests 6.8.2-3.fc44
-packaging/patches/kwin/native-tests.sh --stock build/kwin-tests-stock 6.8.2-3.fc44
+packaging/patches/kwin/native-tests.sh build/kwin-tests 6.8.3-1.fc44
+packaging/patches/kwin/native-tests.sh --stock build/kwin-tests-stock 6.8.3-1.fc44
 tools/tests/kwin-backport/native_compare.py build/kwin-tests-stock build/kwin-tests build/compare
 ```
 
@@ -135,7 +140,8 @@ ruff check packaging/patches/kwin
 ```
 
 The offline suite checks the spec transformation, preserved Fedora patches and changelog,
-incompatible-spec rejection, supported version bounds and output-directory preservation. The
+incompatible-spec rejection, supported version bounds, output-directory preservation and the
+render device the native tests hand to KWin 6.8. The
 backported native tests cover delayed tile/untile commits, notification ordering on X11 and
 settling to a client-selected size. Run `testTiles` and `testXdgShellWindow` on the built KWin;
 also run the move/resize, quick-tiling, internal-window, maximize and placement suites.

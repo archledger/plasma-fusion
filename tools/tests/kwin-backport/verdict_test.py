@@ -65,9 +65,12 @@ class VerdictTest(unittest.TestCase):
         with open(os.path.join(self.res, "summary.md")) as f:
             self.assertIn("| backport-pending | PASS | 2 | 0 |", f.read())
 
-    def setup_682(self):
-        want = "kwin-6.8.2-3.fc44.pf1.x86_64"
-        stock = "kwin-6.8.2-3.fc44.x86_64"
+    # KWin 6.8 starts only on a render device, so its sessions must show that the compositor did.
+    VERSIONS_68 = ("6.8.2-3.fc44", "6.8.3-1.fc44")
+
+    def setup_68(self, vr):
+        want = f"kwin-{vr}.pf1.x86_64"
+        stock = f"kwin-{vr}.x86_64"
         self.write("images.txt", f"stock {stock}\nbackport {want}\n")
         for lane, package, value in (("stock", stock, "false"), ("backport", want, "true")):
             self.session(f"{lane}-pending", f"INFO KWin has Window.requestedGeometry: {value} ({package})\n")
@@ -76,26 +79,34 @@ class VerdictTest(unittest.TestCase):
                            "kwin_core: OpenGL compositing has been successfully initialized\n")
         return want
 
-    def test_682_requires_renderer_evidence(self):
-        want = self.setup_682()
-        self.write("backport-placement/kwin.log", "normal-looking but no initialization proof\n")
-        rc, out = self.verdict(want=want)
-        self.assertEqual(rc, 1, out)
-        self.assertIn("no successful compositor initialization", " ".join(self.summary()["backport-placement"]["failed"]))
+    def test_68_requires_renderer_evidence(self):
+        for vr in self.VERSIONS_68:
+            with self.subTest(vr=vr):
+                want = self.setup_68(vr)
+                self.write("backport-placement/kwin.log", "normal-looking but no initialization proof\n")
+                rc, out = self.verdict(want=want)
+                self.assertEqual(rc, 1, out)
+                self.assertIn("no successful compositor initialization",
+                              " ".join(self.summary()["backport-placement"]["failed"]))
 
-    def test_682_with_renderer_evidence_passes(self):
-        rc, out = self.verdict(want=self.setup_682())
-        self.assertEqual(rc, 0, out)
+    def test_68_with_renderer_evidence_passes(self):
+        for vr in self.VERSIONS_68:
+            with self.subTest(vr=vr):
+                rc, out = self.verdict(want=self.setup_68(vr))
+                self.assertEqual(rc, 0, out)
 
     def test_opened_device_does_not_excuse_renderer_failure(self):
-        want = self.setup_682()
-        self.write("backport-placement/render-device.log", "PASS: opened render device /dev/udmabuf\n")
-        self.write("backport-placement/kwin.log",
-                   "kwin_core: OpenGL compositing has been successfully initialized\n"
-                   "kwin_core: The used windowing system requires compositing\n")
-        rc, out = self.verdict(want=want)
-        self.assertEqual(rc, 1, out)
-        self.assertIn("compositor initialization failed", " ".join(self.summary()["backport-placement"]["failed"]))
+        for vr in self.VERSIONS_68:
+            with self.subTest(vr=vr):
+                want = self.setup_68(vr)
+                self.write("backport-placement/render-device.log", "PASS: opened render device /dev/udmabuf\n")
+                self.write("backport-placement/kwin.log",
+                           "kwin_core: OpenGL compositing has been successfully initialized\n"
+                           "kwin_core: The used windowing system requires compositing\n")
+                rc, out = self.verdict(want=want)
+                self.assertEqual(rc, 1, out)
+                self.assertIn("compositor initialization failed",
+                              " ".join(self.summary()["backport-placement"]["failed"]))
 
     def test_failed_check(self):
         self.write("backport-placement/checks.txt", "PASS one\nFAIL 2. the memory moved\n")

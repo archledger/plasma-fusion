@@ -84,7 +84,7 @@ def judge(results, want, lane, scenario, needs_property, wrong_images):
     kwin_log = read(os.path.join(d, "kwin.log")) or ""
     if any(message in kwin_log for message in RENDERER_FAILED):
         failed.append("FAIL compositor initialization failed")
-    elif want.startswith("kwin-6.8.2-") and RENDERER_READY not in kwin_log:
+    elif want.startswith("kwin-6.8.") and RENDERER_READY not in kwin_log:
         failed.append("FAIL no successful compositor initialization")
     errors = [line for line in kwin_log.splitlines() if SCRIPT_ERROR.search(line)]
     if errors:
