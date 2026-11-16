@@ -10,6 +10,8 @@
 set -euo pipefail
 BASE=${1:?base image}; TAG=${2:?tag}
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
+# build/ is git-ignored, so a fresh clone or worktree does not have it yet.
+mkdir -p "$ROOT/build"
 CTX=$(mktemp -d "$ROOT/build/container-ctx.XXXXXX")
 trap 'rm -rf "$CTX"' EXIT
 mkdir -p "$CTX/packages" "$CTX/tools/container/test"

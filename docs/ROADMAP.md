@@ -33,7 +33,9 @@ are welcome in GitHub Discussions; the way decisions are made is in
    KDE neon. Fedora 44 has since moved to 6.8.2; the compiled parts and depth features pass on it,
    `tested-versions.txt` is raised, and the ThinkPad runs 6.8.2. Since then: the laptop was updated
    to 6.8.2 on 2026-11-10 with the rebuilt parts and a clean login check (#142); both machines run
-   6.8.2.
+   6.8.2. Fedora's 6.8.3 (in updates-testing on 2026-11-15) passes the compiled parts, the depth
+   features and the release VM lanes, as a fresh install and as an update, and
+   `tested-versions.txt` lists it (#191); the test machines move to it with an approved update.
 2. **Split screen in tablet posture.** A split pair shown as one card in the app switcher (in
    navigation 0.1-7 since 2026-10-02; a touch check on the tablet is next) and an app picker in the
    free half after one app is tiled (2026-10-18, board TabletSplit). Saved app pairs (one icon that

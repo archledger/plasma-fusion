@@ -28,4 +28,14 @@ RUN dnf -y --setopt=install_weak_deps=False install \
  && useradd -m -u 1000 test
 COPY tools/container/test/install-parts.sh /usr/local/bin/install-parts.sh
 COPY packages /pf-src/packages
-RUN /usr/local/bin/install-parts.sh && rpm -q kwin plasma-workspace plasma-desktop libplasma
+# The Plasma the image runs is the series the parts were built against (the BASE image's
+# kwin-devel): the desktop packages above are not pinned, and a repository can have moved on since
+# BASE was built (Fedora's updates-testing, left on by the build image's UPDATES_TESTING=1, moves
+# daily).
+RUN /usr/local/bin/install-parts.sh && rpm -q kwin plasma-workspace plasma-desktop libplasma \
+ && want=$(rpm -q --qf '%{VERSION}' kwin-devel | cut -d. -f1-3) \
+ && for p in kwin plasma-workspace plasma-desktop libplasma kscreenlocker kdecoration; do \
+      got=$(rpm -q --qf '%{VERSION}' "$p" | cut -d. -f1-3); \
+      [ "$got" = "$want" ] || \
+        { echo "$p is Plasma $got; the parts were built against $want" >&2; exit 1; }; \
+    done
