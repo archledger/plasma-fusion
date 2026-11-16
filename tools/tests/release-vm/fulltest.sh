@@ -165,6 +165,7 @@ crashes() { # WHEN: this boot's crashes; a collector that cannot say is not zero
   want "crashes $1" "$n" 0
 }
 is_fork() { case $1 in *.pf[0-9]*) return 0 ;; esac; return 1; }
+upstream() { local e=${1#*:}; echo "${e%%-*}"; }  # EVR -> the upstream version (6.8.2-3.fc44.pf5: 6.8.2)
 # The journal of the session's KWin, with the gesture lock written on and off first.
 kwinlog() { # FILE
   guest gesturelock || { log "FAIL: the gesture lock could not be written"; exit 1; }
@@ -424,7 +425,17 @@ if [ "$mode" = fresh ]; then
   status 41-status.log
   has "status: the stock profile" 41-status.log 'profile: stock \(the distribution.s KWin\)'
   has "status: none of the fork's capabilities" 41-status.log "capabilities: none of the fork's \(every feature uses its stock fallback\)"
-  hasnot "status: no note" 41-status.log '^  note:'
+  # While Fedora's KWin is another version than the pin's (#198), the parts built for the pin's
+  # KWin are due for a rebuild on stock KWin, and status says so for the decoration and the
+  # navigation part; nothing else.
+  pin_up=$(upstream "$(fact 12-facts.txt pin)") stock_up=$(upstream "${STOCK[kwin]}")
+  if [ "$pin_up" = "$stock_up" ]; then
+    hasnot "status: no note" 41-status.log '^  note:'
+  else
+    others=$(grep -a '^  note:' "$OUT/41-status.log" |
+      grep -a -v -E "^  note: the (decoration|navigation) part was built against [0-9.]+, KWin is ${stock_up//./\\.}: update or rebuild that package\$" || true)
+    want "status: no note but the rebuild notes of the parts built for KWin $pin_up" "$others" ""
+  fi
   has "the login check switched nothing off" 41-status.log 'switched off: nothing'
   vm ssh "$name" 'grep -h LookAndFeelPackage ~/.config/kdeglobals' >"$OUT/41-theme.txt" 2>&1
   has "the session is still Plasma Fusion's" 41-theme.txt 'org\.plasmafusion\.'
@@ -432,7 +443,14 @@ if [ "$mode" = fresh ]; then
 
   log "the features' fallbacks on stock KWin"
   kwinlog 42-kwin.log
-  has "navigation: the effect stays idle and says why" 42-kwin.log 'plasmafusion-navigation: compositor lacks offscreen opacity capability version 1; the effect stays idle'
+  if [ "$pin_up" = "$stock_up" ]; then
+    has "navigation: the effect stays idle and says why" 42-kwin.log 'plasmafusion-navigation: compositor lacks offscreen opacity capability version 1; the effect stays idle'
+  else
+    # Built for the pin's KWin, the effect stops at its version check before it asks for the
+    # capability.
+    hasf "navigation: the effect stays idle, built for the pin's KWin $pin_up" 42-kwin.log \
+      "plasmafusion-navigation: built for KWin $pin_up, running $stock_up: the effect stays idle"
+  fi
   hasnot "navigation: nothing follows the gesture lock" 42-kwin.log 'plasmafusion-navigation: gesture lock'
   switcher 43-stock
   tiler 44-stock
