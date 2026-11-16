@@ -15,8 +15,8 @@ replace Fedora's on the machines that install them; nothing else in Plasma Fusio
 The patches are made for plasma-workspace 6.8.3 (Fedora 44 and 45: `6.8.3-1.fc44`, `6.8.3-1.fc45`,
 from the same KDE tarball). Since 6.8.2 the search field is the member `m_searchBar` (KDE commit
 `2c7c0edf785a`, "appmenu: auto focus search field"), so they do not apply to anything before
-6.8.2; the 6.7.5 version of patch 0001 is in this directory's git history. Fedora 43, on 6.7.5, is
-not a release Plasma Fusion packages for.
+6.8.2; the 6.7.5 version of patch 0001 is in this directory's git history. Plasma Fusion is not
+packaged for Fedora 43, which is on 6.7.5.
 
 ## Build
 
