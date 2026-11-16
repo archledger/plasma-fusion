@@ -44,7 +44,10 @@
 #  22. NixOS without nix-store on the PATH: the system profile's own binary answers, as it does
 #      for the login check (PF_NIX_SW names the profile here);
 #  23. a database that does not answer in time: the query is bounded as the login check's are, so
-#      status finishes and the version stays unknown.
+#      status finishes and the version stays unknown;
+#  24. the system's database fails while a foreign package manager's files are there: no note,
+#      because the system's database is the one asked and its failure is an unknown, never another
+#      installation's answer.
 # Test tooling only, not installed.
 #
 #   status-unit.sh BASE
@@ -177,6 +180,23 @@ EOF
 chmod +x "$BIN/kwin_wayland" "$BIN/journalctl" "$BIN/busctl" "$BIN/getconf" "$BIN/rpm" \
   "$BIN/pacman" "$BIN/dpkg-query" "$BIN/nix-store"
 export PATH=$BIN:$PATH
+# The package database's files, in the tree status reads (PF_STATUS_ROOT): the login check picks the
+# first database whose files are there, and the tests choose the system the same way. A database
+# whose files are there answers alone - a package manager installed beside it is never asked.
+ROOTFS=$T/root
+mkdir -p "$ROOTFS"
+export PF_STATUS_ROOT=$ROOTFS
+dbev() { # DB: that database's evidence, and no other's
+  rm -rf "$ROOTFS"
+  mkdir -p "$ROOTFS"
+  case $1 in
+    rpm) mkdir -p "$ROOTFS/var/lib/rpm"; : >"$ROOTFS/var/lib/rpm/rpmdb.sqlite" ;;
+    pacman) mkdir -p "$ROOTFS/var/lib/pacman/local"; : >"$ROOTFS/var/lib/pacman/local/ALPM_DB_VERSION" ;;
+    dpkg) mkdir -p "$ROOTFS/var/lib/dpkg"; : >"$ROOTFS/var/lib/dpkg/status" ;;
+    nix) : ;; # PF_NIX_SW's directory is the evidence
+  esac
+}
+dbnone() { rm -rf "$ROOTFS"; mkdir -p "$ROOTFS"; }
 
 run() { # MODE [KWIN VERSION]: the command's output in OUT
   echo "$1" >"$T/mode"
@@ -341,6 +361,7 @@ rm -f "$T/no-getconf"
 # with KWin) used to be permanent (#194).
 record
 nobuilt
+dbev rpm
 echo 6.8.3 >"$T/kdecoration-rpm"
 built decoration kdecoration=6.8.3 qt=6.11.2
 built navigation kwin=6.8.2 qt=6.11.2
@@ -360,24 +381,30 @@ hasnot "16 no navigation note" "the navigation part was built against"
 # pkgver-pkgrel, dpkg's source package with its epoch and revision, Nix's store path name
 rm -f "$T"/kdecoration-*
 built decoration kdecoration=6.8.3 qt=6.11.2
+dbev pacman
 echo 6.8.3-1 >"$T/kdecoration-pacman"
 run fork 6.8.2
 hasnot "17 pacman: the revision does not count" "the decoration part was built against"
 rm -f "$T/kdecoration-pacman"
+dbev dpkg
 echo 4:6.8.3-1 >"$T/kdecoration-dpkg"
 run fork 6.8.2
 hasnot "17 dpkg: the epoch and the revision do not count" "the decoration part was built against"
 rm -f "$T/kdecoration-dpkg"
+dbev nix
+mkdir -p "$T/nixsw"
 echo 6.8.3 >"$T/kdecoration-nix"
-run fork 6.8.2
+PF_NIX_SW=$T/nixsw run fork 6.8.2
 hasnot "17 Nix: the store path's version counts" "the decoration part was built against"
 echo 6.8.4 >"$T/kdecoration-nix"
-run fork 6.8.2
+PF_NIX_SW=$T/nixsw run fork 6.8.2
 has "17 Nix: a newer installed KDecoration is named" "the installed KDecoration is 6.8.4"
 
 # 18. the databases in the login check's order: rpm's answer is the one read, though pacman's is
 # another version
 rm -f "$T"/kdecoration-*
+dbev rpm
+mkdir -p "$ROOTFS/var/lib/pacman/local"; : >"$ROOTFS/var/lib/pacman/local/ALPM_DB_VERSION"
 echo 6.8.3 >"$T/kdecoration-rpm"
 echo 6.9.0 >"$T/kdecoration-pacman"
 built decoration kdecoration=6.8.3 qt=6.11.2
@@ -386,6 +413,7 @@ hasnot "18 rpm's answer is the one read" "the decoration part was built against"
 
 # 19. no database answers: no decoration note, though the record is older than the running KWin
 rm -f "$T"/kdecoration-*
+dbnone
 nobuilt
 built decoration kdecoration=6.8.2 qt=6.11.2
 run fork 6.8.3
@@ -394,6 +422,7 @@ hasnot "19 no decoration note without an answer" "the decoration part was built 
 # 20. the stock profile: no note when the installed KDecoration is the build's - and none either
 # when that older KDecoration is the installed one, though KWin is another version
 record none
+dbev rpm
 built decoration kdecoration=6.8.3 qt=6.11.2
 echo 6.8.3 >"$T/kdecoration-rpm"
 run stock 6.8.3
@@ -408,6 +437,7 @@ hasnot "20 stock: no note when it is the installed KDecoration, not KWin" "the d
 # answer is ambiguous and there is no note - never one built on the database's first line.
 rm -f "$T"/kdecoration-*
 record
+dbev dpkg
 built decoration kdecoration=6.8.3 qt=6.11.2
 printf '4:6.8.2-1\n4:6.8.3-1\n' >"$T/kdecoration-dpkg"
 run fork 6.8.2
@@ -422,6 +452,7 @@ hasnot "21 one version in two revisions is one version" "the decoration part was
 # 22. NixOS without nix-store on the PATH: the login check falls back to the system profile's own
 # binary, and the note is built on its answer (PF_NIX_SW names the profile here)
 rm -f "$T"/kdecoration-*
+dbev nix
 mkdir -p "$T/nixsw/bin"
 cp "$BIN/nix-store" "$T/nixsw/bin/nix-store"
 rm -f "$BIN/nix-store"
@@ -434,6 +465,7 @@ rm -rf "$T/nixsw"
 # 23. a database that does not answer in time: a locked or wedged one leaves the version unknown
 # after the bounded query, and status finishes (the login check bounds its own the same way)
 rm -f "$T"/kdecoration-*
+dbev rpm
 cat >"$BIN/nix-store" <<'EOF'
 #!/bin/bash
 v=$(cat "$T/kdecoration-nix" 2>/dev/null) || exit 1
@@ -449,6 +481,26 @@ elapsed=$((SECONDS - started))
 rm -f "$T/hang-rpm"
 hasnot "23 a database that does not answer gives no note" "the decoration part was built against"
 [ "$elapsed" -le 6 ] && ok "23 and status finishes ($elapsed s, bounded)" || bad "23 status took ${elapsed} s with a wedged database"
+
+# 24. the system's database does not answer while a foreign package manager's files are there: the
+# login check asks the first database present and no other, so a wedged rpm is an unknown - not
+# pacman's KDecoration, which describes a different installation (a false note would name it)
+rm -f "$T"/kdecoration-*
+record
+dbev rpm
+mkdir -p "$ROOTFS/var/lib/pacman/local"; : >"$ROOTFS/var/lib/pacman/local/ALPM_DB_VERSION"
+echo 6.8.3 >"$T/kdecoration-rpm"
+echo 6.9.0 >"$T/kdecoration-pacman"
+built decoration kdecoration=6.8.3 qt=6.11.2
+touch "$T/hang-rpm"
+run fork 6.8.2
+rm -f "$T/hang-rpm"
+hasnot "24 no note from a foreign database while the system's fails" "the decoration part was built against"
+dbev rpm
+echo 6.8.3 >"$T/kdecoration-rpm"
+rm -f "$T/kdecoration-pacman"
+run fork 6.8.2
+hasnot "24 and the system's own answer is the one read" "the decoration part was built against"
 
 echo "status-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
