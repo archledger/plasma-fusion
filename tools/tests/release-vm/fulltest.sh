@@ -15,9 +15,10 @@
 #                    fallbacks on stock KWin, no crash), then uninstall.
 #   switch           the stock profile first - the published installer and the public Copr
 #                    project (lane-env.sh) - then install.sh --full on top of it (the six
-#                    packages move to the full project's builds; the setup is updated, not
-#                    redone), the same checks on the fork, and uninstall on the full system,
-#                    which returns the stock KWin before it removes the packages. The
+#                    packages move to the full project's builds, whose release sorts above the
+#                    stock project's, #197; the setup is updated, not redone), the same
+#                    checks on the fork, and uninstall on the full system, which returns
+#                    the stock KWin before it removes the packages. The
 #                    restore record's directory is root's alone here, as the login screen's
 #                    setup leaves it (greeter-apply.sh): the installer runs as the user and
 #                    has to read its record through sudo.
@@ -193,6 +194,10 @@ check_full_packages() {
     want "the restore record keeps the stock $p" "$(fact "$f" record "$p")" "${STOCK[$p]}"
   done
   for p in $SIX; do want "$p is the metapackage's build" "$(fact "$f" pkg "$p")" "$meta"; done
+  # The version alone does not say whose build it is: the stock project can build the same one.
+  for p in $SIX; do
+    want "$p comes from the full profile's repository" "$(fact "$f" from "$p")" "$FULL_ID"
+  done
   want "the lock list could be read" "$(fact "$f" locklist)" ok
   want "the full profile's repository is enabled" "$(fact "$f" repo)" enabled
 }

@@ -133,6 +133,13 @@ packaging/build-rpm.sh [--topdir DIR] [--compiled] [--no-lint]   # default DIR: 
   `kwin-devel` they cannot both get their best candidate, and mock's dnf runs with `best=1`. Its
   `%check` also refuses a navigation effect whose `built-against` record names another KWin than
   the pin's upstream version. `packaging/check-full-profile.sh` checks both.
+* A full build's packages sort above the stock project's builds of the same version: its dist tag
+  is `.fc44.full` (`%global dist %{?dist}.full`), so they are `X.Y.Z-1.fc44.full`, and a machine
+  that switches from the stock profile has the six replaced by the full project's builds (#197).
+  The suffix is in the dist tag rather than after it on the Release line, which keeps
+  `%{?dist}` at its end: `build-rpm.sh` rewrites the line to `RELEASE%{?dist}`, and Packit's
+  source packages find the dist tag only there. `packaging/check-full-profile.sh` checks the
+  releases, the Release line and the spec `build-rpm.sh` writes.
 * The source tarball is the working tree as it is (tracked plus untracked, not git-ignored files;
   `git ls-files --cached --others --exclude-standard`), stable order, owners 0, the revision's
   commit time as mtime. git is only read (`--no-optional-locks`: no index refresh).

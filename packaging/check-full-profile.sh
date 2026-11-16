@@ -6,9 +6,11 @@
 # never emits plasma-fusion-full; a full build with a matching exact pin emits it once; a full
 # build with a wrong-series pin fails; a full build without a pin fails; a full build requires
 # the fork's kwin-devel at exactly the pin, and its %check refuses a navigation effect built
-# against another KWin. Keeps the %{with full} gate exercised in CI without building the fork's
-# RPMs. The pin's pf suffix carries any number
-# of digits (check-version.sh accepts pf10), so the two-digit gates mirror the one-digit ones.
+# against another KWin; a full build's packages carry the release suffix .full and sort above
+# the stock build of the same version, also from the spec packaging/build-rpm.sh writes (#197).
+# Keeps the %{with full} gate exercised in CI without building the fork's RPMs. The pin's pf
+# suffix carries any number of digits (check-version.sh accepts pf10), so the two-digit gates
+# mirror the one-digit ones.
 #
 # A release sets the pin in the spec itself (%global kwin_full_pin), and a %global in the spec
 # wins over a --define on the command line. The gates therefore run on a copy of the spec
@@ -52,6 +54,85 @@ if rpmspec --define 'fedora 44' --with full -q "$spec" >/dev/null 2>&1; then
   rc=1
 else
   echo "ok   full without a pin fails the build"
+fi
+# A full build's packages sort above the stock build's of the same version. Both Copr projects
+# build the same source package, against different KWins; without the suffix their packages have
+# the same version-release, so a machine that switches from the stock profile keeps the stock
+# project's six, and with both projects enabled dnf can take either (#197).
+suffix() { # SPEC PIN DESC: the stock and the full build's release, their order, the requires
+  local spec=$1 pin=$2 stock full order version reqs how desc
+  # The dist tag as a build can have it: from the system's macros (mock, Copr, build-rpm.sh) and
+  # from the command line. The spec's %global dist wins over both.
+  for how in system command-line; do
+    local -a args=(--define 'fedora 44' --define "kwin_full_pin $pin")
+    [ "$how" = system ] || args+=(--define 'dist .fc44')
+    desc="$3, the $how dist tag"
+    stock=$(rpmspec "${args[@]}" -q --qf '%{RELEASE}\n' "$spec" 2>/dev/null | sort -u)
+    full=$(rpmspec "${args[@]}" --with full -q --qf '%{RELEASE}\n' "$spec" 2>/dev/null | sort -u)
+    case $stock in
+      '' | *.full*) echo "FAIL $desc: a stock build's release: '$stock'"; rc=1 ;;
+      *) echo "ok   $desc: a stock build's release has no suffix ($stock)" ;;
+    esac
+    if [ -n "$stock" ] && [ "$full" = "$stock.full" ]; then
+      echo "ok   $desc: a full build's packages carry the release suffix once ($full)"
+    else
+      echo "FAIL $desc: a full build's release: '$full' (stock '$stock')"
+      rc=1
+    fi
+    order=$(rpm --eval "%{lua: print(rpm.vercmp('${full:-x}', '${stock:-x}'))}" 2>/dev/null)
+    if [ "$order" = 1 ]; then
+      echo "ok   $desc: a full build sorts above the stock build of the same version"
+    else
+      echo "FAIL $desc: rpm.vercmp('$full', '$stock') = '$order', expected 1"
+      rc=1
+    fi
+    version=$(rpmspec --define 'fedora 44' -q --srpm --qf '%{VERSION}' "$spec" 2>/dev/null)
+    reqs=$(rpmspec "${args[@]}" --with full -q --requires "$spec" 2>/dev/null |
+      grep -cxE "plasma-fusion(-decoration|-settings|-navigation|-quicklook|-copytext)? = ${version//./\\.}-${full//./\\.}" ||
+      true)
+    if [ "$reqs" = 6 ]; then
+      echo "ok   $desc: the metapackage requires the six at the full build's release"
+    else
+      echo "FAIL $desc: the metapackage's requires on the six at $version-$full: found x$reqs of 6"
+      rc=1
+    fi
+  done
+}
+suffix "$spec" 6.8.2-3.fc44.pf2 "a test pin"
+# The Release line keeps the dist tag at its end, where both tools that rewrite the line look for
+# it: packaging/build-rpm.sh writes RELEASE%{?dist}, and Packit's source packages split the dist
+# tag off the end only (the specfile library). The full build's suffix lives in the dist tag.
+if grep -qE '^Release:[[:space:]]+[^[:space:]%]+%\{\?dist\}$' "$real"; then
+  echo "ok   the Release line ends with the dist tag, as build-rpm.sh and Packit rewrite it"
+else
+  echo "FAIL the Release line: '$(grep -m 1 '^Release:' "$real")', expected N%{?dist}"
+  rc=1
+fi
+# build-rpm.sh's own rewrite, taken from the script (the release's source package can come from
+# it, docs/RELEASING.md): a full build of the spec it writes still carries the suffix.
+rewrite=$(sed -n "/<<'PY'\$/,/^PY\$/p" "$ROOT/packaging/build-rpm.sh" | sed '1d;$d')
+if [ -z "$rewrite" ]; then
+  echo "FAIL packaging/build-rpm.sh: its rewrite of the spec was not found"
+  rc=1
+else
+  for r in 1 1.dirty202611160000; do
+    out=$work/rewritten-$r.spec
+    if ! python3 -I - "$spec" "$out" 0.8.0 "$r" "Mon Nov 16 2026" 0123456 <<<"$rewrite" 2>/dev/null; then
+      echo "FAIL build-rpm.sh's rewrite of the spec (release $r) failed"
+      rc=1
+      continue
+    fi
+    # The system's dist tag, as rpmbuild in mock or Copr has it.
+    stock=$(rpmspec --define 'fedora 44' -q --qf '%{RELEASE}\n' "$out" 2>/dev/null | sort -u)
+    full=$(rpmspec --define 'fedora 44' --with full --define 'kwin_full_pin 6.8.2-3.fc44.pf2' \
+      -q --qf '%{RELEASE}\n' "$out" 2>/dev/null | sort -u)
+    if [ "$stock" = "$r$(rpm --eval '%{?dist}')" ] && [ "$full" = "$stock.full" ]; then
+      echo "ok   build-rpm.sh's spec (release $r): a stock build $stock, a full build $full"
+    else
+      echo "FAIL build-rpm.sh's spec (release $r): a stock build '$stock', a full build '$full'"
+      rc=1
+    fi
+  done
 fi
 # The profile's record (plasma-fusion status reads it): written by a full build only, with the
 # pin and the fork tag it is built from, and shipped by the metapackage only.
@@ -137,6 +218,7 @@ if [ -n "$own" ]; then
   spec=$real
   query "the spec's own pin ($own): a stock build never emits the metapackage" 0
   query "the spec's own pin: a full build emits it once" 1 --with full
+  suffix "$real" "$own" "the spec's own pin"
   requires=$(rpmspec --define 'fedora 44' --with full -q --requires "$real" 2>/dev/null |
     grep -cxE "kwin(-common|-libs)? = ${own//./\\.}" || true)
   if [ "$requires" = 3 ]; then
