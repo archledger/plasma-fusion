@@ -34,6 +34,10 @@ step=${PF_FETCH_WAIT:-30}
 # An RPM package name: letters, digits and . _ + -, starting with a letter or a digit.
 [[ $name =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*$ ]] || usage "not a package name: '$name'"
 [[ $vr =~ ^[0-9][0-9A-Za-z.+~_]*-[0-9][0-9A-Za-z.+~_]*$ ]] || usage "not a version-release: '$vr'"
+# dnf reads NAME-VERSION-RELEASE.ARCH as that build for ARCH and saves its source package without
+# the architecture, a file this would never find: a release does not end with one of Fedora's.
+[[ ! $vr =~ \.(noarch|nosrc|src|x86_64|i[3-6]86|aarch64|ppc64le|s390x|riscv64|armv7hl)$ ]] ||
+    usage "not a version-release, it ends with an architecture: '$vr'"
 [[ -n $dir ]] || usage "no directory"
 # Decimal only: bash's arithmetic would read 08 as octal.
 [[ $attempts =~ ^[1-9][0-9]?$ ]] && (( attempts <= 20 )) || usage "not 1-20 attempts: '$attempts'"

@@ -9,7 +9,7 @@
 # Exit status: 0 every suite passed, 1 a suite failed in all its attempts, 3 setup or build failed,
 # 64 usage.
 set -euo pipefail
-here=$(cd "$(dirname "$0")" && pwd)
+here=$(cd "$(dirname "$0")" && pwd -P)
 variant=backport
 if [[ ${1:-} == --stock ]]; then
     variant=stock

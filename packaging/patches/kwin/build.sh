@@ -6,7 +6,7 @@
 # Exit status: 0 built; 3 Fedora's source package of that build could not be fetched (no mirror read
 # carries it: ../fetch-source.sh says why); 64 usage; another failure its own status.
 set -euo pipefail
-here=$(cd "$(dirname "$0")" && pwd)
+here=$(cd "$(dirname "$0")" && pwd -P)
 if (( $# < 1 || $# > 2 )); then
     echo "usage: $0 OUT_DIR [VERSION-RELEASE]" >&2
     exit 64

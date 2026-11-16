@@ -23,6 +23,12 @@ In a `registry.fedoraproject.org/fedora:FEDORA` container (podman): Fedora's sou
 `Patch9001` and up after Fedora's own, `Release` suffixed `.pf1` with a changelog entry, `rpmbuild -ba`.
 OUT_DIR gets every binary RPM, the source RPM, `rpmbuild.log`, `download.log` and `SHA256SUMS`.
 
+VERSION-RELEASE is Fedora's build, its release ending with the dist tag (`6.8.3-1.fc44`; numbers
+may follow, as in `1.fc44.1`). `build.sh` checks that before it starts the container and otherwise
+stops with status 64, also for a value with the architecture (`6.8.3-1.fc44.x86_64`). Where this
+lane's rebuild is installed, the default is that rebuild (`6.8.3-1.fc44.pf1`); it is refused with
+the build it came from, which is the one to name.
+
 The source RPM comes through `../fetch-source.sh`, shared with the KWin backport. Right after
 Fedora pushes a stable update, some mirrors' source repositories do not carry it yet, and dnf then
 exits 0 without a file. The helper judges the download by the file that arrived (that build, a

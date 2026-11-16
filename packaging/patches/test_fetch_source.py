@@ -8,6 +8,7 @@ runs it)."""
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -209,6 +210,16 @@ class FetchSourceTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(sleeps, waits)
 
+    def test_version_releases_fedora_uses_are_taken(self):
+        # The refusal of an architecture is of the last part only: a minor bump after the dist tag, a
+        # pre-release and another distribution's tag are version-releases.
+        for vr in ("6.8.3-1.fc44.1", "6.8.90-0.1.beta.fc45", "6.8.3-1.el10_1", "6.8.3-1.fc44.x86"):
+            with self.subTest(vr=vr):
+                result, calls, _ = self.fetch("ok", args=[NAME, vr, str(self.dest), "1"])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls[0].split()[-1], f"kwin-{vr}")
+                self.assertTrue((self.dest / f"kwin-{vr}.src.rpm").is_file())
+
     def test_dnf_s_output_is_standard_output_and_the_outcome_standard_error(self):
         # The callers keep standard output as download.log and show standard error in their log.
         result, _, _ = self.fetch("missing", "ok")
@@ -229,12 +240,18 @@ class FetchSourceTest(unittest.TestCase):
             (["../kwin", VR, dest], None), (["kw in", VR, dest], None),
             ([NAME, "6.8.3", dest], None), ([NAME, "6.8.3-1.fc44;id", dest], None), ([NAME, f"{VR} x", dest], None),
             ([NAME, "-1.fc44", dest], None), ([NAME, VR, ""], None),
+            # dnf reads NAME-VERSION-RELEASE.ARCH as that build for ARCH, and saves the source package
+            # without the architecture: a file this never finds.
+            ([NAME, f"{VR}.x86_64", dest], None), ([NAME, f"{VR}.aarch64", dest], None),
+            ([NAME, f"{VR}.noarch", dest], None), ([NAME, f"{VR}.src", dest], None), ([NAME, f"{VR}.i686", dest], None),
             ([NAME, VR, dest, "0"], None), ([NAME, VR, dest, "21"], None), ([NAME, VR, dest, "08"], None),
             ([NAME, VR, dest, "x"], None),
             ([NAME, VR, dest], "08"), ([NAME, VR, dest], "x"), ([NAME, VR, dest], "-1"),
         )
         for args, wait in cases:
             with self.subTest(args=args, wait=wait):
+                # Each case on its own: a case that wrongly fetches leaves the directory behind.
+                shutil.rmtree(self.dest, ignore_errors=True)
                 result, calls, _ = self.fetch("ok", args=args, wait=wait)
                 self.assertEqual(result.returncode, 64, result.stderr)
                 self.assertIn("usage:", result.stderr)
@@ -250,46 +267,119 @@ class FetchSourceTest(unittest.TestCase):
          'bash /fetch-source.sh plasma-workspace "$vr" /root > /out/download.log || exit 3'),
     )
 
+    # dnf's download command, wherever a command starts ('$(dnf', ';dnf', '/usr/bin/dnf'), after any
+    # options, their values or expansions (the helper's own 'dnf "${refresh[@]}" download'); not
+    # 'dnf-command(download)', the capability plasma-workspace's dnf install line asks for.
+    DIRECT_DOWNLOAD = r"(^|[\s;&|(/`])dnf5?(\s+[^\s;&|]+)*?\s+download(\s|$)"
+    # rpm installing or upgrading (-i, -ivh, -U, --install, --upgrade; not a query such as -qi), and
+    # its standard error thrown away.
+    RPM_INSTALL = r"(^|[\s;&|(/`])rpm\s(.*\s)?(-(?![A-Za-z]*q)[A-Za-z]*[iU][A-Za-z]*|--install|--upgrade)(\s|$)"
+    ERRORS_DROPPED = r"(2|&)>\s*/dev/null|>\s*/dev/null\s+2>&1|2>&-"
+
+    @staticmethod
+    def commands(text):
+        """The lines that are not comments, with backslash-continued lines joined."""
+        return [line for line in text.replace("\\\n", " ").splitlines() if not line.lstrip().startswith("#")]
+
+    def test_the_patterns_tell_the_commands_apart(self):
+        # The patterns the entry points are checked with, on the forms they have to tell apart.
+        direct = ('dnf download --srpm "kwin-$vr"', 'dnf download -q --source "plasma-workspace-$vr"',
+                  'dnf "${refresh[@]}" download --srpm x', 'dnf --refresh download x', 'dnf5 download x',
+                  'src=$(dnf download --srpm x)', 'true;dnf download x', '/usr/bin/dnf download x',
+                  'dnf --repo updates-source download x', 'cd /root && dnf download x')
+        not_direct = ("dnf install -y -q rpm-build 'dnf-command(download)' 'dnf-command(builddep)' >/dev/null",
+                      'bash /fetch-source.sh kwin "$vr" /root/source > /out/download.log || exit 3',
+                      'dnf install -y rpm-build dnf5-plugins python3 > /out/dependencies.log 2>&1',
+                      'dnf builddep -y "$spec" >> /out/dependencies.log 2>&1', 'dnf install x > /out/download.log')
+        dropped = ('rpm -i --define "_topdir $top" "x.src.rpm" 2>/dev/null', 'rpm -i x.src.rpm 2> /dev/null',
+                   'rpm -ivh x.src.rpm >/dev/null 2>&1', 'rpm -i x.src.rpm &>/dev/null', 'rpm --install x 2>/dev/null',
+                   'rpm -U x.rpm 2>&-', '/usr/bin/rpm -i x 2>/dev/null')
+        kept = ('rpm -i --define "_topdir $top" "plasma-workspace-$vr.src.rpm"', 'rpm -i x.src.rpm 2>>/out/rpm.log',
+                "rpm -qa --qf '%{NAME}\\n' | sort > /out/packages.txt", 'rpm -qi kwin 2>/dev/null',
+                'rpm -qpi x.rpm 2>/dev/null', "configure=$(rpm --define \"_topdir $top\" --eval '%{cmake_kf6}')",
+                'dnf builddep -y -q "$spec" >/dev/null')
+        for line in direct:
+            self.assertRegex(line, self.DIRECT_DOWNLOAD)
+        for line in not_direct:
+            self.assertNotRegex(line, self.DIRECT_DOWNLOAD)
+        for line in dropped:
+            self.assertTrue(re.search(self.RPM_INSTALL, line) and re.search(self.ERRORS_DROPPED, line), line)
+        for line in kept:
+            self.assertFalse(re.search(self.RPM_INSTALL, line) and re.search(self.ERRORS_DROPPED, line), line)
+
     def test_the_container_entry_points_fetch_through_it(self):
         # Each keeps dnf's output as download.log and stops as a setup failure (status 3) when the
-        # package is not there; none asks dnf directly, and none installs the source package with its
-        # errors thrown away (plasma-workspace's 'rpm -i ... 2>/dev/null' made that failure silent, #206).
+        # package is not there; none asks dnf directly, and none installs a package with rpm's errors
+        # thrown away (plasma-workspace's 'rpm -i ... 2>/dev/null' made that failure silent, #206).
         for entry, line in self.ENTRY_POINTS:
             with self.subTest(entry=entry):
-                text = (PATCHES / entry).read_text()
-                self.assertIn(line, text)
-                code = [code_line for code_line in text.splitlines() if not code_line.lstrip().startswith("#")]
-                # The download command itself, after dnf and its options or expansions (the helper's own
-                # 'dnf "${refresh[@]}" download'); not 'dnf-command(download)', the capability
-                # plasma-workspace's dnf install line asks for.
-                direct = r'(^|\s)dnf5?(\s+(-\S+|"[^"]*"|\$\S+))*\s+download(\s|$)'
-                self.assertEqual([c for c in code if re.search(direct, c)], [])
-                self.assertEqual([c for c in code if re.search(r"\brpm -i\b", c) and "2>/dev/null" in c], [])
+                code = self.commands((PATCHES / entry).read_text())
+                self.assertIn(line, [command.strip() for command in code], "the fetch is a command, not a comment")
+                self.assertEqual([c for c in code if re.search(self.DIRECT_DOWNLOAD, c)], [])
+                self.assertEqual([c for c in code if re.search(self.RPM_INSTALL, c) and re.search(self.ERRORS_DROPPED, c)],
+                                 [])
+
+    def run_lane(self, script, args, temporary, through=None):
+        """Run a lane's host script with a podman stand-in (it records its arguments and starts
+        nothing); its result and podman's arguments, or None when no container was started. THROUGH:
+        a symbolic link to the lane's directory to run the script by."""
+        recorded = Path(temporary) / "podman.args"
+        recorded.unlink(missing_ok=True)
+        lane, name = script.split("/")
+        directory = PATCHES / lane
+        if through is not None:
+            through.symlink_to(directory, target_is_directory=True)
+            directory = through
+        positional = [a for a in args if not a.startswith("--")]
+        flags = [a for a in args if a.startswith("--")]
+        result = subprocess.run(["bash", str(directory / name), *flags, str(Path(temporary) / "out"), *positional],
+                                capture_output=True, text=True, check=False, timeout=10,
+                                env=self.env(PODMAN_ARGS=str(recorded), PFV_DRI="0"))
+        return result, (recorded.read_text().splitlines() if recorded.exists() else None)
+
+    LANES = (
+        ("kwin/build.sh", ["6.7.5-1.fc44"]),
+        ("kwin/native-tests.sh", ["6.7.5-1.fc44"]),
+        ("kwin/native-tests.sh", ["--stock", "6.7.5-1.fc44"]),
+        ("plasma-workspace/build.sh", ["6.8.3-1.fc44", "44"]),
+    )
 
     def test_each_lane_mounts_the_helper_into_its_container(self):
-        # The scripts run with a podman stand-in that records its arguments and starts nothing: the
-        # helper has to be among the read-only mounts, at the path the entry points call.
-        runs = (
-            ("kwin/build.sh", ["6.7.5-1.fc44"]),
-            ("kwin/native-tests.sh", ["6.7.5-1.fc44"]),
-            ("kwin/native-tests.sh", ["--stock", "6.7.5-1.fc44"]),
-            ("plasma-workspace/build.sh", ["6.8.3-1.fc44", "44"]),
-        )
-        for script, args in runs:
-            with self.subTest(script=script, args=args), tempfile.TemporaryDirectory() as temporary:
-                recorded = Path(temporary) / "podman.args"
-                output = Path(temporary) / "out"
-                positional = [a for a in args if not a.startswith("--")]
-                flags = [a for a in args if a.startswith("--")]
-                subprocess.run(["bash", str(PATCHES / script), *flags, str(output), *positional],
-                               capture_output=True, text=True, check=False, timeout=10,
-                               env=self.env(PODMAN_ARGS=str(recorded), PFV_DRI="0"))
-                self.assertTrue(recorded.exists(), f"{script} did not start its container")
-                words = recorded.read_text().splitlines()
-                mounts = [words[i + 1] for i, word in enumerate(words[:-1]) if word == "-v"]
-                helper = [m for m in mounts if m.endswith(":/fetch-source.sh:ro,z")]
-                self.assertEqual(len(helper), 1, mounts)
-                self.assertEqual(os.path.realpath(helper[0].rsplit(":/fetch-source.sh", 1)[0]), str(FETCH))
+        # The helper has to be among the read-only mounts given before the image, at the path the
+        # entry points call, also when the lane's directory is reached through a symbolic link.
+        for script, args in self.LANES:
+            for linked in (False, True):
+                with self.subTest(script=script, args=args, linked=linked), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    through = Path(temporary) / "lane" if linked else None
+                    result, words = self.run_lane(script, args, temporary, through)
+                    self.assertIsNotNone(words, f"{script} did not start its container: {result.stderr}")
+                    image = next(i for i, word in enumerate(words) if word.startswith("registry.fedoraproject.org/fedora:"))
+                    mounts = [words[i + 1] for i, word in enumerate(words[:image - 1]) if word == "-v"]
+                    helper = [m for m in mounts if m.endswith(":/fetch-source.sh:ro,z")]
+                    self.assertEqual(len(helper), 1, mounts)
+                    self.assertEqual(os.path.realpath(helper[0].rsplit(":/fetch-source.sh", 1)[0]), str(FETCH))
+                    self.assertTrue(Path(helper[0].rsplit(":/fetch-source.sh", 1)[0]).is_file(), helper[0])
+
+    def test_plasma_workspace_refuses_a_build_it_cannot_fetch_before_starting_a_container(self):
+        # Fedora's build, the release ending with its dist tag, is checked before the container starts
+        # (as the KWin scripts check theirs): usage (64), not a fetch failure (3) after the container's
+        # setup. The lane's own rebuild, the default where it is installed, is named as such.
+        cases = (("6.8.3", "not a Fedora build"), ("6.8.3-1", "not a Fedora build"),
+                 ("6.8.3-1.fc44.x86_64", "not a Fedora build"), ("-1.fc44", "not a Fedora build"),
+                 ("6.8.3-1.fc44;id", "not a Fedora build"), ("6.8.3-1.fc44.pf1", "came from (6.8.3-1.fc44)"))
+        for vr, says in cases:
+            with self.subTest(vr=vr), tempfile.TemporaryDirectory() as temporary:
+                result, words = self.run_lane("plasma-workspace/build.sh", [vr, "44"], temporary)
+                self.assertEqual(result.returncode, 64, result.stderr)
+                self.assertIn(says, result.stderr)
+                self.assertIsNone(words, "a container was started")
+                self.assertFalse((Path(temporary) / "out").exists(), "OUT_DIR was made")
+        for vr in ("6.8.3-1.fc44", "6.8.3-1.fc44.1"):
+            with self.subTest(vr=vr), tempfile.TemporaryDirectory() as temporary:
+                _, words = self.run_lane("plasma-workspace/build.sh", [vr, "44"], temporary)
+                self.assertIsNotNone(words, f"{vr} did not start the container")
+                self.assertEqual(words[-1], vr)
 
 
 if __name__ == "__main__":
