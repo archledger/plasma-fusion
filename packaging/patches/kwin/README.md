@@ -78,12 +78,17 @@ packages are accepted; other KWin versions need a reviewed backport rather than 
 rebuild. Builds use a Fedora 44 container,
 four CPUs and an 8 GiB memory limit. The builder:
 
-1. Runs the offline packaging checks, then downloads Fedora's exact source RPM (`fetch-source.sh`)
-   and retains it as `fedora-kwin-*.src.rpm`. A stable update reaches Fedora's source repositories
-   on some mirrors hours after the binary ones, and dnf then exits 0 without a file, so the
-   download is judged by the file that arrived (that build, a source package) and tried up to four
-   times, with fresh metadata and waits of 30, 60 and 90 s between. When no attempt gets it the
-   build stops there with status 3. `native-tests.sh` fetches it the same way.
+1. Runs the offline packaging checks, then downloads Fedora's exact source RPM and retains it as
+   `fedora-kwin-*.src.rpm`. The download goes through `../fetch-source.sh`, which the
+   plasma-workspace build uses too. A stable update reaches Fedora's source repositories on some
+   mirrors hours after the binary ones, and dnf then exits 0 without a file, so the download is
+   judged by the file that arrived (that build, a source package) and tried up to four times, with
+   fresh metadata and waits of 30, 60 and 90 s between. When no attempt gets it the build stops
+   there with status 3, and the helper names the two causes: the build is newer than the mirrors,
+   which usually clears within the day, or Fedora's repositories no longer carry it, because their
+   updates keep only each package's newest build (`dnf repoquery --srpm kwin` lists the ones they
+   carry). The second is the default VERSION-RELEASE's case, the installed KWin, on a machine that
+   has not taken Fedora's latest update. `native-tests.sh` fetches it the same way.
 2. Adds `Patch9001` (and the initializer prerequisite as `Patch9002` on 6.8.2 and 6.8.3),
    preserving Fedora's existing patches and `%autosetup -p1`.
 3. Appends `.pf1` to `Release`, adds a changelog entry, installs build dependencies inside the
@@ -139,11 +144,16 @@ rather than infer it from the package version.
 
 ```sh
 python3 -m unittest discover -s packaging/patches/kwin -v
-shellcheck packaging/patches/kwin/*.sh
-ruff check packaging/patches/kwin
+python3 packaging/patches/test_fetch_source.py -v
+shellcheck -x -S warning packaging/patches/fetch-source.sh packaging/patches/kwin/*.sh
+ruff check packaging/patches
 ```
 
-The offline suite checks the spec transformation, preserved Fedora patches and changelog,
+`test_fetch_source.py` checks the source fetch this lane shares with the plasma-workspace build
+(`../fetch-source.sh`) and its use in both; the `build` workflow runs it on every pull request.
+ShellCheck runs at the severity `tools/checks/shellcheck.sh` uses.
+
+The lane's own offline suite checks the spec transformation, preserved Fedora patches and changelog,
 incompatible-spec rejection, supported version bounds, output-directory preservation and the
 render device the native tests hand to KWin 6.8. The
 backported native tests cover delayed tile/untile commits, notification ordering on X11 and

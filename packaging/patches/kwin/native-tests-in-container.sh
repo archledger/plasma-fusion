@@ -27,8 +27,9 @@ python3 -B -m unittest discover -s /patches -v
 mkdir -p /root/source
 cd /root/source
 # Fedora's source package of exactly this build, checked on arrival: a stable update can reach the
-# source mirrors hours after the binary ones (fetch-source.sh, issue #203).
-bash /patches/fetch-source.sh "$vr" /root/source > /out/download.log || exit 3
+# source mirrors hours after the binary ones (packaging/patches/fetch-source.sh, which native-tests.sh
+# mounts; issue #203).
+bash /fetch-source.sh kwin "$vr" /root/source > /out/download.log || exit 3
 source="kwin-$vr.src.rpm"
 rpm -i --define "_topdir $top" "$source"
 if [[ $variant == backport ]]; then

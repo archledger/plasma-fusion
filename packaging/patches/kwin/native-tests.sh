@@ -9,7 +9,7 @@
 # Exit status: 0 every suite passed, 1 a suite failed in all its attempts, 3 setup or build failed,
 # 64 usage.
 set -euo pipefail
-here=$(cd "$(dirname "$0")" && pwd)
+here=$(cd "$(dirname "$0")" && pwd -P)
 variant=backport
 if [[ ${1:-} == --stock ]]; then
     variant=stock
@@ -42,5 +42,6 @@ fi
 podman run --rm --init --cpus=4 --memory=8g \
     "${devices[@]}" -e "PFV_RENDER_DEVICE=$device" \
     -v "$root/tools/vsession/render-device.sh":/render-device.sh:ro,z \
+    -v "${here%/*}/fetch-source.sh":/fetch-source.sh:ro,z \
     -v "$here":/patches:ro,z -v "$out":/out:Z \
     registry.fedoraproject.org/fedora:44 bash /patches/native-tests-in-container.sh "$vr" "$variant"

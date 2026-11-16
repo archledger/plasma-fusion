@@ -16,7 +16,7 @@
 # A Fedora KWin other than 6.7.5, 6.8.2 or 6.8.3 fails the run: the backport then needs a reviewed
 # update. So does a build whose source package is on none of the mirrors the first job reads, as for
 # some hours after Fedora's push: every job that builds fetches it with
-# packaging/patches/kwin/fetch-source.sh, which retries with fresh metadata and then says so (#203).
+# packaging/patches/fetch-source.sh, which retries with fresh metadata and then says so (#203).
 # The rebuilt packages never leave the runner: only logs and results are uploaded.
 
 name: kwin-backport
@@ -25,6 +25,7 @@ on:
   pull_request:
     paths:
       - "packaging/patches/kwin/**"
+      - "packaging/patches/fetch-source.sh"
       - "packages/kwin/scripts/plasmafusion-placement/**"
       - "packages/kwin/tests/vsession/scenario-placement.sh"
       - "packages/kwin/tests/vsession/scenario-placement-pending.sh"
@@ -37,6 +38,7 @@ on:
     branches: ["main"]
     paths:
       - "packaging/patches/kwin/**"
+      - "packaging/patches/fetch-source.sh"
       - "packages/kwin/scripts/plasmafusion-placement/**"
       - "packages/kwin/tests/vsession/scenario-placement.sh"
       - "packages/kwin/tests/vsession/scenario-placement-pending.sh"
@@ -90,7 +92,7 @@ jobs:
       - name: Its source package (Fedora 44's updates-source)
         env:
           VR: ${{ steps.query.outputs.vr }}
-        run: bash packaging/patches/kwin/fetch-source.sh "$VR" "$RUNNER_TEMP/source"
+        run: bash packaging/patches/fetch-source.sh kwin "$VR" "$RUNNER_TEMP/source"
 
   native:
     name: "KWin tests, ${{ matrix.variant }} (Fedora's configuration)"
