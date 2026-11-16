@@ -122,12 +122,14 @@ Switching off (recorded first in `gate/off`, then written):
 Added by DEVICE-1 (2026-09-30); see `device.md`. Tests: `tests/gate-unit.sh` cases `t`, `t3`, `t4`, `t5`.
 
 Turning back on happens when a part's needs hold again at a login, or when `fusion-config.sh` runs
-(`deploy`). A key is put back only while it still holds what the check wrote; anything changed
-since is left alone. The decoration is the exception: every Global Theme apply (also the automatic
-light/dark switch and the quick-settings Dark tile) removes the user's decoration keys, so the
-compiled decoration comes back whenever the title bars are still a Plasma Fusion Aurorae theme (and
-the plugin is installed), written to the user file unless kdedefaults already names it. The
-drop-in comes back only when it is not there already and the lock-screen package is installed.
+(`deploy`; `plasma-fusion update` runs it, and so does the installer after a profile switch that
+changes KWin's upstream version, installer.md). A key is put back only while it still holds what the
+check wrote; anything changed since is left alone. The decoration is the exception: every Global
+Theme apply (also the automatic light/dark switch and the quick-settings Dark tile) removes the
+user's decoration keys, so the compiled decoration comes back whenever the title bars are still a
+Plasma Fusion Aurorae theme (and the plugin is installed), written to the user file unless
+kdedefaults already names it. The drop-in comes back only when it is not there already and the
+lock-screen package is installed.
 
 A missing plugin (added 2026-09-30 with LAYOUT-1, whose Global Themes name the compiled decoration
 in their defaults): while `org.plasmafusion.decoration` is named, by the user or by kdedefaults, and

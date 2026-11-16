@@ -33,6 +33,14 @@ case \$1 in
   -E) [ -n \"\${FAKE_FEDORA:-}\" ] && echo \"\$FAKE_FEDORA\" || echo %fedora; exit 0 ;;
   -q) fmt=\$3; shift 3
       set -- \"\$1\"; $LOOKUP
+      # FAKE_KWIN_FULL: the KWin set once the metapackage is installed (a switch that changes
+      # KWin's version); FAKE_KWIN_STOCK: the KWin set once distro-sync has run (a restore to
+      # another version than the fork's). Both whole versions, as a leading + marks above.
+      case \$1 in kwin | kwin-common | kwin-libs)
+        if [ -n \"\${FAKE_KWIN_STOCK:-}\" ] && [ -e \"\$FAKE_BIN/distro-synced\" ]; then v=+\$FAKE_KWIN_STOCK
+        elif [ -n \"\${FAKE_KWIN_FULL:-}\" ] && [ -e \"\$FAKE_BIN/full-installed\" ]; then v=+\$FAKE_KWIN_FULL
+        fi ;;
+      esac
       [ -n \"\$v\" ] || { echo \"package \$1 is not installed\"; exit 1; }
       # A leading + marks a value that is a whole version already (the fork's kwin
       # 6.8.2-3.fc44.pf3, in the --full cases); as real rpm does, the pf distag lives in the
@@ -92,6 +100,7 @@ case \" \$* \" in *' repoquery '*kwin-*)
   [ -z \"\${FAKE_SYNC_MISSES:-}\" ] && echo available
   exit \${FAKE_REPOQUERY_RC:-0} ;; esac
 case \" \$* \" in *' install '*) $INSTALLS ;; esac
+case \" \$* \" in *' install '*plasma-fusion-full*) : >\"\$FAKE_BIN/full-installed\" ;; esac
 case \" \$* \" in *' upgrade '*)
   for a; do
     case \$a in -* | upgrade) continue ;; esac
@@ -192,7 +201,7 @@ run() {
   rm -f "$CASE/log.updates"
   OUT=$(env -i HOME="$CASE/home" PATH="$FB:/usr/bin:/bin" FAKE_BIN="$FB" FAKE_LOG="$CASE/log" \
     FAKE_VERSIONS="${VERSIONS:-}" FAKE_FEDORA="${FEDORA:-}" FAKE_KWIN_RUNNING="${KWIN_RUNNING:-}" FAKE_APT_SIM="${APT_SIM:-}" FAKE_APT_SIM_RC="${APT_SIM_RC:-0}" FAKE_APT_SIM_ERR="${APT_SIM_ERR:-}" \
-    FAKE_LOCKS="${LOCKS:-}" \
+    FAKE_LOCKS="${LOCKS:-}" FAKE_KWIN_FULL="${KWIN_FULL:-}" FAKE_KWIN_STOCK="${KWIN_STOCK:-}" \
     FAKE_APT_UPDATE_FAILS="${APT_UPDATE_FAILS:-0}" \
     FAKE_UID="${UID_FAKE:-1000}" FAKE_PF_VERSION=$V GNUPGHOME="$BASE/no-such-keyring" \
     ${SESSION:+XDG_CURRENT_DESKTOP=KDE XDG_SESSION_TYPE=wayland DBUS_SESSION_BUS_ADDRESS=unix:path=/dev/null XDG_RUNTIME_DIR=$CASE} \
@@ -223,7 +232,7 @@ for SHNAME in "${shells[@]}"; do
   sh=$(command -v "$SHNAME") || { echo "SKIP $SHNAME (not installed)"; continue; }
   CASE=$BASE/$SHNAME
   mkdir -p "$CASE/home"
-  DEV=1 SESSION=1 VERSIONS=$P675 FEDORA=44 KWIN_RUNNING=6.7.5 RELEASE='' UID_FAKE=1000 EXTRA_ENV='' SCRIPT=''
+  DEV=1 SESSION=1 VERSIONS=$P675 FEDORA=44 KWIN_RUNNING=6.7.5 RELEASE='' UID_FAKE=1000 EXTRA_ENV='' SCRIPT='' KWIN_FULL='' KWIN_STOCK=''
 
   # unstamped copy outside test mode
   osr fedora "" 44 "" "Fedora Linux 44"
@@ -421,6 +430,13 @@ for SHNAME in "${shells[@]}"; do
   expect "a stock profile switches to full" has_log "dnf -y install plasma-fusion-full"
   expect "  without a setup rerun" bash -c '! grep -q "^plasma-fusion \(setup\|update\)" <<<"$0"' "$LOG"
   expect "  and says the setup is unchanged" has_out "unchanged"
+  # A switch that changes KWin's version (Fedora's KWin newer than the pin, #198): the login check
+  # compares it, so the new set is recorded right away rather than at a safe-mode login.
+  VERSIONS="$P675 plasma-fusion=0.2.0" KWIN_FULL=6.7.4-3.fc44.pf3 EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" \
+    run "$sh" $FED -- --full --yes
+  expect "a switch that changes KWin's version records the new set" has_log "plasma-fusion update"
+  expect "  after the packages" bash -c 'i=$(grep -n "^dnf -y install plasma-fusion-full" <<<"$0" | cut -d: -f1); u=$(grep -n "^plasma-fusion update" <<<"$0" | cut -d: -f1); [ -n "$i" ] && [ -n "$u" ] && [ "$i" -lt "$u" ]' "$LOG"
+  expect "  saying why" has_out "KWin 6.7.5 is now the fork's 6.7.4"
   VERSIONS="$P675 plasma-fusion=0.2.0 plasma-fusion-full=0.2.0 kwin=+6.8.2-3.fc44.pf3" KWIN_RUNNING=6.8.2-3.fc44.pf3 \
     EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44" run "$sh" $FED -- --full --yes
   expect "an installed full profile is left alone" [ "$RC" = 0 ]
@@ -440,10 +456,11 @@ for SHNAME in "${shells[@]}"; do
   expect "  and says so" has_out "not installed"
   expect "  changing nothing" no_change
   # The restore record these tests restore from (the --full tests above prove the writing).
-  plant_record() {
+  plant_record() { # [EVR]: the stock KWin set --full recorded (6.7.5-1.fc44)
+    local evr=${1:-6.7.5-1.fc44}
     mkdir -p "$CASE/root/var/lib/plasma-fusion"
-    printf '# Plasma Fusion full profile: the stock KWin before install.sh --full (undo: --full-restore)\nfedora=44\nkwin=6.7.5-1.fc44\nkwin-common=6.7.5-1.fc44\nkwin-libs=6.7.5-1.fc44\n' \
-      >"$CASE/root/var/lib/plasma-fusion/full-restore.txt"
+    printf '# Plasma Fusion full profile: the stock KWin before install.sh --full (undo: --full-restore)\nfedora=44\nkwin=%s\nkwin-common=%s\nkwin-libs=%s\n' \
+      "$evr" "$evr" "$evr" >"$CASE/root/var/lib/plasma-fusion/full-restore.txt"
   }
   FULLV="$P675 plasma-fusion=0.2.0 plasma-fusion-full=0.2.0 kwin=+6.8.2-3.fc44.pf3"
   plant_record
@@ -459,6 +476,38 @@ for SHNAME in "${shells[@]}"; do
   expect "  then the repository" has_log "dnf -y copr remove archledger/plasma-fusion-full"
   expect "  then syncs KWin back to the recorded EVRs" has_log "dnf -y distro-sync kwin-6.7.5-1.fc44 kwin-common-6.7.5-1.fc44 kwin-libs-6.7.5-1.fc44"
   expect "  in that order" bash -c 'v=$(grep -n "^dnf -y versionlock delete" <<<"$0" | cut -d: -f1); m=$(grep -n "^dnf -y remove --no-autoremove plasma-fusion-full" <<<"$0" | cut -d: -f1); s=$(grep -n "^dnf -y distro-sync" <<<"$0" | cut -d: -f1); [ -n "$v" ] && [ "$v" -lt "$m" ] && [ "$m" -lt "$s" ]' "$LOG"
+  expect "  and records nothing when KWin keeps its version" bash -c '! grep -q "^plasma-fusion update" <<<"$0"' "$LOG"
+  # A restore to another KWin version than the fork's (#198): in the session the new set is
+  # recorded for the login check; outside one the installer says what to run there.
+  plant_record
+  VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 KWIN_STOCK=6.7.5-1.fc44 run "$sh" $FED -- --full-restore --dry-run
+  expect "--full-restore plans the recording when the record shows KWin's version change" \
+    has_out "  plasma-fusion update   (KWin 6.8.2 becomes the recorded 6.7.5: records it for the login check)"
+  expect "  as a step of this run, in the session" bash -c '! grep -qF "then, in your Plasma session" <<<"$0"' "$OUT"
+  plant_record
+  SESSION='' VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --dry-run
+  expect "--full-restore outside a session plans the recording for the user's session" \
+    has_out "  then, in your Plasma session: plasma-fusion update   (KWin 6.8.2 becomes the recorded 6.7.5"
+  VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 KWIN_STOCK=6.7.5-1.fc44 run "$sh" $FED -- --full-restore --yes
+  expect "--full-restore records the new set when KWin's version changes" has_log "plasma-fusion update"
+  expect "  after the sync back" bash -c 's=$(grep -n "^dnf -y distro-sync" <<<"$0" | cut -d: -f1); u=$(grep -n "^plasma-fusion update" <<<"$0" | cut -d: -f1); [ -n "$s" ] && [ -n "$u" ] && [ "$s" -lt "$u" ]' "$LOG"
+  expect "  saying why" has_out "KWin 6.8.2 is now the stock 6.7.5"
+  plant_record
+  SESSION='' VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 KWIN_STOCK=6.7.5-1.fc44 run "$sh" $FED -- --full-restore --yes
+  expect "--full-restore outside a session records nothing" bash -c '! grep -q "^plasma-fusion update" <<<"$0"' "$LOG"
+  expect "  and says what to run in the session" has_out "in your Plasma session, run: plasma-fusion update"
+  # After Fedora's push of a newer KWin (6.8.3 against the pin's 6.8.2): the record holds the stock
+  # KWin of the pin's version, which the repositories no longer carry, so the plan cannot name a
+  # change; the fallback lands on the newer stock, and that is what gets recorded.
+  plant_record 6.8.2-1.fc44
+  VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --dry-run
+  expect "--full-restore with a record of the pin's version plans the recording only if the sync changes it" \
+    has_out "  plasma-fusion update   (if the sync changes KWin's version: records it for the login check)"
+  plant_record 6.8.2-1.fc44
+  EXTRA_ENV="FAKE_SYNC_MISSES=1" VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 KWIN_STOCK=6.8.3-1.fc44 \
+    run "$sh" $FED -- --full-restore --yes
+  expect "  and records the newer stock KWin the fallback lands on" has_log "plasma-fusion update"
+  expect "  saying why" has_out "KWin 6.8.2 is now the stock 6.8.3"
   plant_record
   VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 EXTRA_ENV="PLASMA_FUSION_DEV_FULL_REPO=$CAND" run "$sh" $FED -- --full-restore --yes
   expect "--full-restore removes the candidates project when that is the one it was given" has_log "dnf -y copr remove $CAND"

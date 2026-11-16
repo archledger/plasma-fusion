@@ -128,6 +128,14 @@ pf_installed() {
 
 # The installed epoch-version-release of a package (the copr lane; empty when not installed).
 pkg_evr() { rpm -q --qf '%{EVR}\n' "$1" 2>/dev/null | grep -E '^[0-9]' | head -n 1; }
+# The upstream version of an EVR (6.8.2-3.fc44.pf5 is 6.8.2): what the login check compares, so a
+# profile switch that changes it has the new set recorded (#198).
+upstream_of() { evr_up=${1#*:}; printf '%s\n' "${evr_up%%-*}"; }
+# A terminal in the user's Plasma session, where plasma-fusion update can record the set.
+in_plasma_session() {
+  case "${XDG_CURRENT_DESKTOP:-}" in *KDE*) : ;; *) return 1 ;; esac
+  [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ] && has plasma-fusion
+}
 # The fork's KWin alone carries the pf distag (6.8.2-3.fc44.pf3); stock and fork report the same
 # version string, so the distag - not a version comparison - is what tells them apart.
 kwin_is_fork() {
@@ -492,7 +500,7 @@ plan() {
   if [ "$PACKAGE_ONLY" = 1 ]; then
     echo "  then, as each user in their Plasma session: plasma-fusion setup"
   elif [ "$FULL" = 1 ] && [ -n "$installed" ]; then
-    echo "  plasma-fusion update   (only if the full profile brings newer packages; your setup otherwise stays)"
+    echo "  plasma-fusion update   (only if the full profile brings newer packages, or another KWin version for the login check to record; your setup otherwise stays)"
   else
     echo "  plasma-fusion $SETUP_CMD$SETUP_FLAGS   (as you, in this session; it backs up first)"
   fi
@@ -939,10 +947,34 @@ main() {
     echo "  sudo dnf -y copr remove $FULL_REPO   (the full profile's repository)" >&2
     echo "  sudo dnf -y distro-sync $FULL_KWIN_PKGS   (back to the stock KWin$rec)" >&2
     echo "  the six Plasma Fusion packages stay installed (they run on stock KWin)" >&2
+    # The login check compares KWin's upstream version, so a restore that changes it has the new
+    # set recorded, as plasma-fusion update does: here in the user's Plasma session, by the user
+    # there otherwise (#198). The record names the sync's target, but a recorded KWin the
+    # repositories no longer carry gives way to the current stock (full_restore_kwin): the step
+    # follows what the sync did, and the plan names a change only where the record shows one.
+    rec_kwin=$(full_recorded | tr ',' '\n' | sed -n 's/^kwin=//p')
+    step="  plasma-fusion update"
+    in_plasma_session || step="  then, in your Plasma session: plasma-fusion update"
+    if [ -n "$rec_kwin" ] && [ "$(upstream_of "$rec_kwin")" != "$(upstream_of "$(pkg_evr kwin)")" ]; then
+      echo "$step   (KWin $(upstream_of "$(pkg_evr kwin)") becomes the recorded $(upstream_of "$rec_kwin"): records it for the login check)" >&2
+    else
+      echo "$step   (if the sync changes KWin's version: records it for the login check)" >&2
+    fi
     [ "$DRY" = 1 ] && { say "Dry run: nothing was changed."; exit 0; }
     consent
     $SUDO -v || die "sudo failed."
+    kwin_was=$(pkg_evr kwin)
     full_restore_kwin
+    kwin_now=$(pkg_evr kwin)
+    if [ "$(upstream_of "$kwin_was")" != "$(upstream_of "$kwin_now")" ]; then
+      if in_plasma_session; then
+        say "KWin $(upstream_of "$kwin_was") is now the stock $(upstream_of "$kwin_now"): recording it for the login check"
+        plasma-fusion update </dev/null ||
+          die "recording the stock KWin stopped; until it is recorded, a login is in safe mode (KDE's own lock screen and desktop, the Aurorae title bars): run plasma-fusion update in your Plasma session."
+      else
+        say "KWin $(upstream_of "$kwin_was") is now the stock $(upstream_of "$kwin_now"): in your Plasma session, run: plasma-fusion update (until then a login is in safe mode: KDE's own lock screen and desktop, the Aurorae title bars)."
+      fi
+    fi
     say "Plasma Fusion now runs on stock KWin. Log out and in once."
     exit 0
   fi
@@ -998,6 +1030,7 @@ main() {
   else
     if [ "$FULL" = 1 ]; then
       say "installing the full profile"
+      kwin_was=$(pkg_evr kwin)
       full_swap_packages
     else
       say "installing the packages"
@@ -1015,9 +1048,16 @@ main() {
     exit 0
   fi
   if [ "$FULL" = 1 ] && [ -n "$installed" ]; then
+    kwin_now=$(pkg_evr kwin)
     if [ "$(pf_installed plasma-fusion)" != "$installed" ]; then
       plasma-fusion update </dev/null ||
         die "the package update stopped; your previous desktop is in the backup: plasma-fusion restore --latest"
+    elif [ "$(upstream_of "$kwin_was")" != "$(upstream_of "$kwin_now")" ]; then
+      # The login check compares KWin's upstream version: Fedora's KWin newer or older than the
+      # pin's would otherwise have the next login in safe mode (#198).
+      say "KWin $(upstream_of "$kwin_was") is now the fork's $(upstream_of "$kwin_now"): recording it for the login check"
+      plasma-fusion update </dev/null ||
+        die "recording the fork's KWin stopped; until it is recorded, a login is in safe mode (KDE's own lock screen and desktop, the Aurorae title bars): run plasma-fusion update in your Plasma session."
     else
       say "your Plasma Fusion setup is unchanged (the same packages on the pinned KWin)."
     fi

@@ -92,7 +92,10 @@ not `--yes` (a scripted install stays stock), not without a terminal, not an ins
 4. locks the KWin set (`dnf versionlock add kwin kwin-common kwin-libs`; dnf5 pins each package at
    its just-installed version), so a distribution update can never half-upgrade the set;
 5. runs the unchanged per-user setup. On a stock install it switches only the compositor: no setup
-   rerun (a `plasma-fusion update` runs only if the transaction moved the packages).
+   rerun, except `plasma-fusion update` when the transaction moved the packages or changed KWin's
+   upstream version. The login check compares that version (gate.md), so when Fedora's KWin is
+   another version than the pin's (Fedora's 6.8.3 against the fork's 6.8.2) the new set is
+   recorded right away, and the next login is not in safe mode (#198).
 
 Already on the full profile, `--full` says so and does nothing. A fork KWin without the metapackage
 (an unsupported manual state) is refused with the way back to stock.
@@ -101,6 +104,15 @@ Already on the full profile, `--full` says so and does nothing. A fork KWin with
 within-series path): the version lock goes first — it would hold KWin at the old fork while the
 new metapackage requires the new one — the upgrade takes the six with `plasma-fusion-full`, and
 the lock comes back at the newly installed fork.
+
+When the restore below changes KWin's upstream version (the stock KWin is another version than the
+pin's), it records the new set the same way: `plasma-fusion update` after the sync, in the user's
+Plasma session. Run outside one (from a text console, to recover), it says to run `plasma-fusion
+update` there, and until then a login is in safe mode (gate.md: KDE's own lock screen and desktop,
+the Aurorae title bars). The step follows what the sync did: the record names the sync's target,
+but a recorded KWin the repositories no longer carry gives way to the current stock, as after
+Fedora pushes a newer KWin. So the plan names the change where the record shows one, and the step
+as conditional otherwise; outside a session it names the step as the user's, to run there.
 
 `--full-restore` (no stamp needed — a system on the full profile must always get back, including
 on a Fedora release the release's stamp does not carry, where the stock lanes stay refused):
