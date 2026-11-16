@@ -426,12 +426,16 @@ if [ "$mode" = fresh ]; then
   has "status: the stock profile" 41-status.log 'profile: stock \(the distribution.s KWin\)'
   has "status: none of the fork's capabilities" 41-status.log "capabilities: none of the fork's \(every feature uses its stock fallback\)"
   # While Fedora's KWin is another version than the pin's (#198), the parts built for the pin's
-  # KWin are due for a rebuild on stock KWin, and status says so for the decoration and the
-  # navigation part; nothing else.
+  # KWin are due for a rebuild on stock KWin, and status says so; nothing else. The navigation
+  # part is built against the pin (the full build requires it), so its note is always there. The
+  # decoration's depends on the KDecoration the build was compiled against (#194): a full build
+  # made after Fedora's update has the newer one, and no note.
   pin_up=$(upstream "$(fact 12-facts.txt pin)") stock_up=$(upstream "${STOCK[kwin]}")
   if [ "$pin_up" = "$stock_up" ]; then
     hasnot "status: no note" 41-status.log '^  note:'
   else
+    hasf "status: the navigation part's rebuild note (built for the pin's KWin $pin_up)" 41-status.log \
+      "  note: the navigation part was built against $pin_up, KWin is $stock_up: update or rebuild that package"
     others=$(grep -a '^  note:' "$OUT/41-status.log" |
       grep -a -v -E "^  note: the (decoration|navigation) part was built against [0-9.]+, KWin is ${stock_up//./\\.}: update or rebuild that package\$" || true)
     want "status: no note but the rebuild notes of the parts built for KWin $pin_up" "$others" ""

@@ -182,7 +182,7 @@ Fusion:
 | the new login | status: the full profile, the three capabilities, no note of any kind, the login check switched nothing off; the look-and-feel is Plasma Fusion's |
 | the features on the fork | the navigation effect is not idle and follows the gesture lock (its two journal lines); the switcher is held open by a real Alt (a screenshot is taken then, for the eye: nothing reads it) and another of the three test windows is in front afterwards; the tiler's shortcut starts a session and ends it; no script error in the journal of the session's KWin (KWin's own QML included); no crash |
 | `--full-restore` | the dry run names the three recorded versions and changes nothing; then the three packages at the recorded versions, no lock (in a lock list that was read), no metapackage, no repository, no record, the six packages unchanged; status before the new login: the stock profile and the note to log in again, not the one about a fork installed by hand |
-| the new login on stock KWin | status: the stock profile, none of the fork's capabilities, no note; the session is still Plasma Fusion's; the navigation effect stays idle and says why, and nothing follows the gesture lock. While Fedora's KWin is another version than the pin's (#198), the only notes allowed are the decoration's and the navigation part's rebuild notes (they were built for the pin's KWin), and the navigation effect's reason is that version ("built for KWin 6.8.2, running 6.8.3"), not the capability; the switcher as above; the tiler's shortcut is refused ("the tiler needs the fork"); no script error, no crash |
+| the new login on stock KWin | status: the stock profile, none of the fork's capabilities, no note; the session is still Plasma Fusion's; the navigation effect stays idle and says why, and nothing follows the gesture lock. While Fedora's KWin is another version than the pin's (#198), the navigation part's rebuild note is required (it is built against the pin), the decoration's is allowed (it depends on the KDecoration the build was compiled against, #194), no other note is, and the navigation effect's reason is that version ("built for KWin 6.8.2, running 6.8.3"), not the capability; the switcher as above; the tiler's shortcut is refused ("the tiler needs the fork"); no script error, no crash |
 | uninstall | the stock KWin, no lock, no repository, no package; after the login a session runs and its look-and-feel is not Plasma Fusion's; no crash |
 
 `switch` installs the stock profile first, with the published installer from the public Copr
@@ -201,7 +201,7 @@ run on it, and that they work by their fallbacks on stock KWin with the same pac
 does with its property is the subject of the parts' own tests (kwin.md, navigation-cpp.md).
 
 `test-fulltest.py` (CI `build`) runs the lane against a stand-in VM: both modes pass, and
-thirty-five faults, one test each, fail the run, stop the VM and keep the overlay (from a dry
+thirty-six faults, one test each, fail the run, stop the VM and keep the overlay (from a dry
 run that changes something to a plan that enables another project than the stamped one; the
 file's first lines name them). Not every check has a fault: the lane's plumbing (the copies into
 the VM, a crash collector that cannot count) and the wording of the `--full` plan are covered by

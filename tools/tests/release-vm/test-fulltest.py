@@ -5,22 +5,22 @@
 the installer promises (fresh and switch), and a system that does not fails the run, stops the VM
 and keeps the overlay. The faults, one test each: a dry run that changes something; a set that is
 half the fork, not locked, not the metapackage's build (by version, or by the repository it came
-from: #197), or whose restore record is wrong; a
-repository that is there and switched off; a set that holds without the lock; a lock list that
-cannot be read; a status that does not see the fork or carries a note; no new session after the
-logout, or no desktop after it; an idle navigation effect; a journal that cannot be read; a
-switcher that does not switch, or lands on no test window; a tiler without a session; a restore
-whose plan names another KWin, that leaves the fork or the repository, or takes the packages; in
-switch mode a record directory that is not root's alone; a
-status that takes the session after the restore for a fork installed by hand; a note after the
-restore (any on a stock KWin of the pin's version, any but the two rebuild notes on a newer one:
-#198), or on a newer stock KWin a navigation effect that gives the capability as its reason; a
-fallback that is not one; a crash; an uninstall that leaves the lock or a package, or the theme; a VM that does
-not come up; a plan that enables another Copr project than the stamped one. Not every check of
-the lane has a fault: its plumbing (the copies into the VM, a collector that cannot count) and
-the plan's wording are covered by the passing runs only. Of the stamp, the tests check the Copr
-project it is given (the live one by default, a candidate's own when named: issue #178) and that
-the lock check leaves out that project's repository by its exact id."""
+from: #197), or whose restore record is wrong; a repository that is there and switched off; a set
+that holds without the lock; a lock list that cannot be read; a status that does not see the fork
+or carries a note; no new session after the logout, or no desktop after it; an idle navigation
+effect; a journal that cannot be read; a switcher that does not switch, or lands on no test
+window; a tiler without a session; a restore whose plan names another KWin, that leaves the fork
+or the repository, or takes the packages; in switch mode a record directory that is not root's
+alone; a status that takes the session after the restore for a fork installed by hand; a note
+after the restore (any on a stock KWin of the pin's version, any but the two rebuild notes on a
+newer one: #198), on a newer stock KWin no navigation rebuild note, or a navigation effect that
+gives the capability as its reason; a fallback that is not one; a crash; an uninstall that leaves
+the lock or a package, or the theme; a VM that does not come up; a plan that enables another Copr
+project than the stamped one. Not every check of the lane has a fault: its plumbing (the copies
+into the VM, a collector that cannot count) and the plan's wording are covered by the passing
+runs only. Of the stamp, the tests check the Copr project it is given (the live one by default, a
+candidate's own when named: issue #178) and that the lock check leaves out that project's
+repository by its exact id."""
 import os
 from pathlib import Path
 import shutil
@@ -121,8 +121,13 @@ status() {
     fi
   fi
   if [ "$installed" = restored ] && [ "$running" != fork ] && [ "$(up "$STOCK")" != "$(up "$PIN")" ]; then
-    echo "  note: the decoration part was built against $(up "$PIN"), KWin is $(up "$STOCK"): update or rebuild that package"
-    echo "  note: the navigation part was built against $(up "$PIN"), KWin is $(up "$STOCK"): update or rebuild that package"
+    # The decoration's note depends on the KDecoration it was built against: FAKE_DECO_BUILT, the
+    # pin's version by default (a full build from before Fedora's update).
+    local deco=${FAKE_DECO_BUILT:-$(up "$PIN")}
+    [ "$deco" = "$(up "$STOCK")" ] ||
+      echo "  note: the decoration part was built against $deco, KWin is $(up "$STOCK"): update or rebuild that package"
+    [ "$FAULT" = stock-newer-no-nav-note ] ||
+      echo "  note: the navigation part was built against $(up "$PIN"), KWin is $(up "$STOCK"): update or rebuild that package"
     [ "$FAULT" != stock-newer-other-note ] || echo "  note: run 'plasma-fusion update' to apply this version's settings"
   fi
   # A part built for an older KWin of the same series as stock: a rebuild due, whatever the pin.
@@ -376,11 +381,17 @@ class FullLaneTest(unittest.TestCase):
         # Fedora's KWin past the pin (6.8.3 against 6.8.2-pf3, #198): after the restore the parts
         # built for the pin's KWin are due for a rebuild, and the navigation effect stays idle on
         # its version check; both modes pass.
-        for mode in ("fresh", "switch"):
-            with self.subTest(mode=mode):
-                result, calls = self.run_lane("none", mode, env_extra={"FAKE_STOCK": "6.8.3-1.fc44"})
+        # A decoration built against the newer KDecoration (a full build made after the update)
+        # has no note of its own.
+        for mode, deco in (("fresh", None), ("fresh", "6.8.3"), ("switch", None)):
+            with self.subTest(mode=mode, decoration_built_against=deco):
+                env = {"FAKE_STOCK": "6.8.3-1.fc44"}
+                if deco:
+                    env["FAKE_DECO_BUILT"] = deco
+                result, calls = self.run_lane("none", mode, env_extra=env)
                 self.assertEqual(result.returncode, 0, result.stdout)
                 if mode == "fresh":  # the switch lane has no restore: it uninstalls from the fork
+                    self.assertIn("ok   status: the navigation part's rebuild note (built for the pin's KWin 6.8.2)", result.stdout)
                     self.assertIn("ok   status: no note but the rebuild notes of the parts built for KWin 6.8.2", result.stdout)
                     self.assertIn("ok   navigation: the effect stays idle, built for the pin's KWin 6.8.2", result.stdout)
 
@@ -388,6 +399,13 @@ class FullLaneTest(unittest.TestCase):
         # Stock KWin at the pin's version: no note at all after the restore, a rebuild note included.
         result = self.rejected("restored-stale-build", "FAIL: status after the restore")
         self.assertIn("FAIL status: no note", result.stdout)
+
+    def test_stock_newer_without_the_navigation_rebuild_note(self):
+        # Built against the pin's KWin, the navigation part is due for a rebuild on a newer stock
+        # KWin: a status without that note does not see it.
+        result = self.rejected("stock-newer-no-nav-note", "FAIL: status after the restore",
+                               env_extra={"FAKE_STOCK": "6.8.3-1.fc44"})
+        self.assertIn("FAIL status: the navigation part's rebuild note (built for the pin's KWin 6.8.2)", result.stdout)
 
     def test_stock_newer_with_another_note(self):
         result = self.rejected("stock-newer-other-note", "FAIL: status after the restore",
