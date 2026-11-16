@@ -145,8 +145,30 @@ the installer from the draft's URL with `--dry-run` on one system.
 The navigation effect (and on Arch the decoration) is built against one KWin. Until it is rebuilt,
 the login check keeps it off and `plasma-fusion status` says so.
 
-- Copr: rebuild the last release's SRPM (`copr-cli build-package archledger/plasma-fusion --name
-  plasma-fusion`).
+- Copr (`archledger/plasma-fusion`): the last release's source package again with its release
+  raised, built once the new KWin is in Fedora's stable updates (the build root takes it from
+  there; a fresh Fedora container's `dnf repoquery kwin-devel` shows it). The release must be
+  higher: dnf moves an installed package only to a newer version-release, so `X.Y.Z-1` built again
+  would reach new installs only. `copr-cli build-package` does not do this: it builds the
+  package's default source, and for these uploaded packages that is the first upload's temporary
+  link (0.2.0's, gone: 404 on 2026-11-15). In a Fedora container:
+  1. The release's source package: its build is the newest `plasma-fusion` in
+     `copr-cli list-builds archledger/plasma-fusion`, and
+     `curl -s https://copr.fedorainfracloud.org/api_3/build/BUILD` names it in
+     `source_package.url` (`.../srpm-builds/BUILD/plasma-fusion-X.Y.Z-N.fc44.src.rpm`). Download it
+     and check it with `rpm -K`.
+  2. `rpm -i --define "_topdir $PWD/top" plasma-fusion-X.Y.Z-N.fc44.src.rpm`, then (rpmdevtools)
+     `rpmdev-bumpspec -c "Rebuilt against KWin A.B.C" -u "NAME <EMAIL>" SPEC`, where SPEC is
+     `top/SPECS/plasma-fusion.spec`: the release becomes N+1 with a changelog entry, and the
+     sources stay the release's.
+  3. `rpmbuild -bs --define "_topdir $PWD/top" top/SPECS/plasma-fusion.spec`.
+  4. (owner) `copr-cli build archledger/plasma-fusion top/SRPMS/plasma-fusion-*.src.rpm` (every
+     chroot, as for a release), then read each chroot's result back. On an updated machine,
+     `plasma-fusion status` lists the navigation part as built against the new KWin, without a
+     note to rebuild it.
+
+  The full project (`archledger/plasma-fusion-full`) needs no rebuild: its KWin is the pinned
+  fork, which a distribution's update does not move.
 - AUR: users rebuild (the pacman hook tells them); nothing to publish.
 - PPA and the release `.deb`s: a new upload or release `X.Y.Z-0ppa2~series1` / `X.Y.Z-2~target1`
   built against the new KWin.
