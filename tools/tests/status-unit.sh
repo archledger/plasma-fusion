@@ -42,7 +42,9 @@
 #      them the record matches - an ambiguous answer is not a version - and one version in two
 #      revisions is one version;
 #  22. NixOS without nix-store on the PATH: the system profile's own binary answers, as it does
-#      for the login check (PF_NIX_SW names the profile here).
+#      for the login check (PF_NIX_SW names the profile here);
+#  23. a database that does not answer in time: the query is bounded as the login check's are, so
+#      status finishes and the version stays unknown.
 # Test tooling only, not installed.
 #
 #   status-unit.sh BASE
@@ -146,6 +148,7 @@ EOF
 # nix-store do for a package that is not installed (dpkg-query just lists nothing).
 cat >"$BIN/rpm" <<'EOF'
 #!/bin/bash
+[ ! -e "$T/hang-rpm" ] || sleep 30
 v=$(cat "$T/kdecoration-rpm" 2>/dev/null) || exit 1
 [ -n "$v" ] || exit 1
 echo "$v"
@@ -427,6 +430,25 @@ built decoration kdecoration=6.8.3 qt=6.11.2
 PF_NIX_SW=$T/nixsw run fork 6.8.2
 has "22 the system profile's nix-store answers" "the installed KDecoration is 6.8.4"
 rm -rf "$T/nixsw"
+
+# 23. a database that does not answer in time: a locked or wedged one leaves the version unknown
+# after the bounded query, and status finishes (the login check bounds its own the same way)
+rm -f "$T"/kdecoration-*
+cat >"$BIN/nix-store" <<'EOF'
+#!/bin/bash
+v=$(cat "$T/kdecoration-nix" 2>/dev/null) || exit 1
+printf '/nix/store/00000000000000000000000000000000-kdecoration-%s\n' "$v"
+EOF
+chmod +x "$BIN/nix-store"
+echo 6.8.3 >"$T/kdecoration-rpm"
+built decoration kdecoration=6.8.2 qt=6.11.2
+touch "$T/hang-rpm"
+started=$SECONDS
+run fork 6.8.2
+elapsed=$((SECONDS - started))
+rm -f "$T/hang-rpm"
+hasnot "23 a database that does not answer gives no note" "the decoration part was built against"
+[ "$elapsed" -le 6 ] && ok "23 and status finishes ($elapsed s, bounded)" || bad "23 status took ${elapsed} s with a wedged database"
 
 echo "status-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -46,7 +46,9 @@ and the decoration with the installed KDecoration (upstream versions only, read 
 database as the login check reads it, in its order; the two move apart on the full profile, #194).
 A database that reports two versions of it - a partial upgrade leaves two binaries of Debian's
 source package, or two Nix store paths - is ambiguous and gives no note, and on NixOS the system
-profile's own `nix-store` answers when it is not on the PATH. The CI
+profile's own `nix-store` answers when it is not on the PATH. Every query is bounded as the login
+check's are (`timeout 3`), so a locked database leaves the version unknown instead of hanging
+`status`. The CI
 workflow `packages` builds, lints, installs and checks every channel in a container of its system
 (`tools/tests/packages/`); ci.md.
 
