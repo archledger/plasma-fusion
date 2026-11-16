@@ -41,8 +41,18 @@ per-user step is `plasma-fusion setup` (`tools/device/fusion-config.sh`; not own
 | `packaging/stamp-installer.sh` | the release's installer (installer.md) |
 
 Each compiled part installs `share/plasma-fusion/built-against/<part>` (the KWin or KDecoration and
-Qt it was built with); `plasma-fusion status` compares it with the running KWin. The CI workflow
-`packages` builds, lints, installs and checks every channel in a container of its system
+Qt it was built with); `plasma-fusion status` compares the navigation part with the running KWin
+and the decoration with the installed KDecoration (upstream versions only, read from the system's
+own package database, the first of rpm, pacman, dpkg and Nix whose files are there, as the login
+check picks it - pacman's needs an installed package's directory, not just `ALPM_DB_VERSION`;
+that one answers alone, so a package manager installed beside it is never asked;
+the two move apart on the full profile, #194).
+A database that reports two versions of it - a partial upgrade leaves two binaries of Debian's
+source package, or two Nix store paths - is ambiguous and gives no note, and on NixOS the system
+profile's own `nix-store` answers when it is not on the PATH. Every query is bounded as the login
+check's are (`timeout 3`), so a locked database leaves the version unknown instead of hanging
+`status`. The CI
+workflow `packages` builds, lints, installs and checks every channel in a container of its system
 (`tools/tests/packages/`); ci.md.
 
 ## The profile and the compositor's capabilities
@@ -101,8 +111,8 @@ Qt it was built with); `plasma-fusion status` compares it with the running KWin.
   hundred a second. Without an answer the note is the third.
 
 `tools/tests/status-unit.sh` (CI `build`) runs the command against stand-ins for
-`kwin_wayland`, `busctl` and `journalctl` through those cases, and checks the probe KWin is
-given.
+`kwin_wayland`, `busctl`, `journalctl` and the package databases (`rpm`, `pacman`,
+`dpkg-query`, `nix-store`) through those cases, and checks the probe KWin is given.
 
 ## 1. The RPMs
 

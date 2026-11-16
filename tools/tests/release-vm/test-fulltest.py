@@ -13,10 +13,12 @@ window; a tiler without a session; a restore whose plan names another KWin, that
 or the repository, or takes the packages; in switch mode a record directory that is not root's
 alone; a status that takes the session after the restore for a fork installed by hand; a note
 after the restore (any on a stock KWin of the pin's version, any but the two rebuild notes on a
-newer one: #198), on a newer stock KWin no navigation rebuild note, or a navigation effect that
-gives the capability as its reason; a fallback that is not one; a crash; an uninstall that leaves
-the lock or a package, or the theme; a VM that does not come up; a plan that enables another Copr
-project than the stamped one. Not every check of the lane has a fault: its plumbing (the copies
+newer one: #198; the decoration's compares with the installed KDecoration and not with KWin,
+#194) or on the full profile but the decoration part's; on a newer stock KWin no navigation
+rebuild note, or a navigation effect that gives the capability as its reason; a fallback that is
+not one; a crash; an uninstall that leaves the lock or a package, or the theme; a VM that does not
+come up; a plan that enables another Copr project than the stamped one. Not every check of the
+lane has a fault: its plumbing (the copies
 into the VM, a collector that cannot count) and the plan's wording are covered by the passing
 runs only. Of the stamp, the tests check the Copr project it is given (the live one by default, a
 candidate's own when named: issue #178) and that the lock check leaves out that project's
@@ -93,7 +95,7 @@ facts() {
   fi
 }
 status() {
-  local installed running
+  local installed running deco
   installed=$(get installed stock) running=$(get running stock)
   echo "Plasma Fusion 0.8.0 (/usr/share/plasma-fusion)"
   if [ "$installed" = full ]; then
@@ -120,12 +122,18 @@ status() {
       echo "        log out and in (the session still runs the KWin from before the profile)"
     fi
   fi
+  # The compiled parts' rebuild notes, as status makes them (#194, #198): the decoration's record
+  # holds the KDecoration the build compiled against - FAKE_DECO_BUILT, the pin's version by
+  # default (a full build from before Fedora's update) - compared with the installed one, which is
+  # Fedora's and moves with stock KWin; the navigation part's holds the KWin it was built for,
+  # compared with the running one.
+  case $(get installed stock) in
+    six | full | restored)
+      deco=${FAKE_DECO_BUILT:-$(up "$PIN")}
+      [ "$deco" = "$(up "$STOCK")" ] ||
+        echo "  note: the decoration part was built against $deco, the installed KDecoration is $(up "$STOCK"): update or rebuild that package" ;;
+  esac
   if [ "$installed" = restored ] && [ "$running" != fork ] && [ "$(up "$STOCK")" != "$(up "$PIN")" ]; then
-    # The decoration's note depends on the KDecoration it was built against: FAKE_DECO_BUILT, the
-    # pin's version by default (a full build from before Fedora's update).
-    local deco=${FAKE_DECO_BUILT:-$(up "$PIN")}
-    [ "$deco" = "$(up "$STOCK")" ] ||
-      echo "  note: the decoration part was built against $deco, KWin is $(up "$STOCK"): update or rebuild that package"
     [ "$FAULT" = stock-newer-no-nav-note ] ||
       echo "  note: the navigation part was built against $(up "$PIN"), KWin is $(up "$STOCK"): update or rebuild that package"
     [ "$FAULT" != stock-newer-other-note ] || echo "  note: run 'plasma-fusion update' to apply this version's settings"
@@ -396,9 +404,18 @@ class FullLaneTest(unittest.TestCase):
                     self.assertIn("ok   navigation: the effect stays idle, built for the pin's KWin 6.8.2", result.stdout)
 
     def test_a_stale_build_after_the_restore_on_the_pin_s_version(self):
-        # Stock KWin at the pin's version: no note at all after the restore, a rebuild note included.
+        # Stock KWin at the pin's version: the navigation part's record names that KWin, so a
+        # rebuild note for it is wrong - only the decoration's (which compares Fedora's
+        # KDecoration, #194) is allowed there.
         result = self.rejected("restored-stale-build", "FAIL: status after the restore")
-        self.assertIn("FAIL status: no note", result.stdout)
+        self.assertIn("FAIL status: no note but the decoration part's rebuild note", result.stdout)
+
+    def test_restored_with_a_decoration_built_against_another_kdecoration(self):
+        # Fedora's KDecoration moves with Fedora's updates, independently of the pin: on a stock
+        # KWin of the pin's version the decoration's rebuild note is right, and the lane passes.
+        result, _ = self.run_lane("none", "fresh", env_extra={"FAKE_DECO_BUILT": "6.8.3"})
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("ok   status: no note but the decoration part's rebuild note", result.stdout)
 
     def test_stock_newer_without_the_navigation_rebuild_note(self):
         # Built against the pin's KWin, the navigation part is due for a rebuild on a newer stock

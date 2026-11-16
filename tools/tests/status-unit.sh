@@ -24,7 +24,32 @@
 #  13. a program put on the disk just before KWin started is never taken for a later one: the
 #      start read from /proc is up to two seconds early (the boot time and the clock ticks are
 #      both rounded down), so the times must be further apart than that;
-#  14. without getconf the clock ticks are taken as the kernel's usual hundred a second.
+#  14. without getconf the clock ticks are taken as the kernel's usual hundred a second;
+#  15. the full profile with the decoration record and the installed KDecoration at one version:
+#      no decoration note and no navigation note, though KWin is the pin's older one (the record
+#      holds KDecoration's version, not KWin's, so a comparison with KWin would make this note
+#      permanent, #194);
+#  16. a decoration built against an older KDecoration than the installed one: the note names the
+#      two KDecoration versions, not KWin's;
+#  17. the installed version from the other databases the login check reads (pacman's pkgver and
+#      pkgrel, dpkg's source package with its epoch and revision, Nix's store path name), compared
+#      upstream only, so a distribution rebuild alone is no note;
+#  18. the databases in the login check's order: rpm's answer is the one read;
+#  19. no database answers: no decoration note (a missing note, never a wrong one);
+#  20. the stock profile: no note when the installed KDecoration is the build's, whether or not
+#      KWin is another version;
+#  21. two installed versions of one source package (a partial upgrade): no note, whichever of
+#      them the record matches - an ambiguous answer is not a version - and one version in two
+#      revisions is one version;
+#  22. NixOS without nix-store on the PATH: the system profile's own binary answers, as it does
+#      for the login check (PF_NIX_SW names the profile here);
+#  23. a database that does not answer in time: the query is bounded as the login check's are, so
+#      status finishes and the version stays unknown;
+#  24. the system's database fails while a foreign package manager's files are there: no note,
+#      because the system's database is the one asked and its failure is an unknown, never another
+#      installation's answer;
+#  25. a pacman database without a package directory beside the system's own: it is not the system's
+#      database (the login check needs a package directory), so its version never answers.
 # Test tooling only, not installed.
 #
 #   status-unit.sh BASE
@@ -122,8 +147,62 @@ cat >"$BIN/getconf" <<EOF
 [ ! -e "\$T/no-getconf" ] || exit 127
 exec "$REAL_GETCONF" "\$@"
 EOF
-chmod +x "$BIN/kwin_wayland" "$BIN/journalctl" "$BIN/busctl" "$BIN/getconf"
+# The package databases the login check reads (plasma-fusion-gate.sh, DB_PACKAGES, in its order:
+# rpm, pacman, dpkg, nix). $T/kdecoration-<db> is the version that database reports for
+# kdecoration; without it the database is there and does not know the package, as rpm, pacman and
+# nix-store do for a package that is not installed (dpkg-query just lists nothing).
+cat >"$BIN/rpm" <<'EOF'
+#!/bin/bash
+[ ! -e "$T/hang-rpm" ] || sleep 30
+v=$(cat "$T/kdecoration-rpm" 2>/dev/null) || exit 1
+[ -n "$v" ] || exit 1
+echo "$v"
+EOF
+cat >"$BIN/pacman" <<'EOF'
+#!/bin/bash
+v=$(cat "$T/kdecoration-pacman" 2>/dev/null) || exit 1
+[ -n "$v" ] || exit 1
+echo "kdecoration $v"
+EOF
+cat >"$BIN/dpkg-query" <<'EOF'
+#!/bin/bash
+# Every line of the file is an installed binary of the source package: a partial upgrade can leave
+# two at different versions.
+while IFS= read -r v; do
+  [ -n "$v" ] && printf 'installed kdecoration=%s\n' "$v"
+done <"$T/kdecoration-dpkg" 2>/dev/null
+exit 0
+EOF
+cat >"$BIN/nix-store" <<'EOF'
+#!/bin/bash
+v=$(cat "$T/kdecoration-nix" 2>/dev/null) || exit 1
+[ -n "$v" ] || exit 1
+printf '/nix/store/00000000000000000000000000000000-kdecoration-%s\n' "$v"
+EOF
+chmod +x "$BIN/kwin_wayland" "$BIN/journalctl" "$BIN/busctl" "$BIN/getconf" "$BIN/rpm" \
+  "$BIN/pacman" "$BIN/dpkg-query" "$BIN/nix-store"
 export PATH=$BIN:$PATH
+# The package database's files, in the tree status reads (PF_STATUS_ROOT): the login check picks the
+# first database whose files are there, and the tests choose the system the same way. A database
+# whose files are there answers alone - a package manager installed beside it is never asked.
+ROOTFS=$T/root
+mkdir -p "$ROOTFS"
+export PF_STATUS_ROOT=$ROOTFS
+dbev() { # DB: that database's evidence, and no other's - as the login check reads it
+  rm -rf "$ROOTFS"
+  mkdir -p "$ROOTFS"
+  case $1 in
+    rpm) mkdir -p "$ROOTFS/var/lib/rpm"; : >"$ROOTFS/var/lib/rpm/rpmdb.sqlite" ;;
+    # An installed package's directory, not just ALPM_DB_VERSION: a pacman installed beside the
+    # system's package manager leaves only the latter (gate-unit.sh case v4d).
+    pacman) mkdir -p "$ROOTFS/var/lib/pacman/local/kdecoration-6.8.3-1" ;;
+    dpkg) mkdir -p "$ROOTFS/var/lib/dpkg"
+          printf 'Package: kdecoration\nStatus: install ok installed\nArchitecture: amd64\nVersion: 4:6.8.3-1\n\n' \
+            >"$ROOTFS/var/lib/dpkg/status" ;;
+    nix) : ;; # PF_NIX_SW's directory is the evidence
+  esac
+}
+dbnone() { rm -rf "$ROOTFS"; mkdir -p "$ROOTFS"; }
 
 run() { # MODE [KWIN VERSION]: the command's output in OUT
   echo "$1" >"$T/mode"
@@ -144,6 +223,15 @@ record() { # the metapackage's record, or none
     printf 'kwin=%s\ntag=%s\n' 6.8.2-3.fc44.pf3 v6.8.2-pf3 >"$SHARE/plasma-fusion/full-profile"
   fi
 }
+# The compiled parts' records, as the packages install them: "kdecoration=<version>" for the
+# decoration (CMake's upstream version), "kwin=<version>" for the navigation.
+built() { # PART LINE...
+  local p=$1
+  shift
+  mkdir -p "$SHARE/plasma-fusion/built-against"
+  printf '%s\n' "$@" >"$SHARE/plasma-fusion/built-against/$p"
+}
+nobuilt() { rm -rf "$SHARE/plasma-fusion/built-against"; }
 
 # 1. outside a session
 record none
@@ -273,6 +361,175 @@ touch "$T/no-getconf"
 run fork
 has "14 the note to log in again without getconf" "log out and in (the KWin on the disk was put there after this session's KWin started"
 rm -f "$T/no-getconf"
+
+# 15. the full profile with the decoration record and the installed KDecoration at one version.
+# KWin is the pin's older one; the record holds KDecoration's version, so the note (which compared
+# with KWin) used to be permanent (#194).
+record
+nobuilt
+dbev rpm
+echo 6.8.3 >"$T/kdecoration-rpm"
+built decoration kdecoration=6.8.3 qt=6.11.2
+built navigation kwin=6.8.2 qt=6.11.2
+run fork 6.8.2
+hasnot "15 no decoration note when the installed KDecoration is the build's" "the decoration part was built against"
+hasnot "15 no navigation note" "the navigation part was built against"
+
+# 16. a decoration built against an older KDecoration than the installed one: the note says what it
+# compares, and names the two KDecoration versions, not KWin's
+built decoration kdecoration=6.8.2 qt=6.11.2
+run fork 6.8.2
+has "16 the decoration's rebuild note" "  note: the decoration part was built against 6.8.2, the installed KDecoration is 6.8.3: update or rebuild that package"
+hasnot "16 the note is not about KWin" "KWin is"
+hasnot "16 no navigation note" "the navigation part was built against"
+
+# 17. the other databases the login check reads, upstream only as CMake recorded it: pacman's
+# pkgver-pkgrel, dpkg's source package with its epoch and revision, Nix's store path name
+rm -f "$T"/kdecoration-*
+built decoration kdecoration=6.8.3 qt=6.11.2
+dbev pacman
+echo 6.8.3-1 >"$T/kdecoration-pacman"
+run fork 6.8.2
+hasnot "17 pacman: the revision does not count" "the decoration part was built against"
+rm -f "$T/kdecoration-pacman"
+dbev dpkg
+echo 4:6.8.3-1 >"$T/kdecoration-dpkg"
+run fork 6.8.2
+hasnot "17 dpkg: the epoch and the revision do not count" "the decoration part was built against"
+echo 4:6.8.2-1 >"$T/kdecoration-dpkg"
+run fork 6.8.2
+has "17 dpkg: the source package answers, epoch and revision stripped" "  note: the decoration part was built against 6.8.3, the installed KDecoration is 6.8.2: update or rebuild that package"
+echo 4:6.8.3-1 >"$T/kdecoration-dpkg"
+rm -f "$T/kdecoration-dpkg"
+dbev nix
+mkdir -p "$T/nixsw"
+echo 6.8.3 >"$T/kdecoration-nix"
+PF_NIX_SW=$T/nixsw run fork 6.8.2
+hasnot "17 Nix: the store path's version counts" "the decoration part was built against"
+echo 6.8.4 >"$T/kdecoration-nix"
+PF_NIX_SW=$T/nixsw run fork 6.8.2
+has "17 Nix: a newer installed KDecoration is named" "the installed KDecoration is 6.8.4"
+
+# 18. the databases in the login check's order: rpm's answer is the one read, though pacman's is
+# another version
+rm -f "$T"/kdecoration-*
+dbev rpm
+mkdir -p "$ROOTFS/var/lib/pacman/local"; : >"$ROOTFS/var/lib/pacman/local/ALPM_DB_VERSION"
+echo 6.8.3 >"$T/kdecoration-rpm"
+echo 6.9.0 >"$T/kdecoration-pacman"
+built decoration kdecoration=6.8.3 qt=6.11.2
+run fork 6.8.2
+hasnot "18 rpm's answer is the one read" "the decoration part was built against"
+
+# 19. no database answers: no decoration note, though the record is older than the running KWin
+rm -f "$T"/kdecoration-*
+dbnone
+nobuilt
+built decoration kdecoration=6.8.2 qt=6.11.2
+run fork 6.8.3
+hasnot "19 no decoration note without an answer" "the decoration part was built against"
+
+# 20. the stock profile: no note when the installed KDecoration is the build's - and none either
+# when that older KDecoration is the installed one, though KWin is another version
+record none
+dbev rpm
+built decoration kdecoration=6.8.3 qt=6.11.2
+echo 6.8.3 >"$T/kdecoration-rpm"
+run stock 6.8.3
+hasnot "20 stock: no note when the installed KDecoration is the build's" "the decoration part was built against"
+built decoration kdecoration=6.8.2 qt=6.11.2
+echo 6.8.2 >"$T/kdecoration-rpm"
+run stock 6.8.3
+hasnot "20 stock: no note when it is the installed KDecoration, not KWin" "the decoration part was built against"
+
+# 21. two installed versions of one source package: a partial upgrade leaves Debian's two binaries
+# of it at different versions, or two Nix store paths. Whichever of them the record matches, the
+# answer is ambiguous and there is no note - never one built on the database's first line.
+rm -f "$T"/kdecoration-*
+record
+dbev dpkg
+built decoration kdecoration=6.8.3 qt=6.11.2
+printf '4:6.8.2-1\n4:6.8.3-1\n' >"$T/kdecoration-dpkg"
+run fork 6.8.2
+hasnot "21 two installed versions: no note, though the record matches one of them" "the decoration part was built against"
+run fork 6.8.2
+hasnot "21 and the same on a second run" "the decoration part was built against"
+printf '4:6.8.3-1\n4:6.8.3-2\n' >"$T/kdecoration-dpkg"
+built decoration kdecoration=6.8.3 qt=6.11.2
+run fork 6.8.2
+hasnot "21 one version in two revisions is one version" "the decoration part was built against"
+built decoration kdecoration=6.8.2 qt=6.11.2
+run fork 6.8.2
+has "21 and that version answers the note" "the installed KDecoration is 6.8.3"
+
+# 22. NixOS without nix-store on the PATH: the login check falls back to the system profile's own
+# binary, and the note is built on its answer (PF_NIX_SW names the profile here)
+rm -f "$T"/kdecoration-*
+dbev nix
+mkdir -p "$T/nixsw/bin"
+cp "$BIN/nix-store" "$T/nixsw/bin/nix-store"
+rm -f "$BIN/nix-store"
+echo 6.8.4 >"$T/kdecoration-nix"
+built decoration kdecoration=6.8.3 qt=6.11.2
+PF_NIX_SW=$T/nixsw run fork 6.8.2
+has "22 the system profile's nix-store answers" "the installed KDecoration is 6.8.4"
+rm -rf "$T/nixsw"
+
+# 23. a database that does not answer in time: a locked or wedged one leaves the version unknown
+# after the bounded query, and status finishes (the login check bounds its own the same way)
+rm -f "$T"/kdecoration-*
+dbev rpm
+cat >"$BIN/nix-store" <<'EOF'
+#!/bin/bash
+v=$(cat "$T/kdecoration-nix" 2>/dev/null) || exit 1
+printf '/nix/store/00000000000000000000000000000000-kdecoration-%s\n' "$v"
+EOF
+chmod +x "$BIN/nix-store"
+echo 6.8.3 >"$T/kdecoration-rpm"
+built decoration kdecoration=6.8.2 qt=6.11.2
+touch "$T/hang-rpm"
+started=$SECONDS
+run fork 6.8.2
+elapsed=$((SECONDS - started))
+rm -f "$T/hang-rpm"
+hasnot "23 a database that does not answer gives no note" "the decoration part was built against"
+[ "$elapsed" -le 6 ] && ok "23 and status finishes ($elapsed s, bounded)" || bad "23 status took ${elapsed} s with a wedged database"
+
+# 24. the system's database does not answer while a foreign package manager's files are there: the
+# login check asks the first database present and no other, so a wedged rpm is an unknown - not
+# pacman's KDecoration, which describes a different installation (a false note would name it)
+rm -f "$T"/kdecoration-*
+record
+dbev rpm
+mkdir -p "$ROOTFS/var/lib/pacman/local"; : >"$ROOTFS/var/lib/pacman/local/ALPM_DB_VERSION"
+echo 6.8.3 >"$T/kdecoration-rpm"
+echo 6.9.0 >"$T/kdecoration-pacman"
+built decoration kdecoration=6.8.3 qt=6.11.2
+touch "$T/hang-rpm"
+run fork 6.8.2
+rm -f "$T/hang-rpm"
+hasnot "24 no note from a foreign database while the system's fails" "the decoration part was built against"
+dbev rpm
+echo 6.8.3 >"$T/kdecoration-rpm"
+rm -f "$T/kdecoration-pacman"
+run fork 6.8.2
+hasnot "24 and the system's own answer is the one read" "the decoration part was built against"
+
+# 25. a pacman database with no package directories beside the system's own: the login check does not
+# count it (db_tool needs a package directory), so dpkg's answer is the one read - pacman's file is
+# there and says another version, which would be a false note
+rm -f "$T"/kdecoration-*
+record
+dbev dpkg
+mkdir -p "$ROOTFS/var/lib/pacman/local"; : >"$ROOTFS/var/lib/pacman/local/ALPM_DB_VERSION"
+echo 4:6.8.3-1 >"$T/kdecoration-dpkg"
+echo 6.9.0 >"$T/kdecoration-pacman"
+built decoration kdecoration=6.8.3 qt=6.11.2
+run fork 6.8.2
+hasnot "25 an empty pacman database is no database" "the decoration part was built against"
+mkdir -p "$ROOTFS/var/lib/pacman/local/kdecoration-6.9.0-1"
+run fork 6.8.2
+has "25 a pacman database with a package answers instead" "the installed KDecoration is 6.9.0"
 
 echo "status-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

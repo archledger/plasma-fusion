@@ -59,6 +59,13 @@ the reviewed Aurorae part (docs/parts/decoration.md), value for value.
 | `tests/vsession/scenario-tablet.sh`, `scenario-short.sh`, `scenario-hidpi.sh`, `scenario-mem.sh` | 1.0-3 scenarios: tablet mode, a 1366x768 screen, the 200 % shadow, KWin memory per window |
 | `tools/shadow-alpha.py` | the shadow's alpha from two session screenshots (window shown / minimized) against the CSS model, in device pixels |
 
+The package also installs `share/plasma-fusion/built-against/decoration`
+(`kdecoration=<KDecoration3_VERSION>`, `qt=<Qt6_VERSION>`): `plasma-fusion status` compares that
+KDecoration version with the installed one and names the part when they differ, upstream versions
+only. It never compares the decoration with KWin: on the full profile the pinned fork's KWin and
+Fedora's KDecoration move apart, and a comparison with KWin would make the note permanent (#194,
+system.md).
+
 ## Build
 
 ```

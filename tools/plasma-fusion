@@ -308,8 +308,95 @@ capability_lines() { # FULL (yes when the full profile is installed)
   fi
 }
 
+# A version without an epoch and a distribution revision: pacman prints pkgver-pkgrel, a Debian
+# source version carries an epoch and a revision, and the parts' records hold the upstream version
+# their CMake found.
+upstream_version() {
+  local v=${1#*:}
+  printf '%s\n' "${v%%-*}"
+}
+
+# One upstream version from the answers a database gave, one per line, or nothing when they
+# disagree: a partial upgrade can leave two binaries of one source package, or two store paths, at
+# different versions, and the note may not be built on whichever the database listed first (the
+# login check sorts them for the same reason).
+upstream_versions() {
+  local v out
+  out=$(while IFS= read -r v; do
+    v=$(printf '%s\n' "$v" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    [ -n "$v" ] && upstream_version "$v"
+  done | LC_ALL=C sort -V -u)
+  [ -n "$out" ] && [ "$(printf '%s\n' "$out" | wc -l)" = 1 ] && printf '%s\n' "$out"
+}
+
+# The package database this system uses, chosen the way the login check chooses it
+# (tools/device/gate/plasma-fusion-gate.sh, DB_PACKAGES, in its order): the first database whose
+# files are there is the system's, and only that one answers. A package manager installed beside it
+# does not describe this system's packages, so it is never asked (PF_STATUS_ROOT names the tree the
+# tests use instead of /).
+package_database() {
+  local root=${PF_STATUS_ROOT:-} pkgs
+  if [ -e "$root/usr/lib/sysimage/rpm/rpmdb.sqlite" ] || [ -e "$root/var/lib/rpm/rpmdb.sqlite" ] ||
+    [ -e "$root/var/lib/rpm/Packages" ]; then
+    echo rpm
+  elif pkgs=("$root"/var/lib/pacman/local/*/) && [ -d "${pkgs[0]-}" ]; then
+    # An installed package's directory, not just any file there: a pacman installed beside the
+    # system's package manager leaves a database with only ALPM_DB_VERSION (as the login check's
+    # db_tool knows, gate-unit.sh case v4d).
+    echo pacman
+  elif [ -s "$root/var/lib/dpkg/status" ]; then
+    echo dpkg
+  elif [ -e "${PF_NIX_SW:-/run/current-system/sw}" ]; then
+    echo nix
+  else
+    return 1
+  fi
+}
+
+# The installed KDecoration's upstream version, from that database: the decoration is compiled
+# against KDecoration, not KWin, so this is the version its record is compared with
+# (docs/parts/decoration-cpp.md; issue #194: on the full profile the pinned KWin and the
+# distribution's KDecoration move apart, and a comparison with KWin would never agree again).
+# Prints nothing when that database does not answer in time, does not know the package, or answers
+# with two versions: a missing note is better than a wrong one, and another database's answer would
+# be about another installation.
+installed_kdecoration() {
+  local db out prog nosw
+  local -a tmo=()
+  # NixOS need not put nix-store on a user's PATH; the system profile's own binary answers there,
+  # as it does for the login check (PF_NIX_SW names the profile in the tests).
+  nosw=${PF_NIX_SW:-/run/current-system/sw}
+  # Every query is bounded: a locked or unresponsive database leaves the answer unknown rather than
+  # hanging status, as the login check's own queries are (plasma-fusion-gate.sh, timeout 3).
+  command -v timeout >/dev/null 2>&1 && tmo=(timeout 3)
+  db=$(package_database) || return 1
+  case $db in
+    rpm)
+      command -v rpm >/dev/null 2>&1 || return 1
+      out=$(LC_ALL=C "${tmo[@]}" rpm -q --qf '%{VERSION}\n' kdecoration 2>/dev/null) || return 1 ;;
+    pacman)
+      command -v pacman >/dev/null 2>&1 || return 1
+      out=$(LC_ALL=C "${tmo[@]}" pacman -Q kdecoration 2>/dev/null) || return 1
+      out=${out#kdecoration } ;;
+    dpkg)
+      # The source package (Debian's binary names change between releases), every installed binary
+      # of it: two of them can be at different versions mid-upgrade.
+      command -v dpkg-query >/dev/null 2>&1 || return 1
+      out=$(LC_ALL=C "${tmo[@]}" dpkg-query -W -f '${db:Status-Status} ${source:Package}=${source:Version}\n' 2>/dev/null) || return 1
+      out=$(printf '%s\n' "$out" | sed -n 's/^installed kdecoration=//p') ;;
+    nix)
+      prog=$(command -v nix-store 2>/dev/null) || prog=$nosw/bin/nix-store
+      [ -x "$prog" ] || return 1
+      out=$(LC_ALL=C "${tmo[@]}" "$prog" --query --requisites "$nosw" 2>/dev/null) || return 1
+      out=$(printf '%s\n' "$out" | sed -n 's|.*-kdecoration-\([0-9][^-]*\).*|\1|p') ;;
+  esac
+  out=$(printf '%s\n' "$out" | upstream_versions) || return 1
+  [ -n "$out" ] || return 1
+  printf '%s\n' "$out"
+}
+
 status() {
-  local p f series kwin built full=no
+  local p f series kwin built installed full=no
   echo "Plasma Fusion $VERSION ($PF)"
   for p in decoration settings navigation quicklook copytext; do
     if f=$(built_record "$p"); then
@@ -326,12 +413,21 @@ status() {
   profile_lines "$kwin"
   ! full_profile >/dev/null || full=yes
   capability_lines "$full"
-  for p in decoration navigation; do
-    f=$(built_record "$p") && [ -n "$kwin" ] || continue
-    built=$(sed -n 's/^kwin=//p;s/^kdecoration=//p' "$f" | head -1)
+  # A compiled part built against another version of what it is compiled into is due for a rebuild:
+  # the decoration against KDecoration, the navigation effect against KWin. The decoration's record
+  # holds KDecoration's version, never KWin's, and the two move apart on the full profile (#194).
+  if f=$(built_record decoration); then
+    built=$(sed -n 's/^kdecoration=//p' "$f" | head -1)
+    installed=
+    [ -z "$built" ] || installed=$(installed_kdecoration) || installed=
+    [ -z "$built" ] || [ -z "$installed" ] || [ "$built" = "$installed" ] ||
+      echo "  note: the decoration part was built against $built, the installed KDecoration is $installed: update or rebuild that package"
+  fi
+  if f=$(built_record navigation) && [ -n "$kwin" ]; then
+    built=$(sed -n 's/^kwin=//p' "$f" | head -1)
     [ -z "$built" ] || [ "$built" = "$kwin" ] ||
-      echo "  note: the $p part was built against $built, KWin is $kwin: update or rebuild that package"
-  done
+      echo "  note: the navigation part was built against $built, KWin is $kwin: update or rebuild that package"
+  fi
   if [ -f "$STATE/setup-version" ]; then
     echo "  set up for this account: $(cat "$STATE/setup-version")"
     [ "$(cat "$STATE/setup-version")" = "$VERSION" ] || echo "  note: run 'plasma-fusion update' to apply this version's settings"
