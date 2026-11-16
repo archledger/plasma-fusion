@@ -117,9 +117,11 @@ the installer from the draft's URL with `--dry-run` on one system.
 3. **Copr, full profile** (with a pin): the release's source package is built in
    `archledger/plasma-fusion-full` as well, which builds `--with full` and so adds the
    metapackage: `copr-cli build archledger/plasma-fusion-full plasma-fusion-X.Y.Z-1.fc44.src.rpm`
-   (the source package of Packit's build, or `packaging/build-rpm.sh` at the tag). Read the
-   result back; fedora-44 must succeed. A full-profile machine then updates with
-   `install.sh update`.
+   (the source package of Packit's build, or `packaging/build-rpm.sh` at the tag). Its packages'
+   release carries `.full` (`X.Y.Z-1.fc44.full`, from either source package: the suffix is in the
+   dist tag), so they sort above the stock project's builds of the same version and a machine
+   that switches profiles takes them (#197). Read the result
+   back; fedora-44 must succeed. A full-profile machine then updates with `install.sh update`.
 4. **The fork's release** (with a new fork tag; owner): a GitHub release of archledger/kwin for
    the tag (`Plasma Fusion KWin v<upstream>-pf<N>`), with notes and no files: the fork's only
    channel is the full project (ADR 0001). The notes name the KWin package's EVR and the Plasma

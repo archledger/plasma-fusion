@@ -41,6 +41,12 @@ case ${1:-} in
         echo "pkg $p error"
       fi
     done
+    # The repository each of the six was installed from: both Copr projects can build the same
+    # version of them, against different KWins, so the version alone does not say whose build it
+    # is (#197). No line for a package dnf cannot answer for.
+    # shellcheck disable=SC2086 # one argument per package
+    dnf -q repoquery --installed --qf '%{name} %{from_repo}\n' $SIX 2>/dev/null |
+      awk 'NF == 2 { print "from " $1 " " $2 }'
     # dnf5: "Package name: kwin" and, below it, "evr = 6.8.2-3.fc44.pf3". A list that could not
     # be read is not an empty one.
     if locks=$(sudo dnf versionlock list 2>/dev/null); then

@@ -37,6 +37,17 @@
 %{error:the kwin pin '%{kwin_full_pin}' targets another Fedora release; this build is fc%{?fedora}}
 %endif
 %global build_full 1
+# The full project's packages sort above the stock project's builds of the same version (1.fc44.full
+# above 1.fc44): both projects build this source package, against different KWins, so a machine
+# that switches from the stock profile has its six moved to the full project's builds, and keeps
+# them with both projects enabled (#197). The suffix goes into the dist tag, not after it on the
+# Release line: packaging/build-rpm.sh rewrites that line to RELEASE%%{?dist}, and Packit's source
+# packages find the dist tag only at its end (the specfile library), so anything after it would be
+# dropped by the one and take the dist tag along in the other. %%global expands its body at once,
+# so the stock dist tag goes in once (a spec rpm parses a second time, as it does a noarch main
+# package, would get it twice: check-full-profile.sh compares the releases). The metapackage's
+# exact requires carry the suffix through %%{release}.
+%global dist %{?dist}.full
 %endif
 
 Name:           plasma-fusion

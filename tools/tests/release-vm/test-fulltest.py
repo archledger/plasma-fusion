@@ -4,7 +4,8 @@
 """fulltest.sh against a stand-in VM: the full profile's lane passes on a system that behaves as
 the installer promises (fresh and switch), and a system that does not fails the run, stops the VM
 and keeps the overlay. The faults, one test each: a dry run that changes something; a set that is
-half the fork, not locked, not the metapackage's build, or whose restore record is wrong; a
+half the fork, not locked, not the metapackage's build (by version, or by the repository it came
+from: #197), or whose restore record is wrong; a
 repository that is there and switched off; a set that holds without the lock; a lock list that
 cannot be read; a status that does not see the fork or carries a note; no new session after the
 logout, or no desktop after it; an idle navigation effect; a journal that cannot be read; a
@@ -60,6 +61,17 @@ facts() {
       echo "pkg $p $six"
     fi
   done
+  # The repository each of the six came from (the guest's dnf repoquery --installed): the full
+  # profile's project, named on the command line as the real guest gets it, or the stock one.
+  local repo from stock_id=copr:copr.fedorainfracloud.org:archledger:plasma-fusion
+  repo=$(printf '%s\n' "${1:-}" | sed -n 's/.*full-guest\.sh facts \([^ ]*\).*/\1/p')
+  case $installed in
+    full) from="copr:copr.fedorainfracloud.org:${repo%%/*}:${repo#*/}"
+          [ "$FAULT" != six-from-stock ] || from=$stock_id ;;
+    six | restored) from=$stock_id ;;
+    *) from= ;;
+  esac
+  [ -z "$from" ] || for p in $SIX; do echo "from $p $from"; done
   if [ "$FAULT" = locklist-failed ] && [ "$installed" = restored ]; then echo "locklist failed"; else echo "locklist ok"; fi
   if [ "$full" = yes ]; then
     for p in kwin kwin-common kwin-libs; do
@@ -112,7 +124,7 @@ case "$cmd" in
   stop|shot) exit 0 ;;
   ssh)
     case "$*" in
-      *'full-guest.sh facts'*) facts ;;
+      *'full-guest.sh facts'*) facts "$*" ;;
       *'full-guest.sh kwinlog'*)
         [ "$FAULT" != kwinlog-fails ] || { echo "no kwin_wayland" >&2; exit 1; }
         if [ "$(get running stock)" = fork ]; then
@@ -346,6 +358,13 @@ class FullLaneTest(unittest.TestCase):
     def test_six_packages_that_are_not_the_metapackage_s_build(self):
         result = self.rejected("six-old", "FAIL: the full profile's packages")
         self.assertIn("FAIL plasma-fusion-quicklook is the metapackage's build: '0.7.0-1.fc44'", result.stdout)
+
+    def test_six_packages_from_the_stock_project(self):
+        # The two projects can build the same version: after a switch from the stock profile
+        # the six must still be the full project's builds, not only its version (#197).
+        result = self.rejected("six-from-stock", "FAIL: the full profile's packages")
+        self.assertIn("FAIL plasma-fusion-navigation comes from the full profile's repository: "
+                      "'copr:copr.fedorainfracloud.org:archledger:plasma-fusion'", result.stdout)
 
     def test_restore_record_with_another_kwin(self):
         result = self.rejected("record-wrong", "FAIL: the full profile's packages")
