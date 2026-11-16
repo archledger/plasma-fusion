@@ -69,7 +69,16 @@ BuildRequires:  gcc-c++
 BuildRequires:  ninja-build
 BuildRequires:  kf6-rpm-macros
 BuildRequires:  qt6-rpm-macros
+%if %{build_full}
+# The full profile's parts run on the KWin it pins: build them against that KWin (the fork's
+# kwin-devel in the full Copr project). cmake(KWin) takes the newest kwin-devel in the build root,
+# the distribution's once that is newer than the pin, and a navigation effect built for it would
+# stay idle on every full-profile machine (#191). Instead of cmake(KWin), not with it: next to a
+# newer kwin-devel the two cannot both have their best candidate, and mock's dnf (best=1) fails.
+BuildRequires:  kwin-devel = %{kwin_full_pin}
+%else
 BuildRequires:  cmake(KWin) >= 6.7
+%endif
 BuildRequires:  cmake(KDecoration3) >= 6.7
 BuildRequires:  cmake(PlasmaActivities)
 BuildRequires:  pkgconfig(epoxy)
@@ -456,6 +465,16 @@ find %{buildroot} -type f \( -name '*.qml' -o -name '*.js' -o -name '*.mjs' -o -
 for part in decoration settings navigation quicklook copytext; do
   test -s %{buildroot}%{_datadir}/plasma-fusion/built-against/$part
 done
+%if %{build_full}
+# The navigation effect is built against the pinned KWin (its BuildRequires): built against
+# another, it would stay idle on every full-profile machine.
+pinned='%{kwin_full_pin}'
+built=$(sed -n 's/^kwin=//p' %{buildroot}%{_datadir}/plasma-fusion/built-against/navigation)
+if [ "$built" != "${pinned%%%%-*}" ]; then
+  echo "the navigation effect is built against KWin ${built:-?}; the full profile pins ${pinned%%%%-*}" >&2
+  exit 1
+fi
+%endif
 # KWin gives the overlay its screen pictures by the desktop file whose Exec= is its program, and the
 # session bus starts that program: both point at the installed path.
 grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \

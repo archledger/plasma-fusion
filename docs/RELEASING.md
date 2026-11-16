@@ -24,7 +24,8 @@ key in the AUR package's `validpgpkeys` and the installer.
    package goes to the candidates project and to the live one:
    `copr-cli build archledger/plasma-fusion-full-candidates OUT/SRPMS/kwin-*.src.rpm`, then the
    same with `archledger/plasma-fusion-full`. Plasma Fusion's `--with full` build compiles
-   against its project's own KWin (`cmake(KWin)` resolves to the fork's `kwin-devel` there), so
+   against its project's own KWin: it requires the fork's `kwin-devel` at exactly the pin (not
+   `cmake(KWin)`, which would take Fedora's once Fedora's KWin is newer than the pin, #191), so
    each project needs the tag before a candidate or the release is built in it. In the live
    project the new KWin waits: the current metapackage requires the old pin exactly, and the
    version lock holds every full-profile machine at the old one. The spec's `%global kwin_full_pin`

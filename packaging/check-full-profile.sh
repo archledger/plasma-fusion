@@ -4,8 +4,10 @@
 #
 # The full-profile spec branch's automated checks (docs/full-profile.md): the stock default
 # never emits plasma-fusion-full; a full build with a matching exact pin emits it once; a full
-# build with a wrong-series pin fails; a full build without a pin fails. Keeps the %{with full}
-# gate exercised in CI without building the fork's RPMs. The pin's pf suffix carries any number
+# build with a wrong-series pin fails; a full build without a pin fails; a full build requires
+# the fork's kwin-devel at exactly the pin, and its %check refuses a navigation effect built
+# against another KWin. Keeps the %{with full} gate exercised in CI without building the fork's
+# RPMs. The pin's pf suffix carries any number
 # of digits (check-version.sh accepts pf10), so the two-digit gates mirror the one-digit ones.
 #
 # A release sets the pin in the spec itself (%global kwin_full_pin), and a %global in the spec
@@ -82,6 +84,53 @@ else
   echo "FAIL the metapackage ships the record: found x$files in its file list"
   rc=1
 fi
+# A full build compiles against the KWin it pins: it requires the fork's kwin-devel at exactly
+# the pin, because cmake(KWin) takes the newest kwin-devel in the build root - the
+# distribution's, once that is newer than the pin (#191) - and its %check refuses a navigation
+# effect built against another KWin, which would stay idle on every full-profile machine. The
+# pin replaces cmake(KWin) rather than joining it: next to a newer kwin-devel the two cannot both
+# get their best candidate, and mock's dnf runs with best=1.
+buildreq() { # DESC EXPECTED ARGS...: the build's KWin requirements, one per line
+  local desc=$1 expected=$2 got
+  shift 2
+  got=$(rpmspec --define 'fedora 44' "$@" -q --buildrequires "$spec" 2>/dev/null | grep -E '^(kwin-devel|cmake\(KWin\))' || true)
+  if [ "$got" = "$expected" ]; then
+    echo "ok   $desc"
+  else
+    echo "FAIL $desc: expected '$expected', got '$got'"
+    rc=1
+  fi
+}
+buildreq "a full build requires the pinned kwin-devel exactly, and no other KWin" "kwin-devel = 6.8.2-3.fc44.pf2" --with full --define 'kwin_full_pin 6.8.2-3.fc44.pf2'
+buildreq "a stock build requires any KWin 6.7 or later" "cmake(KWin) >= 6.7" --define 'kwin_full_pin 6.8.2-3.fc44.pf2'
+buildreq "a full build without the compiled parts requires no KWin" "" --with full --without compiled --define 'kwin_full_pin 6.8.2-3.fc44.pf2'
+navcheck() { # DESC EXPECTED(pass|fail|absent) BUILT ARGS...: %check on a navigation record of KWin BUILT
+  local desc=$1 expected=$2 built=$3 body got dir
+  shift 3
+  body=$(rpmspec --define 'fedora 44' "$@" -P "$spec" 2>/dev/null | sed -n "/^pinned='/,/^fi\$/p")
+  if [ -z "$body" ]; then
+    got=absent
+  else
+    dir=$(mktemp -d)
+    printf 'kwin=%s\nqt=6.11.2\n' "$built" >"$dir/navigation"
+    if (eval "$(printf '%s\n' "$body" | sed "s#[^ \"]*/plasma-fusion/built-against/navigation#$dir/navigation#g")") 2>/dev/null; then
+      got=pass
+    else
+      got=fail
+    fi
+    rm -rf "$dir"
+  fi
+  if [ "$got" = "$expected" ]; then
+    echo "ok   $desc"
+  else
+    echo "FAIL $desc: expected $expected, got $got"
+    rc=1
+  fi
+}
+navcheck "a full build's %check accepts the navigation effect built against the pinned KWin" pass 6.8.2 --with full --define 'kwin_full_pin 6.8.2-3.fc44.pf2'
+navcheck "a full build's %check refuses one built against the distribution's newer KWin" fail 6.8.3 --with full --define 'kwin_full_pin 6.8.2-3.fc44.pf2'
+navcheck "a full build's %check refuses one without a KWin version" fail "" --with full --define 'kwin_full_pin 6.8.2-3.fc44.pf2'
+navcheck "a stock build's %check does not compare it with a pin" absent 6.8.3 --define 'kwin_full_pin 6.8.2-3.fc44.pf2'
 # The spec as it is: with a pin of its own, the stock build still never emits the metapackage,
 # the full build emits it once with exact requires on that pin, and the record names it.
 if [ -n "$own" ]; then
@@ -97,6 +146,8 @@ if [ -n "$own" ]; then
     rc=1
   fi
   record "the spec's own pin: the record names it and its fork tag" "kwin=$own tag=v${own%%-*}-${own##*.} " --with full
+  buildreq "the spec's own pin: a full build requires kwin-devel at exactly $own, and no other KWin" "kwin-devel = $own" --with full
+  navcheck "the spec's own pin: %check accepts the navigation effect built against KWin ${own%%-*}" pass "${own%%-*}" --with full
 else
   echo "ok   the spec sets no pin of its own (plasma-fusion-full is not built)"
 fi

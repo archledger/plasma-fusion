@@ -126,6 +126,13 @@ packaging/build-rpm.sh [--topdir DIR] [--compiled] [--no-lint]   # default DIR: 
   pin unset, or with a pin carrying another Fedora release, is a hard error rather than a silent
   skip; `packaging/check-full-profile.sh` exercises those gates
   ([full-profile.md](../full-profile.md)).
+* A full build compiles against the KWin it pins: it requires `kwin-devel = <pin>` (the fork's,
+  from its own Copr project) instead of `cmake(KWin)`, which takes the newest `kwin-devel` in the
+  build root, Fedora's once that is newer than the pin. A navigation effect built for that KWin
+  would stay idle on every full-profile machine (#191). Not both requirements: next to a newer
+  `kwin-devel` they cannot both get their best candidate, and mock's dnf runs with `best=1`. Its
+  `%check` also refuses a navigation effect whose `built-against` record names another KWin than
+  the pin's upstream version. `packaging/check-full-profile.sh` checks both.
 * The source tarball is the working tree as it is (tracked plus untracked, not git-ignored files;
   `git ls-files --cached --others --exclude-standard`), stable order, owners 0, the revision's
   commit time as mtime. git is only read (`--no-optional-locks`: no index refresh).
