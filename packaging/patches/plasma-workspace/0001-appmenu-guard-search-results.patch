@@ -20,13 +20,13 @@ Signed-off-by: Wisbendji Fimerlus <archledger236@gmail.com>
  2 files changed, 13 insertions(+), 6 deletions(-)
 
 diff --git a/applets/appmenu/appmenumodel.cpp b/applets/appmenu/appmenumodel.cpp
-index 4130ac5..3a3678d 100644
+index e91d858..d09b3b6 100644
 --- a/applets/appmenu/appmenumodel.cpp
 +++ b/applets/appmenu/appmenumodel.cpp
-@@ -99,8 +99,11 @@ AppMenuModel::AppMenuModel(QObject *parent)
-             insertSearchActionsIntoMenu(searchBar->text());
+@@ -101,8 +101,11 @@ AppMenuModel::AppMenuModel(QObject *parent)
+             insertSearchActionsIntoMenu(m_searchBar->text());
          });
-         connect(searchBar, &QLineEdit::returnPressed, this, [this]() mutable {
+         connect(m_searchBar, &QLineEdit::returnPressed, this, [this]() mutable {
 -            if (!m_currentSearchActions.empty()) {
 -                m_currentSearchActions.constFirst()->trigger();
 +            for (const auto &action : std::as_const(m_currentSearchActions)) {
@@ -36,8 +36,8 @@ index 4130ac5..3a3678d 100644
 +                }
              }
          });
-         connect(this, &AppMenuModel::modelNeedsUpdate, searchBar, [this, searchBar]() mutable {
-@@ -180,10 +183,13 @@ int AppMenuModel::rowCount(const QModelIndex &parent) const
+         connect(this, &AppMenuModel::modelNeedsUpdate, m_searchBar, [this]() mutable {
+@@ -183,10 +186,13 @@ int AppMenuModel::rowCount(const QModelIndex &parent) const
  
  void AppMenuModel::removeSearchActionsFromMenu()
  {
@@ -55,13 +55,13 @@ index 4130ac5..3a3678d 100644
  
  void AppMenuModel::insertSearchActionsIntoMenu(const QString &filter)
 diff --git a/applets/appmenu/appmenumodel.h b/applets/appmenu/appmenumodel.h
-index b0f97b4..a121311 100644
+index ba4a64e..0779440 100644
 --- a/applets/appmenu/appmenumodel.h
 +++ b/applets/appmenu/appmenumodel.h
-@@ -90,7 +90,8 @@ private:
-     std::unique_ptr<QMenu> m_searchMenu;
+@@ -95,7 +95,8 @@ private:
      QPointer<QMenu> m_menu;
      QPointer<QAction> m_searchAction;
+     QPointer<QLineEdit> m_searchBar;
 -    QList<QAction *> m_currentSearchActions;
 +    // Actions of the imported menu: the importer deletes them when the application rebuilds a menu
 +    QList<QPointer<QAction>> m_currentSearchActions;
@@ -69,5 +69,5 @@ index b0f97b4..a121311 100644
      void removeSearchActionsFromMenu();
      void insertSearchActionsIntoMenu(const QString &filter = QString());
 -- 
-2.55.0
+2.56.1
 

@@ -15,10 +15,10 @@ Signed-off-by: Wisbendji Fimerlus <archledger236@gmail.com>
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/applets/appmenu/appmenumodel.cpp b/applets/appmenu/appmenumodel.cpp
-index 3a3678d..9c087b2 100644
+index d09b3b6..9bcfb8c 100644
 --- a/applets/appmenu/appmenumodel.cpp
 +++ b/applets/appmenu/appmenumodel.cpp
-@@ -83,7 +83,8 @@ AppMenuModel::AppMenuModel(QObject *parent)
+@@ -84,7 +84,8 @@ AppMenuModel::AppMenuModel(QObject *parent)
      if (KWindowSystem::isPlatformWayland()) {
          m_searchAction = new QAction(this);
          m_searchAction->setText(i18n("Search"));
@@ -29,5 +29,5 @@ index 3a3678d..9c087b2 100644
          m_searchMenu.reset(new QMenu);
          auto searchAction = new QWidgetAction(this);
 -- 
-2.55.0
+2.56.1
 
