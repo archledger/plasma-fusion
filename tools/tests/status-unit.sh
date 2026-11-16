@@ -24,7 +24,20 @@
 #  13. a program put on the disk just before KWin started is never taken for a later one: the
 #      start read from /proc is up to two seconds early (the boot time and the clock ticks are
 #      both rounded down), so the times must be further apart than that;
-#  14. without getconf the clock ticks are taken as the kernel's usual hundred a second.
+#  14. without getconf the clock ticks are taken as the kernel's usual hundred a second;
+#  15. the full profile with the decoration record and the installed KDecoration at one version:
+#      no decoration note and no navigation note, though KWin is the pin's older one (the record
+#      holds KDecoration's version, not KWin's, so a comparison with KWin would make this note
+#      permanent, #194);
+#  16. a decoration built against an older KDecoration than the installed one: the note names the
+#      two KDecoration versions, not KWin's;
+#  17. the installed version from the other databases the login check reads (pacman's pkgver and
+#      pkgrel, dpkg's source package with its epoch and revision, Nix's store path name), compared
+#      upstream only, so a distribution rebuild alone is no note;
+#  18. the databases in the login check's order: rpm's answer is the one read;
+#  19. no database answers: no decoration note (a missing note, never a wrong one);
+#  20. the stock profile: no note when the installed KDecoration is the build's, whether or not
+#      KWin is another version.
 # Test tooling only, not installed.
 #
 #   status-unit.sh BASE
@@ -122,7 +135,36 @@ cat >"$BIN/getconf" <<EOF
 [ ! -e "\$T/no-getconf" ] || exit 127
 exec "$REAL_GETCONF" "\$@"
 EOF
-chmod +x "$BIN/kwin_wayland" "$BIN/journalctl" "$BIN/busctl" "$BIN/getconf"
+# The package databases the login check reads (plasma-fusion-gate.sh, DB_PACKAGES, in its order:
+# rpm, pacman, dpkg, nix). $T/kdecoration-<db> is the version that database reports for
+# kdecoration; without it the database is there and does not know the package, as rpm, pacman and
+# nix-store do for a package that is not installed (dpkg-query just lists nothing).
+cat >"$BIN/rpm" <<'EOF'
+#!/bin/bash
+v=$(cat "$T/kdecoration-rpm" 2>/dev/null) || exit 1
+[ -n "$v" ] || exit 1
+echo "$v"
+EOF
+cat >"$BIN/pacman" <<'EOF'
+#!/bin/bash
+v=$(cat "$T/kdecoration-pacman" 2>/dev/null) || exit 1
+[ -n "$v" ] || exit 1
+echo "kdecoration $v"
+EOF
+cat >"$BIN/dpkg-query" <<'EOF'
+#!/bin/bash
+v=$(cat "$T/kdecoration-dpkg" 2>/dev/null) || exit 0
+[ -n "$v" ] || exit 0
+printf 'installed kdecoration=%s\n' "$v"
+EOF
+cat >"$BIN/nix-store" <<'EOF'
+#!/bin/bash
+v=$(cat "$T/kdecoration-nix" 2>/dev/null) || exit 1
+[ -n "$v" ] || exit 1
+printf '/nix/store/00000000000000000000000000000000-kdecoration-%s\n' "$v"
+EOF
+chmod +x "$BIN/kwin_wayland" "$BIN/journalctl" "$BIN/busctl" "$BIN/getconf" "$BIN/rpm" \
+  "$BIN/pacman" "$BIN/dpkg-query" "$BIN/nix-store"
 export PATH=$BIN:$PATH
 
 run() { # MODE [KWIN VERSION]: the command's output in OUT
@@ -144,6 +186,15 @@ record() { # the metapackage's record, or none
     printf 'kwin=%s\ntag=%s\n' 6.8.2-3.fc44.pf3 v6.8.2-pf3 >"$SHARE/plasma-fusion/full-profile"
   fi
 }
+# The compiled parts' records, as the packages install them: "kdecoration=<version>" for the
+# decoration (CMake's upstream version), "kwin=<version>" for the navigation.
+built() { # PART LINE...
+  local p=$1
+  shift
+  mkdir -p "$SHARE/plasma-fusion/built-against"
+  printf '%s\n' "$@" >"$SHARE/plasma-fusion/built-against/$p"
+}
+nobuilt() { rm -rf "$SHARE/plasma-fusion/built-against"; }
 
 # 1. outside a session
 record none
@@ -273,6 +324,73 @@ touch "$T/no-getconf"
 run fork
 has "14 the note to log in again without getconf" "log out and in (the KWin on the disk was put there after this session's KWin started"
 rm -f "$T/no-getconf"
+
+# 15. the full profile with the decoration record and the installed KDecoration at one version.
+# KWin is the pin's older one; the record holds KDecoration's version, so the note (which compared
+# with KWin) used to be permanent (#194).
+record
+nobuilt
+echo 6.8.3 >"$T/kdecoration-rpm"
+built decoration kdecoration=6.8.3 qt=6.11.2
+built navigation kwin=6.8.2 qt=6.11.2
+run fork 6.8.2
+hasnot "15 no decoration note when the installed KDecoration is the build's" "the decoration part was built against"
+hasnot "15 no navigation note" "the navigation part was built against"
+
+# 16. a decoration built against an older KDecoration than the installed one: the note says what it
+# compares, and names the two KDecoration versions, not KWin's
+built decoration kdecoration=6.8.2 qt=6.11.2
+run fork 6.8.2
+has "16 the decoration's rebuild note" "  note: the decoration part was built against 6.8.2, the installed KDecoration is 6.8.3: update or rebuild that package"
+hasnot "16 the note is not about KWin" "KWin is"
+hasnot "16 no navigation note" "the navigation part was built against"
+
+# 17. the other databases the login check reads, upstream only as CMake recorded it: pacman's
+# pkgver-pkgrel, dpkg's source package with its epoch and revision, Nix's store path name
+rm -f "$T"/kdecoration-*
+built decoration kdecoration=6.8.3 qt=6.11.2
+echo 6.8.3-1 >"$T/kdecoration-pacman"
+run fork 6.8.2
+hasnot "17 pacman: the revision does not count" "the decoration part was built against"
+rm -f "$T/kdecoration-pacman"
+echo 4:6.8.3-1 >"$T/kdecoration-dpkg"
+run fork 6.8.2
+hasnot "17 dpkg: the epoch and the revision do not count" "the decoration part was built against"
+rm -f "$T/kdecoration-dpkg"
+echo 6.8.3 >"$T/kdecoration-nix"
+run fork 6.8.2
+hasnot "17 Nix: the store path's version counts" "the decoration part was built against"
+echo 6.8.4 >"$T/kdecoration-nix"
+run fork 6.8.2
+has "17 Nix: a newer installed KDecoration is named" "the installed KDecoration is 6.8.4"
+
+# 18. the databases in the login check's order: rpm's answer is the one read, though pacman's is
+# another version
+rm -f "$T"/kdecoration-*
+echo 6.8.3 >"$T/kdecoration-rpm"
+echo 6.9.0 >"$T/kdecoration-pacman"
+built decoration kdecoration=6.8.3 qt=6.11.2
+run fork 6.8.2
+hasnot "18 rpm's answer is the one read" "the decoration part was built against"
+
+# 19. no database answers: no decoration note, though the record is older than the running KWin
+rm -f "$T"/kdecoration-*
+nobuilt
+built decoration kdecoration=6.8.2 qt=6.11.2
+run fork 6.8.3
+hasnot "19 no decoration note without an answer" "the decoration part was built against"
+
+# 20. the stock profile: no note when the installed KDecoration is the build's - and none either
+# when that older KDecoration is the installed one, though KWin is another version
+record none
+built decoration kdecoration=6.8.3 qt=6.11.2
+echo 6.8.3 >"$T/kdecoration-rpm"
+run stock 6.8.3
+hasnot "20 stock: no note when the installed KDecoration is the build's" "the decoration part was built against"
+built decoration kdecoration=6.8.2 qt=6.11.2
+echo 6.8.2 >"$T/kdecoration-rpm"
+run stock 6.8.3
+hasnot "20 stock: no note when it is the installed KDecoration, not KWin" "the decoration part was built against"
 
 echo "status-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

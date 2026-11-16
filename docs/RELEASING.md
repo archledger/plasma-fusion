@@ -146,8 +146,12 @@ the installer from the draft's URL with `--dry-run` on one system.
 
 ## 6. After a KWin update in a distribution
 
-The navigation effect (and on Arch the decoration) is built against one KWin. Until it is rebuilt,
-the login check keeps it off and `plasma-fusion status` says so.
+The navigation effect is built against one KWin and the decoration against one KDecoration;
+either being another version than the build makes the part due for a rebuild. Until it is rebuilt,
+the login check keeps the version-bound part off and `plasma-fusion status` says so: the navigation
+part when the running KWin is not the one in its record, the decoration when the installed
+KDecoration is not the one in its record (upstream versions; the full profile's pin holds KWin
+while Fedora's KDecoration moves, #194).
 
 - Copr (`archledger/plasma-fusion`): the last release's source package again with its release
   raised, built once the new KWin is in Fedora's stable updates (the build root takes it from

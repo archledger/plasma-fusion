@@ -308,8 +308,53 @@ capability_lines() { # FULL (yes when the full profile is installed)
   fi
 }
 
+# A version without an epoch and a distribution revision: pacman prints pkgver-pkgrel, a Debian
+# source version carries an epoch and a revision, and the parts' records hold the upstream version
+# their CMake found.
+upstream_version() {
+  local v=${1#*:}
+  printf '%s\n' "${v%%-*}"
+}
+
+# The installed KDecoration's upstream version, from the package databases the login check reads,
+# in its order and naming (tools/device/gate/plasma-fusion-gate.sh, DB_PACKAGES): the decoration is
+# compiled against KDecoration, not KWin, so this is the version its record is compared with
+# (docs/parts/decoration-cpp.md; issue #194: on the full profile the pinned KWin and the
+# distribution's KDecoration move apart, and a comparison with KWin would never agree again).
+# Prints nothing when no database answers: a missing note is better than a wrong one.
+installed_kdecoration() {
+  local db out
+  for db in rpm pacman dpkg nix; do
+    out=
+    case $db in
+      rpm)
+        command -v rpm >/dev/null 2>&1 || continue
+        out=$(rpm -q --qf '%{VERSION}\n' kdecoration 2>/dev/null) || out= ;;
+      pacman)
+        command -v pacman >/dev/null 2>&1 || continue
+        out=$(pacman -Q kdecoration 2>/dev/null) || out=
+        out=${out#kdecoration } ;;
+      dpkg)
+        # The source package: Debian's binary names change between releases.
+        command -v dpkg-query >/dev/null 2>&1 || continue
+        out=$(dpkg-query -W -f '${db:Status-Status} ${source:Package}=${source:Version}\n' 2>/dev/null) || out=
+        out=$(printf '%s\n' "$out" | sed -n 's/^installed kdecoration=//p' | head -1) ;;
+      nix)
+        command -v nix-store >/dev/null 2>&1 || continue
+        out=$(nix-store --query --requisites /run/current-system/sw 2>/dev/null) || out=
+        out=$(printf '%s\n' "$out" | sed -n 's|.*-kdecoration-\([0-9][^-]*\).*|\1|p' | head -1) ;;
+    esac
+    # rpm can answer for more than one architecture; the first answer is the version.
+    out=$(printf '%s\n' "$out" | sed -n '1{s/^[[:space:]]*//;s/[[:space:]]*$//;p}')
+    [ -n "$out" ] || continue
+    upstream_version "$out"
+    return 0
+  done
+  return 1
+}
+
 status() {
-  local p f series kwin built full=no
+  local p f series kwin built installed full=no
   echo "Plasma Fusion $VERSION ($PF)"
   for p in decoration settings navigation quicklook copytext; do
     if f=$(built_record "$p"); then
@@ -326,12 +371,21 @@ status() {
   profile_lines "$kwin"
   ! full_profile >/dev/null || full=yes
   capability_lines "$full"
-  for p in decoration navigation; do
-    f=$(built_record "$p") && [ -n "$kwin" ] || continue
-    built=$(sed -n 's/^kwin=//p;s/^kdecoration=//p' "$f" | head -1)
+  # A compiled part built against another version of what it is compiled into is due for a rebuild:
+  # the decoration against KDecoration, the navigation effect against KWin. The decoration's record
+  # holds KDecoration's version, never KWin's, and the two move apart on the full profile (#194).
+  if f=$(built_record decoration); then
+    built=$(sed -n 's/^kdecoration=//p' "$f" | head -1)
+    installed=
+    [ -z "$built" ] || installed=$(installed_kdecoration) || installed=
+    [ -z "$built" ] || [ -z "$installed" ] || [ "$built" = "$installed" ] ||
+      echo "  note: the decoration part was built against $built, the installed KDecoration is $installed: update or rebuild that package"
+  fi
+  if f=$(built_record navigation) && [ -n "$kwin" ]; then
+    built=$(sed -n 's/^kwin=//p' "$f" | head -1)
     [ -z "$built" ] || [ "$built" = "$kwin" ] ||
-      echo "  note: the $p part was built against $built, KWin is $kwin: update or rebuild that package"
-  done
+      echo "  note: the navigation part was built against $built, KWin is $kwin: update or rebuild that package"
+  fi
   if [ -f "$STATE/setup-version" ]; then
     echo "  set up for this account: $(cat "$STATE/setup-version")"
     [ "$(cat "$STATE/setup-version")" = "$VERSION" ] || echo "  note: run 'plasma-fusion update' to apply this version's settings"

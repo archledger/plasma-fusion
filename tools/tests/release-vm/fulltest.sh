@@ -373,7 +373,12 @@ has "status: the full profile" 21-status.log "profile: full \(the maintained KWi
 has "status: thumbnail source lifecycle, version 1" 21-status.log 'thumbnail source lifecycle: version 1'
 has "status: offscreen opacity, version 1" 21-status.log 'offscreen opacity: version 1'
 has "status: transient tiling" 21-status.log 'transient tiling \(dynamic tiling\): yes'
-hasnot "status: no note" 21-status.log '^  note:'
+# The decoration's record holds the KDecoration the build compiled against - Fedora's, not the
+# pin's - so when Fedora's KDecoration has moved since that build, its rebuild note is right on the
+# full profile too (#194). Nothing else is.
+others=$(grep -a '^  note:' "$OUT/21-status.log" |
+  grep -a -v -E '^  note: the decoration part was built against [0-9.]+, the installed KDecoration is [0-9.]+: update or rebuild that package$' || true)
+want "status: no note but the decoration part's rebuild note" "$others" ""
 has "the login check switched nothing off" 21-status.log 'switched off: nothing'
 vm ssh "$name" 'grep -h LookAndFeelPackage ~/.config/kdeglobals' >"$OUT/21-theme.txt" 2>&1
 has "the session is Plasma Fusion's" 21-theme.txt 'org\.plasmafusion\.'
@@ -428,8 +433,9 @@ if [ "$mode" = fresh ]; then
   # While Fedora's KWin is another version than the pin's (#198), the parts built for the pin's
   # KWin are due for a rebuild on stock KWin, and status says so; nothing else. The navigation
   # part is built against the pin (the full build requires it), so its note is always there. The
-  # decoration's depends on the KDecoration the build was compiled against (#194): a full build
-  # made after Fedora's update has the newer one, and no note.
+  # decoration's compares the installed KDecoration (Fedora's, #194): a full build made after
+  # Fedora's update has the newer one, and no note; one from before it has a note that names the
+  # two KDecoration versions. Either way it is the only other note allowed.
   pin_up=$(upstream "$(fact 12-facts.txt pin)") stock_up=$(upstream "${STOCK[kwin]}")
   if [ "$pin_up" = "$stock_up" ]; then
     hasnot "status: no note" 41-status.log '^  note:'
@@ -437,7 +443,8 @@ if [ "$mode" = fresh ]; then
     hasf "status: the navigation part's rebuild note (built for the pin's KWin $pin_up)" 41-status.log \
       "  note: the navigation part was built against $pin_up, KWin is $stock_up: update or rebuild that package"
     others=$(grep -a '^  note:' "$OUT/41-status.log" |
-      grep -a -v -E "^  note: the (decoration|navigation) part was built against [0-9.]+, KWin is ${stock_up//./\\.}: update or rebuild that package\$" || true)
+      grep -a -v -E -e "^  note: the navigation part was built against ${pin_up//./\\.}, KWin is ${stock_up//./\\.}: update or rebuild that package\$" \
+        -e '^  note: the decoration part was built against [0-9.]+, the installed KDecoration is [0-9.]+: update or rebuild that package$' || true)
     want "status: no note but the rebuild notes of the parts built for KWin $pin_up" "$others" ""
   fi
   has "the login check switched nothing off" 41-status.log 'switched off: nothing'
