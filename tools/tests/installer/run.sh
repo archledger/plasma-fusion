@@ -218,6 +218,7 @@ expect() { # DESCRIPTION CONDITION...
   if "$@"; then ok "$SHNAME: $d"; else bad "$SHNAME: $d"; printf '      rc=%s\n%s\n      log:\n%s\n' "$RC" "$(sed 's/^/      /' <<<"$OUT" | tail -8)" "$(sed 's/^/      /' <<<"$LOG")"; fi
 }
 has_out() { grep -qF -- "$1" <<<"$OUT"; }
+hasnt_out() { ! grep -qF -- "$1" <<<"$OUT"; }
 has_log() { grep -qF -- "$1" <<<"$LOG"; }
 # No package step and no setup: only queries (rpm, pacman, dpkg-query, busctl) in the log.
 no_change() { ! grep -qE '^(sudo|dnf|apt-get|add-apt-repository|yay|paru|makepkg|plasma-fusion) ' <<<"$LOG"; }
@@ -321,6 +322,34 @@ for SHNAME in "${shells[@]}"; do
   expect "  records the stock KWin for --full-restore" has_out "/var/lib/plasma-fusion/full-restore.txt"
   expect "  states the security-update lag" has_out "can lag Fedora by days"
   expect "  and changes nothing" no_change
+  # #198: Fedora's KWin newer than the full profile's pin. The stamp carries the pin (PF_FULL_PIN),
+  # so the plan names the version change the transaction makes - here a downgrade; the direction
+  # comes from the two EVRs. The same upstream version on both sides is a rebuild swap, not a
+  # version change, and the plan says nothing of versions then.
+  PINV=6.8.2-3.fc44.pf5
+  P683="plasma-workspace=6.8.3 kwin=6.8.3"
+  FULLPIN="PLASMA_FUSION_DEV_FULL_FEDORA=44 PLASMA_FUSION_DEV_FULL_PIN=$PINV PLASMA_FUSION_DEV_SERIES=6.8"
+  EXTRA_ENV="$FULLPIN" VERSIONS=$P683 KWIN_RUNNING=6.8.3-1.fc44 run "$sh" $FED -- --full --dry-run
+  expect "--full on a stock KWin newer than the pin names the change" \
+    has_out "  note: the full profile's KWin 6.8.2-3.fc44.pf5 replaces Fedora's 6.8.3-1.fc44 (an older upstream version)."
+  expect "  exits 0 on it" [ "$RC" = 0 ]
+  expect "  still changing nothing" no_change
+  EXTRA_ENV="$FULLPIN" VERSIONS="plasma-workspace=6.8.2 kwin=6.8.2" KWIN_RUNNING=6.8.2-3.fc44 run "$sh" $FED -- --full --dry-run
+  expect "a stock KWin of the pin's upstream version names no change" hasnt_out "replaces Fedora's"
+  EXTRA_ENV="$FULLPIN" VERSIONS="plasma-workspace=6.8.3 kwin-wayland=6.8.3" KWIN_RUNNING=6.8.3-1.fc44 run "$sh" $FED -- --full --dry-run
+  expect "a pin with no installed KWin to compare names no change" hasnt_out "replaces Fedora's"
+  expect "  and keeps the plan's plain words" has_out "replaces the stock KWin"
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44 PLASMA_FUSION_DEV_SERIES=6.8" VERSIONS=$P683 KWIN_RUNNING=6.8.3-1.fc44 \
+    run "$sh" $FED -- --full --dry-run
+  expect "a stamp without a pin names no change (as before)" hasnt_out "replaces Fedora's"
+  expect "  and plans the profile the same" has_out "dnf -y install plasma-fusion-full"
+  # A pin newer than Fedora's KWin: the same line, the other direction (a new fork on a KWin
+  # ahead of Fedora's).
+  EXTRA_ENV="PLASMA_FUSION_DEV_FULL_FEDORA=44 PLASMA_FUSION_DEV_FULL_PIN=6.8.3-1.fc44.pf1 PLASMA_FUSION_DEV_SERIES=6.8" \
+    VERSIONS="plasma-workspace=6.8.2 kwin=6.8.2" KWIN_RUNNING=6.8.2-3.fc44 run "$sh" $FED -- --full --dry-run
+  expect "a pin newer than the stock KWin names the upgrade" \
+    has_out "  note: the full profile's KWin 6.8.3-1.fc44.pf1 replaces Fedora's 6.8.2-1.fc44 (a newer upstream version)."
+  EXTRA_ENV=''
   # The profile question (#179): a fresh install on the Fedora release the stamp builds the full
   # profile for asks which one, before the plan, on the terminal (in test mode: a file).
   ANS=$CASE/answer
@@ -483,7 +512,25 @@ for SHNAME in "${shells[@]}"; do
   VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 KWIN_STOCK=6.7.5-1.fc44 run "$sh" $FED -- --full-restore --dry-run
   expect "--full-restore plans the recording when the record shows KWin's version change" \
     has_out "  plasma-fusion update   (KWin 6.8.2 becomes the recorded 6.7.5: records it for the login check)"
+  expect "  and names the stock KWin it brings back" \
+    has_out "  note: the stock KWin 6.7.5-1.fc44 replaces the full profile's KWin 6.8.2-3.fc44.pf3 (an older upstream version)."
   expect "  as a step of this run, in the session" bash -c '! grep -qF "then, in your Plasma session" <<<"$0"' "$OUT"
+  # After Fedora's push (6.8.3 against the pin's 6.8.2): the record names the newer stock KWin, and
+  # the plan says that the restore brings a newer upstream version back (#198).
+  plant_record 6.8.3-1.fc44
+  VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --dry-run
+  expect "--full-restore names the newer stock KWin it brings back" \
+    has_out "  note: the stock KWin 6.8.3-1.fc44 replaces the full profile's KWin 6.8.2-3.fc44.pf3 (a newer upstream version)."
+  # The same upstream version on both sides is a rebuild swap, not a version change.
+  plant_record 6.8.2-1.fc44
+  VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --dry-run
+  expect "a recorded stock KWin of the fork's upstream version names no change" \
+    hasnt_out "replaces the full profile's KWin"
+  # A KWin the user already synced back (the metapackage still on): the fork is not what runs, and
+  # the plan does not say the restore replaces it.
+  plant_record 6.8.3-1.fc44
+  VERSIONS="$P675 plasma-fusion-full=0.2.0" KWIN_RUNNING=6.7.5 run "$sh" $FED -- --full-restore --dry-run
+  expect "a stock KWin already back names no fork it replaces" hasnt_out "replaces the full profile's KWin"
   plant_record
   SESSION='' VERSIONS=$FULLV KWIN_RUNNING=6.8.2-3.fc44.pf3 run "$sh" $FED -- --full-restore --dry-run
   expect "--full-restore outside a session plans the recording for the user's session" \
@@ -789,6 +836,38 @@ for SHNAME in "${shells[@]}"; do
   else
     ok "$SHNAME: --full-repo refuses a name that is not OWNER/NAME"
   fi
+  # The pin (#198): the stamp carries the spec's %global kwin_full_pin - the same read as
+  # packaging/release-assets.sh - unless --full-pin names one, and the plan reads it from there.
+  SPECPIN=$(sed -n 's/^%global kwin_full_pin *//p' "$ROOT/packaging/fedora/plasma-fusion.spec" | tr -d '[:space:]')
+  if [ -n "$SPECPIN" ]; then
+    grep -qx "PF_FULL_PIN='$SPECPIN'" "$STAMPED_FULL" 2>/dev/null &&
+      ok "$SHNAME: a stamp without --full-pin carries the spec's pin" ||
+      bad "$SHNAME: a stamp without --full-pin carries the spec's pin"
+  else
+    grep -qx "PF_FULL_PIN=''" "$STAMPED_FULL" 2>/dev/null &&
+      ok "$SHNAME: a spec without a pin stamps none" ||
+      bad "$SHNAME: a spec without a pin stamps none"
+  fi
+  STAMPED_PIN=$CASE/install-stamped-pin.sh
+  "$ROOT/packaging/stamp-installer.sh" --copr "44" --ppa stonking --deb "neon testing" --full-fedora 44 \
+    --full-pin 6.8.2-3.fc44.pf7 "$STAMPED_PIN" >/dev/null 2>&1
+  grep -qx "PF_FULL_PIN='6.8.2-3.fc44.pf7'" "$STAMPED_PIN" 2>/dev/null &&
+    ok "$SHNAME: --full-pin stamps the pin" ||
+    bad "$SHNAME: --full-pin stamps the pin"
+  STAMPED_NOPIN=$CASE/install-stamped-nopin.sh
+  "$ROOT/packaging/stamp-installer.sh" --copr "44" --ppa stonking --deb "neon testing" --full-fedora 44 \
+    --full-pin '' "$STAMPED_NOPIN" >/dev/null 2>&1
+  grep -qx "PF_FULL_PIN=''" "$STAMPED_NOPIN" 2>/dev/null &&
+    ok "$SHNAME: --full-pin '' stamps no pin" ||
+    bad "$SHNAME: --full-pin '' stamps no pin"
+  for badpin in '6.8.2-3.fc44.pf5;reboot' '6.8.2 3' '6.8.2' "6.8.2-3.fc44.pf5'"; do
+    if "$ROOT/packaging/stamp-installer.sh" --copr "44" --ppa stonking --deb "neon testing" --full-fedora 44 \
+      --full-pin "$badpin" "$CASE/install-stamped-badpin.sh" >/dev/null 2>&1; then
+      bad "$SHNAME: --full-pin refuses '$badpin'"
+    else
+      ok "$SHNAME: --full-pin refuses '$badpin'"
+    fi
+  done
   # A stamped copy stops at the real os-release before any plan off Fedora, but it checks the
   # project's shape before any system check: a copy that took this malformed one from the
   # environment would name it in its refusal on every system the tests run on.

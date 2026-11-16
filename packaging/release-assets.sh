@@ -18,7 +18,8 @@
 # flake.nix). Environment: PF_COPR_FEDORA (default "44 45"), PF_PPA_SERIES (default "stonking"),
 # PF_DEB_TARGETS (default "neon testing"), PF_FULL_FEDORA (default: the Fedora release of the
 # spec's full-profile pin, %global kwin_full_pin, e.g. 44 for 6.8.2-3.fc44.pf5; empty without a
-# pin: the release has no full profile): stamped into install.sh.
+# pin: the release has no full profile): stamped into install.sh, with that pin (--full-pin), so
+# --full's plan names the KWin version change (#198).
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TAG=${1:?usage: release-assets.sh vX.Y.Z OUTDIR}
@@ -40,7 +41,8 @@ version=${TAG#v}
 rm -rf "$OUT/release" "$OUT/ppa" "$OUT/logs" "$OUT/work"
 mkdir -p "$OUT/release" "$OUT/ppa" "$OUT/logs" "$OUT/work"
 tarball=$("$ROOT/packaging/make-source.sh" --ref "$TAG" --output "$OUT/release")
-"$ROOT/packaging/stamp-installer.sh" --copr "$COPR" --ppa "$PPA" --deb "$DEBT" --full-fedora "$FULLF" "$OUT/release/install.sh"
+"$ROOT/packaging/stamp-installer.sh" --copr "$COPR" --ppa "$PPA" --deb "$DEBT" --full-fedora "$FULLF" \
+  --full-pin "$pin" "$OUT/release/install.sh"
 
 # Containers build from a copy of the tree at the tag (the tarball), with the test scripts.
 tar -xzf "$tarball" -C "$OUT/work"

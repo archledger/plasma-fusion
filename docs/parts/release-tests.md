@@ -162,9 +162,11 @@ is not part of `run-all.sh`: the full profile has one channel, its own Copr proj
 installer knows no other place for the fork, so the lane runs on a Copr project's builds (the
 fork tag's KWin and the metapackage) and needs no served channel. The installer is the tree's
 own, stamped by `packaging/stamp-installer.sh` with `--full-fedora` (`PF_FULL_FEDORA`, default
-`44`) and `--full-repo` (`PF_FULL_REPO`, default the live `archledger/plasma-fusion-full`). A
-candidate runs with `PF_FULL_REPO=archledger/plasma-fusion-full-candidates`: the live project has
-users and never carries a candidate (RELEASING.md, step 2). `PF_PUBLIC=1` takes the published
+`44`), `--full-pin` (the spec's `%global kwin_full_pin`, so the plan names the version change
+against the VM's KWin, #198) and `--full-repo` (`PF_FULL_REPO`, default the live
+`archledger/plasma-fusion-full`). A candidate runs with
+`PF_FULL_REPO=archledger/plasma-fusion-full-candidates`: the live project has users and never
+carries a candidate (RELEASING.md, step 2). `PF_PUBLIC=1` takes the published
 installer instead, after a release, and that one names the live project. Before a VM starts, the
 lane refuses a `PF_FULL_REPO` that is not OWNER/NAME, and `PF_PUBLIC=1` with any project but the
 live one. Results: `$PF_VM_HOME/results/NAME-full/` and `NAME-full-switch/`.
