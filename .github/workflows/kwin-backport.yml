@@ -14,7 +14,10 @@
 #   (tools/tests/kwin-backport/run.sh; the runners have no GPU, so the sessions paint in software
 #   and take no screenshots).
 # A Fedora KWin other than 6.7.5, 6.8.2 or 6.8.3 fails the run: the backport then needs a reviewed
-# update. The rebuilt packages never leave the runner: only logs and results are uploaded.
+# update. So does a build whose source package is on none of the mirrors the first job reads, as for
+# some hours after Fedora's push: every job that builds fetches it with
+# packaging/patches/kwin/fetch-source.sh, which retries with fresh metadata and then says so (#203).
+# The rebuilt packages never leave the runner: only logs and results are uploaded.
 
 name: kwin-backport
 
@@ -58,7 +61,8 @@ jobs:
   source:
     name: "Fedora 44's KWin"
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Room for the source package's four attempts (fetch-source.sh: 3 minutes of waits between them).
+    timeout-minutes: 15
     container: registry.fedoraproject.org/fedora:44
     outputs:
       vr: ${{ steps.query.outputs.vr }}
@@ -74,6 +78,19 @@ jobs:
             exit 1
           fi
           echo "vr=$vr" >>"$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The jobs below rebuild that build from its source package. A stable update reaches Fedora's
+      # source repositories on some mirrors hours after the binary ones (#203), so the run stops here,
+      # with the reason, while no mirror this job reads carries it yet: not 40 minutes later, on a
+      # missing file.
+      - name: Its source package (Fedora 44's updates-source)
+        env:
+          VR: ${{ steps.query.outputs.vr }}
+        run: bash packaging/patches/kwin/fetch-source.sh "$VR" "$RUNNER_TEMP/source"
 
   native:
     name: "KWin tests, ${{ matrix.variant }} (Fedora's configuration)"

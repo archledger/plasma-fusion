@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Rebuild supported Fedora 44 KWin versions with the optional requestedGeometry backport.
 # Usage: build.sh OUT_DIR [VERSION-RELEASE]
+# Exit status: 0 built; 3 Fedora's source package of that build could not be fetched (no mirror read
+# carries it yet: fetch-source.sh); 64 usage; another failure its own status.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 if (( $# < 1 || $# > 2 )); then
