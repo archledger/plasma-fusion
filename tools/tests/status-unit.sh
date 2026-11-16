@@ -47,7 +47,9 @@
 #      status finishes and the version stays unknown;
 #  24. the system's database fails while a foreign package manager's files are there: no note,
 #      because the system's database is the one asked and its failure is an unknown, never another
-#      installation's answer.
+#      installation's answer;
+#  25. a pacman database without a package directory beside the system's own: it is not the system's
+#      database (the login check needs a package directory), so its version never answers.
 # Test tooling only, not installed.
 #
 #   status-unit.sh BASE
@@ -186,13 +188,17 @@ export PATH=$BIN:$PATH
 ROOTFS=$T/root
 mkdir -p "$ROOTFS"
 export PF_STATUS_ROOT=$ROOTFS
-dbev() { # DB: that database's evidence, and no other's
+dbev() { # DB: that database's evidence, and no other's - as the login check reads it
   rm -rf "$ROOTFS"
   mkdir -p "$ROOTFS"
   case $1 in
     rpm) mkdir -p "$ROOTFS/var/lib/rpm"; : >"$ROOTFS/var/lib/rpm/rpmdb.sqlite" ;;
-    pacman) mkdir -p "$ROOTFS/var/lib/pacman/local"; : >"$ROOTFS/var/lib/pacman/local/ALPM_DB_VERSION" ;;
-    dpkg) mkdir -p "$ROOTFS/var/lib/dpkg"; : >"$ROOTFS/var/lib/dpkg/status" ;;
+    # An installed package's directory, not just ALPM_DB_VERSION: a pacman installed beside the
+    # system's package manager leaves only the latter (gate-unit.sh case v4d).
+    pacman) mkdir -p "$ROOTFS/var/lib/pacman/local/kdecoration-6.8.3-1" ;;
+    dpkg) mkdir -p "$ROOTFS/var/lib/dpkg"
+          printf 'Package: kdecoration\nStatus: install ok installed\nArchitecture: amd64\nVersion: 4:6.8.3-1\n\n' \
+            >"$ROOTFS/var/lib/dpkg/status" ;;
     nix) : ;; # PF_NIX_SW's directory is the evidence
   esac
 }
@@ -390,6 +396,10 @@ dbev dpkg
 echo 4:6.8.3-1 >"$T/kdecoration-dpkg"
 run fork 6.8.2
 hasnot "17 dpkg: the epoch and the revision do not count" "the decoration part was built against"
+echo 4:6.8.2-1 >"$T/kdecoration-dpkg"
+run fork 6.8.2
+has "17 dpkg: the source package answers, epoch and revision stripped" "  note: the decoration part was built against 6.8.3, the installed KDecoration is 6.8.2: update or rebuild that package"
+echo 4:6.8.3-1 >"$T/kdecoration-dpkg"
 rm -f "$T/kdecoration-dpkg"
 dbev nix
 mkdir -p "$T/nixsw"
@@ -448,6 +458,9 @@ printf '4:6.8.3-1\n4:6.8.3-2\n' >"$T/kdecoration-dpkg"
 built decoration kdecoration=6.8.3 qt=6.11.2
 run fork 6.8.2
 hasnot "21 one version in two revisions is one version" "the decoration part was built against"
+built decoration kdecoration=6.8.2 qt=6.11.2
+run fork 6.8.2
+has "21 and that version answers the note" "the installed KDecoration is 6.8.3"
 
 # 22. NixOS without nix-store on the PATH: the login check falls back to the system profile's own
 # binary, and the note is built on its answer (PF_NIX_SW names the profile here)
@@ -501,6 +514,22 @@ echo 6.8.3 >"$T/kdecoration-rpm"
 rm -f "$T/kdecoration-pacman"
 run fork 6.8.2
 hasnot "24 and the system's own answer is the one read" "the decoration part was built against"
+
+# 25. a pacman database with no package directories beside the system's own: the login check does not
+# count it (db_tool needs a package directory), so dpkg's answer is the one read - pacman's file is
+# there and says another version, which would be a false note
+rm -f "$T"/kdecoration-*
+record
+dbev dpkg
+mkdir -p "$ROOTFS/var/lib/pacman/local"; : >"$ROOTFS/var/lib/pacman/local/ALPM_DB_VERSION"
+echo 4:6.8.3-1 >"$T/kdecoration-dpkg"
+echo 6.9.0 >"$T/kdecoration-pacman"
+built decoration kdecoration=6.8.3 qt=6.11.2
+run fork 6.8.2
+hasnot "25 an empty pacman database is no database" "the decoration part was built against"
+mkdir -p "$ROOTFS/var/lib/pacman/local/kdecoration-6.9.0-1"
+run fork 6.8.2
+has "25 a pacman database with a package answers instead" "the installed KDecoration is 6.9.0"
 
 echo "status-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

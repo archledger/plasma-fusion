@@ -44,7 +44,8 @@ Each compiled part installs `share/plasma-fusion/built-against/<part>` (the KWin
 Qt it was built with); `plasma-fusion status` compares the navigation part with the running KWin
 and the decoration with the installed KDecoration (upstream versions only, read from the system's
 own package database, the first of rpm, pacman, dpkg and Nix whose files are there, as the login
-check picks it; that one answers alone, so a package manager installed beside it is never asked;
+check picks it - pacman's needs an installed package's directory, not just `ALPM_DB_VERSION`;
+that one answers alone, so a package manager installed beside it is never asked;
 the two move apart on the full profile, #194).
 A database that reports two versions of it - a partial upgrade leaves two binaries of Debian's
 source package, or two Nix store paths - is ambiguous and gives no note, and on NixOS the system
