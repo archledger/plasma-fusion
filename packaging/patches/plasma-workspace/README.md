@@ -21,7 +21,18 @@ packaging/patches/plasma-workspace/build.sh OUT_DIR [VERSION-RELEASE [FEDORA]]
 In a `registry.fedoraproject.org/fedora:FEDORA` container (podman): Fedora's source RPM of
 `VERSION-RELEASE` (default: the plasma-workspace installed on the machine), the patches added as
 `Patch9001` and up after Fedora's own, `Release` suffixed `.pf1` with a changelog entry, `rpmbuild -ba`.
-OUT_DIR gets every binary RPM, the source RPM, `rpmbuild.log` and `SHA256SUMS`.
+OUT_DIR gets every binary RPM, the source RPM, `rpmbuild.log`, `download.log` and `SHA256SUMS`.
+
+The source RPM comes through `../fetch-source.sh`, shared with the KWin backport. Right after
+Fedora pushes a stable update, some mirrors' source repositories do not carry it yet, and dnf then
+exits 0 without a file. The helper judges the download by the file that arrived (that build, a
+source package) and tries up to four times, with fresh metadata (which lets the mirror list pick
+another mirror) and waits of 30, 60 and 90 s between. When no attempt gets it, the build stops with
+status 3 and names the two causes. Either the build is newer than the mirrors, which usually clears
+within the day, or Fedora's repositories no longer carry it: their updates keep only each package's
+newest build, and `dnf repoquery --srpm plasma-workspace` lists the builds they carry. The default
+VERSION-RELEASE, the installed one, is the second case on a machine that has not taken Fedora's
+latest update; name a build they carry instead. dnf's own output is in `download.log`.
 
 Install the rebuilt subpackages that are installed now (the others need not come along), in one
 transaction:

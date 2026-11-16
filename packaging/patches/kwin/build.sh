@@ -4,7 +4,7 @@
 # Rebuild supported Fedora 44 KWin versions with the optional requestedGeometry backport.
 # Usage: build.sh OUT_DIR [VERSION-RELEASE]
 # Exit status: 0 built; 3 Fedora's source package of that build could not be fetched (no mirror read
-# carries it yet: fetch-source.sh); 64 usage; another failure its own status.
+# carries it: ../fetch-source.sh says why); 64 usage; another failure its own status.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 if (( $# < 1 || $# > 2 )); then
@@ -23,6 +23,7 @@ if [[ -n $(find "$out" -mindepth 1 -maxdepth 1 -print -quit) ]]; then
     exit 64
 fi
 podman run --rm --init --cpus=4 --memory=8g \
+    -v "${here%/*}/fetch-source.sh":/fetch-source.sh:ro,z \
     -v "$here":/patches:ro,z -v "$out":/out:Z \
     registry.fedoraproject.org/fedora:44 bash /patches/build-in-container.sh "$vr"
 (cd "$out" && sha256sum -- *.rpm > SHA256SUMS)

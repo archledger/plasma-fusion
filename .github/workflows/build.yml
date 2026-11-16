@@ -177,6 +177,9 @@ jobs:
       - name: Full-profile spec branch (stock default, pin gating, series refusal)
         run: packaging/check-full-profile.sh
 
+      - name: The patch lanes' source fetch (packaging/patches/fetch-source.sh against stand-ins, and its use in both lanes)
+        run: python3 packaging/patches/test_fetch_source.py
+
       - name: Snap geometry regression tests (offscreen Qt)
         run: |
           set -euo pipefail
