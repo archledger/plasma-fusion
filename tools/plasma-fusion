@@ -316,14 +316,31 @@ upstream_version() {
   printf '%s\n' "${v%%-*}"
 }
 
+# One upstream version from the answers a database gave, one per line, or nothing when they
+# disagree: a partial upgrade can leave two binaries of one source package, or two store paths, at
+# different versions, and the note may not be built on whichever the database listed first (the
+# login check sorts them for the same reason).
+upstream_versions() {
+  local v out
+  out=$(while IFS= read -r v; do
+    v=$(printf '%s\n' "$v" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    [ -n "$v" ] && upstream_version "$v"
+  done | LC_ALL=C sort -V -u)
+  [ -n "$out" ] && [ "$(printf '%s\n' "$out" | wc -l)" = 1 ] && printf '%s\n' "$out"
+}
+
 # The installed KDecoration's upstream version, from the package databases the login check reads,
 # in its order and naming (tools/device/gate/plasma-fusion-gate.sh, DB_PACKAGES): the decoration is
 # compiled against KDecoration, not KWin, so this is the version its record is compared with
 # (docs/parts/decoration-cpp.md; issue #194: on the full profile the pinned KWin and the
 # distribution's KDecoration move apart, and a comparison with KWin would never agree again).
-# Prints nothing when no database answers: a missing note is better than a wrong one.
+# Prints nothing when no database answers, or when one answers with two versions: a missing note is
+# better than a wrong one.
 installed_kdecoration() {
-  local db out
+  local db out prog nosw
+  # NixOS need not put nix-store on a user's PATH; the system profile's own binary answers there,
+  # as it does for the login check (PF_NIX_SW names the profile in the tests).
+  nosw=${PF_NIX_SW:-/run/current-system/sw}
   for db in rpm pacman dpkg nix; do
     out=
     case $db in
@@ -335,19 +352,20 @@ installed_kdecoration() {
         out=$(pacman -Q kdecoration 2>/dev/null) || out=
         out=${out#kdecoration } ;;
       dpkg)
-        # The source package: Debian's binary names change between releases.
+        # The source package (Debian's binary names change between releases), every installed
+        # binary of it: two of them can be at different versions mid-upgrade.
         command -v dpkg-query >/dev/null 2>&1 || continue
         out=$(dpkg-query -W -f '${db:Status-Status} ${source:Package}=${source:Version}\n' 2>/dev/null) || out=
-        out=$(printf '%s\n' "$out" | sed -n 's/^installed kdecoration=//p' | head -1) ;;
+        out=$(printf '%s\n' "$out" | sed -n 's/^installed kdecoration=//p') ;;
       nix)
-        command -v nix-store >/dev/null 2>&1 || continue
-        out=$(nix-store --query --requisites /run/current-system/sw 2>/dev/null) || out=
-        out=$(printf '%s\n' "$out" | sed -n 's|.*-kdecoration-\([0-9][^-]*\).*|\1|p' | head -1) ;;
+        prog=$(command -v nix-store 2>/dev/null) || prog=$nosw/bin/nix-store
+        [ -x "$prog" ] || continue
+        out=$("$prog" --query --requisites "$nosw" 2>/dev/null) || out=
+        out=$(printf '%s\n' "$out" | sed -n 's|.*-kdecoration-\([0-9][^-]*\).*|\1|p') ;;
     esac
-    # rpm can answer for more than one architecture; the first answer is the version.
-    out=$(printf '%s\n' "$out" | sed -n '1{s/^[[:space:]]*//;s/[[:space:]]*$//;p}')
+    out=$(printf '%s\n' "$out" | upstream_versions) || continue
     [ -n "$out" ] || continue
-    upstream_version "$out"
+    printf '%s\n' "$out"
     return 0
   done
   return 1

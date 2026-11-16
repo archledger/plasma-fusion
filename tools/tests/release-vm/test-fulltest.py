@@ -404,9 +404,18 @@ class FullLaneTest(unittest.TestCase):
                     self.assertIn("ok   navigation: the effect stays idle, built for the pin's KWin 6.8.2", result.stdout)
 
     def test_a_stale_build_after_the_restore_on_the_pin_s_version(self):
-        # Stock KWin at the pin's version: no note at all after the restore, a rebuild note included.
+        # Stock KWin at the pin's version: the navigation part's record names that KWin, so a
+        # rebuild note for it is wrong - only the decoration's (which compares Fedora's
+        # KDecoration, #194) is allowed there.
         result = self.rejected("restored-stale-build", "FAIL: status after the restore")
-        self.assertIn("FAIL status: no note", result.stdout)
+        self.assertIn("FAIL status: no note but the decoration part's rebuild note", result.stdout)
+
+    def test_restored_with_a_decoration_built_against_another_kdecoration(self):
+        # Fedora's KDecoration moves with Fedora's updates, independently of the pin: on a stock
+        # KWin of the pin's version the decoration's rebuild note is right, and the lane passes.
+        result, _ = self.run_lane("none", "fresh", env_extra={"FAKE_DECO_BUILT": "6.8.3"})
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("ok   status: no note but the decoration part's rebuild note", result.stdout)
 
     def test_stock_newer_without_the_navigation_rebuild_note(self):
         # Built against the pin's KWin, the navigation part is due for a rebuild on a newer stock

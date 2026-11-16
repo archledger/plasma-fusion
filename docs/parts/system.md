@@ -43,7 +43,10 @@ per-user step is `plasma-fusion setup` (`tools/device/fusion-config.sh`; not own
 Each compiled part installs `share/plasma-fusion/built-against/<part>` (the KWin or KDecoration and
 Qt it was built with); `plasma-fusion status` compares the navigation part with the running KWin
 and the decoration with the installed KDecoration (upstream versions only, read from the package
-database as the login check reads it; the two move apart on the full profile, #194). The CI
+database as the login check reads it, in its order; the two move apart on the full profile, #194).
+A database that reports two versions of it - a partial upgrade leaves two binaries of Debian's
+source package, or two Nix store paths - is ambiguous and gives no note, and on NixOS the system
+profile's own `nix-store` answers when it is not on the PATH. The CI
 workflow `packages` builds, lints, installs and checks every channel in a container of its system
 (`tools/tests/packages/`); ci.md.
 

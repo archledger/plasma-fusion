@@ -37,7 +37,12 @@
 #  18. the databases in the login check's order: rpm's answer is the one read;
 #  19. no database answers: no decoration note (a missing note, never a wrong one);
 #  20. the stock profile: no note when the installed KDecoration is the build's, whether or not
-#      KWin is another version.
+#      KWin is another version;
+#  21. two installed versions of one source package (a partial upgrade): no note, whichever of
+#      them the record matches - an ambiguous answer is not a version - and one version in two
+#      revisions is one version;
+#  22. NixOS without nix-store on the PATH: the system profile's own binary answers, as it does
+#      for the login check (PF_NIX_SW names the profile here).
 # Test tooling only, not installed.
 #
 #   status-unit.sh BASE
@@ -153,9 +158,12 @@ echo "kdecoration $v"
 EOF
 cat >"$BIN/dpkg-query" <<'EOF'
 #!/bin/bash
-v=$(cat "$T/kdecoration-dpkg" 2>/dev/null) || exit 0
-[ -n "$v" ] || exit 0
-printf 'installed kdecoration=%s\n' "$v"
+# Every line of the file is an installed binary of the source package: a partial upgrade can leave
+# two at different versions.
+while IFS= read -r v; do
+  [ -n "$v" ] && printf 'installed kdecoration=%s\n' "$v"
+done <"$T/kdecoration-dpkg" 2>/dev/null
+exit 0
 EOF
 cat >"$BIN/nix-store" <<'EOF'
 #!/bin/bash
@@ -391,6 +399,34 @@ built decoration kdecoration=6.8.2 qt=6.11.2
 echo 6.8.2 >"$T/kdecoration-rpm"
 run stock 6.8.3
 hasnot "20 stock: no note when it is the installed KDecoration, not KWin" "the decoration part was built against"
+
+# 21. two installed versions of one source package: a partial upgrade leaves Debian's two binaries
+# of it at different versions, or two Nix store paths. Whichever of them the record matches, the
+# answer is ambiguous and there is no note - never one built on the database's first line.
+rm -f "$T"/kdecoration-*
+record
+built decoration kdecoration=6.8.3 qt=6.11.2
+printf '4:6.8.2-1\n4:6.8.3-1\n' >"$T/kdecoration-dpkg"
+run fork 6.8.2
+hasnot "21 two installed versions: no note, though the record matches one of them" "the decoration part was built against"
+run fork 6.8.2
+hasnot "21 and the same on a second run" "the decoration part was built against"
+printf '4:6.8.3-1\n4:6.8.3-2\n' >"$T/kdecoration-dpkg"
+built decoration kdecoration=6.8.3 qt=6.11.2
+run fork 6.8.2
+hasnot "21 one version in two revisions is one version" "the decoration part was built against"
+
+# 22. NixOS without nix-store on the PATH: the login check falls back to the system profile's own
+# binary, and the note is built on its answer (PF_NIX_SW names the profile here)
+rm -f "$T"/kdecoration-*
+mkdir -p "$T/nixsw/bin"
+cp "$BIN/nix-store" "$T/nixsw/bin/nix-store"
+rm -f "$BIN/nix-store"
+echo 6.8.4 >"$T/kdecoration-nix"
+built decoration kdecoration=6.8.3 qt=6.11.2
+PF_NIX_SW=$T/nixsw run fork 6.8.2
+has "22 the system profile's nix-store answers" "the installed KDecoration is 6.8.4"
+rm -rf "$T/nixsw"
 
 echo "status-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

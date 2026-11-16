@@ -431,14 +431,21 @@ if [ "$mode" = fresh ]; then
   has "status: the stock profile" 41-status.log 'profile: stock \(the distribution.s KWin\)'
   has "status: none of the fork's capabilities" 41-status.log "capabilities: none of the fork's \(every feature uses its stock fallback\)"
   # While Fedora's KWin is another version than the pin's (#198), the parts built for the pin's
-  # KWin are due for a rebuild on stock KWin, and status says so; nothing else. The navigation
-  # part is built against the pin (the full build requires it), so its note is always there. The
-  # decoration's compares the installed KDecoration (Fedora's, #194): a full build made after
-  # Fedora's update has the newer one, and no note; one from before it has a note that names the
-  # two KDecoration versions. Either way it is the only other note allowed.
+  # KWin are due for a rebuild on stock KWin, and status says so besides the decoration's. The
+  # navigation part is built against the pin (the full build requires it), so its note is always
+  # there. The decoration's compares the installed KDecoration (Fedora's, #194), which Fedora's
+  # updates move independently of the pin: a full build made after Fedora's update has the newer
+  # one and no note, one from before it has a note naming the two KDecoration versions - on a
+  # stock KWin of the pin's version too. Either way it is the only note besides the navigation
+  # part's, and the only one allowed at all when the versions are the same.
   pin_up=$(upstream "$(fact 12-facts.txt pin)") stock_up=$(upstream "${STOCK[kwin]}")
   if [ "$pin_up" = "$stock_up" ]; then
-    hasnot "status: no note" 41-status.log '^  note:'
+    # The navigation part's record names that same KWin, so it has no note; the decoration's
+    # compares the installed KDecoration, which Fedora's updates move independently of the pin, so
+    # its rebuild note is right here too (#194).
+    others=$(grep -a '^  note:' "$OUT/41-status.log" |
+      grep -a -v -E '^  note: the decoration part was built against [0-9.]+, the installed KDecoration is [0-9.]+: update or rebuild that package$' || true)
+    want "status: no note but the decoration part's rebuild note" "$others" ""
   else
     hasf "status: the navigation part's rebuild note (built for the pin's KWin $pin_up)" 41-status.log \
       "  note: the navigation part was built against $pin_up, KWin is $stock_up: update or rebuild that package"
