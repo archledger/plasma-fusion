@@ -11,9 +11,10 @@ dnf install -y rpm-build dnf5-plugins python3 > /out/dependencies.log 2>&1
 python3 -B -m unittest discover -s /patches -v
 mkdir -p /root/source
 cd /root/source
-dnf download --srpm "kwin-$vr" > /out/download.log 2>&1
+# Fedora's source package of exactly this build, checked on arrival: a stable update can reach the
+# source mirrors hours after the binary ones (fetch-source.sh, issue #203).
+bash /patches/fetch-source.sh "$vr" /root/source > /out/download.log || exit 3
 source="kwin-$vr.src.rpm"
-[[ $(rpm -qp --qf '%{NAME}-%{VERSION}-%{RELEASE}' "$source") == "kwin-$vr" ]]
 cp "$source" /out/fedora-"$source"
 rpm -i --define "_topdir $top" "$source"
 cp /patches/*.patch "$top/SOURCES/"

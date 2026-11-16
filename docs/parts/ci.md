@@ -135,7 +135,14 @@ tested together with its consumer, the placement memory, which records a window'
 KWin's request has settled (docs/parts/kwin.md). The lane runs nightly and on changes to the
 backport, the placement memory or their test tools, against Fedora 44's newest KWin (stable
 updates). Its first job fails when that is not 6.7.5, 6.8.2 or 6.8.3: the backport then needs a
-reviewed update (README; 6.8.3 takes the 6.8.2 patches as they are).
+reviewed update (README; 6.8.3 takes the 6.8.2 patches as they are). It also fails, with the reason,
+while that build's source package is on none of the mirrors it reads. A stable update reaches
+Fedora's source repositories on some mirrors hours after the binary ones, and dnf5's `download
+--srpm` then exits 0 without a file (#203: on 2026-11-16 one fresh container in eight still met
+such a mirror twelve hours after the 6.8.3 push). Every job that builds fetches it with
+`packaging/patches/kwin/fetch-source.sh`, which judges the download by the file, tries four times
+with fresh metadata (which lets the mirror list pick another mirror), and otherwise stops the job
+with status 3; the next nightly takes the build.
 
 - **native** (`packaging/patches/kwin/native-tests.sh [--stock] OUT_DIR VERSION-RELEASE`):
   Fedora's source package, prepared as `build.sh` prepares it (`rpmbuild -bp`), once with the patch

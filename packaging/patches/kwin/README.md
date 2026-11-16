@@ -78,8 +78,12 @@ packages are accepted; other KWin versions need a reviewed backport rather than 
 rebuild. Builds use a Fedora 44 container,
 four CPUs and an 8 GiB memory limit. The builder:
 
-1. Runs the offline packaging checks, then downloads Fedora's exact source RPM and retains it as
-   `fedora-kwin-*.src.rpm`.
+1. Runs the offline packaging checks, then downloads Fedora's exact source RPM (`fetch-source.sh`)
+   and retains it as `fedora-kwin-*.src.rpm`. A stable update reaches Fedora's source repositories
+   on some mirrors hours after the binary ones, and dnf then exits 0 without a file, so the
+   download is judged by the file that arrived (that build, a source package) and tried up to four
+   times, with fresh metadata and waits of 30, 60 and 90 s between. When no attempt gets it the
+   build stops there with status 3. `native-tests.sh` fetches it the same way.
 2. Adds `Patch9001` (and the initializer prerequisite as `Patch9002` on 6.8.2 and 6.8.3),
    preserving Fedora's existing patches and `%autosetup -p1`.
 3. Appends `.pf1` to `Release`, adds a changelog entry, installs build dependencies inside the
