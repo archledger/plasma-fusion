@@ -33,9 +33,10 @@
 # Integrity: dnf and apt check the Copr and PPA signatures; the AUR package builds the signed git tag;
 # release files are checked against SHA256SUMS, whose signature must verify against the pinned key
 # below (a missing signature stops the installer). Safety: it runs as your user and asks for sudo
-# for the package step only; it checks everything before it asks; it never downgrades; it installs
-# neither Plasma nor a login screen or boot splash; the whole script is one function, so a
-# truncated download does nothing. Read it first:
+# for the package step only; it checks everything before it asks; it never downgrades the six
+# packages (the full profile does replace Fedora's KWin with the pinned fork build, a downgrade
+# while Fedora's is newer, and its plan says so); it installs neither Plasma nor a login screen or
+# boot splash; the whole script is one function, so a truncated download does nothing. Read it first:
 #   curl -fsSLO https://github.com/archledger/plasma-fusion/releases/latest/download/install.sh
 
 # Stamped by the release (packaging/stamp-installer.sh); an unstamped copy runs only for tests.
