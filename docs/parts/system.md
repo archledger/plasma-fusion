@@ -278,9 +278,9 @@ Each user then runs, inside their Plasma session, `plasma-fusion setup` (after l
 them, each directory with a build script and a README (what, why, rebuild, when to drop). They are
 not part of the plasma-fusion RPM; a machine installs them separately.
 
-| Package | Release | Why | Test (ThinkPad private sessions, plasmashell under gdb, 2026-10-02) |
+| Package | Release | Why | Test (private sessions, plasmashell under gdb) |
 |---|---|---|---|
-| plasma-workspace | `6.7.5-1.fc44.pf1` | the global menu's Search crashed plasmashell after the active app rebuilt a submenu (KDE [bug 526561](https://bugs.kde.org/show_bug.cgi?id=526561), unfixed on master 19e67e2); the top bar shows Search only with this build (`menuSearch`, docs/parts/shell-topbar.md) | stock applet: the bug report's reproducer, a window switch with stale results and the typing sequence crash (3 of 3, twice); rebuilt applet: 0 crashes in 9 sequences with results shown each time, a result activated with Return |
+| plasma-workspace | `6.8.3-1.fc44.pf1`, `6.8.3-1.fc45.pf1` | the global menu's Search crashes plasmashell after the active app rebuilt a submenu (KDE [bug 526561](https://bugs.kde.org/show_bug.cgi?id=526561), open; no fix on master or Plasma/6.8 on 2026-11-16); with `menuSearch` off (the default) the top bar shows Search only with this build (docs/parts/shell-topbar.md) | 6.8.3, Fedora 44 test container, 2026-11-16: stock applet: the bug report's reproducer, a window switch with stale results and the typing sequence crash (3 of 3), the same keys without a menu change do not (0 of 2); rebuilt applet: 0 crashes in 9 sequences that listed results, 8 with the menu changing under them (in 7 the screen showed the held results deleted before the key) and one activating a result with Return; with Plasma Fusion's top bar and `menuSearch` off, Search is shown only with the rebuilt applet. Fedora 45: built, not run. 6.7.5, ThinkPad, 2026-10-02: in each of two runs, 3 of 3 crashes and 0 in 9 |
 
 The optional [KWin backport](../../packaging/patches/kwin/README.md) adds the
 `Window.requestedGeometry` property and change notification to Fedora 44 KWin 6.7.5, as a

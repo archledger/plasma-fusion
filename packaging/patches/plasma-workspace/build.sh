@@ -9,7 +9,7 @@
 #   build.sh OUT_DIR [VERSION-RELEASE [FEDORA]]
 #
 # VERSION-RELEASE is Fedora's build to start from (default: the one installed here, for example
-# 6.7.5-1.fc44); FEDORA the release whose container builds it (default: this machine's).
+# 6.8.3-1.fc44); FEDORA the release whose container builds it (default: this machine's).
 # The rebuilt packages are VERSION-RELEASE.pf1: newer than Fedora's same build, older than its next.
 # Exit status: 0 built; 3 Fedora's source package of that build could not be fetched (no mirror
 # read carries it: ../fetch-source.sh says why); 64 usage; another failure its own status.
