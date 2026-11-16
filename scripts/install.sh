@@ -33,9 +33,10 @@
 # Integrity: dnf and apt check the Copr and PPA signatures; the AUR package builds the signed git tag;
 # release files are checked against SHA256SUMS, whose signature must verify against the pinned key
 # below (a missing signature stops the installer). Safety: it runs as your user and asks for sudo
-# for the package step only; it checks everything before it asks; it never downgrades; it installs
-# neither Plasma nor a login screen or boot splash; the whole script is one function, so a
-# truncated download does nothing. Read it first:
+# for the package step only; it checks everything before it asks; it never downgrades the six
+# packages (the full profile does replace Fedora's KWin with the pinned fork build, a downgrade
+# while Fedora's is newer, and its plan says so); it installs neither Plasma nor a login screen or
+# boot splash; the whole script is one function, so a truncated download does nothing. Read it first:
 #   curl -fsSLO https://github.com/archledger/plasma-fusion/releases/latest/download/install.sh
 
 # Stamped by the release (packaging/stamp-installer.sh); an unstamped copy runs only for tests.
@@ -49,6 +50,10 @@ PF_FULL_FEDORA='@PF_FULL_FEDORA@'
 # The full profile's Copr project (OWNER/NAME): the live one in a release; the release tests stamp
 # a candidate's own project, so the live one never carries a candidate (issue #178).
 PF_FULL_REPO='@PF_FULL_REPO@'
+# The full profile's pinned KWin (the spec's %global kwin_full_pin, 6.8.2-3.fc44.pf5): --full's
+# plan names it against the stock KWin where the two upstream versions differ (a downgrade
+# included, #198). Empty when this release names no pin: the plan then says nothing of versions.
+PF_FULL_PIN='@PF_FULL_PIN@'
 
 REPO=archledger/plasma-fusion
 PKGS="plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation"
@@ -440,6 +445,21 @@ deb_assets() {
 
 # ---------- plan and channels ----------
 
+# The plan's line for a KWin set whose upstream version changes: the full profile's pin replacing
+# Fedora's KWin is a downgrade while Fedora's is newer, and the plan names it before the
+# transaction (#198); --full-restore's is the same line the other way. Both EVRs have to be known -
+# the pin from the stamp, the installed KWin from rpm, the restore's target from the record - and
+# the upstream versions have to differ: 6.8.2-3.fc44 and 6.8.2-3.fc44.pf5 are the same version, and
+# the swap is only a rebuild.
+kwin_note() { # NEW_EVR OLD_EVR "NEW_NAME" "OLD_NAME"
+  [ -n "$1" ] && [ -n "$2" ] || return 0
+  note_new=$(upstream_of "$1") note_old=$(upstream_of "$2")
+  [ "$note_new" != "$note_old" ] || return 0
+  note_dir='a newer upstream version'
+  ver_ge "$note_new" "$note_old" || note_dir='an older upstream version'
+  echo "  note: $3 $1 replaces $4 $2 ($note_dir)."
+}
+
 # For update: the packages of PKGS installed now (HAVE_PKGS) and those a newer release added
 # (NEW_PKGS). dnf refuses to upgrade a package that is not installed, and apt's --only-upgrade skips
 # it, so the new ones are installed apart.
@@ -461,6 +481,7 @@ plan() {
         echo "  sudo dnf -y copr enable $FULL_REPO fedora-$FEDORA-x86_64"
         echo "  sudo dnf -y install plasma-fusion-full   (the six packages + the pinned kwin, kwin-common, kwin-libs; replaces the stock KWin)"
         echo "  sudo dnf -y versionlock add $FULL_KWIN_PKGS   (the pin: the set moves together or not at all)"
+        kwin_note "$PF_FULL_PIN" "$(pkg_evr kwin)" "the full profile's KWin" "Fedora's"
         echo "  note: the fork takes KWin security fixes on its weekly cadence, which can lag Fedora by days (ADR 0001)."
       elif [ "$MODE" = update ] && full_meta_installed; then
         echo "  sudo dnf -y versionlock delete $FULL_KWIN_PKGS   (the pin goes first: it would hold KWin at the old fork)"
@@ -787,6 +808,7 @@ main() {
       PF_COPR_FEDORA=${PLASMA_FUSION_DEV_COPR_FEDORA:-44} PF_PPA_SERIES=${PLASMA_FUSION_DEV_PPA_SERIES:-stonking}
       PF_DEB_TARGETS=${PLASMA_FUSION_DEV_DEB_TARGETS:-neon testing} PF_FULL_FEDORA=${PLASMA_FUSION_DEV_FULL_FEDORA:-}
       PF_FULL_REPO=${PLASMA_FUSION_DEV_FULL_REPO:-archledger/plasma-fusion-full}
+      PF_FULL_PIN=${PLASMA_FUSION_DEV_FULL_PIN:-}
       DEV_DNF_REPO=${PLASMA_FUSION_DEV_DNF_REPO:-} DEV_APT_REPO=${PLASMA_FUSION_DEV_APT_REPO:-}
       DEV_AUR_SRC=${PLASMA_FUSION_DEV_AUR_SRC:-} RELEASE_BASE=${PLASMA_FUSION_DEV_RELEASE_BASE:-}
       TEST_ROOT=${PLASMA_FUSION_DEV_ROOT:-} ASK_TTY=${PLASMA_FUSION_DEV_TTY:-/dev/tty}
@@ -941,18 +963,23 @@ main() {
     elif full_record_hidden; then
       rec=": the recorded versions, which sudo reads"
     fi
+    rec_kwin=$(full_recorded | tr ',' '\n' | sed -n 's/^kwin=//p')
     say "Plan:"
     echo "  sudo dnf -y versionlock delete $FULL_KWIN_PKGS   (the pin goes)" >&2
     full_meta_installed && echo "  sudo dnf -y remove --no-autoremove plasma-fusion-full   (the metapackage)" >&2
     echo "  sudo dnf -y copr remove $FULL_REPO   (the full profile's repository)" >&2
     echo "  sudo dnf -y distro-sync $FULL_KWIN_PKGS   (back to the stock KWin$rec)" >&2
+    # The note speaks of the fork only where the fork is what runs: not after a KWin the user
+    # already synced back (the restore then only finishes the job).
+    if kwin_is_fork; then
+      kwin_note "$rec_kwin" "$(pkg_evr kwin)" "the stock KWin" "the full profile's KWin" >&2
+    fi
     echo "  the six Plasma Fusion packages stay installed (they run on stock KWin)" >&2
     # The login check compares KWin's upstream version, so a restore that changes it has the new
     # set recorded, as plasma-fusion update does: here in the user's Plasma session, by the user
     # there otherwise (#198). The record names the sync's target, but a recorded KWin the
     # repositories no longer carry gives way to the current stock (full_restore_kwin): the step
     # follows what the sync did, and the plan names a change only where the record shows one.
-    rec_kwin=$(full_recorded | tr ',' '\n' | sed -n 's/^kwin=//p')
     step="  plasma-fusion update"
     in_plasma_session || step="  then, in your Plasma session: plasma-fusion update"
     if [ -n "$rec_kwin" ] && [ "$(upstream_of "$rec_kwin")" != "$(upstream_of "$(pkg_evr kwin)")" ]; then

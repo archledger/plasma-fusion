@@ -325,7 +325,7 @@ if [ "${PF_PUBLIC:-}" = 1 ]; then
   published install.sh || { log "FAIL: could not fetch the published installer"; exit 1; }
 else
   vm ssh "$name" 'cat >~/install.sh' <"$OUT/install.sh" || { log "FAIL: could not copy the installer into the VM"; exit 1; }
-  log "installer: this tree's, $(grep -m 1 '^PF_VERSION=' "$OUT/install.sh") $(grep -m 1 '^PF_FULL_FEDORA=' "$OUT/install.sh") $(grep -m 1 '^PF_FULL_REPO=' "$OUT/install.sh")"
+  log "installer: this tree's, $(grep -m 1 '^PF_VERSION=' "$OUT/install.sh") $(grep -m 1 '^PF_FULL_FEDORA=' "$OUT/install.sh") $(grep -m 1 '^PF_FULL_REPO=' "$OUT/install.sh") $(grep -m 1 '^PF_FULL_PIN=' "$OUT/install.sh")"
 fi
 log "installer: --full --dry-run"
 insession "sh ~/install.sh --full --dry-run" >"$OUT/10-dry-run.log" 2>&1

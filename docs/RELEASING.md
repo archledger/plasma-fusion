@@ -93,7 +93,9 @@ It checks the tag's signature, VERSION and a clean tree, then builds `plasma-fus
 the stamped `install.sh`, the neon and Debian testing `.deb` sets and the shared `.deb`
 (`X.Y.Z-1_all`), each installed and checked in its container, and `SHA256SUMS`; and the unsigned PPA
 source packages. With a pin in the spec, `install.sh` is stamped with the pin's Fedora release
-(`--full-fedora`; `PF_FULL_FEDORA` overrides it), which turns on `--full`. Then (owner):
+(`--full-fedora`; `PF_FULL_FEDORA` overrides it), which turns on `--full`, and with the pin itself
+(`--full-pin`, the spec's `%global kwin_full_pin`), so `--full`'s plan names the KWin version
+change against Fedora's. Then (owner):
 
 ```sh
 cd build/release-X.Y.Z/release

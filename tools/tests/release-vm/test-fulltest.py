@@ -235,7 +235,7 @@ while [ $# -gt 1 ]; do
   case $1 in --full-repo) repo=$2; shift ;; esac
   shift
 done
-printf "PF_VERSION='0.8.0'\nPF_FULL_FEDORA='44'\nPF_FULL_REPO='%s'\n" "$repo" >"$1"
+printf "PF_VERSION='0.8.0'\nPF_FULL_FEDORA='44'\nPF_FULL_REPO='%s'\nPF_FULL_PIN='6.8.2-3.fc44.pf3'\n" "$repo" >"$1"
 '''
 KEYS = r'''#!/usr/bin/env python3
 import sys

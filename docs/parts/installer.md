@@ -54,11 +54,13 @@ apart; the AUR and the release `.deb`s install the whole set either way.
 The release stamps the lists: `PF_COPR_FEDORA` (Fedora releases), `PF_PPA_SERIES`, `PF_DEB_TARGETS`
 (`neon testing`), `PF_PLASMA_SERIES` (`packaging/tested-plasma.txt`) and `PF_FULL_FEDORA` (the
 Fedora releases the full profile builds; empty until the full Copr project goes live, and then
-`--full` refuses), and the full profile's Copr project, `PF_FULL_REPO` (OWNER/NAME: the live
+`--full` refuses), the full profile's Copr project, `PF_FULL_REPO` (OWNER/NAME: the live
 `archledger/plasma-fusion-full` in a release; the release tests stamp a candidate's own project,
-docs/RELEASING.md), with `packaging/stamp-installer.sh` (`--full-fedora`, `--full-repo`). The
-installer refuses a project that is not OWNER/NAME (exit 3); the stamp never writes one. An
-unstamped copy (the repository's) refuses to run outside test mode.
+docs/RELEASING.md), and its pinned KWin, `PF_FULL_PIN` (the spec's `%global kwin_full_pin`; empty
+when the spec has none, and then the plan says nothing of KWin's version), with
+`packaging/stamp-installer.sh` (`--full-fedora`, `--full-pin`, `--full-repo`). The stamp refuses a
+pin that is not a version-release EVR; the installer refuses a project that is not OWNER/NAME (exit
+3). An unstamped copy (the repository's) refuses to run outside test mode.
 
 ## The full profile (`--full`, `--full-restore`)
 
@@ -88,7 +90,11 @@ not `--yes` (a scripted install stays stock), not without a terminal, not an ins
    `/var/lib/plasma-fusion/full-restore.txt`;
 3. enables the full project (`PF_FULL_REPO`: `archledger/plasma-fusion-full` in a release) and
    installs `plasma-fusion-full` — the metapackage whose exact-EVR requires pull the six packages
-   and the pinned fork in one transaction;
+   and the pinned fork in one transaction. Where the pin's upstream version differs from the stock
+   KWin's, the plan names the change ("the full profile's KWin 6.8.2-3.fc44.pf5 replaces Fedora's
+   6.8.3-1.fc44 (an older upstream version)"): the transaction is a downgrade then, and it says
+   so (#198). The same upstream version on both sides (`6.8.2-3.fc44` and `6.8.2-3.fc44.pf5`) is
+   only a rebuild swap, and then the plan says nothing of versions;
 4. locks the KWin set (`dnf versionlock add kwin kwin-common kwin-libs`; dnf5 pins each package at
    its just-installed version), so a distribution update can never half-upgrade the set;
 5. runs the unchanged per-user setup. On a stock install it switches only the compositor: no setup
@@ -112,7 +118,10 @@ update` there, and until then a login is in safe mode (gate.md: KDE's own lock s
 the Aurorae title bars). The step follows what the sync did: the record names the sync's target,
 but a recorded KWin the repositories no longer carry gives way to the current stock, as after
 Fedora pushes a newer KWin. So the plan names the change where the record shows one, and the step
-as conditional otherwise; outside a session it names the step as the user's, to run there.
+as conditional otherwise; outside a session it names the step as the user's, to run there. It also
+names the KWin the restore brings back where that one's upstream version differs from the fork's
+("the stock KWin 6.8.3-1.fc44 replaces the full profile's KWin 6.8.2-3.fc44.pf5 (a newer upstream
+version)", #198); a record it cannot read, or the same upstream version, leaves the plan as it was.
 
 `--full-restore` (no stamp needed — a system on the full profile must always get back, including
 on a Fedora release the release's stamp does not carry, where the stock lanes stay refused):
@@ -247,8 +256,8 @@ Exit codes: 0 done or nothing to do, 1 error, 2 usage, 3 refused (nothing change
 ## Test mode and tests
 
 With `PLASMA_FUSION_DEV=1` an unstamped copy runs with test values: `PLASMA_FUSION_DEV_VERSION`,
-`_SERIES`, `_COPR_FEDORA`, `_PPA_SERIES`, `_DEB_TARGETS`, `_FULL_FEDORA`, `_FULL_REPO` (default
-`archledger/plasma-fusion-full`), test channels
+`_SERIES`, `_COPR_FEDORA`, `_PPA_SERIES`, `_DEB_TARGETS`, `_FULL_FEDORA`, `_FULL_PIN`, `_FULL_REPO`
+(default `archledger/plasma-fusion-full`), test channels
 (`PLASMA_FUSION_DEV_DNF_REPO` a dnf base URL, `_APT_REPO` an apt line, `_AUR_SRC` a directory with a
 PKGBUILD, `_RELEASE_BASE` a release URL), `_ROOT` (a directory with `etc/os-release`), `_TTY` (a
 file the profile question reads its answer from, instead of the terminal) and `_KEY`,
@@ -269,7 +278,8 @@ every apt install and remove and `apt-get update` tried again, 2026-10-21; the f
 Copr project from the stamp or `_FULL_REPO`, never from a stamped copy's environment, 2026-11-14;
 the profile question with Enter, `1`, `2` and another answer, and no question without a terminal,
 with `--full` or `--yes`, on an installed system or `update`, without the full profile for that
-Fedora, or on Arch, 2026-11-15).
+Fedora, or on Arch, 2026-11-15; the pin in the plan's words, with a stock KWin newer or older than
+it, of its own version, with no pin from the stamp and with no KWin to compare, 2026-11-16).
 The `packages` workflow runs it with ShellCheck, `dash -n` and `busybox sh -n`.
 
 The release-test VMs (docs/RELEASING.md) run it for real on Fedora 44, Arch, Ubuntu 26.10, KDE neon
