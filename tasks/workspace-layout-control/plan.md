@@ -7,6 +7,7 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Status: **Accepted on 2026-11-17.** The [specification](../../SPEC-workspace-layout-control.md) is
 accepted, including its two refinements. P0 is authorized; later review gates still apply.
+The owner also approved the P0 extension described below on 2026-11-17.
 Tasks are in [todo.md](todo.md). The owner selected this separate folder to preserve the existing
 native-tiling `tasks/plan.md` and `tasks/todo.md`.
 
@@ -31,6 +32,19 @@ G0: real transport/lifecycle proof
 The first checkpoint is deliberately early. Do not build UI on a transport that only works in
 a stand-in. A failed G0 returns a concrete blocker for scope review, not a native fork patch,
 daemon, polling loop or weakened freshness rule.
+
+### Approved P0 extension
+
+The probe may register one transient, identity-only session-bus name per provider lifetime.
+It adds no D-Bus objects or RPC methods and grants no privilege; its owner identifies the
+actual publishing connection independently of the current `org.kde.KWin` owner. Registration
+must not queue for an occupied name, and retirement must release it without looking up torn-down
+native context. This remains test-only until the G0 contract review.
+
+A sixth test file may provide a separate lifecycle runner whose private bus outlives individual
+compositor processes. It must use its own image/container, HOME, runtime directory and results,
+track only its children, and never change shared test harnesses, live sessions or other work.
+The runner must record that the bus remains the same while backend connection identities change.
 
 ## Source evidence and limits
 
@@ -89,7 +103,8 @@ This candidate needs an actual two-process proof of:
 4. Invalidation on script disable/reload, shell restart and KWin owner replacement. Do not
    assume a generic service Boolean or an internal C++ `runningChanged` is a public script signal.
 5. No idle polling, script reload as a command mechanism, global reconfigure per action, new
-   daemon or new native endpoint.
+   daemon or new native RPC/object export. The approved identity-only alias is addressing,
+   not a new control interface.
 
 The concrete envelope encoding, lifecycle identifiers and invalidation path are unresolved
 until G0. Record source, packet/event traces, controls and failure cases. Review that receipt

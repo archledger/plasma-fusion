@@ -57,7 +57,8 @@ def prepare(stage: Path, output: Path) -> None:
     private_config = output / ".config"
     private_config.mkdir()
     (private_config / "kwinrc").write_text(
-        f"[Plugins]\n{SCRIPT_ID}Enabled=true\n\n[Desktops]\nNumber=2\nRows=1\n"
+        f"[Plugins]\n{SCRIPT_ID}Enabled=true\n\n[Script-{SCRIPT_ID}]\nProbeAuthorized=true\n"
+        "\n[Desktops]\nNumber=2\nRows=1\n"
     )
     (output / "probe-inputs.json").write_text(json.dumps({
         name: hashlib.sha256(data).hexdigest() for name, data in fixtures.items()

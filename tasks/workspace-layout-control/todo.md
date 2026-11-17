@@ -15,9 +15,10 @@ Path abbreviations: `clock/` = `packages/plasmoids/org.plasmafusion.clockpill/`;
 
 ## P0: Prove the real transport and lifecycle boundary
 
-Dependencies: owner approval of the plan. Scope: test-only, at most five files under
-`tools/tests/layout-control/` (seed preparer, scenario, declarative probe fixtures and receipt
-description). No production changes.
+Dependencies: owner approval of the plan (given). Scope: test-only, the original five fixtures
+under `tools/tests/layout-control/` plus one separately approved private-bus lifecycle runner.
+The transient identity-only alias and sixth runner were approved on 2026-11-17.
+No production changes.
 
 - [ ] Prove wake-up, correlated state exchange and script/shell/KWin lifetime invalidation in a
       real isolated shell/fork pair; include stale retained fields and negative controls.

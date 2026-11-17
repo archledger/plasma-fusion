@@ -40,6 +40,7 @@ class SeedTests(unittest.TestCase):
         self.assertEqual((script / "contents/ui/Tiling.js").read_bytes(), self.rules.read_bytes())
         self.assertTrue((applet / "contents/config/main.xml").is_file())
         self.assertIn("plasmafusion-layout-probeEnabled=true", (self.output / ".config/kwinrc").read_text())
+        self.assertIn("ProbeAuthorized=true", (self.output / ".config/kwinrc").read_text())
         self.assertFalse((self.output / ".config/plasma-org.kde.plasma.desktop-appletsrc").exists())
 
     def test_refuses_an_existing_seed_without_overwriting_it(self):

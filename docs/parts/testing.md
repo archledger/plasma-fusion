@@ -83,6 +83,49 @@ metric's window for noise; only quiet windows count when there are any).
 `run.sh` that runs, which is the snapshot's copy when run from `build/snap`). To update the
 repository's baseline from a snapshot run, pass `--baseline <repo>/tools/tests/perf/baseline.json`.
 
+### Workspace layout transport probe (P0)
+
+`tools/tests/layout-control/` contains test-only KWin and applet fixtures, not the production
+layout control. The accepted scope and remaining gates are in
+[`tasks/workspace-layout-control/plan.md`](../../tasks/workspace-layout-control/plan.md).
+Nothing in these fixtures installs into the logged-in desktop.
+
+Build `topbar kwin` into a private stage, then make a fresh seed under this worktree's `build/`:
+
+```sh
+python3 tools/tests/layout-control/test_prepare_seed.py
+python3 tools/tests/layout-control/prepare_seed.py \
+    --stage build/layout-control-stage --output build/layout-probe/seed-example
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-example tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-example" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-example
+```
+
+`IMAGE` must identify an independently prepared, immutable fork test image. Use a new, short run
+name each time: the existing harness puts it twice in a Unix socket path, which must fit 108
+bytes including its terminator. The seed preparer refuses an existing output or an output
+outside `build/`; it never copies live user configuration. The provider remains inactive without
+`ProbeAuthorized=true` in its private KWin configuration.
+
+The probe saves each request before waking KWin and observes actual receiver memory through
+JSON log records. It checks native capability/refusal, two-widget delivery, graceful retirement,
+alias release, reload with a fresh query, and rejection of a high-revision frame claiming the
+wrong backend connection. Its identity-only alias exports no objects or methods. The receiver
+checks the current KWin owner and the alias owner before accepting an online frame; request and
+revision checks also run after those asynchronous lookups. The relevant version-matched APIs are
+[the workspace D-Bus decoder and connection](https://invent.kde.org/plasma/plasma-workspace/-/tree/v6.8.3/components/dbus)
+and [KConfigPropertyMap::writeConfig](https://invent.kde.org/frameworks/kconfig/-/blob/v6.32.0/src/qml/kconfigpropertymap.cpp).
+
+`--check-result` requires the explicit first-slice receipt and successful inner scenario/session
+codes. The wrapper's exit code alone is insufficient. `reload-result.json` and
+`identity-fence-result.json` record the additional assertions; none of these certifies full G0.
+Process replacement, stale ordering, timeout, target preparation and existing-tiler integration
+still need their own evidence. A shell abort during teardown was also reproduced with the
+probe disabled and zero probe widgets; retain that environment limitation rather than claiming
+crash-free qualification.
+
 ### Icon positions (M2): `tools/tests/icons/run.sh`
 
 Options: `--stage DIR`, `--name NAME` (default `icons`), `--work DIR`, `--scale S` (default
