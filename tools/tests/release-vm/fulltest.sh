@@ -127,15 +127,18 @@ wait_plasma() { # wait for a settled desktop; none within five minutes fails the
   # D-Bus activation from the session before can still be pending at a quick new login, and fail
   # just after the new splash starts (2026-11-17, the update round: the splash for 31.9 s, the
   # gesture lock's first change unseen at second 32). Checks wait for the start-up's end.
-  # A state that could not be read (ssh, the user's service manager) is no end: it is read again.
+  # Only an explicit end counts: inactive (the splash's oneshot unit has finished; a session
+  # without KSplash reads the same) or failed (it ended with an error). Any other state, or none
+  # read (ssh, the user's service manager), is read again.
   local splash=''
   for _ in $(seq 1 30); do
     splash=$(vm ssh "$name" 'systemctl --user is-active plasma-ksplash.service' 2>/dev/null)
-    case $splash in active | activating | '') sleep 3 ;; *) break ;; esac
+    case $splash in inactive | failed) break ;; *) sleep 3 ;; esac
   done
   case $splash in
+    inactive | failed) ;;
     '') log "FAIL: the session's start-up state could not be read (systemctl --user over ssh, 90 s)"; exit 1 ;;
-    active | activating) log "FAIL: the session's start-up did not end (the splash still $splash after 90 s)"; exit 1 ;;
+    *) log "FAIL: the session's start-up did not end (the splash still $splash after 90 s)"; exit 1 ;;
   esac
   sleep 25
   # Plasma's welcome app opens on a first login; it would cover the desktop in the screenshots.

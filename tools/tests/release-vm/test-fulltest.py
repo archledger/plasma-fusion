@@ -9,7 +9,8 @@ half the fork, not locked, not the metapackage's build (by version, or by the re
 from: #197), or whose restore record is wrong; a repository that is there and switched off; a set
 that holds without the lock; a lock list that cannot be read; a status that does not see the fork
 or carries a note; no new session after the logout, or no desktop after it; a start-up that does
-not end, or whose state cannot be read; an idle navigation effect; a journal that cannot be read; a switcher that does not switch, or lands on no test
+not end (still activating or deactivating), or whose state cannot be read; an idle navigation
+effect; a journal that cannot be read; a switcher that does not switch, or lands on no test
 window; a tiler without a session; a restore whose plan names another KWin, that leaves the fork
 or the repository, or takes the packages; in switch mode a record directory that is not root's
 alone; a status that takes the session after the restore for a fork installed by hand; a note
@@ -309,6 +310,7 @@ case "$cmd" in
         n=$(bump splashprobe)
         case $FAULT in
           splash-stuck) echo activating ;;
+          splash-deactivating) echo deactivating ;;
           splash-unreadable) exit 1 ;;
           splash-unreadable-once) if [ "$n" = 1 ]; then exit 1; else echo inactive; fi ;;
           *) echo inactive ;;
@@ -749,6 +751,11 @@ class FullLaneTest(unittest.TestCase):
     def test_start_up_that_does_not_end(self):
         # The splash still up: the session's start-up has not ended, and no check runs in it.
         result = self.rejected("splash-stuck", "FAIL: the session's start-up did not end (the splash still activating after 90 s)")
+        self.assertNotIn("screenshot 01-stock", result.stdout)
+
+    def test_start_up_that_is_still_ending(self):
+        # Only inactive or failed is the end: a splash still deactivating is not.
+        result = self.rejected("splash-deactivating", "FAIL: the session's start-up did not end (the splash still deactivating after 90 s)")
         self.assertNotIn("screenshot 01-stock", result.stdout)
 
     def test_start_up_state_that_cannot_be_read(self):
