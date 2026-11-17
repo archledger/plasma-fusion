@@ -24,6 +24,47 @@ PlasmoidItem {
     property bool verifying: false
     property var checkingPacket: null
     property var pendingPacket: null
+    property var queryDeadline: null
+    readonly property int queryTimeoutMs: {
+        const value = Number(Plasmoid.configuration.queryTimeoutMs);
+        return value >= 100 && value <= 10000 && value % 1 === 0 ? value : 10000;
+    }
+
+    Component {
+        id: deadlineFactory
+        Timer {
+            id: deadline
+            required property var receiver
+            required property int generation
+            repeat: false
+            triggeredOnStart: false
+            onTriggered: {
+                if (deadline.receiver && deadline.receiver.queryDeadline === deadline) {
+                    deadline.receiver.queryDeadline = null;
+                    deadline.receiver.queryTimedOut(deadline.generation);
+                }
+                deadline.destroy();
+            }
+        }
+    }
+
+    function stopQueryDeadline(): void {
+        if (queryDeadline) {
+            const timer = queryDeadline;
+            queryDeadline = null;
+            timer.stop();
+            timer.destroy();
+        }
+    }
+
+    function queryTimedOut(generation: int): void {
+        if (probe.stopped || generation !== probe.requestNumber || probe.boundEpoch !== "") {
+            return;
+        }
+        // Uncertainty does not cancel the outstanding query or authorize a retry.
+        probe.phase = "unconfirmed";
+        probe.observe(null);
+    }
 
     function finishVerification(): void {
         verifying = false;
@@ -85,6 +126,7 @@ PlasmoidItem {
         boundEpoch = packet.epoch;
         boundOwner = packet.backendOwner;
         boundIdentity = packet.identityName;
+        stopQueryDeadline();
         phase = packet.status === "online" && !packet.capable ? "unsupported" : packet.status;
         epoch = packet.epoch;
         revision = packet.revision;
@@ -96,6 +138,24 @@ PlasmoidItem {
     }
 
     function sendQuery(): void {
+        if (stopped) {
+            return;
+        }
+        stopQueryDeadline();
+        queryDeadline = deadlineFactory.createObject(probe, {
+            receiver: probe, generation: requestNumber, interval: queryTimeoutMs
+        });
+        if (!queryDeadline) {
+            stopped = true;
+            phase = "unknown";
+            observe(null);
+            console.warn("layout-probe: cannot create private query deadline");
+            return;
+        }
+        queryDeadline.start();
+        console.info("layout-probe-query", JSON.stringify({
+            boot: boot, request: requestNumber, deadlineMs: queryDeadline.interval
+        }));
         Plasmoid.configuration.layoutRequest = JSON.stringify({consumer: boot, request: requestNumber});
         // Desktop scripting reads the saved group, not this unsaved property map.
         Plasmoid.configuration.writeConfig();
@@ -108,6 +168,7 @@ PlasmoidItem {
     }
 
     function freshQuery(showUnknown: bool): void {
+        stopQueryDeadline();
         if (requestNumber >= 2147483646) {
             stopped = true;
             phase = "unknown";
@@ -194,6 +255,12 @@ PlasmoidItem {
                     || !["online", "offline"].includes(packet.status)
                     || typeof packet.revision !== "number" || packet.revision % 1 !== 0
                     || packet.revision < 1 || packet.revision > 2147483646) {
+                if (packet && packet.consumer === probe.boot
+                        && packet.request !== probe.requestNumber) {
+                    console.info("layout-probe-rejected request ", JSON.stringify({
+                        boot: probe.boot, request: packet.request, current: probe.requestNumber
+                    }));
+                }
                 return;
             }
             // Delivery order is not revision order while the one verifier is busy.
@@ -212,5 +279,8 @@ PlasmoidItem {
         observe(null);
         sendQuery();
     }
-    Component.onDestruction: stopped = true
+    Component.onDestruction: {
+        stopped = true;
+        stopQueryDeadline();
+    }
 }

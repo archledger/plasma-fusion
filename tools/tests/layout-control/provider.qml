@@ -30,6 +30,65 @@ Item {
     property var registration: null
     property bool registrationHandled: false
     property bool dropRetirementFrame: false
+    property int replyDelayMs: 0
+    property var pendingPublication: null
+
+    Component {
+        id: publicationFactory
+        Timer {
+            id: delayed
+            required property var publisher
+            required property string destination
+            property var rows: []
+            repeat: false
+            triggeredOnStart: false
+            onTriggered: {
+                if (delayed.publisher.pendingPublication === delayed) {
+                    delayed.publisher.pendingPublication = null;
+                    if (!delayed.publisher.stopping) {
+                        console.info("layout-probe: delayed publication released");
+                        delayed.publisher.publish("online", delayed.rows, delayed.destination);
+                    }
+                }
+                delayed.destroy();
+            }
+        }
+    }
+
+    function cancelPublication(): void {
+        if (pendingPublication) {
+            const timer = pendingPublication;
+            pendingPublication = null;
+            timer.stop();
+            timer.destroy();
+        }
+    }
+
+    function queuePublication(rows: var, destination: string): void {
+        if (replyDelayMs === 0) {
+            publish("online", rows, destination);
+            return;
+        }
+        if (pendingPublication && pendingPublication.destination !== destination) {
+            cancelPublication();
+        }
+        if (rows.length === 0) {
+            return;
+        }
+        if (pendingPublication) {
+            pendingPublication.rows = rows;
+            return;
+        }
+        pendingPublication = publicationFactory.createObject(probe, {
+            publisher: probe, destination: destination, rows: rows, interval: replyDelayMs
+        });
+        if (pendingPublication) {
+            console.info("layout-probe: delayed publication queued", replyDelayMs);
+            pendingPublication.start();
+        } else {
+            console.warn("layout-probe: cannot create private publication fault timer");
+        }
+    }
 
     function registrationFinished(): void {
         if (!registration || !registration.isFinished || registrationHandled || stopping) {
@@ -83,8 +142,8 @@ Item {
             && text !== "00000000-0000-0000-0000-000000000000";
     }
 
-    function publish(status: string, rows: var): void {
-        if (replyOwner === "" || rows.length === 0) {
+    function publish(status: string, rows: var, destination: string): void {
+        if (!destination.startsWith(":") || rows.length === 0) {
             return;
         }
         const messages = rows.map(row => ({
@@ -97,6 +156,7 @@ Item {
                 backendOwner: selfOwner, identityName: identityName
             })
         }));
+        writer.service = destination;
         writer.arguments = ["var messages = " + JSON.stringify(messages) + ";var written=0;"
             + "panels().forEach(function(p) { p.widgets('org.plasmafusion.layoutprobe').forEach(function(w) {"
             + "messages.forEach(function(m) { if(w.id === m.id) { w.currentConfigGroup=['General'];"
@@ -162,7 +222,7 @@ Item {
             probe.replyOwner = probe.readOwner;
             probe.recipients = JSON.parse(String(value[0]));
             console.info("layout-probe: mailbox rows", probe.recipients.length);
-            probe.publish("online", probe.recipients);
+            probe.queuePublication(probe.recipients, probe.replyOwner);
             probe.finishRead();
         }
         onFailed: {
@@ -172,8 +232,8 @@ Item {
     }
     DBusCall {
         id: writer
-        // A cached unique name cannot auto-start a new shell during retirement.
-        service: probe.replyOwner
+        // Each publication uses its captured unique destination, including delayed replies.
+        service: ""
         path: "/PlasmaShell"
         dbusInterface: "org.kde.PlasmaShell"
         method: "evaluateScript"
@@ -204,6 +264,8 @@ Item {
             return;
         }
         dropRetirementFrame = KWin.readConfig("DropRetirementFrame", false) === true;
+        const delay = Number(KWin.readConfig("ReplyDelayMs", 0));
+        replyDelayMs = delay >= 0 && delay <= 3000 && delay % 1 === 0 ? delay : 0;
         if (typeof Workspace.transientTiling === "function") {
             const api = Workspace.transientTiling();
             if (api) {
@@ -226,10 +288,11 @@ Item {
     }
     Component.onDestruction: {
         stopping = true;
+        cancelPublication();
         if (dropRetirementFrame) {
             console.info("layout-probe: retirement frame deliberately dropped");
         } else {
-            probe.publish("offline", probe.recipients);
+            probe.publish("offline", probe.recipients, probe.replyOwner);
         }
         if (identityName !== "") {
             identityRelease.arguments = [identityName];

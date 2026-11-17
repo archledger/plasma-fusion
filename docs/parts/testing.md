@@ -163,11 +163,41 @@ That scope requires `reply-ordering-result.json`; a first-slice receipt cannot c
 This covers same-exchange query-state ordering, not mixed-lifetime stress or production action
 completion acknowledgements.
 
+The query-timeout case uses a short client deadline and delayed native publication:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-timeout --query-timeout-ms 200 --reply-delay-ms 2000
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-timeout tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-timeout" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-timeout --scope query-timeout-late
+```
+
+The private query deadline defaults to 10000 ms and accepts 100–10000 ms. Reply delay defaults
+to zero; the fault accepts up to 3000 ms and must exceed the chosen deadline. The seed hashes
+both the provider configuration and client schema. Intervals follow
+[Qt's one-shot Timer](https://doc.qt.io/qt-6/qml-qtqml-timer.html), not a real-time guarantee.
+Timers are dynamically created with an explicit owner and captured request/destination; see
+[Component.createObject](https://doc.qt.io/qt-6/qml-qtqml-component.html#createObject-method).
+They do not repeat or poll. Confirmed replies, replacement queries and teardown cancel owned
+client deadlines. Provider teardown cancels held publications, whose unique shell destination
+is never resolved again when the delay expires.
+
+The case captures the provider alias before creating widgets. Each live consumer must start
+unknown, become unconfirmed once, and accept its valid late state on the same query and provider
+lifetime. A timeout neither advances the query identity nor retries it. Outbound traces and
+native wake counts prove that no automatic retry occurred. Wrong-request high revisions must
+remain rejected after the valid late response. A dedicated receipt is required. These are
+read-only query checks, not qualification of mutating-action cancellation, retries or outcome
+acknowledgements.
+
 `--check-result` requires the explicit selected-scope receipt and successful inner scenario/session
 codes. The wrapper's exit code alone is insufficient. `reload-result.json` and
 `identity-fence-result.json` record the additional assertions; none of these certifies full G0.
 The silent-retirement scope requires its own receipt and cannot use the first-slice receipt.
-Completion/timeout behavior, target preparation and existing-tiler integration still need their own
+Action completion/timeout behavior, target preparation and existing-tiler integration need their own
 evidence. A shell abort during teardown was also reproduced with the
 probe disabled and zero probe widgets; retain that environment limitation rather than claiming
 crash-free qualification.

@@ -76,6 +76,35 @@ qdbus org.kde.kglobalaccel /component/kwin >"$OUT/kwin-shortcut-interface.txt"
 qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.shortcutNames \
     >"$OUT/kwin-shortcut-names.txt"
 
+reply_delay_ms=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
+    --group Script-plasmafusion-layout-probe --key ReplyDelayMs --default 0)
+[[ $reply_delay_ms =~ ^[0-9]+$ ]] || return 64
+if [[ $reply_delay_ms != 0 ]]; then
+    timeout_provider_ready=false
+    for _ in {1..40}; do
+        qdbus org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.ListNames \
+            >"$OUT/timeout-bus-names.txt"
+        if python3 - "$OUT/timeout-bus-names.txt" "$OUT/timeout-identity-before.txt" <<'PY'
+import sys
+names = [line.strip() for line in open(sys.argv[1])
+         if line.strip().startswith("org.plasmafusion.LayoutProbe.p")]
+assert len(names) == 1, names
+with open(sys.argv[2], "w") as identity:
+    identity.write(names[0])
+PY
+        then
+            timeout_provider_ready=true
+            break
+        fi
+        sleep 0.1
+    done
+    [[ $timeout_provider_ready == true ]] || return 1
+    timeout_identity_before=$(cat "$OUT/timeout-identity-before.txt")
+    qdbus org.freedesktop.DBus /org/freedesktop/DBus \
+        org.freedesktop.DBus.GetNameOwner "$timeout_identity_before" \
+        >"$OUT/timeout-owner-before.txt"
+fi
+
 evaljs - >"$OUT/widgets-created.txt" <<'JS'
 var p=new Panel;
 p.location="top";
@@ -112,6 +141,100 @@ identity_name=$(cat "$OUT/identity-name.txt")
 identity_owner=$(qdbus org.freedesktop.DBus /org/freedesktop/DBus \
     org.freedesktop.DBus.GetNameOwner "$identity_name")
 [[ $identity_owner == "$backend_owner" ]] || return 1
+
+if [[ $reply_delay_ms != 0 ]]; then
+    python3 - "$OUT/observations-online.json" "$OUT/plasmashell.log" "$OUT/kwin.log" \
+        "$OUT/timeout-identity-before.txt" "$OUT/timeout-owner-before.txt" <<'PY'
+import json, sys
+from pathlib import Path
+from xml.etree import ElementTree
+rows = json.load(open(sys.argv[1]))
+trace = open(sys.argv[2]).readlines()
+history = [json.loads(line.split("layout-probe-observation ", 1)[1])
+           for line in trace if line.endswith("\n") and "layout-probe-observation " in line]
+for row in rows:
+    boot = row["consumer"]
+    timeline = [entry for entry in history if entry["boot"] == boot]
+    unconfirmed = [index for index, entry in enumerate(timeline)
+                   if entry["phase"] == "unconfirmed"]
+    assert len(unconfirmed) == 1, "query must become unconfirmed once before its late reply"
+    first_online = next(index for index, entry in enumerate(timeline) if entry["phase"] == "online")
+    assert unconfirmed[0] < first_online
+    expired = timeline[unconfirmed[0]]
+    assert expired["packet"] is None and expired["accepted"] == 0
+    assert expired["request"] == 1
+    packet = row["observation"]["packet"]
+    assert packet["request"] == expired["request"]
+    assert packet["identityName"] == open(sys.argv[4]).read().strip()
+    assert packet["backendOwner"] == open(sys.argv[5]).read().strip()
+queries = [json.loads(line.split("layout-probe-query ", 1)[1])
+           for line in trace if line.endswith("\n") and "layout-probe-query " in line]
+schema = Path.home() / (
+    ".local/share/plasma/plasmoids/org.plasmafusion.layoutprobe/contents/config/main.xml"
+)
+expected_deadline = int(ElementTree.parse(schema).find(
+    ".//k:entry[@name='queryTimeoutMs']/k:default",
+    {"k": "http://www.kde.org/standards/kcfg/1.0"},
+).text)
+assert {entry["boot"] for entry in queries} == {row["consumer"] for row in rows}
+assert all(entry["deadlineMs"] == expected_deadline for entry in queries)
+for row in rows:
+    assert [entry["request"] for entry in queries if entry["boot"] == row["consumer"]] == [1]
+provider = open(sys.argv[3]).read()
+assert provider.count("layout-probe: initialized ") == 1
+assert provider.count("layout-probe: wake received") == 2
+assert provider.count("layout-probe: delayed publication queued") == 1
+assert provider.count("layout-probe: delayed publication released") == 1
+print("PASS: timeout is unconfirmed, not cancelled/retried; same-provider late state is accepted")
+PY
+    python3 - "$OUT/observations-online.json" "$OUT/timeout-stale.js" <<'PY'
+import json, sys
+messages = []
+for row in json.load(open(sys.argv[1])):
+    packet = dict(row["observation"]["packet"])
+    packet["request"] = 0
+    packet["revision"] += 10000
+    messages.append({"consumer": row["consumer"], "packet": json.dumps(packet)})
+with open(sys.argv[2], "w") as injection:
+    injection.write("var messages=" + json.dumps(messages) + ";"
+        "panels().forEach(function(p){"
+        "p.widgets('org.plasmafusion.layoutprobe').forEach(function(w){"
+        "w.currentConfigGroup=['General'];var q=JSON.parse(w.readConfig('layoutRequest',''));"
+        "messages.forEach(function(m){if(m.consumer===q.consumer){"
+        "w.writeConfig('layoutResponse',m.packet);}});});});")
+PY
+    evaljs "$OUT/timeout-stale.js" >"$OUT/timeout-stale-send.txt"
+    for _ in {1..40}; do
+        if [[ $(grep -c 'layout-probe-rejected request ' "$OUT/plasmashell.log") == 2 ]]; then
+            break
+        fi
+        sleep 0.1
+    done
+    observations >"$OUT/observations-after-timeout-stale.json"
+    python3 - "$OUT/observations-online.json" "$OUT/observations-after-timeout-stale.json" \
+        "$OUT/plasmashell.log" <<'PY'
+import json, sys
+before = {row["consumer"]: row["observation"] for row in json.load(open(sys.argv[1]))}
+after = {row["consumer"]: row["observation"] for row in json.load(open(sys.argv[2]))}
+assert before.keys() == after.keys()
+for boot, row in after.items():
+    assert row["phase"] == "online" and row["request"] == 1
+    assert row["packet"]["request"] == 1 and row["epoch"] == before[boot]["epoch"]
+    assert before[boot]["revision"] <= row["revision"] < before[boot]["revision"] + 10000
+trace = open(sys.argv[3]).read()
+assert trace.count("layout-probe-rejected request ") == 2
+accepted = [json.loads(line.split("layout-probe-observation ", 1)[1])
+            for line in trace.splitlines() if "layout-probe-observation " in line]
+assert all(not entry["packet"] or entry["packet"]["request"] == 1 for entry in accepted)
+queries = [line for line in trace.splitlines() if "layout-probe-query " in line]
+assert len(queries) == 2
+print("PASS: wrong-request high revisions cannot replace the valid late state or trigger retries")
+PY
+    printf '%s\n' '{"schema":1,"passed":true,' \
+        '"checks":["roundtrip-native","query-timeout","late-state"]}' \
+        >"$OUT/query-timeout-result.json"
+    return 0
+fi
 
 drop_retirement_frame=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
     --group Script-plasmafusion-layout-probe --key DropRetirementFrame --default false)

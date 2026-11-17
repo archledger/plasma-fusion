@@ -6,19 +6,21 @@
 import hashlib
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+from xml.etree import ElementTree
 
 PREPARER = Path(__file__).with_name("prepare_seed.py")
 LIFECYCLE = Path(__file__).with_name("lifecycle.py")
 
 
-def consumer_handler(name: str) -> str:
-    source = Path(__file__).with_name("consumer.qml").read_text()
+def qml_handler(name: str, filename: str = "consumer.qml") -> str:
+    source = Path(__file__).with_name(filename).read_text()
     start = source.index(f"function {name}(")
     opening = source.index("{", start)
     depth = 1
@@ -26,7 +28,9 @@ def consumer_handler(name: str) -> str:
     while depth:
         depth += (source[end] == "{") - (source[end] == "}")
         end += 1
-    return source[start:end]
+    # QML's signature annotations are not JavaScript; keep the actual decision body.
+    header = re.sub(r":\s*(?:int|bool|var|string|real|void)\b", "", source[start:opening])
+    return header + source[opening:end]
 
 
 class SeedTests(unittest.TestCase):
@@ -59,6 +63,8 @@ class SeedTests(unittest.TestCase):
         self.assertIn("plasmafusion-layout-probeEnabled=true", (self.output / ".config/kwinrc").read_text())
         self.assertIn("ProbeAuthorized=true", (self.output / ".config/kwinrc").read_text())
         self.assertIn("DropRetirementFrame=false", (self.output / ".config/kwinrc").read_text())
+        self.assertIn("ReplyDelayMs=0", (self.output / ".config/kwinrc").read_text())
+        self.assertEqual(self.query_timeout_default(), 10000)
         self.assertFalse((self.output / ".config/plasma-org.kde.plasma.desktop-appletsrc").exists())
 
     def test_refuses_an_existing_seed_without_overwriting_it(self):
@@ -173,6 +179,71 @@ class SeedTests(unittest.TestCase):
             "checks": ["roundtrip-native", "same-provider-ordering"],
         }))
         result = self.run_check("--scope", "reply-ordering")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def query_timeout_default(self):
+        schema = self.output / (
+            ".local/share/plasma/plasmoids/org.plasmafusion.layoutprobe/contents/config/main.xml"
+        )
+        entry = ElementTree.parse(schema).find(
+            ".//k:entry[@name='queryTimeoutMs']/k:default",
+            {"k": "http://www.kde.org/standards/kcfg/1.0"},
+        )
+        self.assertIsNotNone(entry, "client query deadline missing from the private schema")
+        return int(entry.text)
+
+    def test_delayed_reply_fault_records_both_private_timing_inputs(self):
+        result = self.run_seed("--query-timeout-ms", "200", "--reply-delay-ms", "2000")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.query_timeout_default(), 200)
+        self.assertIn("ReplyDelayMs=2000", (self.output / ".config/kwinrc").read_text())
+
+    def test_query_deadline_rejects_invalid_input_without_partial_seed(self):
+        result = self.run_seed("--query-timeout-ms", "-1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("query deadline must", result.stderr)
+        self.assertFalse(self.output.exists())
+
+    def test_reply_delay_is_bounded_without_partial_seed(self):
+        result = self.run_seed("--query-timeout-ms", "200", "--reply-delay-ms", "5000")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("reply delay must", result.stderr)
+        self.assertFalse(self.output.exists())
+
+    def test_late_reply_fault_must_exceed_the_query_deadline(self):
+        result = self.run_seed("--query-timeout-ms", "200", "--reply-delay-ms", "100")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("reply delay must exceed", result.stderr)
+        self.assertFalse(self.output.exists())
+
+    def test_seed_manifest_covers_the_client_deadline_schema(self):
+        result = self.run_seed()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        schema = self.output / (
+            ".local/share/plasma/plasmoids/org.plasmafusion.layoutprobe/contents/config/main.xml"
+        )
+        inputs = json.loads((self.output / "probe-inputs.json").read_text())
+        self.assertEqual(inputs["main.xml"], hashlib.sha256(schema.read_bytes()).hexdigest())
+
+    def test_receipt_check_cannot_enable_timing_faults(self):
+        self.result_files()
+        result = self.run_check("--query-timeout-ms", "200")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("cannot be combined", result.stderr)
+
+    def test_timeout_scope_does_not_accept_other_receipts(self):
+        self.result_files()
+        result = self.run_check("--scope", "query-timeout-late")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing probe receipt", result.stderr)
+
+    def test_timeout_scope_accepts_its_own_complete_receipt(self):
+        self.result_files()
+        (self.output / "query-timeout-result.json").write_text(json.dumps({
+            "schema": 1, "passed": True,
+            "checks": ["roundtrip-native", "query-timeout", "late-state"],
+        }))
+        result = self.run_check("--scope", "query-timeout-late")
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
@@ -352,7 +423,7 @@ class LifecycleSafetyTests(unittest.TestCase):
 
 class OwnerEventTests(unittest.TestCase):
     def run_event(self, *, checking=None, bound=True, wrapped=False, service=None):
-        handler = consumer_handler("dbusNameOwnerChanged")
+        handler = qml_handler("dbusNameOwnerChanged")
         identity = "org.plasmafusion.LayoutProbe.ptest"
         probe = {
             "stopped": False, "boundOwner": ":1.0" if bound else "",
@@ -407,7 +478,7 @@ class ReplyOrderingTests(unittest.TestCase):
                   "verifying:true,pendingPacket:null};"
                   "probe.verifyPending=()=>{};console.info=()=>{};"
                   "const Plasmoid={configuration:{layoutResponse:''}};\n")
-        script += consumer_handler("onLayoutResponseChanged")
+        script += qml_handler("onLayoutResponseChanged")
         script += "\nfor(const packet of " + json.dumps(packets) + ") {"
         script += ("Plasmoid.configuration.layoutResponse=JSON.stringify(packet);"
                    "onLayoutResponseChanged();}"
@@ -440,6 +511,103 @@ class ReplyOrderingTests(unittest.TestCase):
         queued = self.run_packets([self.packet(100), self.packet(200, request=2)])
         self.assertEqual(queued["request"], 3)
         self.assertEqual(queued["revision"], 100)
+
+
+class QueryDeadlineTests(unittest.TestCase):
+    def run_deadline(self, *, generation=3, state=None, packet=None):
+        probe = {
+            "stopped": False, "boot": "current", "requestNumber": 3, "phase": "unknown",
+            "epoch": "", "revision": -1, "accepted": 0, "boundEpoch": "",
+            "boundOwner": "", "boundIdentity": "", "stops": 0,
+        } | (state or {})
+        script = "const probe=" + json.dumps(probe) + ";\n"
+        script += (
+            "probe.observations=[];"
+            "probe.observe=packet=>probe.observations.push({phase:probe.phase,packet:packet});"
+            "probe.sendQuery=()=>{throw new Error('deadline retried the query');};"
+            "probe.freshQuery=()=>{throw new Error('deadline replaced the query');};"
+            "probe.stopQueryDeadline=()=>{++probe.stops;};"
+            "const methods=(function(){with(probe){return ["
+        )
+        script += qml_handler("queryTimedOut") + "," + qml_handler("acceptPacket")
+        script += "];}})();\nmethods[0](" + json.dumps(generation) + ");\n"
+        if packet is not None:
+            # Acceptance is after identity verification; the native suite tests that boundary.
+            script += "methods[1](" + json.dumps(packet) + ");\n"
+        script += "process.stdout.write(JSON.stringify(probe));\n"
+        result = subprocess.run(["node", "-"], input=script, capture_output=True, text=True,
+                                timeout=10, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_deadline_is_unconfirmed_not_cancelled_or_retried(self):
+        result = self.run_deadline()
+        self.assertEqual(result["phase"], "unconfirmed")
+        self.assertEqual(result["requestNumber"], 3)
+        self.assertFalse(result["stopped"])
+        self.assertEqual(result["observations"], [{"phase": "unconfirmed", "packet": None}])
+
+    def test_old_deadline_cannot_affect_a_newer_query(self):
+        result = self.run_deadline(generation=2)
+        self.assertEqual(result["phase"], "unknown")
+        self.assertEqual(result["observations"], [])
+
+    def test_deadline_does_not_downgrade_confirmed_state(self):
+        result = self.run_deadline(state={"phase": "online", "boundEpoch": "confirmed"})
+        self.assertEqual(result["phase"], "online")
+        self.assertEqual(result["observations"], [])
+
+    def test_stopped_consumer_ignores_the_deadline(self):
+        result = self.run_deadline(state={"stopped": True})
+        self.assertEqual(result["phase"], "unknown")
+        self.assertEqual(result["observations"], [])
+
+    def test_current_verified_late_state_is_accepted_after_deadline(self):
+        packet = ReplyOrderingTests.packet(7)
+        result = self.run_deadline(packet=packet)
+        self.assertEqual(result["phase"], "online")
+        self.assertEqual(result["requestNumber"], 3)
+        self.assertEqual(result["accepted"], 1)
+        self.assertEqual(result["revision"], 7)
+        self.assertEqual(result["stops"], 1)
+
+    def test_old_verified_late_request_stays_rejected_after_deadline(self):
+        result = self.run_deadline(packet=ReplyOrderingTests.packet(1000, request=2))
+        self.assertEqual(result["phase"], "unconfirmed")
+        self.assertEqual(result["requestNumber"], 3)
+        self.assertEqual(result["accepted"], 0)
+        self.assertEqual(result["stops"], 0)
+
+
+class PublicationLifetimeTests(unittest.TestCase):
+    def run_empty_read(self, destination: str):
+        script = (
+            "const probe={replyDelayMs:2000,pendingPublication:null,stops:0,destroys:0};"
+            "probe.pendingPublication={destination:':1.10',rows:[{id:1}],"
+            "stop:()=>++probe.stops,destroy:()=>++probe.destroys};"
+            "probe.publish=()=>{throw new Error('empty read published state');};"
+            "const publicationFactory={createObject:()=>{"
+            "throw new Error('empty read created a publication timer');}};"
+            "const methods=(function(){with(probe){return ["
+        )
+        script += (qml_handler("cancelPublication", "provider.qml") + ","
+                   + qml_handler("queuePublication", "provider.qml"))
+        script += "];}})();probe.cancelPublication=methods[0];methods[1]([], "
+        script += json.dumps(destination) + ");"
+        script += ("process.stdout.write(JSON.stringify({pending:probe.pendingPublication!==null,"
+                   "stops:probe.stops,destroys:probe.destroys}));\n")
+        result = subprocess.run(["node", "-"], input=script, capture_output=True, text=True,
+                                timeout=10, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_empty_replacement_read_cancels_the_previous_shell_batch(self):
+        result = self.run_empty_read(":1.20")
+        self.assertEqual(result, {"pending": False, "stops": 1, "destroys": 1})
+
+    def test_empty_same_shell_read_does_not_retarget_the_existing_batch(self):
+        result = self.run_empty_read(":1.10")
+        self.assertEqual(result, {"pending": True, "stops": 0, "destroys": 0})
 
 
 class RetirementDeliveryTests(unittest.TestCase):
