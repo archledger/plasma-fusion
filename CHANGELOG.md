@@ -12,7 +12,11 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 Tested with Plasma 6.7 and 6.8: Fedora 44's Plasma 6.8.3 in the release tests, whose matrix
 covers Arch, Ubuntu 26.10, Debian testing, KDE neon and NixOS as well. Packaged as before for
 Fedora 44 and 45 (Copr), Arch (AUR), Ubuntu 26.10 (PPA), Debian testing and KDE neon (.deb) and
-NixOS (flake), as six packages. The full profile moves to the KWin fork's 6.8.3.
+NixOS (flake), as six packages; other Debian and Ubuntu family systems with Plasma 6.7 or later
+get the shared part only. The installer refuses other Fedora releases, the RHEL family and other
+Fedora-likes, SteamOS and systems it does not recognise, a Plasma older than 6.7 or of a series
+newer than 6.8, and machines other than x86-64. The full profile stays Fedora 44 only, and moves
+to the KWin fork's 6.8.3.
 
 - **The full profile on KWin 6.8.3:** the pin moves to archledger/kwin `v6.8.3-pf1`, built as
   `kwin-6.8.3-1.fc44.pf1`: KDE's KWin 6.8.3 with the same fork changes as `v6.8.2-pf5`. Fedora 44
