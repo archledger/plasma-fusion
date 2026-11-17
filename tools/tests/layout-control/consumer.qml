@@ -12,12 +12,22 @@ import org.kde.plasma.workspace.dbus as DBus
 
 PlasmoidItem {
     id: probe
-    implicitWidth: focusEnabled ? 120 : 24
+    implicitWidth: targetEnabled ? 280 : focusEnabled ? 120 : 24
     implicitHeight: 24
     Layout.minimumWidth: implicitWidth
     Layout.preferredWidth: implicitWidth
     readonly property bool focusEnabled: Plasmoid.configuration.focusProbe === true
+    readonly property bool targetEnabled: Plasmoid.configuration.targetProbe === true
     property bool focusPopupOpen: false
+    property string queryIntent: "query"
+    property string requestOutput: ""
+    property string preparedToken: ""
+    property var targetContext: null
+    property var requestContext: null
+    property var preparedContext: null
+    property bool preparedReady: false
+    property var pendingMenuContext: null
+    property bool targetPreparationPending: false
     // Probe-only correlation, not a production identity or authentication mechanism.
     readonly property string boot: Date.now() + ":" + Math.random()
     property string phase: "unknown"
@@ -139,6 +149,38 @@ PlasmoidItem {
         epoch = packet.epoch;
         revision = packet.revision;
         ++accepted;
+        if (probe.targetEnabled) {
+            const context = packet.targetContext;
+            probe.targetContext = context && context.epoch === packet.epoch
+                && Number.isInteger(context.generation) && context.generation >= 0
+                && context.generation <= 2147483646
+                && typeof context.desktopId === "string" && context.desktopId.length > 0
+                && context.desktopId.length <= 128 && typeof context.activityId === "string"
+                && context.activityId.length > 0 && context.activityId.length <= 128
+                && typeof context.outputName === "string" && context.outputName.length > 0
+                && context.outputName.length <= 128 ? {
+                    epoch: context.epoch, generation: context.generation,
+                    desktopId: context.desktopId, activityId: context.activityId,
+                    outputName: context.outputName
+                } : null;
+        }
+        if (probe.targetEnabled && packet.preparation && packet.preparation.intent === "prepare") {
+            const ready = packet.preparation.ready === true && probe.targetContext
+                && typeof packet.preparation.token === "string"
+                && packet.preparation.token.length > 0 && packet.preparation.token.length <= 128;
+            probe.preparedReady = !!ready;
+            if (ready) {
+                probe.preparedToken = packet.preparation.token;
+                probe.preparedContext = {
+                    epoch: probe.targetContext.epoch, generation: probe.targetContext.generation,
+                    desktopId: probe.targetContext.desktopId, activityId: probe.targetContext.activityId,
+                    outputName: probe.targetContext.outputName
+                };
+            }
+        } else if (probe.targetEnabled && packet.preparation) {
+            probe.preparedReady = packet.preparation.intent === "validate"
+                && packet.preparation.ready === true;
+        }
         observe(packet);
         if (packet.status === "offline") {
             freshQuery(true);
@@ -164,7 +206,24 @@ PlasmoidItem {
         console.info("layout-probe-query", JSON.stringify({
             boot: boot, request: requestNumber, deadlineMs: queryDeadline.interval
         }));
-        Plasmoid.configuration.layoutRequest = JSON.stringify({consumer: boot, request: requestNumber});
+        const request = {consumer: boot, request: requestNumber};
+        if (probe.targetEnabled) {
+            if (probe.queryIntent === "query") {
+                probe.requestOutput = Screen.name;
+            }
+            const context = probe.queryIntent === "validate"
+                ? probe.preparedContext : probe.requestContext;
+            Object.assign(request, {
+                version: 1, intent: probe.queryIntent, outputName: probe.requestOutput,
+                token: probe.queryIntent === "validate" ? probe.preparedToken : "",
+                viewEpoch: context ? context.epoch : "",
+                viewGeneration: context ? context.generation : -1,
+                desktopId: context ? context.desktopId : "",
+                activityId: context ? context.activityId : "",
+                viewOutputName: context ? context.outputName : ""
+            });
+        }
+        Plasmoid.configuration.layoutRequest = JSON.stringify(request);
         // Desktop scripting reads the saved group, not this unsaved property map.
         Plasmoid.configuration.writeConfig();
         DBus.SessionBus.asyncCall({
@@ -176,6 +235,10 @@ PlasmoidItem {
     }
 
     function freshQuery(showUnknown: bool): void {
+        probe.queryIntent = "query";
+        if (probe.targetEnabled) {
+            probe.preparedReady = false;
+        }
         stopQueryDeadline();
         if (requestNumber >= 2147483646) {
             stopped = true;
@@ -202,6 +265,43 @@ PlasmoidItem {
         });
     }
 
+    function requestTarget(intent: string): void {
+        if (!probe.targetEnabled || (intent !== "prepare" && intent !== "validate")) {
+            return;
+        }
+        const context = intent === "prepare" && probe.targetPreparationPending
+            ? probe.pendingMenuContext : probe.targetContext;
+        const captured = intent === "prepare" && context ? {
+            epoch: context.epoch, generation: context.generation, desktopId: context.desktopId,
+            activityId: context.activityId, outputName: context.outputName
+        } : null;
+        probe.freshQuery(true);
+        // freshQuery resets lifecycle requests to query; its captured-generation send is deferred.
+        probe.queryIntent = intent;
+        probe.requestOutput = Screen.name;
+        if (intent === "prepare") {
+            probe.preparedToken = "";
+            probe.preparedContext = null;
+            probe.preparedReady = false;
+            probe.requestContext = captured;
+            probe.targetPreparationPending = false;
+            probe.pendingMenuContext = null;
+        }
+    }
+
+    function openTargetMenu(): void {
+        if (!probe.targetEnabled) {
+            return;
+        }
+        const context = probe.targetContext;
+        probe.pendingMenuContext = context ? {
+            epoch: context.epoch, generation: context.generation, desktopId: context.desktopId,
+            activityId: context.activityId, outputName: context.outputName
+        } : null;
+        probe.targetPreparationPending = true;
+        probe.focusPopupOpen = true;
+    }
+
     function observe(packet: var): void {
         console.info("layout-probe-observation", JSON.stringify({
             boot: boot, phase: phase, epoch: epoch, revision: revision,
@@ -217,18 +317,47 @@ PlasmoidItem {
             return;
         }
         const point = focusButton.mapToGlobal(focusButton.width / 2, focusButton.height / 2);
+        const validation = validateButton.mapToGlobal(validateButton.width / 2,
+                                                     validateButton.height / 2);
         console.info("layout-probe-focus-control", JSON.stringify({
-            boot: boot, x: point.x, y: point.y, screen: Screen.name
+            boot: boot, x: point.x, y: point.y, screen: Screen.name,
+            validateX: validation.x, validateY: validation.y
         }));
+        if (probe.targetEnabled && probe.queryIntent === "query" && Screen.name !== ""
+                && probe.requestOutput !== Screen.name) {
+            // One event-driven refresh when attachment/movement changes the bar's output.
+            probe.freshQuery(true);
+        }
     }
     Controls.Button {
         id: focusButton
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: probe.targetEnabled ? parent.width / 2 : parent.width
         visible: probe.focusEnabled
         enabled: visible
         text: "Focus probe"
         Accessible.name: "Open isolated focus probe"
-        onClicked: probe.focusPopupOpen = true
+        onClicked: {
+            if (probe.targetEnabled) {
+                probe.openTargetMenu();
+            } else {
+                probe.focusPopupOpen = true;
+            }
+        }
+    }
+    Controls.Button {
+        id: validateButton
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: parent.width / 2
+        visible: probe.targetEnabled
+        enabled: visible
+        text: i18n("Validate captured")
+        Accessible.name: i18n("Validate the captured isolated target without preparing again")
+        onClicked: probe.requestTarget("validate")
     }
     PlasmaCore.AppletPopup {
         id: focusPopup
@@ -244,6 +373,8 @@ PlasmoidItem {
                 focusPopup.requestActivate();
                 focusQuery.forceActiveFocus();
             } else {
+                probe.targetPreparationPending = false;
+                probe.pendingMenuContext = null;
                 probe.focusPopupOpen = false;
             }
         }
@@ -252,7 +383,8 @@ PlasmoidItem {
             implicitWidth: 180
             implicitHeight: 60
             focus: true
-            text: "Query focus"
+            text: !probe.targetEnabled ? "Query focus"
+                : probe.targetPreparationPending ? i18n("Prepare target") : i18n("Validate target")
             Accessible.name: "Query isolated focus by keyboard"
             onActiveFocusChanged: {
                 if (activeFocus && probe.focusEnabled) {
@@ -265,11 +397,19 @@ PlasmoidItem {
                 if ([Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter].includes(event.key)) {
                     event.accepted = true;
                     if (!event.isAutoRepeat) {
+                        const intent = probe.targetEnabled && probe.targetPreparationPending
+                            ? "prepare" : probe.targetEnabled ? "validate" : "query";
                         console.info("layout-probe-keyboard-query", JSON.stringify({
                             boot: probe.boot, key: event.key, activeFocus: focusQuery.activeFocus,
-                            screen: Screen.name, request: probe.requestNumber + 1
+                            screen: Screen.name, request: probe.requestNumber + 1, intent: intent
                         }));
-                        probe.freshQuery(true);
+                        if (probe.targetEnabled) {
+                            // A received popup input, not Window.active's transient chain, admits
+                            // the one initial native app/panel-to-popup handoff.
+                            probe.requestTarget(intent);
+                        } else {
+                            probe.freshQuery(true);
+                        }
                     }
                 } else if (event.key === Qt.Key_Escape) {
                     event.accepted = true;

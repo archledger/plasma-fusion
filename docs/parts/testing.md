@@ -224,15 +224,65 @@ candidate is not a prepared token or guarded captured-view contract: focus-chang
 refusal, competing controls, output-object lifetime validation and tiler integration remain
 separate G0 work. The diagnostic dimensions are not production design values.
 
-The test-only provider contains a private native-reference guard core, exercised by the unit
-suite with the actual `Tiling.js` eligibility, aliveness, membership and view helpers. It captures
-the exact application and focus surface, refuses changed or destroyed references and does not
-renew an invalidated preparation. The caller must first establish the shell connection/PID and
-the intended context; an app-id string alone is insufficient.
+The separate `--target-probe` mode exercises non-mutating preparation and validation:
 
-This core is not yet wired to a shell-facing preparation exchange. Its flag defaults off, it
-exports no objects or methods and it never admits a window, writes geometry or changes placement
-memory. Native delivery, lifetime/context fencing and the remaining G0 gates are separate work.
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-target --target-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-target tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-target" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-target --scope target-preparation
+```
+
+The default-off seed enables the diagnostic focus controls and requires normal transport.
+The provider resolves the captured unique shell owner's PID through the existing session bus.
+Only a non-normal shell applet popup, dock or desktop surface with that verified PID and the
+intended native output may preserve the remembered eligible app. A class/app-id string is not
+identity evidence. Native PID/type observations were checked in the private Wayland environment;
+this is not an XWayland qualification.
+
+The captured window, focus surface, desktop and output objects stay in KWin. A small diagnostic handle
+binds one prepared slot to its shell connection, live widget ID and consumer lifetime. The
+provider accepts only versioned `prepare`/`validate` intents, bounds the envelope and rows, rejects
+conflicting identities and never renews a repeated preparation. Validation rechecks native state;
+it is not a cached action acknowledgement. Focus, membership and view events invalidate the
+reference and advance a bounded context generation rather than selecting another window. The
+exact captured focus surface must remain live and focused: another shell popup or menu dismissal
+also invalidates the preparation, not merely another application. The provider publishes read-only
+view/context updates on those events. The menu request freezes the
+confirmed provider incarnation, generation and desktop/activity/output IDs before its deferred
+send. Every actual focus transition advances that generation, including before capture. The
+first received popup input dispatches preparation against the frozen pre-opening context; opening
+alone does not send it. Only the recorded single eligible-app/panel-to-popup handoff may bridge
+one generation, with the same live candidate and view. Another popup, dismissal or return cannot
+use that exception. The provider rejects a stale snapshot before choosing any target. Returning
+to an earlier view cannot revive that intent. The accepted preparation context is separate from
+the original immutable request and is used for validation. Loss of readiness retains only an
+inert last-confirmed diagnostic snapshot so stale-handle rejection can be tested.
+Preparation responses contain only intent, readiness, reason and
+the handle; context frames contain only their required scalar view IDs and generation, never
+window IDs, PIDs, classes or placement records.
+
+The native scenario uses the first Space to prepare and the second to validate the controlled app.
+It then requires refusal after another app activates, a new explicit preparation followed by
+close/refusal, and a desktop
+leave/return followed by refusal of the old handle. Each reply must match the receiver, outbound
+generation and native verdict. Unit cases also cover ineligible/spoofed focus, destroyed wrappers,
+membership/activity loss and same-name output-object replacement.
+Pre-capture focus/view races and immutable client snapshots also have regression coverage.
+Pre-capture popup-to-popup, dismissal and return sequences are regression cases too. A
+[window's active flag](https://doc.qt.io/qt-6/qwindow.html#isActive) includes its transient chain;
+it is not used alone as the popup-input receipt.
+Recorded frame centers are backend-only test input coordinates used to reactivate the controlled
+app after close; they are never target/view identity or mode evidence.
+
+This is a one-slot diagnostic prototype, not the settled production protocol: fair competing-bar
+recovery, slot retirement after widget loss, mixed lifetimes, action acknowledgements/timeouts,
+real activity/output-loss cases and existing-tiler integration remain separate G0 gates. No
+preparation or validation admits a window, changes its geometry or writes placement memory.
+
 `--check-result` requires the explicit selected-scope receipt and successful inner scenario/session
 codes. The wrapper's exit code alone is insufficient. `reload-result.json` and
 `identity-fence-result.json` record the additional assertions; none of these certifies full G0.

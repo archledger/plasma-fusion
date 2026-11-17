@@ -16,7 +16,7 @@ APPLET_ID = "org.plasmafusion.layoutprobe"
 
 def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
             query_timeout_ms: int = 10000, reply_delay_ms: int = 0,
-            focus_probe: bool = False) -> None:
+            focus_probe: bool = False, target_probe: bool = False) -> None:
     build = Path.cwd() / "build"
     if build.is_symlink() or not output.resolve().is_relative_to(build.resolve()):
         raise ValueError("output must be under the current worktree's build directory")
@@ -28,6 +28,7 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         raise ValueError("reply delay must be between 0 and 3000 ms")
     if reply_delay_ms and reply_delay_ms <= query_timeout_ms:
         raise ValueError("reply delay must exceed the query deadline for this fault")
+    focus_probe = focus_probe or target_probe
     if focus_probe and (drop_retirement_frame or reply_delay_ms):
         raise ValueError("focus observation requires normal transport")
     rules = stage / ".local/share/kwin/scripts/plasmafusion-placement/contents/ui/Tiling.js"
@@ -65,6 +66,8 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
                 f'<default>{query_timeout_ms}</default></entry>')
     entries += ('<entry name="focusProbe" type="Bool"><default>'
                 f'{"true" if focus_probe else "false"}</default></entry>')
+    entries += ('<entry name="targetProbe" type="Bool"><default>'
+                f'{"true" if target_probe else "false"}</default></entry>')
     (config / "main.xml").write_text(
         '<?xml version="1.0"?><kcfg xmlns="http://www.kde.org/standards/kcfg/1.0">'
         f'<kcfgfile name=""/><group name="General">{entries}</group></kcfg>'
@@ -76,6 +79,7 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         f"DropRetirementFrame={'true' if drop_retirement_frame else 'false'}\n"
         f"ReplyDelayMs={reply_delay_ms}\n"
         f"FocusProbe={'true' if focus_probe else 'false'}\n"
+        f"TargetProbe={'true' if target_probe else 'false'}\n"
         "\n[Desktops]\nNumber=2\nRows=1\n"
     )
     inputs = {
@@ -99,7 +103,7 @@ def main() -> None:
     parser.add_argument(
         "--scope",
         choices=("first-slice", "silent-retirement", "reply-ordering",
-                 "query-timeout-late", "focus-observation"),
+                 "query-timeout-late", "focus-observation", "target-preparation"),
         default="first-slice",
     )
     parser.add_argument("--drop-retirement-frame", action="store_true",
@@ -108,12 +112,14 @@ def main() -> None:
     parser.add_argument("--reply-delay-ms", type=int, help="private delayed-publication fault")
     parser.add_argument("--focus-probe", action="store_true",
                         help="private focus-event observation controls and client helper")
+    parser.add_argument("--target-probe", action="store_true",
+                        help="private non-mutating target preparation and validation")
     args = parser.parse_args()
     try:
         if args.check_result is not None:
             if (args.stage is not None or args.output is not None or args.drop_retirement_frame
                     or args.query_timeout_ms is not None or args.reply_delay_ms is not None
-                    or args.focus_probe):
+                    or args.focus_probe or args.target_probe):
                 raise ValueError("--check-result cannot be combined with seed preparation")
             check_result(args.check_result, args.scope)
         else:
@@ -127,7 +133,7 @@ def main() -> None:
                         args.query_timeout_ms if args.query_timeout_ms is not None else 10000
                     ),
                     reply_delay_ms=args.reply_delay_ms if args.reply_delay_ms is not None else 0,
-                    focus_probe=args.focus_probe)
+                    focus_probe=args.focus_probe, target_probe=args.target_probe)
     except (ValueError, OSError) as error:
         parser.exit(2, f"{error}\n")
 
@@ -154,6 +160,9 @@ def check_result(directory: Path, scope: str = "first-slice") -> None:
     elif scope == "focus-observation":
         receipt = directory / "focus-observation-result.json"
         checks = ["roundtrip-native", "panel-keyboard-focus"]
+    elif scope == "target-preparation":
+        receipt = directory / "target-preparation-result.json"
+        checks = ["roundtrip-native", "guarded-target"]
     else:
         raise ValueError("unknown probe receipt scope")
     if not receipt.is_file():

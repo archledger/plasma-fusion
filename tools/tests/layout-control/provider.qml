@@ -20,12 +20,14 @@ Item {
     property string replyOwner: ""
     property var recipients: []
     property bool focusProbe: false
-    property var lastEligibleWindow: null
     property bool targetProbe: false
+    property var lastEligibleWindow: null
     property int shellPid: 0
     property string shellPidOwner: ""
     property var preparedTarget: null
     property string preparationFailure: "not-prepared"
+    property var targetExchange: null
+    property int targetSerial: 0
     property int targetGeneration: 0
     property var lastFocusedWindow: null
     property var targetHandoff: null
@@ -155,16 +157,29 @@ Item {
         if (!destination.startsWith(":") || rows.length === 0) {
             return;
         }
-        const messages = rows.map(row => ({
-            id: row.id,
-            packet: JSON.stringify({
+        const messages = rows.map(row => {
+            const preparation = status === "online" && probe.targetProbe
+                ? probe.handleTargetRequest(row) : null;
+            if (preparation) {
+                const window = probe.preparedTarget ? probe.preparedTarget.window : null;
+                console.info("layout-probe-target", JSON.stringify({
+                    consumer: row.consumer, request: row.request, intent: preparation.intent,
+                    ready: preparation.ready, reason: preparation.reason,
+                    targetClass: Tiling.alive(window) ? String(window.resourceClass) : "",
+                    targetAlive: Tiling.alive(window)
+                }));
+            }
+            return {id: row.id, packet: JSON.stringify({
                 consumer: row.consumer, epoch: epoch, revision: ++revision,
                 status: status, capable: capable, refusal: refusal,
                 request: row.request,
+                preparation: preparation,
+                targetContext: status === "online" && probe.targetProbe
+                    ? probe.captureTargetContext(row.outputName) : null,
                 competingProviderRejected: competingProviderRejected,
                 backendOwner: selfOwner, identityName: identityName
-            })
-        }));
+            })};
+        });
         writer.service = destination;
         writer.arguments = ["var messages = " + JSON.stringify(messages) + ";var written=0;"
             + "panels().forEach(function(p) { p.widgets('org.plasmafusion.layoutprobe').forEach(function(w) {"
@@ -409,6 +424,106 @@ Item {
         };
     }
 
+    // One bounded diagnostic slot. Validation is read-only and always rechecks native state;
+    // replaying a prepare must not capture a different window or renew an invalidated reference.
+    function handleTargetRequest(row: var): var {
+        if (row && (row.intent === undefined || row.intent === "query")) {
+            return null;
+        }
+        const response = {intent: "invalid", ready: false, reason: "malformed", token: ""};
+        if (!row || row.version !== 1 || !Number.isInteger(row.id) || row.id <= 0
+                || typeof row.consumer !== "string" || row.consumer.length === 0
+                || row.consumer.length > 128 || !Number.isInteger(row.request)
+                || row.request <= 0 || row.request > 2147483646
+                || (row.intent !== "prepare" && row.intent !== "validate")
+                || typeof row.outputName !== "string" || row.outputName.length === 0
+                || row.outputName.length > 128 || typeof row.token !== "string"
+                || row.token.length > 128 || (row.intent === "prepare" && row.token !== "")
+                || typeof row.viewEpoch !== "string" || row.viewEpoch.length > 128
+                || !Number.isInteger(row.viewGeneration) || row.viewGeneration < 0
+                || typeof row.desktopId !== "string" || row.desktopId.length > 128
+                || typeof row.activityId !== "string" || row.activityId.length > 128
+                || typeof row.viewOutputName !== "string" || row.viewOutputName.length > 128) {
+            return response;
+        }
+        response.intent = row.intent;
+        if (!targetContextReady()) {
+            response.reason = "unavailable";
+            return response;
+        }
+        if (targetExchange && targetExchange.owner !== readOwner) {
+            targetExchange = null;
+            lastEligibleWindow = null;
+            invalidateTarget("shell-replaced");
+        }
+        let exchange = targetExchange;
+        if (exchange && (exchange.consumer !== row.consumer || exchange.id !== row.id)) {
+            response.reason = "busy";
+            return response;
+        }
+        const payload = JSON.stringify([row.intent, row.outputName, row.token, row.viewEpoch,
+                                        row.viewGeneration, row.desktopId, row.activityId,
+                                        row.viewOutputName]);
+        if (exchange && (row.request < exchange.request
+                || (row.request === exchange.request && payload !== exchange.payload))) {
+            response.reason = "stale-or-conflicting-request";
+            return response;
+        }
+        const fresh = !exchange || row.request > exchange.request;
+        if (!exchange) {
+            exchange = {owner: readOwner, consumer: row.consumer, id: row.id,
+                        request: 0, payload: "", outputName: "", nonce: ""};
+            targetExchange = exchange;
+        }
+        if (fresh) {
+            exchange.request = row.request;
+            exchange.payload = payload;
+        }
+        if (fresh && row.intent === "prepare") {
+            invalidateTarget("stale-context");
+        }
+        // Claim the bounded identity even on refusal: it must never become a later capture.
+        const context = captureTargetContext(row.outputName);
+        if (!context || row.viewEpoch !== context.epoch
+                || (row.viewGeneration !== context.generation && !canUseTargetHandoff(row))
+                || row.desktopId !== context.desktopId
+                || row.activityId !== context.activityId || row.viewOutputName !== context.outputName) {
+            response.reason = "stale-context";
+            return response;
+        }
+        const active = Workspace.activeWindow;
+        if (row.intent === "prepare"
+                && (!shellOwnsFocus(active, Tiling.alive(active) ? active.output : null)
+                    || active.appletPopup !== true || String(active.output.name) !== row.outputName)) {
+            response.reason = "popup-focus-unconfirmed";
+            return response;
+        }
+        if (row.intent === "prepare") {
+            if (fresh) {
+                if (targetSerial >= 2147483646) {
+                    invalidateTarget("unavailable");
+                    response.reason = preparationFailure;
+                    return response;
+                }
+                exchange.nonce = epoch + ":" + (++targetSerial);
+                exchange.outputName = row.outputName;
+                response.ready = prepareTarget(row.outputName);
+            } else {
+                response.ready = validateTarget();
+            }
+            response.token = response.ready ? exchange.nonce : "";
+        } else {
+            if (row.token === "" || row.token !== exchange.nonce
+                    || row.outputName !== exchange.outputName) {
+                response.reason = "wrong-preparation";
+                return response;
+            }
+            response.ready = validateTarget();
+        }
+        response.reason = response.ready ? "" : preparationFailure;
+        return response;
+    }
+
     function finishRead(): void {
         reading = false;
         if (again) {
@@ -426,16 +541,58 @@ Item {
         arguments: ["org.kde.plasmashell"]
         onFinished: value => {
             probe.readOwner = String(value[0]);
-            probe.readMailboxes();
+            if (probe.targetProbe) {
+                shellIdentityLookup.arguments = [probe.readOwner];
+                shellIdentityLookup.call();
+            } else {
+                probe.readMailboxes();
+            }
         }
         onFailed: probe.finishRead()
     }
+    DBusCall {
+        id: shellIdentityLookup
+        service: "org.freedesktop.DBus"
+        path: "/org/freedesktop/DBus"
+        dbusInterface: "org.freedesktop.DBus"
+        method: "GetConnectionUnixProcessID"
+        onFinished: value => {
+            const pid = Number(value[0]);
+            if (!Number.isInteger(pid) || pid <= 0) {
+                probe.shellPid = 0;
+                probe.shellPidOwner = "";
+                probe.targetViewChanged();
+                probe.finishRead();
+                return;
+            }
+            if (probe.shellPidOwner !== "" && probe.shellPidOwner !== probe.readOwner) {
+                probe.targetViewChanged();
+                probe.targetExchange = null;
+            }
+            probe.shellPid = pid;
+            probe.shellPidOwner = probe.readOwner;
+            probe.readMailboxes();
+        }
+        onFailed: {
+            probe.shellPid = 0;
+            probe.shellPidOwner = "";
+            probe.targetViewChanged();
+            probe.finishRead();
+        }
+    }
 
     function readMailboxes(): void {
+        const bounded = probe.targetProbe ? "if(rows.length>=16)return;" : "";
         reader.arguments = ["var rows=[];panels().forEach(function(p) {"
             + "p.widgets('org.plasmafusion.layoutprobe').forEach(function(w) {"
-            + "w.currentConfigGroup=['General'];try { var q=JSON.parse(w.readConfig('layoutRequest',''));"
-            + "rows.push({id:w.id,consumer:q.consumer,request:q.request}); }catch(e){} }); });"
+            + bounded
+            + "w.currentConfigGroup=['General'];try {var text=w.readConfig('layoutRequest','');"
+            + (probe.targetProbe ? "if(text.length>2048)return;" : "")
+            + "var q=JSON.parse(text);rows.push({id:w.id,consumer:q.consumer,request:q.request,"
+            + "version:q.version,intent:q.intent,outputName:q.outputName,token:q.token,"
+            + "viewEpoch:q.viewEpoch,viewGeneration:q.viewGeneration,desktopId:q.desktopId,"
+            + "activityId:q.activityId,viewOutputName:q.viewOutputName});"
+            + "}catch(e){} }); });"
             + "print(JSON.stringify(rows));"];
         reader.call();
     }
@@ -480,18 +637,49 @@ Item {
     }
     Connections {
         target: Workspace
-        enabled: probe.authorized
+        enabled: probe.authorized && !probe.stopping
         function onWindowActivated(window) {
-            if (Tiling.eligibleForMaster(window)) {
+            if (probe.targetProbe) {
+                probe.trackTargetActivation(window);
+            } else if (Tiling.eligibleForMaster(window)) {
                 probe.lastEligibleWindow = window;
             }
             probe.traceFocus("activation");
         }
         function onWindowRemoved(window) {
-            if (window === probe.lastEligibleWindow) {
+            const remembered = window === probe.lastEligibleWindow;
+            const focused = window === probe.lastFocusedWindow;
+            const handed = probe.targetHandoff && (probe.targetHandoff.source === window
+                || probe.targetHandoff.popup === window || probe.targetHandoff.window === window);
+            if (focused) {
+                probe.lastFocusedWindow = null;
+            }
+            if (probe.targetProbe && (remembered || (probe.preparedTarget
+                    && probe.preparedTarget.window === window))) {
+                probe.targetMembershipChanged();
+            } else if (probe.targetProbe && (focused || handed || (probe.preparedTarget
+                    && probe.preparedTarget.focusSurface === window))) {
+                probe.advanceTargetContext("focus-changed");
+            }
+            if (remembered) {
                 probe.lastEligibleWindow = null;
                 probe.traceFocus("removed");
             }
+        }
+        function onCurrentDesktopChanged() {
+            if (probe.targetProbe) probe.targetViewChanged();
+        }
+        function onCurrentActivityChanged() {
+            if (probe.targetProbe) probe.targetViewChanged();
+        }
+        function onScreensChanged() {
+            if (probe.targetProbe) probe.targetViewChanged();
+        }
+        function onDesktopsChanged() {
+            if (probe.targetProbe) probe.targetViewChanged();
+        }
+        function onActivitiesChanged() {
+            if (probe.targetProbe) probe.targetViewChanged();
         }
     }
     Connections {
@@ -517,6 +705,13 @@ Item {
         }
         dropRetirementFrame = KWin.readConfig("DropRetirementFrame", false) === true;
         focusProbe = KWin.readConfig("FocusProbe", false) === true;
+        targetProbe = KWin.readConfig("TargetProbe", false) === true;
+        if (targetProbe) {
+            lastFocusedWindow = Workspace.activeWindow;
+            if (Tiling.eligibleForMaster(lastFocusedWindow)) {
+                lastEligibleWindow = lastFocusedWindow;
+            }
+        }
         const delay = Number(KWin.readConfig("ReplyDelayMs", 0));
         replyDelayMs = delay >= 0 && delay <= 3000 && delay % 1 === 0 ? delay : 0;
         if (typeof Workspace.transientTiling === "function") {

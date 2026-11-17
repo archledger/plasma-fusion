@@ -278,6 +278,30 @@ class SeedTests(unittest.TestCase):
         result = self.run_check("--scope", "focus-observation")
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_target_probe_is_a_separate_default_off_private_mode(self):
+        result = self.run_seed("--target-probe")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        config = (self.output / ".config/kwinrc").read_text()
+        self.assertIn("FocusProbe=true", config)
+        self.assertIn("TargetProbe=true", config)
+        self.assertTrue((self.output / ".local/lib/layout-control/heldclient.py").is_file())
+
+    def test_target_probe_cannot_stack_a_transport_fault(self):
+        result = self.run_seed("--target-probe", "--drop-retirement-frame")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("focus observation requires normal transport", result.stderr)
+        self.assertFalse(self.output.exists())
+
+    def test_target_scope_requires_its_specific_receipt(self):
+        self.result_files()
+        result = self.run_check("--scope", "target-preparation")
+        self.assertNotEqual(result.returncode, 0)
+        (self.output / "target-preparation-result.json").write_text(json.dumps({
+            "schema": 1, "passed": True, "checks": ["roundtrip-native", "guarded-target"],
+        }))
+        result = self.run_check("--scope", "target-preparation")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 class LifecycleSafetyTests(unittest.TestCase):
     def setUp(self):
@@ -692,6 +716,128 @@ class FocusObservationTests(unittest.TestCase):
         ) + handler + ")(event);process.stdout.write(JSON.stringify(records[0]));"
         self.assertEqual(self.run_node(script)["request"], 8)
 
+    def test_target_intents_are_explicit_and_capture_the_calling_control_output(self):
+        script = """
+const Screen={name:'Virtual-0'};
+const probe={
+    targetEnabled:true,queryIntent:'query',requestOutput:'',preparedToken:'old',requestNumber:1,
+    freshQuery:()=>{probe.queryIntent='query';++probe.requestNumber;}
+};
+""" + qml_handler("requestTarget") + """
+requestTarget('prepare');
+const prepare={intent:probe.queryIntent,output:probe.requestOutput,token:probe.preparedToken};
+probe.preparedToken='opaque-preparation';
+Screen.name='Virtual-1';
+requestTarget('validate');
+process.stdout.write(JSON.stringify({
+    prepare,validate:{intent:probe.queryIntent,output:probe.requestOutput,token:probe.preparedToken}
+}));
+"""
+        self.assertEqual(self.run_node(script), {
+            "prepare": {"intent": "prepare", "output": "Virtual-0", "token": ""},
+            "validate": {"intent": "validate", "output": "Virtual-1", "token": "opaque-preparation"},
+        })
+
+    def test_target_context_is_frozen_before_later_state_updates(self):
+        script = """
+const Screen={name:'Virtual-0'};
+const original={epoch:'provider-a',generation:7,desktopId:'a',activityId:'activity',
+                outputName:'Virtual-0'};
+const probe={targetEnabled:true,targetContext:original,requestContext:null,preparedToken:'',
+             freshQuery:()=>{probe.queryIntent='query';}};
+""" + qml_handler("requestTarget") + """
+requestTarget('prepare');
+original.generation=99;
+probe.targetContext={...original,desktopId:'b'};
+requestTarget('validate');
+process.stdout.write(JSON.stringify(probe.requestContext));
+"""
+        self.assertEqual(self.run_node(script), {
+            "epoch": "provider-a", "generation": 7, "desktopId": "a",
+            "activityId": "activity", "outputName": "Virtual-0",
+        })
+
+    def test_confirmed_handoff_context_is_separate_from_the_original_prepare_intent(self):
+        script = """
+const epoch='a'.repeat(32);
+const context={epoch,generation:1,desktopId:'desktop-a',activityId:'activity-a',
+               outputName:'Virtual-0'};
+const probe={
+    stopped:false,requestNumber:2,boundEpoch:'',boundOwner:'',boundIdentity:'',revision:-1,
+    accepted:0,phase:'unknown',epoch:'',targetEnabled:true,targetContext:null,preparedContext:null,
+    preparedToken:'',requestContext:{...context,generation:0},
+    stopQueryDeadline:()=>{},observe:()=>{}
+};
+const accept=(function(){with(probe){return """ + qml_handler("acceptPacket") + """;}})();
+accept({
+    request:2,epoch,revision:1,status:'online',capable:true,backendOwner:':1.0',identityName:'alias',
+    targetContext:context,preparation:{intent:'prepare',ready:true,reason:'',token:'opaque'}
+});
+process.stdout.write(JSON.stringify({
+    original:probe.requestContext.generation,accepted:probe.preparedContext,
+    token:probe.preparedToken
+}));
+"""
+        self.assertEqual(self.run_node(script), {
+            "original": 0, "accepted": {
+                "epoch": "a" * 32, "generation": 1, "desktopId": "desktop-a",
+                "activityId": "activity-a", "outputName": "Virtual-0",
+            }, "token": "opaque",
+        })
+
+    def test_menu_opening_freezes_context_but_waits_for_its_own_input(self):
+        script = """
+const Screen={name:'Virtual-0'};
+const original={epoch:'provider',generation:7,desktopId:'a',activityId:'activity',
+                outputName:'Virtual-0'};
+let sent=0;
+const probe={
+    targetEnabled:true,targetContext:original,pendingMenuContext:null,targetPreparationPending:false,
+    focusPopupOpen:false,preparedToken:'',preparedContext:null,preparedReady:false,
+    freshQuery:()=>{++sent;probe.queryIntent='query';}
+};
+""" + qml_handler("openTargetMenu") + qml_handler("requestTarget") + """
+openTargetMenu();
+const beforeInput=sent;
+original.generation=99;
+probe.targetContext={...original,desktopId:'b'};
+requestTarget('prepare');
+process.stdout.write(JSON.stringify({
+    beforeInput,sent,pending:probe.targetPreparationPending,context:probe.requestContext
+}));
+"""
+        self.assertEqual(self.run_node(script), {
+            "beforeInput": 0, "sent": 1, "pending": False, "context": {
+                "epoch": "provider", "generation": 7, "desktopId": "a",
+                "activityId": "activity", "outputName": "Virtual-0",
+            },
+        })
+
+    def test_readiness_loss_retains_only_the_inert_last_confirmed_snapshot(self):
+        script = """
+const epoch='a'.repeat(32);
+const context={epoch,generation:1,desktopId:'a',activityId:'activity',outputName:'Virtual-0'};
+const probe={
+    stopped:false,requestNumber:2,boundEpoch:'',boundOwner:'',boundIdentity:'',revision:-1,
+    accepted:0,phase:'unknown',epoch:'',targetEnabled:true,targetContext:null,preparedContext:null,
+    preparedToken:'',preparedReady:false,stopQueryDeadline:()=>{},observe:()=>{}
+};
+const accept=(function(){with(probe){return """ + qml_handler("acceptPacket") + """;}})();
+const packet={request:2,epoch,revision:1,status:'online',capable:true,
+              backendOwner:':1.0',identityName:'alias',targetContext:context,
+              preparation:{intent:'prepare',ready:true,reason:'',token:'opaque'}};
+accept(packet);
+accept({...packet,revision:2,targetContext:{...context,generation:2},
+        preparation:{intent:'prepare',ready:false,reason:'stale-context',token:''}});
+process.stdout.write(JSON.stringify({
+    ready:probe.preparedReady,token:probe.preparedToken,
+    captured:probe.preparedContext && probe.preparedContext.generation,
+    current:probe.targetContext.generation
+}));
+"""
+        self.assertEqual(self.run_node(script),
+                         {"ready": False, "token": "opaque", "captured": 1, "current": 2})
+
     def run_focus_receipt(self, fault=None):
         source = Path(__file__).with_name("scenario-bridge.sh").read_text()
         section = source.split("    queried=false\n", 1)[1]
@@ -754,7 +900,7 @@ class FocusObservationTests(unittest.TestCase):
 
 
 class TargetGuardTests(unittest.TestCase):
-    def run_guard(self, action):
+    def run_guard(self, action, *, requests=False):
         rules = (Path(__file__).resolve().parents[3] /
                  "packages/kwin/scripts/plasmafusion-placement/contents/ui/Tiling.js").read_text()
         script = r"""
@@ -780,7 +926,7 @@ const panel = {
 const probe = {
     authorized:true, capable:true, identityReady:true, stopping:false, readOwner:':1.20',
     shellPid:202, shellPidOwner:':1.20', lastEligibleWindow:app, preparedTarget:null,
-    preparationFailure:'not-prepared', epoch:'a'.repeat(32),
+    preparationFailure:'not-prepared', epoch:'a'.repeat(32), targetExchange:null, targetSerial:0,
     targetGeneration:0,lastFocusedWindow:panel,targetHandoff:null
 };
 Workspace.activeWindow = panel;
@@ -790,6 +936,8 @@ const methods = (function(){with(probe){return {
                    "prepareTarget", "validateTarget", "trackTargetActivation",
                    "targetViewChanged", "targetMembershipChanged", "advanceTargetContext",
                    "captureTargetContext", "targetEligibilityChanged", "canUseTargetHandoff")
+        if requests:
+            methods += ("handleTargetRequest",)
         script += ",".join(name + ":" + qml_handler(name, "provider.qml") for name in methods)
         script += "};}})();Object.assign(probe,methods);\n" + action
         result = subprocess.run(["node", "-"], input=script, capture_output=True, text=True,
@@ -921,6 +1069,190 @@ process.stdout.write(JSON.stringify({
 }));
 """)
                 self.assertEqual(result, {"valid": False, "candidateCleared": True})
+
+    def test_repeated_prepare_never_renews_or_retargets_the_same_intent(self):
+        result = self.run_guard("""
+const request = {version:1,id:7,consumer:'current',request:2,intent:'prepare',
+                 outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
+                 desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
+const first = probe.handleTargetRequest(request);
+const other = {...app,pid:303};
+Workspace.activeWindow=other;
+probe.trackTargetActivation(other);
+const repeated = probe.handleTargetRequest(request);
+process.stdout.write(JSON.stringify({
+    first:first.ready, repeated:repeated.ready, targetCleared:probe.preparedTarget===null
+}));
+""", requests=True)
+        self.assertEqual(result, {"first": True, "repeated": False, "targetCleared": True})
+
+    def test_guarded_validation_binds_the_handle_to_consumer_and_payload(self):
+        result = self.run_guard("""
+const prepare = {version:1,id:7,consumer:'current',request:2,intent:'prepare',
+                 outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
+                 desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
+const first=probe.handleTargetRequest(prepare);
+const conflicting=probe.handleTargetRequest({...prepare,outputName:'Virtual-1'});
+const stranger=probe.handleTargetRequest({...prepare,id:8,consumer:'other',request:3});
+const validate={...prepare,request:3,intent:'validate',token:first.token};
+const confirmed=probe.handleTargetRequest(validate);
+const reused=probe.handleTargetRequest({...validate,token:'changed'});
+process.stdout.write(JSON.stringify({
+    first:first.ready, conflicting:conflicting.ready, stranger:stranger.ready,
+    confirmed:confirmed.ready, reused:reused.ready, exact:probe.preparedTarget.window===app
+}));
+""", requests=True)
+        self.assertEqual(result, {"first": True, "conflicting": False, "stranger": False,
+                                  "confirmed": True, "reused": False, "exact": True})
+
+    def test_delayed_preparation_cannot_capture_a_later_focus_or_view(self):
+        for change in (
+            """currentDesktop=otherDesktop;probe.targetViewChanged();
+               Workspace.activeWindow={...app,desktops:[otherDesktop],pid:303};
+               probe.trackTargetActivation(Workspace.activeWindow);""",
+            """Workspace.activeWindow={...app,pid:303};
+               probe.trackTargetActivation(Workspace.activeWindow);""",
+            """currentDesktop=otherDesktop;probe.targetViewChanged();
+               currentDesktop=desktop;probe.targetViewChanged();Workspace.activeWindow=app;""",
+        ):
+            with self.subTest(change=change):
+                result = self.run_guard("""
+const request={version:1,id:7,consumer:'current',request:2,intent:'prepare',
+               outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
+               desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
+""" + change + """
+const reply=probe.handleTargetRequest(request);
+process.stdout.write(JSON.stringify({ready:reply.ready,cleared:probe.preparedTarget===null}));
+""", requests=True)
+                self.assertEqual(result, {"ready": False, "cleared": True})
+
+    def test_pre_capture_popup_changes_or_dismissal_cannot_substitute_focus(self):
+        for sequence in (
+            "Workspace.activeWindow={...panel};probe.trackTargetActivation(Workspace.activeWindow);",
+            "Workspace.activeWindow=app;probe.trackTargetActivation(app);",
+            """Workspace.activeWindow=app;probe.trackTargetActivation(app);
+               Workspace.activeWindow=panel;probe.trackTargetActivation(panel);""",
+            """Workspace.activeWindow={...panel};probe.trackTargetActivation(Workspace.activeWindow);
+               Workspace.activeWindow=panel;probe.trackTargetActivation(panel);""",
+        ):
+            with self.subTest(sequence=sequence):
+                result = self.run_guard("""
+const request={version:1,id:7,consumer:'current',request:2,intent:'prepare',
+               outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
+               desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
+""" + sequence + """
+const reply=probe.handleTargetRequest(request);
+process.stdout.write(JSON.stringify({ready:reply.ready,cleared:probe.preparedTarget===null}));
+""", requests=True)
+                self.assertEqual(result, {"ready": False, "cleared": True})
+
+    def test_only_the_single_initial_menu_opening_handoff_is_permitted(self):
+        result = self.run_guard("""
+Workspace.activeWindow=app;
+probe.lastFocusedWindow=app;
+const request={version:1,id:7,consumer:'current',request:2,intent:'prepare',
+               outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
+               desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
+Workspace.activeWindow=panel;
+probe.trackTargetActivation(panel);
+const reply=probe.handleTargetRequest(request);
+process.stdout.write(JSON.stringify({
+    ready:reply.ready,generation:probe.targetGeneration,
+    exact:probe.preparedTarget && probe.preparedTarget.focusSurface===panel
+}));
+""", requests=True)
+        self.assertEqual(result, {"ready": True, "generation": 1, "exact": True})
+
+    def test_prepare_rejects_stale_provider_or_captured_view_identifiers(self):
+        for field, value in (("viewEpoch", "b" * 32), ("desktopId", "desktop-b"),
+                             ("activityId", "activity-b"), ("viewOutputName", "Virtual-1")):
+            with self.subTest(field=field):
+                result = self.run_guard("""
+const request={version:1,id:7,consumer:'current',request:2,intent:'prepare',
+               outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
+               desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
+""" + f"request[{json.dumps(field)}]={json.dumps(value)};" + """
+const reply=probe.handleTargetRequest(request);
+process.stdout.write(JSON.stringify({ready:reply.ready,cleared:probe.preparedTarget===null}));
+""", requests=True)
+                self.assertEqual(result, {"ready": False, "cleared": True})
+
+    def test_detached_shell_surface_refuses_without_dereferencing_a_null_output(self):
+        result = self.run_guard("""
+Workspace.activeWindow={...panel,output:null};
+probe.lastFocusedWindow=Workspace.activeWindow;
+const request={version:1,id:7,consumer:'current',request:2,intent:'prepare',
+               outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
+               desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
+const reply=probe.handleTargetRequest(request);
+process.stdout.write(JSON.stringify({ready:reply.ready,cleared:probe.preparedTarget===null}));
+""", requests=True)
+        self.assertEqual(result, {"ready": False, "cleared": True})
+
+    def test_refused_preparation_identity_cannot_be_reused_to_capture_later(self):
+        result = self.run_guard("""
+const request={version:1,id:7,consumer:'current',request:2,intent:'prepare',
+               outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:2,
+               desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
+const refused=probe.handleTargetRequest(request);
+Workspace.activeWindow={...app,pid:303};
+probe.trackTargetActivation(Workspace.activeWindow);
+Workspace.activeWindow=panel;
+probe.trackTargetActivation(panel);
+const later=probe.handleTargetRequest(request);
+const changed=probe.handleTargetRequest({...request,desktopId:'changed'});
+process.stdout.write(JSON.stringify({
+    refused:refused.ready,later:later.ready,changed:changed.ready,cleared:probe.preparedTarget===null
+}));
+""", requests=True)
+        self.assertEqual(result, {"refused": False, "later": False, "changed": False, "cleared": True})
+
+    def run_target_checker(self, fault=None):
+        source = Path(__file__).with_name("scenario-bridge.sh").read_text()
+        checker = source.split("# Non-mutating target receipt:", 1)[1]
+        checker = checker.split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
+        outbound = {"boot": "current", "request": 4}
+        observation = {"boot": "current", "request": 4, "phase": "online", "packet": {
+            "consumer": "current", "request": 4, "preparation": {
+                "intent": "validate", "ready": False, "reason": "focus-changed", "token": "",
+            },
+        }}
+        native = {"consumer": "current", "request": 4, "intent": "validate",
+                  "ready": False, "targetAlive": False, "targetClass": ""}
+        if fault == "old-state":
+            observation["request"] = observation["packet"]["request"] = 3
+        elif fault == "wrong-receiver":
+            observation["packet"]["consumer"] = "other"
+        elif fault == "wrong-native":
+            native["ready"] = True
+        events = [("query", outbound), ("observation", observation)]
+        if fault == "out-of-order":
+            events.reverse()
+        elif fault == "received-not-accepted":
+            events[-1] = ("received", observation)
+        with tempfile.TemporaryDirectory(prefix="pf-target-check-", dir="/tmp/opencode") as scratch:
+            root = Path(scratch)
+            shell = root / "shell.log"
+            shell.write_text("".join(
+                f"qml: layout-probe-{kind} {json.dumps(row)}\n" for kind, row in events
+            ))
+            backend = root / "kwin.log"
+            backend.write_text("qml: layout-probe-target " + json.dumps(native) + "\n")
+            return subprocess.run(
+                [sys.executable, "-", str(shell), str(backend), "current", "validate",
+                 "false", "3", "-", str(root)], input=checker, capture_output=True,
+                text=True, timeout=10, check=False,
+            )
+
+    def test_target_receipt_accepts_only_a_correlated_accepted_native_refusal(self):
+        result = self.run_target_checker()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_target_receipt_rejects_old_wrong_receiver_or_unaccepted_evidence(self):
+        for fault in ("old-state", "wrong-receiver", "wrong-native",
+                      "out-of-order", "received-not-accepted"):
+            with self.subTest(fault=fault):
+                self.assertNotEqual(self.run_target_checker(fault).returncode, 0)
 
 
 class RetirementDeliveryTests(unittest.TestCase):

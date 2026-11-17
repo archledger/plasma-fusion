@@ -145,6 +145,116 @@ identity_owner=$(qdbus org.freedesktop.DBus /org/freedesktop/DBus \
 focus_probe=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
     --group Script-plasmafusion-layout-probe --key FocusProbe --default false)
 if [[ $focus_probe == true ]]; then
+    target_probe=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
+        --group Script-plasmafusion-layout-probe --key TargetProbe --default false)
+    wait_target_reply() {
+        local boot=$1 intent=$2 ready=$3 previous=$4 app=$5
+        local complete=false
+        for _ in {1..40}; do
+            # Non-mutating target receipt: one accepted-state/outbound snapshot, plus native verdict.
+            if python3 - "$OUT/plasmashell.log" "$OUT/kwin.log" "$boot" "$intent" \
+                "$ready" "$previous" "$app" "$OUT" 2>>"$OUT/target-reply-wait.log" <<'PY'
+import json, sys
+from pathlib import Path
+trace = open(sys.argv[1]).readlines()
+events = []
+for index, line in enumerate(trace):
+    if line.endswith("\n"):
+        for kind in ("query", "observation"):
+            marker = f"layout-probe-{kind} "
+            if marker in line:
+                events.append((index, kind, json.loads(line.split(marker, 1)[1])))
+index, _, observation = [event for event in events
+                         if event[1] == "observation" and event[2]["boot"] == sys.argv[3]][-1]
+request = observation["request"]
+assert type(request) is int and request > int(sys.argv[6])
+assert observation["phase"] == "online"
+packet = observation["packet"]
+assert packet["consumer"] == sys.argv[3] and packet["request"] == request
+preparation = packet["preparation"]
+assert set(preparation) == {"intent", "ready", "reason", "token"}
+assert preparation["intent"] == sys.argv[4] and preparation["ready"] is (sys.argv[5] == "true")
+queries = [event for event in events if event[1] == "query"
+           and event[2]["boot"] == sys.argv[3] and event[2]["request"] == request]
+assert len(queries) == 1 and queries[0][0] < index
+native = [json.loads(line.split("layout-probe-target ", 1)[1])
+          for line in open(sys.argv[2])
+          if line.endswith("\n") and "layout-probe-target " in line]
+native = [row for row in native if row["consumer"] == sys.argv[3]
+          and row["request"] == request and row["intent"] == sys.argv[4]][-1]
+assert native["ready"] is preparation["ready"]
+if preparation["ready"]:
+    assert native["targetAlive"] and native["targetClass"] == sys.argv[7], native
+else:
+    assert not native["targetAlive"] and native["targetClass"] == "", native
+    assert preparation["reason"] and preparation["token"] == ""
+with (Path(sys.argv[8]) / f"target-observations-{request}.json").open("w") as output:
+    json.dump(observation, output)
+print(request)
+PY
+            then
+                complete=true
+                break
+            fi
+            sleep 0.1
+        done
+        [[ $complete == true ]]
+    }
+    wait_target_context() {
+        local boot=$1 app=$2 ready=false
+        for _ in {1..40}; do
+            if python3 - "$OUT/plasmashell.log" "$OUT/kwin.log" "$boot" "$app" \
+                2>>"$OUT/target-context-wait.log" <<'PY'
+import json, sys
+observations = [json.loads(line.split("layout-probe-observation ", 1)[1])
+                for line in open(sys.argv[1])
+                if line.endswith("\n") and "layout-probe-observation " in line]
+observation = [row for row in observations if row["boot"] == sys.argv[3]][-1]
+assert observation["phase"] == "online"
+context = observation["packet"]["targetContext"]
+assert context and context["epoch"] == observation["packet"]["epoch"]
+native = [json.loads(line.split("layout-probe-focus ", 1)[1])
+          for line in open(sys.argv[2])
+          if line.endswith("\n") and "layout-probe-focus " in line][-1]
+assert native["activeClass"] == native["rememberedClass"] == sys.argv[4]
+assert native["activeEligible"] and native["rememberedAlive"]
+assert context["generation"] == native["contextGeneration"]
+assert context["desktopId"] == native["desktopId"] and context["activityId"] == native["activityId"]
+assert context["outputName"] == native["rememberedOutput"]
+PY
+            then
+                ready=true
+                break
+            fi
+            sleep 0.1
+        done
+        [[ $ready == true ]]
+    }
+    wait_target_popup() {
+        local app=$1 ready=false
+        for _ in {1..40}; do
+            if python3 - "$OUT/kwin.log" "$OUT/focus-shell-pid.txt" "$app" \
+                2>>"$OUT/target-popup-wait.log" <<'PY'
+import json, sys
+rows = [json.loads(line.split("layout-probe-focus ", 1)[1])
+        for line in open(sys.argv[1])
+        if line.endswith("\n") and "layout-probe-focus " in line]
+native = rows[-1]
+assert native["activeAppletPopup"] and not native["activeNormal"]
+assert native["activePid"] == int(open(sys.argv[2]).read())
+assert native["rememberedClass"] == sys.argv[3] and native["rememberedAlive"]
+PY
+            then
+                ready=true
+                break
+            fi
+            sleep 0.1
+        done
+        [[ $ready == true ]]
+    }
+    qdbus org.freedesktop.DBus /org/freedesktop/DBus \
+        org.freedesktop.DBus.GetConnectionUnixProcessID org.kde.plasmashell \
+        >"$OUT/focus-shell-pid.txt"
     mkfifo "$OUT/focus-client.in"
     exec {focus_input}<>"$OUT/focus-client.in"
     python3 "$HOME/.local/lib/layout-control/heldclient.py" pf.focus.alpha 430x310 \
@@ -183,6 +293,9 @@ with open(sys.argv[2], "w") as point:
     point.write(f'{control["x"]} {control["y"]} {control["boot"]}\n')
 PY
     read -r focus_x focus_y focus_boot <"$OUT/focus-control.txt"
+    if [[ $target_probe == true ]]; then
+        wait_target_context "$focus_boot" pf.focus.alpha
+    fi
     pfinput "click $focus_x $focus_y"
     popup_seen=false
     for _ in {1..40}; do
@@ -201,6 +314,17 @@ PY
         sleep 0.1
     done
     [[ $popup_seen == true ]] || { echo "FAIL: focus popup not ready" >&2; return 1; }
+    if [[ $target_probe == true ]]; then
+        wait_target_popup pf.focus.alpha
+        python3 - "$OUT/kwin.log" "$focus_boot" <<'PY'
+import json, sys
+rows = [json.loads(line.split("layout-probe-target ", 1)[1])
+        for line in open(sys.argv[1])
+        if line.endswith("\n") and "layout-probe-target " in line]
+assert not any(row["consumer"] == sys.argv[2] and row["intent"] == "prepare" for row in rows)
+print("PASS: opening the popup alone never dispatches a preparation")
+PY
+    fi
     python3 - "$OUT/plasmashell.log" "$OUT/kwin.log" "$OUT/focus-key-baseline.json" <<'PY'
 import json, sys
 with open(sys.argv[3], "w") as baseline:
@@ -261,6 +385,88 @@ PY
     done
     [[ $queried == true ]] || { echo "FAIL: keyboard focus query not confirmed" >&2; return 1; }
     shot focus-keyboard
+    if [[ $target_probe == true ]]; then
+        target_prepare_request=$(wait_target_reply "$focus_boot" prepare true 1 pf.focus.alpha)
+        pfinput "key space"
+        target_request=$(wait_target_reply "$focus_boot" validate true \
+            "$target_prepare_request" pf.focus.alpha)
+        echo "PASS: explicit preparation and keyboard validation retain the native application"
+        python3 - "$OUT/plasmashell.log" "$focus_boot" >"$OUT/target-control.txt" <<'PY'
+import json, sys
+rows = [json.loads(line.split("layout-probe-focus-control ", 1)[1])
+        for line in open(sys.argv[1])
+        if line.endswith("\n") and "layout-probe-focus-control " in line]
+control = [row for row in rows if row["boot"] == sys.argv[2]][-1]
+assert control["validateX"] >= 0 and control["validateY"] >= 0
+print(control["validateX"], control["validateY"])
+PY
+        read -r validate_x validate_y <"$OUT/target-control.txt"
+        mkfifo "$OUT/target-second.in"
+        exec {target_second_input}<>"$OUT/target-second.in"
+        python3 "$HOME/.local/lib/layout-control/heldclient.py" pf.focus.beta 430x310 \
+            <"$OUT/target-second.in" >"$OUT/target-second.log" 2>&1 &
+        target_second=$!
+        beta_seen=false
+        for _ in {1..40}; do
+            if python3 - "$OUT/kwin.log" 2>>"$OUT/target-second-wait.log" <<'PY'
+import json, sys
+rows = [json.loads(line.split("layout-probe-focus ", 1)[1])
+        for line in open(sys.argv[1])
+        if line.endswith("\n") and "layout-probe-focus " in line]
+assert any(row["activeClass"] == "pf.focus.beta" and row["activeEligible"] for row in rows)
+PY
+            then
+                beta_seen=true
+                break
+            fi
+            sleep 0.1
+        done
+        [[ $beta_seen == true ]] || return 1
+        pfinput "click $validate_x $validate_y"
+        target_request=$(wait_target_reply "$focus_boot" validate false "$target_request" -)
+        echo "PASS: another eligible app invalidates the old preparation instead of retargeting"
+        pfinput "click $focus_x $focus_y"
+        wait_target_popup pf.focus.beta
+        pfinput "key space"
+        target_request=$(wait_target_reply "$focus_boot" prepare true "$target_request" pf.focus.beta)
+        printf 'quit\n' >&"$target_second_input"
+        wait "$target_second"
+        exec {target_second_input}>&-
+        pfinput "click $validate_x $validate_y"
+        target_request=$(wait_target_reply "$focus_boot" validate false "$target_request" -)
+        echo "PASS: closing a freshly prepared target refuses its old handle"
+        python3 - "$OUT/kwin.log" >"$OUT/target-alpha-control.txt" <<'PY'
+import json, sys
+rows = [json.loads(line.split("layout-probe-focus ", 1)[1])
+        for line in open(sys.argv[1])
+        if line.endswith("\n") and "layout-probe-focus " in line]
+alpha = [row for row in rows if row["rememberedClass"] == "pf.focus.alpha"
+         and row["rememberedCenter"]][-1]
+point = alpha["rememberedCenter"]
+assert 0 < point["x"] < 1440 and 0 < point["y"] < 900
+print(point["x"], point["y"])
+PY
+        read -r alpha_x alpha_y <"$OUT/target-alpha-control.txt"
+        # The popup kept focus after Beta closed. Re-establish the intended app, not a fallback.
+        pfinput "click $alpha_x $alpha_y"
+        wait_target_context "$focus_boot" pf.focus.alpha
+        pfinput "click $focus_x $focus_y"
+        wait_target_popup pf.focus.alpha
+        pfinput "key space"
+        target_request=$(wait_target_reply "$focus_boot" prepare true "$target_request" pf.focus.alpha)
+        [[ $(qdbus org.kde.KWin /KWin org.kde.KWin.currentDesktop) == 1 ]] || return 1
+        [[ $(qdbus org.kde.KWin /KWin org.kde.KWin.setCurrentDesktop 2) == true ]] || return 1
+        [[ $(qdbus org.kde.KWin /KWin org.kde.KWin.setCurrentDesktop 1) == true ]] || return 1
+        pfinput "click $validate_x $validate_y"
+        target_request=$(wait_target_reply "$focus_boot" validate false "$target_request" -)
+        echo "PASS: leaving and returning to the desktop cannot revive an old preparation"
+        printf 'quit\n' >&"$focus_input"
+        wait "$focus_client"
+        exec {focus_input}>&-
+        printf '%s\n' '{"schema":1,"passed":true,' \
+            '"checks":["roundtrip-native","guarded-target"]}' >"$OUT/target-preparation-result.json"
+        return 0
+    fi
     printf 'quit\n' >&"$focus_input"
     wait "$focus_client"
     exec {focus_input}>&-
