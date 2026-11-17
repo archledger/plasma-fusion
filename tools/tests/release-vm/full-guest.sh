@@ -7,7 +7,9 @@
 #
 #   full-guest.sh facts [OWNER/NAME]  what the package system holds of the full profile, one
 #                                  "KEY VALUE..." line each: pkg NAME EVR|none|error (error:
-#                                  rpm could not say), locklist ok|failed (failed: dnf could
+#                                  rpm could not say), tid NAME TID (the rpm transaction that
+#                                  installed it, rpm's INSTALLTID; no line when it is not
+#                                  installed), locklist ok|failed (failed: dnf could
 #                                  not list the locks), lock NAME EVR,
 #                                  record NAME EVR (the restore record), pin EVR and tag TAG (the
 #                                  metapackage's record), repo enabled|disabled|no (the full
@@ -39,6 +41,14 @@ case ${1:-} in
         echo "pkg $p none"
       else
         echo "pkg $p error"
+      fi
+    done
+    # The transaction each package came with: every package of one rpm transaction has its id,
+    # so fulltest.sh's update round sees whether one transaction moved the set. rpm exits 1 for a
+    # package that is not installed and says so on stdout: no line then.
+    for p in kwin kwin-common kwin-libs plasma-fusion-full $SIX; do
+      if out=$(rpm -q --qf '%{INSTALLTID}\n' "$p" 2>/dev/null); then
+        echo "tid $p $(printf '%s\n' "$out" | sort -u | paste -sd, -)"
       fi
     done
     # The repository each of the six was installed from: both Copr projects can build the same

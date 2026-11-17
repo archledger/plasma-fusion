@@ -66,7 +66,9 @@ users, and a candidate there would reach them: its version sorts above the last 
   `sudo dnf copr enable archledger/plasma-fusion-full-candidates fedora-44-x86_64`) and updates
   with the candidate's `install.sh update`. That must be one dnf transaction (the KWin packages,
   the metapackage and the six packages together), ending with the version lock at the new pin:
-  ADR 0001's security-cadence round.
+  ADR 0001's security-cadence round. `PF_FULL_REPO=archledger/plasma-fusion-full-candidates
+  tools/tests/release-vm/fulltest.sh fedora44lane update` runs it, with these steps and checks
+  (docs/parts/release-tests.md).
 
 Then the depth features' check on the merged commit's HOME tree, on the test host and on the
 Plasma beta container (`tools/tests/depth/run.sh`, docs/parts/testing.md "Depth features"): window

@@ -64,4 +64,5 @@ Each lane's scaffolding is packaging-only: it builds and installs, but the quali
    transaction on a full-profile machine. Done with the real `v6.8.2-pf4`: a Fedora 44 VM on the
    pf3 candidate ran `install.sh update`, which was one dnf transaction (the KWin packages to
    `pf4`, the metapackage and the six packages to the pf4 candidate) and left the version lock at
-   `pf4`.
+   `pf4`. `tools/tests/release-vm/fulltest.sh NAME update` runs this round from the last
+   release's full profile to a candidate's (RELEASING.md, step 2).
