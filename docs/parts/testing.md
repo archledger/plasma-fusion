@@ -121,10 +121,44 @@ and [KConfigPropertyMap::writeConfig](https://invent.kde.org/frameworks/kconfig/
 `--check-result` requires the explicit first-slice receipt and successful inner scenario/session
 codes. The wrapper's exit code alone is insufficient. `reload-result.json` and
 `identity-fence-result.json` record the additional assertions; none of these certifies full G0.
-Process replacement, stale ordering, timeout, target preparation and existing-tiler integration
-still need their own evidence. A shell abort during teardown was also reproduced with the
+Stale ordering, timeout, target preparation and existing-tiler integration still need their own
+evidence. A shell abort during teardown was also reproduced with the
 probe disabled and zero probe widgets; retain that environment limitation rather than claiming
 crash-free qualification.
+
+`lifecycle.py` is the separate, P0-only process-replacement runner:
+
+```sh
+python3 tools/tests/layout-control/lifecycle.py --name layout-control-lc-example \
+    --seed "$PWD/build/layout-probe/seed-example" --image "$IMAGE"
+```
+
+It requires a full 64-digit image ID, a private authorized seed and unused results. Its own
+container has no network or inherited host bus/display, adds no capabilities, and removes KWin's
+file capability only in its disposable overlay before running as `test`. A short fixed Wayland
+socket name avoids the existing harness's doubled-path limit. It never changes `tools/vsession/`.
+Both internal entry points require the disposable-container marker before any filesystem or
+D-Bus side effect, not just matching HOME/runtime strings. Owner readiness uses one lookup and
+retries only `NameHasNoOwner`; other bus errors remain failures.
+
+The supervisor owns the private bus independently of KWin. It restarts Plasma, then KWin and its
+shell, retaining the same HOME and bus. The receipt requires one bus UUID, two different backend
+connections and three different shell connections. Each receiver must first trace unknown with
+zero accepted frames, then bind a fresh response; saved response fields must exist before the
+first restart. The replaced backend's alias must disappear. These checks use
+[D-Bus GetId and GetNameOwner](https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-get-id),
+not a process name or a generic service Boolean.
+
+Results go to `vsession-out/<name>/`, with explicit `lifecycle-result.json`, per-process logs,
+receiver observations, versions and child exit statuses. Cleanup stops only children it started
+and the container ID created by that invocation. Container teardown also removes private
+bus-activated services. Missing receipts, changed bus identity or reused connection identities
+fail the run.
+
+Wayland clients can exit when their compositor stops. This runner proves fresh bootstrap after
+real replacement, not that an old widget survives compositor loss or invalidates correctly
+without a retirement frame. Those lifecycle cases remain separate G0 obligations. Ordinary
+missing-system-service warnings in a container are not evidence about the live desktop.
 
 ### Icon positions (M2): `tools/tests/icons/run.sh`
 
