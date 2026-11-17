@@ -753,6 +753,176 @@ class FocusObservationTests(unittest.TestCase):
                 self.assertNotEqual(self.run_focus_receipt(fault).returncode, 0, fault)
 
 
+class TargetGuardTests(unittest.TestCase):
+    def run_guard(self, action):
+        rules = (Path(__file__).resolve().parents[3] /
+                 "packages/kwin/scripts/plasmafusion-placement/contents/ui/Tiling.js").read_text()
+        script = r"""
+const vm = require('node:vm');
+const Tiling = {};
+vm.runInNewContext(RULES.replace(/^\.pragma library$/m, ''), Tiling);
+const output = {name:'Virtual-0'}, otherOutput = {name:'Virtual-1'};
+const desktop = {id:'desktop-a'}, otherDesktop = {id:'desktop-b'};
+let currentDesktop = desktop;
+const Workspace = {
+    screens:[output], desktops:[desktop, otherDesktop], activities:['activity-a','activity-b'],
+    currentActivity:'activity-a', currentDesktopForScreen:()=>currentDesktop, activeWindow:null
+};
+const app = {
+    deleted:false, normalWindow:true, transient:false, modal:false, moveable:true, resizeable:true,
+    fullScreen:false, tile:null, minimized:false, maximizeMode:0, skipTaskbar:false, skipSwitcher:false,
+    desktops:[desktop], activities:[], output:output, pid:101
+};
+const panel = {
+    deleted:false, normalWindow:false, appletPopup:true, dock:false, desktopWindow:false,
+    output:output, pid:202
+};
+const probe = {
+    authorized:true, capable:true, identityReady:true, stopping:false, readOwner:':1.20',
+    shellPid:202, shellPidOwner:':1.20', lastEligibleWindow:app, preparedTarget:null,
+    preparationFailure:'not-prepared', epoch:'a'.repeat(32),
+    targetGeneration:0,lastFocusedWindow:panel,targetHandoff:null
+};
+Workspace.activeWindow = panel;
+const methods = (function(){with(probe){return {
+""".replace("RULES", json.dumps(rules))
+        methods = ("shellOwnsFocus", "invalidateTarget", "targetContextReady", "targetViewIsCurrent",
+                   "prepareTarget", "validateTarget", "trackTargetActivation",
+                   "targetViewChanged", "targetMembershipChanged", "advanceTargetContext",
+                   "captureTargetContext", "targetEligibilityChanged", "canUseTargetHandoff")
+        script += ",".join(name + ":" + qml_handler(name, "provider.qml") for name in methods)
+        script += "};}})();Object.assign(probe,methods);\n" + action
+        result = subprocess.run(["node", "-"], input=script, capture_output=True, text=True,
+                                timeout=10, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_preparation_retains_the_exact_native_app_behind_its_shell_popup(self):
+        result = self.run_guard("""
+const prepared = probe.prepareTarget('Virtual-0');
+process.stdout.write(JSON.stringify({
+    prepared, valid:probe.validateTarget(), exact:probe.preparedTarget.window===app
+}));
+""")
+        self.assertEqual(result, {"prepared": True, "valid": True, "exact": True})
+
+    def test_another_application_invalidates_instead_of_retargeting(self):
+        result = self.run_guard("""
+probe.prepareTarget('Virtual-0');
+const other = {...app,pid:303};
+Workspace.activeWindow = other;
+probe.trackTargetActivation(other);
+Workspace.activeWindow = panel;
+process.stdout.write(JSON.stringify({
+    valid:probe.validateTarget(), cleared:probe.preparedTarget===null,
+    candidate:probe.lastEligibleWindow===other
+}));
+""")
+        self.assertEqual(result, {"valid": False, "cleared": True, "candidate": True})
+
+    def test_replaced_output_with_the_same_name_cannot_revalidate_a_target(self):
+        result = self.run_guard("""
+probe.prepareTarget('Virtual-0');
+Workspace.screens = [{name:'Virtual-0'}];
+const valid = probe.validateTarget();
+Workspace.screens = [output];
+process.stdout.write(JSON.stringify({
+    valid, afterReturn:probe.validateTarget(), cleared:probe.preparedTarget===null
+}));
+""")
+        self.assertEqual(result, {"valid": False, "afterReturn": False, "cleared": True})
+
+    def test_unrelated_ineligible_focus_cannot_preserve_an_old_candidate(self):
+        result = self.run_guard("""
+probe.prepareTarget('Virtual-0');
+const unrelated = {...app, minimized:true, resourceClass:'org.kde.plasmashell'};
+Workspace.activeWindow = unrelated;
+probe.trackTargetActivation(unrelated);
+Workspace.activeWindow = panel;
+process.stdout.write(JSON.stringify({
+    valid:probe.validateTarget(), candidateCleared:probe.lastEligibleWindow===null,
+    newPreparation:probe.prepareTarget('Virtual-0')
+}));
+""")
+        self.assertEqual(result, {"valid": False, "candidateCleared": True, "newPreparation": False})
+
+    def test_a_different_shell_surface_or_dismissed_menu_invalidates_the_preparation(self):
+        for focus in ("{...panel}", "app"):
+            with self.subTest(focus=focus):
+                result = self.run_guard("""
+probe.prepareTarget('Virtual-0');
+const changedFocus = """ + focus + """;
+Workspace.activeWindow = changedFocus;
+probe.trackTargetActivation(changedFocus);
+Workspace.activeWindow = panel;
+process.stdout.write(JSON.stringify({
+    valid:probe.validateTarget(),cleared:probe.preparedTarget===null
+}));
+""")
+                self.assertEqual(result, {"valid": False, "cleared": True})
+
+    def test_eligibility_notifies_preserve_a_valid_target_but_lost_eligibility_cannot_revive(self):
+        handler = qml_handler("onMinimizedChanged", "provider.qml")
+        result = self.run_guard(handler + """
+probe.prepareTarget('Virtual-0');
+onMinimizedChanged();
+const stillValid=probe.validateTarget();
+app.minimized=true;
+onMinimizedChanged();
+app.minimized=false;
+process.stdout.write(JSON.stringify({stillValid,afterReturn:probe.validateTarget()}));
+""")
+        self.assertEqual(result, {"stillValid": True, "afterReturn": False})
+
+    def test_shell_exceptions_require_verified_owner_pid_and_native_surface_type(self):
+        for setup in (
+            "panel.pid=303;panel.resourceClass='org.kde.plasmashell';",
+            "panel.normalWindow=true;panel.appletPopup=false;",
+            "probe.shellPid=0;",
+            "probe.shellPidOwner=':1.99';",
+            "panel.output=otherOutput;",
+            "probe.lastEligibleWindow=null;",
+            "Workspace.screens=[output,{name:'Virtual-0'}];",
+        ):
+            with self.subTest(setup=setup):
+                self.assertFalse(self.run_guard(
+                    setup + "process.stdout.write(JSON.stringify(probe.prepareTarget('Virtual-0')));"
+                ))
+
+    def test_loss_and_departure_clear_the_preparation_irreversibly(self):
+        for change, restore in (
+            ("Workspace.desktops=[];", "Workspace.desktops=[desktop,otherDesktop];"),
+            ("Workspace.activities=[];", "Workspace.activities=['activity-a','activity-b'];"),
+            ("currentDesktop=otherDesktop;", "currentDesktop=desktop;"),
+            ("Workspace.currentActivity='activity-b';", "Workspace.currentActivity='activity-a';"),
+            ("app.deleted=true;", "app.deleted=false;"),
+            ("app.deleted=undefined;", "app.deleted=false;"),
+            ("app.output=otherOutput;", "app.output=output;"),
+            ("app.desktops=[otherDesktop];", "app.desktops=[desktop];"),
+            ("app.activities=['activity-b'];", "app.activities=[];"),
+            ("app.minimized=true;", "app.minimized=false;"),
+            ("app.fullScreen=true;", "app.fullScreen=false;"),
+            ("probe.stopping=true;", "probe.stopping=false;"),
+            ("probe.readOwner=':1.99';", "probe.readOwner=':1.20';"),
+        ):
+            with self.subTest(change=change):
+                result = self.run_guard("probe.prepareTarget('Virtual-0');" + change +
+                                        "const valid=probe.validateTarget();" + restore + """
+process.stdout.write(JSON.stringify({valid, afterReturn:probe.validateTarget()}));
+""")
+                self.assertEqual(result, {"valid": False, "afterReturn": False})
+
+    def test_view_and_membership_events_prevent_leave_and_return_resurrection(self):
+        for event in ("targetViewChanged", "targetMembershipChanged"):
+            with self.subTest(event=event):
+                result = self.run_guard("probe.prepareTarget('Virtual-0');probe." + event + """();
+process.stdout.write(JSON.stringify({
+    valid:probe.validateTarget(), candidateCleared:probe.lastEligibleWindow===null
+}));
+""")
+                self.assertEqual(result, {"valid": False, "candidateCleared": True})
+
+
 class RetirementDeliveryTests(unittest.TestCase):
     def run_delivery(self, swapped: bool):
         scenario = Path(__file__).with_name("scenario-bridge.sh").read_text()

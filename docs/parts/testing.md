@@ -224,6 +224,15 @@ candidate is not a prepared token or guarded captured-view contract: focus-chang
 refusal, competing controls, output-object lifetime validation and tiler integration remain
 separate G0 work. The diagnostic dimensions are not production design values.
 
+The test-only provider contains a private native-reference guard core, exercised by the unit
+suite with the actual `Tiling.js` eligibility, aliveness, membership and view helpers. It captures
+the exact application and focus surface, refuses changed or destroyed references and does not
+renew an invalidated preparation. The caller must first establish the shell connection/PID and
+the intended context; an app-id string alone is insufficient.
+
+This core is not yet wired to a shell-facing preparation exchange. Its flag defaults off, it
+exports no objects or methods and it never admits a window, writes geometry or changes placement
+memory. Native delivery, lifetime/context fencing and the remaining G0 gates are separate work.
 `--check-result` requires the explicit selected-scope receipt and successful inner scenario/session
 codes. The wrapper's exit code alone is insufficient. `reload-result.json` and
 `identity-fence-result.json` record the additional assertions; none of these certifies full G0.
