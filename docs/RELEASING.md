@@ -29,7 +29,7 @@ key in the AUR package's `validpgpkeys` and the installer.
    each project needs the tag before a candidate or the release is built in it. In the live
    project the new KWin waits: the current metapackage requires the old pin exactly, and the
    version lock holds every full-profile machine at the old one. The spec's `%global kwin_full_pin`
-   is the builds' exact EVR (the same in both projects: `6.8.2-3.fc44.pf5`);
+   is the builds' exact EVR (the same in both projects: `6.8.3-1.fc44.pf1`);
    `packaging/check-version.sh` checks its shape and `packaging/check-full-profile.sh` the
    gates with it. Both need `rpmspec`: run them in a Fedora container.
 

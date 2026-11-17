@@ -24,7 +24,7 @@
 # pass the bcond, so enabling the stock repository never offers a KWin replacement (the stock
 # Copr project and the full project are separate). The pin moves only through a release.
 %bcond full 0
-%global kwin_full_pin 6.8.2-3.fc44.pf5
+%global kwin_full_pin 6.8.3-1.fc44.pf1
 %global build_full 0
 # The full profile's own project builds --with full; anything else never emits the metapackage.
 # Inside a full build the pin must be set and must target this Fedora release - a wrong-series
@@ -51,7 +51,7 @@
 %endif
 
 Name:           plasma-fusion
-Version:        0.8.0
+Version:        0.8.1
 Release:        1%{?dist}
 Summary:        Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
 
@@ -628,6 +628,14 @@ grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
 %endif
 
 %changelog
+* Tue Nov 17 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.8.1-1
+- The full profile on the fork's KWin 6.8.3 (v6.8.3-pf1), which
+  install.sh update reaches in one transaction
+- A profile choice on a fresh Fedora install; a switch from the stock
+  profile replaces the six packages and records the new KWin version
+- The full build compiles against the pinned KWin; the window scripts
+  treat a destroyed window as gone
+
 * Sat Nov 14 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.8.0-1
 - The full profile on Fedora 44: Plasma Fusion with the pinned KWin fork,
   installed with install.sh --full and undone with --full-restore, and
