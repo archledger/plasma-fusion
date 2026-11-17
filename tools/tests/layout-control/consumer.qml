@@ -196,6 +196,14 @@ PlasmoidItem {
                     || packet.revision < 1 || packet.revision > 2147483646) {
                 return;
             }
+            // Delivery order is not revision order while the one verifier is busy.
+            const queued = probe.pendingPacket;
+            if (queued && queued.consumer === packet.consumer && queued.request === packet.request
+                    && queued.epoch === packet.epoch && queued.backendOwner === packet.backendOwner
+                    && queued.identityName === packet.identityName
+                    && queued.revision >= packet.revision) {
+                return;
+            }
             probe.pendingPacket = packet;
             probe.verifyPending();
         }

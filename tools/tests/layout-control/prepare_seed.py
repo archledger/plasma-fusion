@@ -73,7 +73,7 @@ def main() -> None:
     parser.add_argument("--stage", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--check-result", type=Path)
-    parser.add_argument("--scope", choices=("first-slice", "silent-retirement"),
+    parser.add_argument("--scope", choices=("first-slice", "silent-retirement", "reply-ordering"),
                         default="first-slice")
     parser.add_argument("--drop-retirement-frame", action="store_true",
                         help="fault injection in this private test seed only")
@@ -107,6 +107,9 @@ def check_result(directory: Path, scope: str = "first-slice") -> None:
     elif scope == "silent-retirement":
         receipt = directory / "silent-retirement-result.json"
         checks = ["roundtrip-native", "silent-retirement", "provider-reload"]
+    elif scope == "reply-ordering":
+        receipt = directory / "reply-ordering-result.json"
+        checks = ["roundtrip-native", "same-provider-ordering"]
     else:
         raise ValueError("unknown probe receipt scope")
     if not receipt.is_file():

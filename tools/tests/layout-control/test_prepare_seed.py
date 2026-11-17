@@ -17,6 +17,18 @@ PREPARER = Path(__file__).with_name("prepare_seed.py")
 LIFECYCLE = Path(__file__).with_name("lifecycle.py")
 
 
+def consumer_handler(name: str) -> str:
+    source = Path(__file__).with_name("consumer.qml").read_text()
+    start = source.index(f"function {name}(")
+    opening = source.index("{", start)
+    depth = 1
+    end = opening + 1
+    while depth:
+        depth += (source[end] == "{") - (source[end] == "}")
+        end += 1
+    return source[start:end]
+
+
 class SeedTests(unittest.TestCase):
     def setUp(self):
         self.scratch = tempfile.TemporaryDirectory(prefix="pf-layout-seed-", dir="/tmp/opencode")
@@ -147,6 +159,21 @@ class SeedTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("--scope requires --check-result", result.stderr)
         self.assertFalse(self.output.exists())
+
+    def test_ordering_scope_does_not_accept_the_first_slice_receipt(self):
+        self.result_files()
+        result = self.run_check("--scope", "reply-ordering")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing probe receipt", result.stderr)
+
+    def test_ordering_scope_accepts_its_own_complete_receipt(self):
+        self.result_files()
+        (self.output / "reply-ordering-result.json").write_text(json.dumps({
+            "schema": 1, "passed": True,
+            "checks": ["roundtrip-native", "same-provider-ordering"],
+        }))
+        result = self.run_check("--scope", "reply-ordering")
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 class LifecycleSafetyTests(unittest.TestCase):
@@ -325,15 +352,7 @@ class LifecycleSafetyTests(unittest.TestCase):
 
 class OwnerEventTests(unittest.TestCase):
     def run_event(self, *, checking=None, bound=True, wrapped=False, service=None):
-        source = Path(__file__).with_name("consumer.qml").read_text()
-        start = source.index("function dbusNameOwnerChanged(")
-        opening = source.index("{", start)
-        depth = 1
-        end = opening + 1
-        while depth:
-            depth += (source[end] == "{") - (source[end] == "}")
-            end += 1
-        handler = source[start:end]
+        handler = consumer_handler("dbusNameOwnerChanged")
         identity = "org.plasmafusion.LayoutProbe.ptest"
         probe = {
             "stopped": False, "boundOwner": ":1.0" if bound else "",
@@ -371,6 +390,56 @@ class OwnerEventTests(unittest.TestCase):
 
     def test_watched_backend_loss_invalidates(self):
         self.assertEqual(self.run_event(service="org.kde.KWin"), ["unknown", 4])
+
+
+class ReplyOrderingTests(unittest.TestCase):
+    @staticmethod
+    def packet(revision: int, *, epoch: str = "a" * 32, request: int = 3):
+        return {
+            "consumer": "current", "request": request, "epoch": epoch, "revision": revision,
+            "backendOwner": ":1.0", "identityName": "org.plasmafusion.LayoutProbe.p" + epoch,
+            "status": "online", "capable": True,
+        }
+
+    def run_packets(self, packets):
+        # Keep native verification busy; live tests exercise the actual asynchronous boundary.
+        script = ("const probe={stopped:false,boot:'current',requestNumber:3,"
+                  "verifying:true,pendingPacket:null};"
+                  "probe.verifyPending=()=>{};console.info=()=>{};"
+                  "const Plasmoid={configuration:{layoutResponse:''}};\n")
+        script += consumer_handler("onLayoutResponseChanged")
+        script += "\nfor(const packet of " + json.dumps(packets) + ") {"
+        script += ("Plasmoid.configuration.layoutResponse=JSON.stringify(packet);"
+                   "onLayoutResponseChanged();}"
+                   "process.stdout.write(JSON.stringify(probe.pendingPacket));\n")
+        result = subprocess.run(["node", "-"], input=script, capture_output=True, text=True,
+                                timeout=10, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_newest_pending_state_survives_a_delayed_older_reply(self):
+        queued = self.run_packets([self.packet(100), self.packet(90)])
+        self.assertEqual(queued["revision"], 100)
+
+    def test_newer_reply_replaces_an_older_pending_state(self):
+        queued = self.run_packets([self.packet(90), self.packet(100)])
+        self.assertEqual(queued["revision"], 100)
+
+    def test_revision_watermark_does_not_hide_another_provider_epoch(self):
+        queued = self.run_packets([self.packet(100), self.packet(1, epoch="b" * 32)])
+        self.assertEqual(queued["epoch"], "b" * 32)
+        self.assertEqual(queued["revision"], 1)
+
+    def test_other_backend_owner_is_not_hidden_by_the_pending_watermark(self):
+        replacement = self.packet(1) | {"backendOwner": ":1.99"}
+        queued = self.run_packets([self.packet(100), replacement])
+        self.assertEqual(queued["backendOwner"], ":1.99")
+        self.assertEqual(queued["revision"], 1)
+
+    def test_stale_request_cannot_replace_current_pending_state(self):
+        queued = self.run_packets([self.packet(100), self.packet(200, request=2)])
+        self.assertEqual(queued["request"], 3)
+        self.assertEqual(queued["revision"], 100)
 
 
 class RetirementDeliveryTests(unittest.TestCase):

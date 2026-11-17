@@ -278,4 +278,88 @@ print("PASS: wrong-backend high-revision frames rejected by both receivers")
 PY
 printf '%s\n' '{"schema":1,"aliasReleased":true,"staleBackendRejected":true}' \
     >"$OUT/identity-fence-result.json"
-echo "PASS: delivery, retirement, reload and identity fence; remaining G0 cases unqualified"
+
+observations >"$OUT/observations-before-ordering.json"
+python3 - "$OUT/observations-before-ordering.json" "$OUT/ordering-burst.js" \
+    "$OUT/ordering-inputs.json" <<'PY'
+import json, sys
+rows = json.load(open(sys.argv[1]))
+messages = []
+expected = {}
+for row in rows:
+    packet = row["observation"]["packet"]
+    base = packet["revision"]
+    assert base < 2147483546, "burst would exceed the protocol's integer bound"
+    expected[row["consumer"]] = {
+        "low": base + 10, "high": base + 100, "middle": base + 90,
+        "epoch": packet["epoch"], "request": packet["request"],
+        "backendOwner": packet["backendOwner"], "identityName": packet["identityName"],
+    }
+    frames = [json.dumps(packet | {"revision": base + offset}) for offset in (10, 100, 90)]
+    messages.append({"consumer": row["consumer"], "packets": frames})
+with open(sys.argv[3], "w") as inputs:
+    json.dump(expected, inputs)
+with open(sys.argv[2], "w") as injection:
+    injection.write("var messages=" + json.dumps(messages) + ";var written=0;"
+        "panels().forEach(function(p){"
+        "p.widgets('org.plasmafusion.layoutprobe').forEach(function(w){"
+        "w.currentConfigGroup=['General'];var q=JSON.parse(w.readConfig('layoutRequest',''));"
+        "messages.forEach(function(m){if(m.consumer===q.consumer){"
+        "m.packets.forEach(function(packet){"
+        "w.writeConfig('layoutResponse',packet);++written;});}});});});print(written);")
+PY
+evaljs "$OUT/ordering-burst.js" >"$OUT/ordering-burst-send.txt"
+[[ $(cat "$OUT/ordering-burst-send.txt") == 6 ]] || return 1
+python3 - "$OUT/ordering-inputs.json" "$OUT/plasmashell.log" <<'PY'
+import json, sys
+expected = json.load(open(sys.argv[1]))
+lines = open(sys.argv[2]).readlines()
+for boot, spec in expected.items():
+    revisions = {spec[key] for key in ("low", "high", "middle")}
+    received = {}
+    accepted = []
+    for index, line in enumerate(lines):
+        if not line.endswith("\n"):
+            continue
+        if "layout-probe-received " in line:
+            packet = json.loads(line.split("layout-probe-received ", 1)[1])
+            if packet["receiverBoot"] == boot and packet["revision"] in revisions:
+                assert packet["consumer"] == boot and packet["epoch"] == spec["epoch"]
+                assert packet["request"] == spec["request"]
+                received[packet["revision"]] = index
+        if "layout-probe-observation " in line:
+            row = json.loads(line.split("layout-probe-observation ", 1)[1])
+            if row["boot"] == boot and row["packet"] and row["revision"] in revisions:
+                accepted.append(index)
+    assert received.keys() == revisions, "burst packets did not all reach the live receiver"
+    assert not accepted or min(accepted) > max(received.values()), \
+        "burst did not queue while verification was in flight"
+print("PASS: all six burst frames reached the intended receivers before verification completed")
+PY
+ordered=false
+for _ in {1..40}; do
+    observations >"$OUT/observations-after-ordering.json"
+    if python3 - "$OUT/ordering-inputs.json" "$OUT/observations-after-ordering.json" \
+        2>>"$OUT/ordering-wait.log" <<'PY'
+import json, sys
+expected = json.load(open(sys.argv[1]))
+after = {row["consumer"]: row["observation"] for row in json.load(open(sys.argv[2]))}
+assert after.keys() == expected.keys()
+for boot, row in after.items():
+    spec = expected[boot]
+    assert row["phase"] == "online" and row["revision"] == spec["high"], row
+    assert row["packet"]["consumer"] == boot and row["epoch"] == spec["epoch"]
+    assert row["packet"]["request"] == spec["request"]
+    assert row["packet"]["backendOwner"] == spec["backendOwner"]
+    assert row["packet"]["identityName"] == spec["identityName"]
+PY
+    then
+        ordered=true
+        break
+    fi
+    sleep 0.1
+done
+[[ $ordered == true ]] || { echo "FAIL: newer pending state was lost" >&2; return 1; }
+printf '%s\n' '{"schema":1,"passed":true,' \
+    '"checks":["roundtrip-native","same-provider-ordering"]}' >"$OUT/reply-ordering-result.json"
+echo "PASS: same-provider ordering plus prior transport/lifetime checks; full G0 remains open"

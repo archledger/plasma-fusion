@@ -146,11 +146,28 @@ wrong-owner or injected high revision is accepted. Event-routing unit tests exec
 QML handler in Node, including wrapped strings and loss during an unbound verification; real
 session tests remain necessary to validate D-Bus delivery and state transitions.
 
-`--check-result` requires the explicit first-slice receipt and successful inner scenario/session
+The normal scenario also sends a low/high/middle revision burst to each live widget. All six
+frames must reach the intended receivers before any burst state is accepted, so the test
+actually exercises the pending slot during asynchronous verification. The highest revision must
+eventually be confirmed without changing the request or provider binding. Coalescing keeps the
+highest pending state only within the complete consumer/request/epoch/backend/alias exchange;
+revision watermarks do not hide a different exchange. The queue still has one active verification
+and one pending packet.
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-example --scope reply-ordering
+```
+
+That scope requires `reply-ordering-result.json`; a first-slice receipt cannot certify it.
+This covers same-exchange query-state ordering, not mixed-lifetime stress or production action
+completion acknowledgements.
+
+`--check-result` requires the explicit selected-scope receipt and successful inner scenario/session
 codes. The wrapper's exit code alone is insufficient. `reload-result.json` and
 `identity-fence-result.json` record the additional assertions; none of these certifies full G0.
 The silent-retirement scope requires its own receipt and cannot use the first-slice receipt.
-Stale ordering, timeout, target preparation and existing-tiler integration still need their own
+Completion/timeout behavior, target preparation and existing-tiler integration still need their own
 evidence. A shell abort during teardown was also reproduced with the
 probe disabled and zero probe widgets; retain that environment limitation rather than claiming
 crash-free qualification.
