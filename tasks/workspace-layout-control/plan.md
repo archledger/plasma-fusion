@@ -46,6 +46,11 @@ compositor processes. It must use its own image/container, HOME, runtime directo
 track only its children, and never change shared test harnesses, live sessions or other work.
 The runner must record that the bus remains the same while backend connection identities change.
 
+The owner also approved focused test modules on 2026-11-17. The organization-only split preserves
+the existing entry command, class selectors and all original 98 cases. Further P0 lifecycle
+tests may use focused modules in the same directory; this does not expand production, native,
+shared-harness, packaging or CI scope.
+
 ## Source evidence and limits
 
 Inspected at Plasma Fusion main `44412a8901bf15c9f467fd5675795ee42fc3ffb7`:

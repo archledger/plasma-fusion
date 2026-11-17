@@ -103,7 +103,8 @@ def main() -> None:
     parser.add_argument(
         "--scope",
         choices=("first-slice", "silent-retirement", "reply-ordering",
-                 "query-timeout-late", "focus-observation", "target-preparation"),
+                 "query-timeout-late", "focus-observation", "target-preparation",
+                 "consumer-retirement"),
         default="first-slice",
     )
     parser.add_argument("--drop-retirement-frame", action="store_true",
@@ -163,6 +164,10 @@ def check_result(directory: Path, scope: str = "first-slice") -> None:
     elif scope == "target-preparation":
         receipt = directory / "target-preparation-result.json"
         checks = ["roundtrip-native", "guarded-target"]
+    elif scope == "consumer-retirement":
+        receipt = directory / "consumer-retirement-result.json"
+        checks = ["roundtrip-native", "guarded-target", "consumer-retirement",
+                  "busy-replay", "explicit-recovery"]
     else:
         raise ValueError("unknown probe receipt scope")
     if not receipt.is_file():

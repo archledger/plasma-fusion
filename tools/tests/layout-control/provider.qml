@@ -31,6 +31,10 @@ Item {
     property int targetGeneration: 0
     property var lastFocusedWindow: null
     property var targetHandoff: null
+    property var targetConsumers: []
+    property int consumerSerial: 0
+    property string inventoryOwner: ""
+    property bool targetInventoryComplete: false
     property QtObject competingProvider: QtObject {}
     property bool competingProviderRejected: false
     property bool authorized: false
@@ -164,6 +168,7 @@ Item {
                 const window = probe.preparedTarget ? probe.preparedTarget.window : null;
                 console.info("layout-probe-target", JSON.stringify({
                     consumer: row.consumer, request: row.request, intent: preparation.intent,
+                    revision: revision + 1,
                     ready: preparation.ready, reason: preparation.reason,
                     targetClass: Tiling.alive(window) ? String(window.resourceClass) : "",
                     targetAlive: Tiling.alive(window)
@@ -175,7 +180,7 @@ Item {
                 request: row.request,
                 preparation: preparation,
                 targetContext: status === "online" && probe.targetProbe
-                    ? probe.captureTargetContext(row.outputName) : null,
+                    ? probe.captureTargetConsumerContext(row) : null,
                 competingProviderRejected: competingProviderRejected,
                 backendOwner: selfOwner, identityName: identityName
             })};
@@ -402,6 +407,93 @@ Item {
             && Tiling.onWorkspace(handoff.window, handoff.desktop, handoff.activity, handoff.output);
     }
 
+    function targetConsumerFor(id: real, consumer: string): var {
+        if (!targetInventoryComplete || inventoryOwner !== readOwner) {
+            return null;
+        }
+        return targetConsumers.find(actor => actor.confirmed && actor.owner === readOwner
+            && actor.id === id && actor.consumer === consumer) || null;
+    }
+
+    function captureTargetConsumerContext(row: var): var {
+        const actor = targetConsumerFor(row.id, row.consumer);
+        const context = actor ? captureTargetContext(row.outputName) : null;
+        return context ? Object.assign(context, {consumerLease: actor.lease}) : null;
+    }
+
+    function consumeTargetInventory(snapshot: var): var {
+        const ids = new Set();
+        if (!snapshot || !Array.isArray(snapshot.widgets) || !Array.isArray(snapshot.rows)
+                || snapshot.rows.length > 16 || snapshot.rows.some(row => {
+                    if (!row || ids.has(row.id) || typeof row.consumer !== "string"
+                            || !Number.isInteger(row.request) || row.request <= 0
+                            || row.request > 2147483646 || !snapshot.widgets.some(widget =>
+                                widget && widget.id === row.id && widget.consumer === row.consumer)) {
+                        return true;
+                    }
+                    ids.add(row.id);
+                    return false;
+                }) || snapshot.widgets.some(widget => widget && widget.consumer !== null
+                    && !ids.has(widget.id))) {
+            reconcileTargetConsumers(null);
+            return null;
+        }
+        return reconcileTargetConsumers(snapshot) ? snapshot.rows : null;
+    }
+
+    // Request parse failure is not widget absence. Only a complete native inventory may retire
+    // identities; an unknown consumer keeps its prior lease inert until it is confirmed again.
+    function reconcileTargetConsumers(snapshot: var): bool {
+        targetInventoryComplete = false;
+        targetConsumers.forEach(actor => { actor.confirmed = false; });
+        if (!snapshot || snapshot.complete !== true || !Array.isArray(snapshot.widgets)
+                || snapshot.widgets.length > 16 || !readOwner.startsWith(":")) {
+            return false;
+        }
+        const ids = new Set();
+        for (const widget of snapshot.widgets) {
+            if (!widget || !Number.isInteger(widget.id) || widget.id <= 0
+                    || widget.id > 4294967295 || ids.has(widget.id)
+                    || (widget.consumer !== null && (typeof widget.consumer !== "string"
+                        || widget.consumer.length === 0 || widget.consumer.length > 128))) {
+                return false;
+            }
+            ids.add(widget.id);
+        }
+        const previous = inventoryOwner === readOwner ? targetConsumers : [];
+        const additions = snapshot.widgets.filter(widget => widget.consumer !== null
+            && !previous.some(actor => actor.id === widget.id && actor.consumer === widget.consumer));
+        if (consumerSerial > 2147483646 - additions.length) {
+            invalidateTarget("consumer-capacity");
+            return false;
+        }
+        const current = [];
+        for (const widget of snapshot.widgets) {
+            const existing = previous.find(actor => actor.id === widget.id
+                && (widget.consumer === null || actor.consumer === widget.consumer));
+            if (existing) {
+                existing.confirmed = widget.consumer !== null;
+                current.push(existing);
+            } else if (widget.consumer !== null) {
+                current.push({
+                    owner: readOwner, id: widget.id, consumer: widget.consumer,
+                    lease: epoch + ":" + (++consumerSerial), confirmed: true,
+                    request: 0, payload: "", outcome: "not-prepared"
+                });
+            }
+        }
+        if (targetExchange && !current.some(actor => actor.owner === targetExchange.owner
+                && actor.id === targetExchange.id && actor.consumer === targetExchange.consumer
+                && actor.lease === targetExchange.lease)) {
+            targetExchange = null;
+            invalidateTarget("consumer-retired");
+        }
+        targetConsumers = current;
+        inventoryOwner = readOwner;
+        targetInventoryComplete = true;
+        return true;
+    }
+
     function captureTargetContext(outputName: string): var {
         if (!targetContextReady()) {
             return null;
@@ -434,6 +526,8 @@ Item {
         if (!row || row.version !== 1 || !Number.isInteger(row.id) || row.id <= 0
                 || typeof row.consumer !== "string" || row.consumer.length === 0
                 || row.consumer.length > 128 || !Number.isInteger(row.request)
+                || typeof row.consumerLease !== "string" || row.consumerLease.length === 0
+                || row.consumerLease.length > 128
                 || row.request <= 0 || row.request > 2147483646
                 || (row.intent !== "prepare" && row.intent !== "validate")
                 || typeof row.outputName !== "string" || row.outputName.length === 0
@@ -451,33 +545,48 @@ Item {
             response.reason = "unavailable";
             return response;
         }
+        const actor = targetConsumerFor(row.id, row.consumer);
+        if (!actor || row.consumerLease !== actor.lease) {
+            response.reason = "consumer-not-current";
+            return response;
+        }
         if (targetExchange && targetExchange.owner !== readOwner) {
             targetExchange = null;
             lastEligibleWindow = null;
             invalidateTarget("shell-replaced");
         }
-        let exchange = targetExchange;
-        if (exchange && (exchange.consumer !== row.consumer || exchange.id !== row.id)) {
-            response.reason = "busy";
-            return response;
-        }
         const payload = JSON.stringify([row.intent, row.outputName, row.token, row.viewEpoch,
                                         row.viewGeneration, row.desktopId, row.activityId,
-                                        row.viewOutputName]);
-        if (exchange && (row.request < exchange.request
-                || (row.request === exchange.request && payload !== exchange.payload))) {
+                                        row.viewOutputName, row.consumerLease]);
+        if (row.request < actor.request
+                || (row.request === actor.request && payload !== actor.payload)) {
             response.reason = "stale-or-conflicting-request";
             return response;
         }
-        const fresh = !exchange || row.request > exchange.request;
-        if (!exchange) {
-            exchange = {owner: readOwner, consumer: row.consumer, id: row.id,
-                        request: 0, payload: "", outputName: "", nonce: ""};
-            targetExchange = exchange;
-        }
+        const fresh = row.request > actor.request;
         if (fresh) {
-            exchange.request = row.request;
-            exchange.payload = payload;
+            actor.request = row.request;
+            actor.payload = payload;
+            actor.outcome = "refused";
+        } else if (row.intent === "prepare" && actor.outcome !== "prepared") {
+            response.reason = actor.outcome;
+            return response;
+        }
+        let exchange = targetExchange;
+        if (exchange && (exchange.consumer !== row.consumer || exchange.id !== row.id
+                || exchange.lease !== actor.lease)) {
+            if (fresh) actor.outcome = "busy";
+            response.reason = "busy";
+            return response;
+        }
+        if (!exchange) {
+            if (row.intent !== "prepare") {
+                response.reason = "wrong-preparation";
+                return response;
+            }
+            exchange = {owner: readOwner, consumer: row.consumer, id: row.id,
+                        lease: actor.lease, outputName: "", nonce: ""};
+            targetExchange = exchange;
         }
         if (fresh && row.intent === "prepare") {
             invalidateTarget("stale-context");
@@ -521,6 +630,9 @@ Item {
             response.ready = validateTarget();
         }
         response.reason = response.ready ? "" : preparationFailure;
+        if (row.intent === "prepare") {
+            actor.outcome = response.ready ? "prepared" : response.reason;
+        }
         return response;
     }
 
@@ -548,7 +660,10 @@ Item {
                 probe.readMailboxes();
             }
         }
-        onFailed: probe.finishRead()
+        onFailed: {
+            if (probe.targetProbe) probe.reconcileTargetConsumers(null);
+            probe.finishRead();
+        }
     }
     DBusCall {
         id: shellIdentityLookup
@@ -562,6 +677,7 @@ Item {
                 probe.shellPid = 0;
                 probe.shellPidOwner = "";
                 probe.targetViewChanged();
+                probe.reconcileTargetConsumers(null);
                 probe.finishRead();
                 return;
             }
@@ -577,23 +693,30 @@ Item {
             probe.shellPid = 0;
             probe.shellPidOwner = "";
             probe.targetViewChanged();
+            probe.reconcileTargetConsumers(null);
             probe.finishRead();
         }
     }
 
     function readMailboxes(): void {
-        const bounded = probe.targetProbe ? "if(rows.length>=16)return;" : "";
-        reader.arguments = ["var rows=[];panels().forEach(function(p) {"
+        const target = probe.targetProbe;
+        reader.arguments = ["var rows=[],widgets=[],complete=true;panels().forEach(function(p) {"
             + "p.widgets('org.plasmafusion.layoutprobe').forEach(function(w) {"
-            + bounded
+            + (target ? "if(widgets.length>=16){complete=false;return;}"
+                + "var item={id:w.id,consumer:null};widgets.push(item);" : "")
             + "w.currentConfigGroup=['General'];try {var text=w.readConfig('layoutRequest','');"
-            + (probe.targetProbe ? "if(text.length>2048)return;" : "")
-            + "var q=JSON.parse(text);rows.push({id:w.id,consumer:q.consumer,request:q.request,"
+            + (target ? "if(text.length>2048)return;" : "")
+            + "var q=JSON.parse(text);"
+            + (target ? "if(typeof q.consumer!=='string'||!q.consumer.length||q.consumer.length>128"
+                + "||!Number.isInteger(q.request)||q.request<=0||q.request>2147483646)return;"
+                + "item.consumer=q.consumer;" : "")
+            + "rows.push({id:w.id,consumer:q.consumer,request:q.request,"
             + "version:q.version,intent:q.intent,outputName:q.outputName,token:q.token,"
             + "viewEpoch:q.viewEpoch,viewGeneration:q.viewGeneration,desktopId:q.desktopId,"
-            + "activityId:q.activityId,viewOutputName:q.viewOutputName});"
+            + "activityId:q.activityId,viewOutputName:q.viewOutputName,consumerLease:q.consumerLease});"
             + "}catch(e){} }); });"
-            + "print(JSON.stringify(rows));"];
+            + (target ? "print(JSON.stringify({complete:complete,widgets:widgets,rows:rows}));"
+                : "print(JSON.stringify(rows));")];
         reader.call();
     }
 
@@ -605,12 +728,28 @@ Item {
         method: "evaluateScript"
         onFinished: value => {
             probe.replyOwner = probe.readOwner;
-            probe.recipients = JSON.parse(String(value[0]));
+            let data;
+            try {
+                data = JSON.parse(String(value[0]));
+            } catch (error) {
+                if (probe.targetProbe) probe.reconcileTargetConsumers(null);
+                probe.finishRead();
+                console.warn("layout-probe: malformed mailbox snapshot");
+                return;
+            }
+            const rows = probe.targetProbe ? probe.consumeTargetInventory(data) : data;
+            if (!Array.isArray(rows)) {
+                probe.finishRead();
+                console.warn("layout-probe: mailbox inventory unconfirmed");
+                return;
+            }
+            probe.recipients = rows;
             console.info("layout-probe: mailbox rows", probe.recipients.length);
             probe.queuePublication(probe.recipients, probe.replyOwner);
             probe.finishRead();
         }
         onFailed: {
+            if (probe.targetProbe) probe.reconcileTargetConsumers(null);
             probe.finishRead();
             console.warn("layout-probe: mailbox read failed");
         }

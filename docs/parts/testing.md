@@ -91,8 +91,9 @@ layout control. The accepted scope and remaining gates are in
 Nothing in these fixtures installs into the logged-in desktop.
 
 The Python entry point remains `tools/tests/layout-control/test_prepare_seed.py`. Guard cases
-live in `target_guard_tests.py` and share `qml_helpers.py` with the entry point. The driver
-re-exports the guard class, preserving existing class selectors and all cases. The support
+live in `target_guard_tests.py`; consumer inventory, lease and retirement cases live in
+`consumer_lifecycle_tests.py`. They share `qml_helpers.py` with the entry point. The driver
+re-exports the classes, preserving existing class selectors and all cases. The support
 module names deliberately do not match `test_*.py`, avoiding duplicate default discovery.
 Package-aware imports also preserve `python3 -m unittest` with the entry file's path.
 
@@ -269,7 +270,23 @@ the original immutable request and is used for validation. Loss of readiness ret
 inert last-confirmed diagnostic snapshot so stale-handle rejection can be tested.
 Preparation responses contain only intent, readiness, reason and
 the handle; context frames contain only their required scalar view IDs and generation, never
-window IDs, PIDs, classes or placement records.
+window IDs, PIDs, classes or placement records. Each context also carries its consumer's public
+freshness lease, not a native writer token or authentication credential. The client copies that
+lease with the frozen menu, original request and accepted preparation contexts; a later update
+cannot replace it in an outstanding intent.
+
+Target mode reads a complete native widget inventory separately from parsed requests. At most
+16 widgets and 2048 characters per request are accepted. Unreadable requests leave their widgets
+in the inventory with an unknown consumer. Truncation, malformed or inconsistent snapshots and
+reader failures unconfirm records; they do not prove absence or free the slot. Only a complete
+inventory can retire a missing widget or a confirmed replacement consumer. Inventory is reconciled
+on the existing event-driven scans, not an idle polling timer.
+
+The provider retains bounded request/payload/refusal history per current consumer, independently
+of the single prepared slot. Repeating a busy preparation stays refused after the holder
+disappears; a new explicit intent is required. Replacement or reappearance gets a distinct,
+monotonically issued lease, so a saved old request cannot revive even if its boot label returns.
+Lease exhaustion refuses rather than wrapping.
 
 The native scenario uses the first Space to prepare and the second to validate the controlled app.
 It then requires refusal after another app activates, a new explicit preparation followed by
@@ -284,8 +301,27 @@ it is not used alone as the popup-input receipt.
 Recorded frame centers are backend-only test input coordinates used to reactivate the controlled
 app after close; they are never target/view identity or mode evidence.
 
-This is a one-slot diagnostic prototype, not the settled production protocol: fair competing-bar
-recovery, slot retirement after widget loss, mixed lifetimes, action acknowledgements/timeouts,
+The target scenario then prepares through the competing widget, requires a busy refusal, and
+removes only the owned holder widget after checking its native ID and current consumer. It
+enumerates native applets to confirm removal, wakes the provider and requires a newer accepted
+revision that still refuses the same competing request. A new keyboard preparation must succeed
+with the surviving consumer's unchanged lease. The checker correlates accepted state with the
+exact native verdict revision; merely received or older frames cannot satisfy it.
+[Widget::remove()](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/widget.h)
+is exposed as a slot; its
+[implementation](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/widget.cpp)
+destroys the applet. The inventory comes from
+[Containment::widgets()](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/containment.cpp),
+not the presence of saved request fields.
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-target --scope consumer-retirement
+```
+
+This requires `consumer-retirement-result.json`; the guarded-target receipt alone is insufficient.
+It remains a one-slot diagnostic prototype, not the settled production protocol: general fair
+competing-bar recovery, mixed lifetimes, action acknowledgements/timeouts,
 real activity/output-loss cases and existing-tiler integration remain separate G0 gates. No
 preparation or validation admits a window, changes its geometry or writes placement memory.
 

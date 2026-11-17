@@ -230,6 +230,57 @@ PY
         done
         [[ $ready == true ]]
     }
+    wait_consumer_state() {
+        local boot=$1 previous=$2 intent=$3 ready=$4 reason=$5 app=$6 complete=false
+        for _ in {1..40}; do
+            # Consumer retirement receipt: a newer accepted revision and its exact native verdict.
+            if python3 - "$OUT/plasmashell.log" "$OUT/kwin.log" "$boot" "$previous" "$intent" \
+                "$ready" "$reason" "$app" "$OUT/consumer-current.json" \
+                2>>"$OUT/consumer-state-wait.log" <<'PY'
+import json, sys
+trace = open(sys.argv[1]).readlines()
+events = []
+for index, line in enumerate(trace):
+    if line.endswith("\n"):
+        for kind in ("query", "observation"):
+            marker = f"layout-probe-{kind} "
+            if marker in line:
+                events.append((index, kind, json.loads(line.split(marker, 1)[1])))
+index, _, observation = [event for event in events
+                         if event[1] == "observation" and event[2]["boot"] == sys.argv[3]][-1]
+packet = observation["packet"]
+assert observation["phase"] == "online" and packet["consumer"] == sys.argv[3]
+assert packet["request"] == observation["request"]
+assert type(packet["revision"]) is int and packet["revision"] > int(sys.argv[4])
+context = packet["targetContext"]
+assert context and isinstance(context["consumerLease"], str) and context["consumerLease"]
+preparation = packet["preparation"]
+assert preparation["intent"] == sys.argv[5] and preparation["ready"] is (sys.argv[6] == "true")
+assert preparation["reason"] == ("" if sys.argv[7] == "-" else sys.argv[7])
+queries = [event for event in events if event[1] == "query" and event[2]["boot"] == sys.argv[3]
+           and event[2]["request"] == observation["request"]]
+assert len(queries) == 1 and queries[0][0] < index
+native = [json.loads(line.split("layout-probe-target ", 1)[1]) for line in open(sys.argv[2])
+          if line.endswith("\n") and "layout-probe-target " in line]
+native = [row for row in native if row["consumer"] == sys.argv[3]
+          and row["request"] == observation["request"] and row["revision"] == packet["revision"]][-1]
+assert all(native[key] == preparation[key] for key in ("intent", "ready", "reason"))
+if preparation["ready"]:
+    assert native["targetAlive"] and native["targetClass"] == sys.argv[8]
+else:
+    assert preparation["token"] == ""
+with open(sys.argv[9], "w") as output:
+    json.dump(observation, output)
+print(observation["request"], packet["revision"])
+PY
+            then
+                complete=true
+                break
+            fi
+            sleep 0.1
+        done
+        [[ $complete == true ]]
+    }
     wait_target_popup() {
         local app=$1 ready=false
         for _ in {1..40}; do
@@ -460,11 +511,131 @@ PY
         pfinput "click $validate_x $validate_y"
         target_request=$(wait_target_reply "$focus_boot" validate false "$target_request" -)
         echo "PASS: leaving and returning to the desktop cannot revive an old preparation"
+
+        python3 - "$OUT/plasmashell.log" "$focus_boot" >"$OUT/consumer-competitor.txt" <<'PY'
+import json, sys
+latest, controls = {}, {}
+for line in open(sys.argv[1]):
+    for marker, rows in (("layout-probe-observation ", latest),
+                         ("layout-probe-focus-control ", controls)):
+        if line.endswith("\n") and marker in line:
+            row = json.loads(line.split(marker, 1)[1])
+            rows[row["boot"]] = row
+boots = set(latest) - {sys.argv[2]}
+assert len(boots) == 1
+boot = boots.pop()
+print(boot, controls[boot]["x"], controls[boot]["y"], latest[boot]["packet"]["revision"])
+PY
+        read -r competitor_boot competitor_x competitor_y competitor_revision \
+            <"$OUT/consumer-competitor.txt"
+        # The desktop round trip deliberately cleared the remembered app. Re-establish it first.
+        pfinput "click $alpha_x $alpha_y"
+        wait_target_context "$competitor_boot" pf.focus.alpha
+        pfinput "click $competitor_x $competitor_y"
+        wait_target_popup pf.focus.alpha
+        pfinput "key space"
+        wait_consumer_state "$competitor_boot" "$competitor_revision" prepare false busy -
+        cp "$OUT/consumer-current.json" "$OUT/consumer-busy-before.json"
+
+        # Remove only the owned fixture whose native ID and current boot were checked first.
+        python3 - "$focus_boot" "$OUT/widgets-created.txt" >"$OUT/consumer-remove.js" <<'PY'
+import json, sys
+owned = json.load(open(sys.argv[2]))
+print("var boot=" + json.dumps(sys.argv[1]) + ",owned=" + json.dumps(owned) + ";")
+print("""
+var matches=[];
+panels().forEach(function(p){p.widgets('org.plasmafusion.layoutprobe').forEach(function(w){
+    w.currentConfigGroup=['General'];
+    if(owned.indexOf(w.id)>=0 && JSON.parse(w.readConfig('layoutRequest','{}')).consumer===boot)
+        matches.push(w);
+});});
+if(matches.length!==1) throw new Error('owned consumer not unique');
+var removedId=matches[0].id;
+matches[0].remove();
+print(JSON.stringify({removedId:removedId,consumer:boot}));
+""")
+PY
+        evaljs "$OUT/consumer-remove.js" >"$OUT/consumer-removed.json"
+        consumer_removed=false
+        for _ in {1..40}; do
+            evaljs - >"$OUT/consumer-widgets-after.json" <<'JS'
+var rows=[];
+panels().forEach(function(p){p.widgets('org.plasmafusion.layoutprobe').forEach(function(w){
+    rows.push({id:w.id,type:w.type});
+});});
+print(JSON.stringify(rows));
+JS
+            if python3 - "$OUT/consumer-widgets-after.json" "$OUT/consumer-removed.json" \
+                "$OUT/widgets-created.txt" 2>>"$OUT/consumer-removal-wait.log" <<'PY'
+import json, sys
+rows, removed, owned = [json.load(open(path)) for path in sys.argv[1:]]
+assert len(rows) == 1 and rows[0]["id"] in owned
+assert rows[0]["id"] != removed["removedId"]
+assert rows[0]["type"] == "org.plasmafusion.layoutprobe"
+PY
+            then
+                consumer_removed=true
+                break
+            fi
+            sleep 0.1
+        done
+        [[ $consumer_removed == true ]] || return 1
+        competitor_revision=$(python3 - "$OUT/consumer-busy-before.json" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1]))["packet"]["revision"])
+PY
+)
+        qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut \
+            "Plasma Fusion: Layout Probe Wake"
+        wait_consumer_state "$competitor_boot" "$competitor_revision" prepare false busy -
+        cp "$OUT/consumer-current.json" "$OUT/consumer-busy-after.json"
+        python3 - "$OUT/consumer-busy-before.json" "$OUT/consumer-busy-after.json" <<'PY'
+import json, sys
+before, after = [json.load(open(path)) for path in sys.argv[1:]]
+assert before["request"] == after["request"]
+assert before["packet"]["targetContext"]["consumerLease"] == after["packet"]["targetContext"]["consumerLease"]
+assert after["packet"]["revision"] > before["packet"]["revision"]
+print("PASS: real widget removal does not promote the competitor's repeated busy intent")
+PY
+
+        pfinput "key esc"
+        pfinput "click $alpha_x $alpha_y"
+        wait_target_context "$competitor_boot" pf.focus.alpha
+        python3 - "$OUT/plasmashell.log" "$competitor_boot" >"$OUT/consumer-new-control.txt" <<'PY'
+import json, sys
+rows = [json.loads(line.split("layout-probe-focus-control ", 1)[1])
+        for line in open(sys.argv[1])
+        if line.endswith("\n") and "layout-probe-focus-control " in line]
+control = [row for row in rows if row["boot"] == sys.argv[2]][-1]
+print(control["x"], control["y"])
+PY
+        read -r competitor_x competitor_y <"$OUT/consumer-new-control.txt"
+        pfinput "click $competitor_x $competitor_y"
+        wait_target_popup pf.focus.alpha
+        pfinput "key space"
+        competitor_revision=$(python3 - "$OUT/consumer-busy-after.json" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1]))["packet"]["revision"])
+PY
+)
+        wait_consumer_state "$competitor_boot" "$competitor_revision" prepare true - pf.focus.alpha
+        cp "$OUT/consumer-current.json" "$OUT/consumer-explicit-recovery.json"
+        python3 - "$OUT/consumer-busy-after.json" "$OUT/consumer-explicit-recovery.json" <<'PY'
+import json, sys
+before, after = [json.load(open(path)) for path in sys.argv[1:]]
+assert after["request"] > before["request"]
+assert before["packet"]["targetContext"]["consumerLease"] == after["packet"]["targetContext"]["consumerLease"]
+assert after["packet"]["preparation"]["ready"] and after["packet"]["preparation"]["token"]
+print("PASS: a new explicit competitor intent succeeds after confirmed holder retirement")
+PY
         printf 'quit\n' >&"$focus_input"
         wait "$focus_client"
         exec {focus_input}>&-
         printf '%s\n' '{"schema":1,"passed":true,' \
             '"checks":["roundtrip-native","guarded-target"]}' >"$OUT/target-preparation-result.json"
+        printf '%s\n' '{"schema":1,"passed":true,' \
+            '"checks":["roundtrip-native","guarded-target","consumer-retirement",' \
+            '"busy-replay","explicit-recovery"]}' >"$OUT/consumer-retirement-result.json"
         return 0
     fi
     printf 'quit\n' >&"$focus_input"

@@ -43,7 +43,8 @@ const probe = {
     authorized:true, capable:true, identityReady:true, stopping:false, readOwner:':1.20',
     shellPid:202, shellPidOwner:':1.20', lastEligibleWindow:app, preparedTarget:null,
     preparationFailure:'not-prepared', epoch:'a'.repeat(32), targetExchange:null, targetSerial:0,
-    targetGeneration:0,lastFocusedWindow:panel,targetHandoff:null
+    targetGeneration:0,lastFocusedWindow:panel,targetHandoff:null,
+    targetConsumers:[],consumerSerial:0,inventoryOwner:'',targetInventoryComplete:false
 };
 Workspace.activeWindow = panel;
 const methods = (function(){with(probe){return {
@@ -53,9 +54,17 @@ const methods = (function(){with(probe){return {
                    "targetViewChanged", "targetMembershipChanged", "advanceTargetContext",
                    "captureTargetContext", "targetEligibilityChanged", "canUseTargetHandoff")
         if requests:
-            methods += ("handleTargetRequest",)
+            methods += ("handleTargetRequest", "reconcileTargetConsumers", "targetConsumerFor")
         script += ",".join(name + ":" + qml_handler(name, "provider.qml") for name in methods)
-        script += "};}})();Object.assign(probe,methods);\n" + action
+        script += "};}})();Object.assign(probe,methods);\n"
+        if requests:
+            script += """
+probe.reconcileTargetConsumers({complete:true,widgets:[{id:7,consumer:'current'},
+                                                     {id:8,consumer:'other'}]});
+const consumerLease=probe.targetConsumerFor(7,'current').lease;
+const otherLease=probe.targetConsumerFor(8,'other').lease;
+"""
+        script += action
         result = subprocess.run(["node", "-"], input=script, capture_output=True, text=True,
                                 timeout=10, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -189,6 +198,7 @@ process.stdout.write(JSON.stringify({
     def test_repeated_prepare_never_renews_or_retargets_the_same_intent(self):
         result = self.run_guard("""
 const request = {version:1,id:7,consumer:'current',request:2,intent:'prepare',
+                 consumerLease,
                  outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
                  desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
 const first = probe.handleTargetRequest(request);
@@ -205,11 +215,13 @@ process.stdout.write(JSON.stringify({
     def test_guarded_validation_binds_the_handle_to_consumer_and_payload(self):
         result = self.run_guard("""
 const prepare = {version:1,id:7,consumer:'current',request:2,intent:'prepare',
+                 consumerLease,
                  outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
                  desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
 const first=probe.handleTargetRequest(prepare);
 const conflicting=probe.handleTargetRequest({...prepare,outputName:'Virtual-1'});
-const stranger=probe.handleTargetRequest({...prepare,id:8,consumer:'other',request:3});
+const stranger=probe.handleTargetRequest({...prepare,id:8,consumer:'other',request:3,
+                                         consumerLease:otherLease});
 const validate={...prepare,request:3,intent:'validate',token:first.token};
 const confirmed=probe.handleTargetRequest(validate);
 const reused=probe.handleTargetRequest({...validate,token:'changed'});
@@ -234,6 +246,7 @@ process.stdout.write(JSON.stringify({
             with self.subTest(change=change):
                 result = self.run_guard("""
 const request={version:1,id:7,consumer:'current',request:2,intent:'prepare',
+               consumerLease,
                outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
                desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
 """ + change + """
@@ -254,6 +267,7 @@ process.stdout.write(JSON.stringify({ready:reply.ready,cleared:probe.preparedTar
             with self.subTest(sequence=sequence):
                 result = self.run_guard("""
 const request={version:1,id:7,consumer:'current',request:2,intent:'prepare',
+               consumerLease,
                outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
                desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
 """ + sequence + """
@@ -267,6 +281,7 @@ process.stdout.write(JSON.stringify({ready:reply.ready,cleared:probe.preparedTar
 Workspace.activeWindow=app;
 probe.lastFocusedWindow=app;
 const request={version:1,id:7,consumer:'current',request:2,intent:'prepare',
+               consumerLease,
                outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
                desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
 Workspace.activeWindow=panel;
@@ -285,6 +300,7 @@ process.stdout.write(JSON.stringify({
             with self.subTest(field=field):
                 result = self.run_guard("""
 const request={version:1,id:7,consumer:'current',request:2,intent:'prepare',
+               consumerLease,
                outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
                desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
 """ + f"request[{json.dumps(field)}]={json.dumps(value)};" + """
@@ -298,6 +314,7 @@ process.stdout.write(JSON.stringify({ready:reply.ready,cleared:probe.preparedTar
 Workspace.activeWindow={...panel,output:null};
 probe.lastFocusedWindow=Workspace.activeWindow;
 const request={version:1,id:7,consumer:'current',request:2,intent:'prepare',
+               consumerLease,
                outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
                desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
 const reply=probe.handleTargetRequest(request);
@@ -308,6 +325,7 @@ process.stdout.write(JSON.stringify({ready:reply.ready,cleared:probe.preparedTar
     def test_refused_preparation_identity_cannot_be_reused_to_capture_later(self):
         result = self.run_guard("""
 const request={version:1,id:7,consumer:'current',request:2,intent:'prepare',
+               consumerLease,
                outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:2,
                desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
 const refused=probe.handleTargetRequest(request);

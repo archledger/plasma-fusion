@@ -16,10 +16,12 @@ from unittest import mock
 from xml.etree import ElementTree
 
 if __package__:
+    from .consumer_lifecycle_tests import ConsumerLifecycleTests as ConsumerLifecycleTests
     from .qml_helpers import qml_handler
     # Re-export preserves the existing unittest entry point and class selectors.
     from .target_guard_tests import TargetGuardTests as TargetGuardTests
 else:
+    from consumer_lifecycle_tests import ConsumerLifecycleTests as ConsumerLifecycleTests
     from qml_helpers import qml_handler
     from target_guard_tests import TargetGuardTests as TargetGuardTests
 
@@ -296,6 +298,25 @@ class SeedTests(unittest.TestCase):
             "schema": 1, "passed": True, "checks": ["roundtrip-native", "guarded-target"],
         }))
         result = self.run_check("--scope", "target-preparation")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_consumer_scope_requires_its_specific_complete_receipt(self):
+        self.result_files()
+        result = self.run_check("--scope", "consumer-retirement")
+        self.assertNotEqual(result.returncode, 0)
+        receipt = self.output / "consumer-retirement-result.json"
+        receipt.write_text(json.dumps({
+            "schema": 1, "passed": True, "checks": ["roundtrip-native", "guarded-target"],
+        }))
+        result = self.run_check("--scope", "consumer-retirement")
+        self.assertNotEqual(result.returncode, 0)
+        receipt.write_text(json.dumps({
+            "schema": 1, "passed": True, "checks": [
+                "roundtrip-native", "guarded-target", "consumer-retirement",
+                "busy-replay", "explicit-recovery",
+            ],
+        }))
+        result = self.run_check("--scope", "consumer-retirement")
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
@@ -738,7 +759,7 @@ process.stdout.write(JSON.stringify({
         script = """
 const Screen={name:'Virtual-0'};
 const original={epoch:'provider-a',generation:7,desktopId:'a',activityId:'activity',
-                outputName:'Virtual-0'};
+                outputName:'Virtual-0',consumerLease:'provider-a:1'};
 const probe={targetEnabled:true,targetContext:original,requestContext:null,preparedToken:'',
              freshQuery:()=>{probe.queryIntent='query';}};
 """ + qml_handler("requestTarget") + """
@@ -750,14 +771,14 @@ process.stdout.write(JSON.stringify(probe.requestContext));
 """
         self.assertEqual(self.run_node(script), {
             "epoch": "provider-a", "generation": 7, "desktopId": "a",
-            "activityId": "activity", "outputName": "Virtual-0",
+            "activityId": "activity", "outputName": "Virtual-0", "consumerLease": "provider-a:1",
         })
 
     def test_confirmed_handoff_context_is_separate_from_the_original_prepare_intent(self):
         script = """
 const epoch='a'.repeat(32);
 const context={epoch,generation:1,desktopId:'desktop-a',activityId:'activity-a',
-               outputName:'Virtual-0'};
+               outputName:'Virtual-0',consumerLease:epoch+':1'};
 const probe={
     stopped:false,requestNumber:2,boundEpoch:'',boundOwner:'',boundIdentity:'',revision:-1,
     accepted:0,phase:'unknown',epoch:'',targetEnabled:true,targetContext:null,preparedContext:null,
@@ -778,6 +799,7 @@ process.stdout.write(JSON.stringify({
             "original": 0, "accepted": {
                 "epoch": "a" * 32, "generation": 1, "desktopId": "desktop-a",
                 "activityId": "activity-a", "outputName": "Virtual-0",
+                "consumerLease": "a" * 32 + ":1",
             }, "token": "opaque",
         })
 
@@ -785,7 +807,7 @@ process.stdout.write(JSON.stringify({
         script = """
 const Screen={name:'Virtual-0'};
 const original={epoch:'provider',generation:7,desktopId:'a',activityId:'activity',
-                outputName:'Virtual-0'};
+                outputName:'Virtual-0',consumerLease:'provider:1'};
 let sent=0;
 const probe={
     targetEnabled:true,targetContext:original,pendingMenuContext:null,targetPreparationPending:false,
@@ -806,13 +828,15 @@ process.stdout.write(JSON.stringify({
             "beforeInput": 0, "sent": 1, "pending": False, "context": {
                 "epoch": "provider", "generation": 7, "desktopId": "a",
                 "activityId": "activity", "outputName": "Virtual-0",
+                "consumerLease": "provider:1",
             },
         })
 
     def test_readiness_loss_retains_only_the_inert_last_confirmed_snapshot(self):
         script = """
 const epoch='a'.repeat(32);
-const context={epoch,generation:1,desktopId:'a',activityId:'activity',outputName:'Virtual-0'};
+const context={epoch,generation:1,desktopId:'a',activityId:'activity',outputName:'Virtual-0',
+               consumerLease:epoch+':1'};
 const probe={
     stopped:false,requestNumber:2,boundEpoch:'',boundOwner:'',boundIdentity:'',revision:-1,
     accepted:0,phase:'unknown',epoch:'',targetEnabled:true,targetContext:null,preparedContext:null,

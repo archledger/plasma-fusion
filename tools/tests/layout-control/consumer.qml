@@ -158,10 +158,11 @@ PlasmoidItem {
                 && context.desktopId.length <= 128 && typeof context.activityId === "string"
                 && context.activityId.length > 0 && context.activityId.length <= 128
                 && typeof context.outputName === "string" && context.outputName.length > 0
-                && context.outputName.length <= 128 ? {
+                && context.outputName.length <= 128 && typeof context.consumerLease === "string"
+                && context.consumerLease.length > 0 && context.consumerLease.length <= 128 ? {
                     epoch: context.epoch, generation: context.generation,
                     desktopId: context.desktopId, activityId: context.activityId,
-                    outputName: context.outputName
+                    outputName: context.outputName, consumerLease: context.consumerLease
                 } : null;
         }
         if (probe.targetEnabled && packet.preparation && packet.preparation.intent === "prepare") {
@@ -174,12 +175,15 @@ PlasmoidItem {
                 probe.preparedContext = {
                     epoch: probe.targetContext.epoch, generation: probe.targetContext.generation,
                     desktopId: probe.targetContext.desktopId, activityId: probe.targetContext.activityId,
-                    outputName: probe.targetContext.outputName
+                    outputName: probe.targetContext.outputName,
+                    consumerLease: probe.targetContext.consumerLease
                 };
             }
         } else if (probe.targetEnabled && packet.preparation) {
             probe.preparedReady = packet.preparation.intent === "validate"
-                && packet.preparation.ready === true;
+                && packet.preparation.ready === true && !!probe.targetContext
+                && !!probe.preparedContext
+                && probe.targetContext.consumerLease === probe.preparedContext.consumerLease;
         }
         observe(packet);
         if (packet.status === "offline") {
@@ -220,7 +224,8 @@ PlasmoidItem {
                 viewGeneration: context ? context.generation : -1,
                 desktopId: context ? context.desktopId : "",
                 activityId: context ? context.activityId : "",
-                viewOutputName: context ? context.outputName : ""
+                viewOutputName: context ? context.outputName : "",
+                consumerLease: context ? context.consumerLease : ""
             });
         }
         Plasmoid.configuration.layoutRequest = JSON.stringify(request);
@@ -273,7 +278,8 @@ PlasmoidItem {
             ? probe.pendingMenuContext : probe.targetContext;
         const captured = intent === "prepare" && context ? {
             epoch: context.epoch, generation: context.generation, desktopId: context.desktopId,
-            activityId: context.activityId, outputName: context.outputName
+            activityId: context.activityId, outputName: context.outputName,
+            consumerLease: context.consumerLease
         } : null;
         probe.freshQuery(true);
         // freshQuery resets lifecycle requests to query; its captured-generation send is deferred.
@@ -296,7 +302,8 @@ PlasmoidItem {
         const context = probe.targetContext;
         probe.pendingMenuContext = context ? {
             epoch: context.epoch, generation: context.generation, desktopId: context.desktopId,
-            activityId: context.activityId, outputName: context.outputName
+            activityId: context.activityId, outputName: context.outputName,
+            consumerLease: context.consumerLease
         } : null;
         probe.targetPreparationPending = true;
         probe.focusPopupOpen = true;
