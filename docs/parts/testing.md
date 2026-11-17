@@ -90,6 +90,12 @@ layout control. The accepted scope and remaining gates are in
 [`tasks/workspace-layout-control/plan.md`](../../tasks/workspace-layout-control/plan.md).
 Nothing in these fixtures installs into the logged-in desktop.
 
+The Python entry point remains `tools/tests/layout-control/test_prepare_seed.py`. Guard cases
+live in `target_guard_tests.py` and share `qml_helpers.py` with the entry point. The driver
+re-exports the guard class, preserving existing class selectors and all cases. The support
+module names deliberately do not match `test_*.py`, avoiding duplicate default discovery.
+Package-aware imports also preserve `python3 -m unittest` with the entry file's path.
+
 Build `topbar kwin` into a private stage, then make a fresh seed under this worktree's `build/`:
 
 ```sh
