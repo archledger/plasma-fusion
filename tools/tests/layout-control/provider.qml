@@ -19,7 +19,8 @@ Item {
     property string readOwner: ""
     property string replyOwner: ""
     property var recipients: []
-    property string lastApplication: ""
+    property bool focusProbe: false
+    property var lastEligibleWindow: null
     property QtObject competingProvider: QtObject {}
     property bool competingProviderRejected: false
     property bool authorized: false
@@ -151,7 +152,7 @@ Item {
             packet: JSON.stringify({
                 consumer: row.consumer, epoch: epoch, revision: ++revision,
                 status: status, capable: capable, refusal: refusal,
-                request: row.request, application: lastApplication,
+                request: row.request,
                 competingProviderRejected: competingProviderRejected,
                 backendOwner: selfOwner, identityName: identityName
             })
@@ -179,6 +180,26 @@ Item {
         }
         reading = true;
         ownerLookup.call();
+    }
+
+    function traceFocus(event: string): void {
+        if (!focusProbe) {
+            return;
+        }
+        const active = Workspace.activeWindow;
+        const remembered = lastEligibleWindow;
+        console.info("layout-probe-focus", JSON.stringify({
+            event: event,
+            activeClass: Tiling.alive(active) ? String(active.resourceClass) : "",
+            activeEligible: Tiling.eligibleForMaster(active),
+            rememberedClass: Tiling.alive(remembered) ? String(remembered.resourceClass) : "",
+            rememberedAlive: Tiling.alive(remembered),
+            desktopId: Workspace.currentDesktop ? String(Workspace.currentDesktop.id) : "",
+            activityId: String(Workspace.currentActivity),
+            activeOutput: Workspace.activeScreen ? String(Workspace.activeScreen.name) : "",
+            rememberedOutput: Tiling.alive(remembered) && remembered.output
+                ? String(remembered.output.name) : ""
+        }));
     }
 
     function finishRead(): void {
@@ -246,14 +267,23 @@ Item {
         sequence: ""
         onActivated: {
             console.info("layout-probe: wake received");
+            probe.traceFocus("wake");
             probe.scan();
         }
     }
     Connections {
         target: Workspace
+        enabled: probe.authorized
         function onWindowActivated(window) {
             if (Tiling.eligibleForMaster(window)) {
-                probe.lastApplication = String(window.internalId);
+                probe.lastEligibleWindow = window;
+            }
+            probe.traceFocus("activation");
+        }
+        function onWindowRemoved(window) {
+            if (window === probe.lastEligibleWindow) {
+                probe.lastEligibleWindow = null;
+                probe.traceFocus("removed");
             }
         }
     }
@@ -264,6 +294,7 @@ Item {
             return;
         }
         dropRetirementFrame = KWin.readConfig("DropRetirementFrame", false) === true;
+        focusProbe = KWin.readConfig("FocusProbe", false) === true;
         const delay = Number(KWin.readConfig("ReplyDelayMs", 0));
         replyDelayMs = delay >= 0 && delay <= 3000 && delay % 1 === 0 ? delay : 0;
         if (typeof Workspace.transientTiling === "function") {

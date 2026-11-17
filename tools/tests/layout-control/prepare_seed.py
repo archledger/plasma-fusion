@@ -15,7 +15,8 @@ APPLET_ID = "org.plasmafusion.layoutprobe"
 
 
 def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
-            query_timeout_ms: int = 10000, reply_delay_ms: int = 0) -> None:
+            query_timeout_ms: int = 10000, reply_delay_ms: int = 0,
+            focus_probe: bool = False) -> None:
     build = Path.cwd() / "build"
     if build.is_symlink() or not output.resolve().is_relative_to(build.resolve()):
         raise ValueError("output must be under the current worktree's build directory")
@@ -27,10 +28,13 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         raise ValueError("reply delay must be between 0 and 3000 ms")
     if reply_delay_ms and reply_delay_ms <= query_timeout_ms:
         raise ValueError("reply delay must exceed the query deadline for this fault")
+    if focus_probe and (drop_retirement_frame or reply_delay_ms):
+        raise ValueError("focus observation requires normal transport")
     rules = stage / ".local/share/kwin/scripts/plasmafusion-placement/contents/ui/Tiling.js"
     if not rules.is_file():
         raise ValueError("missing staged Tiling.js")
     fixtures = {name: (HERE / name).read_bytes() for name in ("provider.qml", "consumer.qml")}
+    focus_helper = (HERE.parent / "lib/heldclient.py").read_bytes() if focus_probe else None
     output.mkdir(parents=True, mode=0o700)
     script = output / ".local/share/kwin/scripts" / SCRIPT_ID
     applet = output / ".local/share/plasma/plasmoids" / APPLET_ID
@@ -59,6 +63,8 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
     )
     entries += (f'<entry name="queryTimeoutMs" type="Int">'
                 f'<default>{query_timeout_ms}</default></entry>')
+    entries += ('<entry name="focusProbe" type="Bool"><default>'
+                f'{"true" if focus_probe else "false"}</default></entry>')
     (config / "main.xml").write_text(
         '<?xml version="1.0"?><kcfg xmlns="http://www.kde.org/standards/kcfg/1.0">'
         f'<kcfgfile name=""/><group name="General">{entries}</group></kcfg>'
@@ -69,14 +75,20 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         f"[Plugins]\n{SCRIPT_ID}Enabled=true\n\n[Script-{SCRIPT_ID}]\nProbeAuthorized=true\n"
         f"DropRetirementFrame={'true' if drop_retirement_frame else 'false'}\n"
         f"ReplyDelayMs={reply_delay_ms}\n"
+        f"FocusProbe={'true' if focus_probe else 'false'}\n"
         "\n[Desktops]\nNumber=2\nRows=1\n"
     )
-    (output / "probe-inputs.json").write_text(json.dumps({
+    inputs = {
         name: hashlib.sha256(data).hexdigest() for name, data in fixtures.items()
     } | {"Tiling.js": hashlib.sha256(rules.read_bytes()).hexdigest(),
          "kwinrc": hashlib.sha256((private_config / "kwinrc").read_bytes()).hexdigest(),
-         "main.xml": hashlib.sha256((config / "main.xml").read_bytes()).hexdigest()},
-        indent=2) + "\n")
+         "main.xml": hashlib.sha256((config / "main.xml").read_bytes()).hexdigest()}
+    if focus_helper is not None:
+        helper = output / ".local/lib/layout-control/heldclient.py"
+        helper.parent.mkdir(parents=True)
+        helper.write_bytes(focus_helper)
+        inputs["heldclient.py"] = hashlib.sha256(focus_helper).hexdigest()
+    (output / "probe-inputs.json").write_text(json.dumps(inputs, indent=2) + "\n")
 
 
 def main() -> None:
@@ -86,18 +98,22 @@ def main() -> None:
     parser.add_argument("--check-result", type=Path)
     parser.add_argument(
         "--scope",
-        choices=("first-slice", "silent-retirement", "reply-ordering", "query-timeout-late"),
+        choices=("first-slice", "silent-retirement", "reply-ordering",
+                 "query-timeout-late", "focus-observation"),
         default="first-slice",
     )
     parser.add_argument("--drop-retirement-frame", action="store_true",
                         help="fault injection in this private test seed only")
     parser.add_argument("--query-timeout-ms", type=int, help="private client one-shot deadline")
     parser.add_argument("--reply-delay-ms", type=int, help="private delayed-publication fault")
+    parser.add_argument("--focus-probe", action="store_true",
+                        help="private focus-event observation controls and client helper")
     args = parser.parse_args()
     try:
         if args.check_result is not None:
             if (args.stage is not None or args.output is not None or args.drop_retirement_frame
-                    or args.query_timeout_ms is not None or args.reply_delay_ms is not None):
+                    or args.query_timeout_ms is not None or args.reply_delay_ms is not None
+                    or args.focus_probe):
                 raise ValueError("--check-result cannot be combined with seed preparation")
             check_result(args.check_result, args.scope)
         else:
@@ -110,7 +126,8 @@ def main() -> None:
                     query_timeout_ms=(
                         args.query_timeout_ms if args.query_timeout_ms is not None else 10000
                     ),
-                    reply_delay_ms=args.reply_delay_ms if args.reply_delay_ms is not None else 0)
+                    reply_delay_ms=args.reply_delay_ms if args.reply_delay_ms is not None else 0,
+                    focus_probe=args.focus_probe)
     except (ValueError, OSError) as error:
         parser.exit(2, f"{error}\n")
 
@@ -134,6 +151,9 @@ def check_result(directory: Path, scope: str = "first-slice") -> None:
     elif scope == "query-timeout-late":
         receipt = directory / "query-timeout-result.json"
         checks = ["roundtrip-native", "query-timeout", "late-state"]
+    elif scope == "focus-observation":
+        receipt = directory / "focus-observation-result.json"
+        checks = ["roundtrip-native", "panel-keyboard-focus"]
     else:
         raise ValueError("unknown probe receipt scope")
     if not receipt.is_file():

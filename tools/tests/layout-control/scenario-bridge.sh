@@ -142,6 +142,151 @@ identity_owner=$(qdbus org.freedesktop.DBus /org/freedesktop/DBus \
     org.freedesktop.DBus.GetNameOwner "$identity_name")
 [[ $identity_owner == "$backend_owner" ]] || return 1
 
+focus_probe=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
+    --group Script-plasmafusion-layout-probe --key FocusProbe --default false)
+if [[ $focus_probe == true ]]; then
+    mkfifo "$OUT/focus-client.in"
+    exec {focus_input}<>"$OUT/focus-client.in"
+    python3 "$HOME/.local/lib/layout-control/heldclient.py" pf.focus.alpha 430x310 \
+        <"$OUT/focus-client.in" >"$OUT/focus-client.log" 2>&1 &
+    focus_client=$!
+    app_seen=false
+    for _ in {1..40}; do
+        if python3 - "$OUT/kwin.log" 2>>"$OUT/focus-activation-wait.log" <<'PY'
+import json, sys
+events = [json.loads(line.split("layout-probe-focus ", 1)[1])
+          for line in open(sys.argv[1]) if line.endswith("\n") and "layout-probe-focus " in line]
+assert any(row["event"] == "activation" and row["activeClass"] == "pf.focus.alpha"
+           and row["activeEligible"] and row["rememberedAlive"] for row in events)
+PY
+        then
+            app_seen=true
+            break
+        fi
+        sleep 0.1
+    done
+    if [[ $app_seen != true ]]; then
+        echo "FAIL: controlled app activation not observed" >&2
+        return 1
+    fi
+    python3 - "$OUT/plasmashell.log" "$OUT/focus-control.txt" <<'PY'
+import json, sys
+latest = {}
+for line in open(sys.argv[1]):
+    if line.endswith("\n") and "layout-probe-focus-control " in line:
+        row = json.loads(line.split("layout-probe-focus-control ", 1)[1])
+        latest[row["boot"]] = row
+assert len(latest) == 2, latest
+control = min(latest.values(), key=lambda row: row["x"])
+assert control["screen"] and control["x"] >= 0 and control["y"] >= 0, control
+with open(sys.argv[2], "w") as point:
+    point.write(f'{control["x"]} {control["y"]} {control["boot"]}\n')
+PY
+    read -r focus_x focus_y focus_boot <"$OUT/focus-control.txt"
+    pfinput "click $focus_x $focus_y"
+    popup_seen=false
+    for _ in {1..40}; do
+        if python3 - "$OUT/plasmashell.log" "$focus_boot" \
+            2>>"$OUT/focus-popup-wait.log" <<'PY'
+import json, sys
+rows = [json.loads(line.split("layout-probe-popup-focus ", 1)[1])
+        for line in open(sys.argv[1])
+        if line.endswith("\n") and "layout-probe-popup-focus " in line]
+assert any(row["boot"] == sys.argv[2] for row in rows)
+PY
+        then
+            popup_seen=true
+            break
+        fi
+        sleep 0.1
+    done
+    [[ $popup_seen == true ]] || { echo "FAIL: focus popup not ready" >&2; return 1; }
+    python3 - "$OUT/plasmashell.log" "$OUT/kwin.log" "$OUT/focus-key-baseline.json" <<'PY'
+import json, sys
+with open(sys.argv[3], "w") as baseline:
+    json.dump({"shellLines": len(open(sys.argv[1]).readlines()),
+               "kwinLines": len(open(sys.argv[2]).readlines())}, baseline)
+PY
+    pfinput "key space"
+    queried=false
+    for _ in {1..40}; do
+        if python3 - "$OUT/plasmashell.log" "$OUT/kwin.log" "$focus_boot" \
+            "$OUT/focus-observations-after-key.json" "$OUT/focus-key-baseline.json" \
+            2>>"$OUT/focus-query-wait.log" <<'PY'
+import json, sys
+baseline = json.load(open(sys.argv[5]))
+# One shell-log snapshot prevents a newer key from borrowing an older accepted-state snapshot.
+shell = open(sys.argv[1]).readlines()
+events = []
+latest = {}
+for index, line in enumerate(shell):
+    if not line.endswith("\n"):
+        continue
+    for kind in ("keyboard-query", "query", "observation"):
+        marker = f"layout-probe-{kind} "
+        if marker in line:
+            row = json.loads(line.split(marker, 1)[1])
+            events.append((index, kind, row))
+            if kind == "observation":
+                latest[row["boot"]] = (index, row)
+keys = [(index, row) for index, kind, row in events
+        if kind == "keyboard-query" and index >= baseline["shellLines"]]
+assert len(keys) == 1
+key_index, key = keys[0]
+assert key["boot"] == sys.argv[3] and key["activeFocus"] and key["key"] == 32
+queries = [(index, row) for index, kind, row in events
+           if kind == "query" and row["boot"] == key["boot"] and row["request"] == key["request"]]
+assert len(queries) == 1 and key_index < queries[0][0]
+accepted_index, selected = latest[key["boot"]]
+assert queries[0][0] < accepted_index and selected["phase"] == "online", selected
+assert selected["request"] == selected["packet"]["request"] == key["request"], selected
+assert selected["packet"]["consumer"] == key["boot"], selected
+events = [json.loads(line.split("layout-probe-focus ", 1)[1])
+          for index, line in enumerate(open(sys.argv[2]))
+          if index >= baseline["kwinLines"] and line.endswith("\n") and "layout-probe-focus " in line]
+wake = [row for row in events if row["event"] == "wake"][-1]
+assert wake["rememberedClass"] == "pf.focus.alpha" and wake["rememberedAlive"], wake
+assert wake["rememberedOutput"] == key["screen"] == wake["activeOutput"], (wake, key)
+assert wake["desktopId"] and wake["activityId"], wake
+with open(sys.argv[4], "w") as output:
+    json.dump([{"consumer": boot, "observation": row} for boot, (_, row) in latest.items()], output)
+print("PASS: actual popup keyboard query retains the eligible app and matching output identity")
+print(json.dumps(wake))
+PY
+        then
+            queried=true
+            break
+        fi
+        sleep 0.1
+    done
+    [[ $queried == true ]] || { echo "FAIL: keyboard focus query not confirmed" >&2; return 1; }
+    shot focus-keyboard
+    printf 'quit\n' >&"$focus_input"
+    wait "$focus_client"
+    exec {focus_input}>&-
+    removed=false
+    for _ in {1..40}; do
+        if python3 - "$OUT/kwin.log" 2>>"$OUT/focus-removal-wait.log" <<'PY'
+import json, sys
+events = [json.loads(line.split("layout-probe-focus ", 1)[1])
+          for line in open(sys.argv[1]) if line.endswith("\n") and "layout-probe-focus " in line]
+assert any(row["event"] == "removed" and not row["rememberedAlive"]
+           and row["rememberedClass"] == "" for row in events)
+print("PASS: controlled window removal clears the retained native candidate")
+PY
+        then
+            removed=true
+            break
+        fi
+        sleep 0.1
+    done
+    [[ $removed == true ]] || { echo "FAIL: removed target remained retained" >&2; return 1; }
+    printf '%s\n' '{"schema":1,"passed":true,' \
+        '"checks":["roundtrip-native","panel-keyboard-focus"]}' \
+        >"$OUT/focus-observation-result.json"
+    return 0
+fi
+
 if [[ $reply_delay_ms != 0 ]]; then
     python3 - "$OUT/observations-online.json" "$OUT/plasmashell.log" "$OUT/kwin.log" \
         "$OUT/timeout-identity-before.txt" "$OUT/timeout-owner-before.txt" <<'PY'

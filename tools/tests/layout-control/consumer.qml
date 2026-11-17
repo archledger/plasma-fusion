@@ -3,13 +3,21 @@
     SPDX-License-Identifier: GPL-2.0-or-later
 */
 import QtQuick
+import QtQuick.Controls as Controls
+import QtQuick.Layouts
+import QtQuick.Window
 import org.kde.plasma.plasmoid
+import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.workspace.dbus as DBus
 
 PlasmoidItem {
     id: probe
-    implicitWidth: 24
+    implicitWidth: focusEnabled ? 120 : 24
     implicitHeight: 24
+    Layout.minimumWidth: implicitWidth
+    Layout.preferredWidth: implicitWidth
+    readonly property bool focusEnabled: Plasmoid.configuration.focusProbe === true
+    property bool focusPopupOpen: false
     // Probe-only correlation, not a production identity or authentication mechanism.
     readonly property string boot: Date.now() + ":" + Math.random()
     property string phase: "unknown"
@@ -199,6 +207,76 @@ PlasmoidItem {
             boot: boot, phase: phase, epoch: epoch, revision: revision,
             accepted: accepted, packet: packet, request: requestNumber
         }));
+        if (focusEnabled && phase === "online") {
+            Qt.callLater(logFocusControl);
+        }
+    }
+
+    function logFocusControl(): void {
+        if (!focusEnabled || focusButton.width <= 0 || focusButton.height <= 0) {
+            return;
+        }
+        const point = focusButton.mapToGlobal(focusButton.width / 2, focusButton.height / 2);
+        console.info("layout-probe-focus-control", JSON.stringify({
+            boot: boot, x: point.x, y: point.y, screen: Screen.name
+        }));
+    }
+    Controls.Button {
+        id: focusButton
+        anchors.fill: parent
+        visible: probe.focusEnabled
+        enabled: visible
+        text: "Focus probe"
+        Accessible.name: "Open isolated focus probe"
+        onClicked: probe.focusPopupOpen = true
+    }
+    PlasmaCore.AppletPopup {
+        id: focusPopup
+        visualParent: focusButton
+        popupDirection: Qt.BottomEdge
+        margin: 8
+        floating: false
+        removeBorderStrategy: PlasmaCore.AppletPopup.Never
+        hideOnWindowDeactivate: true
+        visible: probe.focusEnabled && probe.focusPopupOpen
+        onVisibleChanged: {
+            if (visible) {
+                focusPopup.requestActivate();
+                focusQuery.forceActiveFocus();
+            } else {
+                probe.focusPopupOpen = false;
+            }
+        }
+        mainItem: Controls.Button {
+            id: focusQuery
+            implicitWidth: 180
+            implicitHeight: 60
+            focus: true
+            text: "Query focus"
+            Accessible.name: "Query isolated focus by keyboard"
+            onActiveFocusChanged: {
+                if (activeFocus && probe.focusEnabled) {
+                    console.info("layout-probe-popup-focus", JSON.stringify({
+                        boot: probe.boot, screen: Screen.name
+                    }));
+                }
+            }
+            Keys.onPressed: event => {
+                if ([Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter].includes(event.key)) {
+                    event.accepted = true;
+                    if (!event.isAutoRepeat) {
+                        console.info("layout-probe-keyboard-query", JSON.stringify({
+                            boot: probe.boot, key: event.key, activeFocus: focusQuery.activeFocus,
+                            screen: Screen.name, request: probe.requestNumber + 1
+                        }));
+                        probe.freshQuery(true);
+                    }
+                } else if (event.key === Qt.Key_Escape) {
+                    event.accepted = true;
+                    probe.focusPopupOpen = false;
+                }
+            }
+        }
     }
     DBus.SignalWatcher {
         enabled: !probe.stopped

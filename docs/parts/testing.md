@@ -193,6 +193,37 @@ remain rejected after the valid late response. A dedicated receipt is required. 
 read-only query checks, not qualification of mutating-action cancellation, retries or outcome
 acknowledgements.
 
+The focus observation case uses opt-in diagnostic controls, not production layout-control UI:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-focus --focus-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-focus tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-focus" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-focus --scope focus-observation
+```
+
+The seed copies and hashes the existing guarded `heldclient.py`; no shared helper is modified.
+A controlled Wayland app is activated, the native applet popup takes focus, and EIS sends Space
+to the focused control. The case requires the actual received key, a new correlated query, a
+live retained eligible app, matching Qt/native output names and candidate clearing after close.
+The key trace names its expected query generation before the
+[deferred query](https://doc.qt.io/qt-6/qml-qtqml-qt.html#callLater-method).
+One shell-log snapshot must show that receiver's key, matching outbound query and accepted state
+in order. Native wake evidence must follow the pre-key log baseline; an older online response
+cannot certify a newer key. Negative checker fixtures exercise this stale-snapshot case.
+It records activation order instead of assuming that keyboard focus and KWin's active window
+are identical. App classes stay in backend diagnostics; the client packet no longer includes
+the old window identifier. Interactive test controls have explicit accessible names and use
+native Qt controls/AppletPopup behavior.
+
+This receipt establishes focus/event/output-name feasibility only. The retained observation
+candidate is not a prepared token or guarded captured-view contract: focus-change/view-change
+refusal, competing controls, output-object lifetime validation and tiler integration remain
+separate G0 work. The diagnostic dimensions are not production design values.
+
 `--check-result` requires the explicit selected-scope receipt and successful inner scenario/session
 codes. The wrapper's exit code alone is insufficient. `reload-result.json` and
 `identity-fence-result.json` record the additional assertions; none of these certifies full G0.

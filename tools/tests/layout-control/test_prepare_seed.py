@@ -64,6 +64,7 @@ class SeedTests(unittest.TestCase):
         self.assertIn("ProbeAuthorized=true", (self.output / ".config/kwinrc").read_text())
         self.assertIn("DropRetirementFrame=false", (self.output / ".config/kwinrc").read_text())
         self.assertIn("ReplyDelayMs=0", (self.output / ".config/kwinrc").read_text())
+        self.assertIn("FocusProbe=false", (self.output / ".config/kwinrc").read_text())
         self.assertEqual(self.query_timeout_default(), 10000)
         self.assertFalse((self.output / ".config/plasma-org.kde.plasma.desktop-appletsrc").exists())
 
@@ -244,6 +245,37 @@ class SeedTests(unittest.TestCase):
             "checks": ["roundtrip-native", "query-timeout", "late-state"],
         }))
         result = self.run_check("--scope", "query-timeout-late")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_focus_observation_is_an_explicit_private_seed(self):
+        result = self.run_seed("--focus-probe")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("FocusProbe=true", (self.output / ".config/kwinrc").read_text())
+        helper = self.output / ".local/lib/layout-control/heldclient.py"
+        self.assertEqual(helper.read_bytes(),
+                         (PREPARER.parent.parent / "lib/heldclient.py").read_bytes())
+        inputs = json.loads((self.output / "probe-inputs.json").read_text())
+        self.assertEqual(inputs["heldclient.py"], hashlib.sha256(helper.read_bytes()).hexdigest())
+
+    def test_focus_observation_does_not_enable_other_fault_modes(self):
+        result = self.run_seed("--focus-probe", "--drop-retirement-frame")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("focus observation requires normal transport", result.stderr)
+        self.assertFalse(self.output.exists())
+
+    def test_focus_scope_requires_its_own_receipt(self):
+        self.result_files()
+        result = self.run_check("--scope", "focus-observation")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing probe receipt", result.stderr)
+
+    def test_focus_scope_accepts_only_the_explicit_observation_receipt(self):
+        self.result_files()
+        (self.output / "focus-observation-result.json").write_text(json.dumps({
+            "schema": 1, "passed": True,
+            "checks": ["roundtrip-native", "panel-keyboard-focus"],
+        }))
+        result = self.run_check("--scope", "focus-observation")
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
@@ -608,6 +640,117 @@ class PublicationLifetimeTests(unittest.TestCase):
     def test_empty_same_shell_read_does_not_retarget_the_existing_batch(self):
         result = self.run_empty_read(":1.10")
         self.assertEqual(result, {"pending": True, "stops": 0, "destroys": 0})
+
+
+class FocusObservationTests(unittest.TestCase):
+    def run_node(self, script: str):
+        result = subprocess.run(["node", "-"], input=script, capture_output=True, text=True,
+                                timeout=10, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_panel_activation_preserves_the_last_eligible_object(self):
+        script = (
+            "const probe={lastEligibleWindow:null,lastApplication:'',focusProbe:true};"
+            "probe.traceFocus=()=>{};console.info=()=>{};"
+            "const Tiling={eligibleForMaster:window=>!!window&&window.eligible};"
+        )
+        script += qml_handler("onWindowActivated", "provider.qml")
+        script += ("const app={eligible:true,resourceClass:'pf.focus.alpha',"
+                   "internalId:'private-a'};"
+                   "onWindowActivated(app);"
+                   "onWindowActivated({eligible:false,resourceClass:'plasmashell'});"
+                   "process.stdout.write(JSON.stringify(probe.lastEligibleWindow===app));")
+        self.assertTrue(self.run_node(script))
+
+    def test_window_identifiers_do_not_enter_the_client_packet(self):
+        probe = {
+            "epoch": "a" * 32, "revision": 0, "capable": True, "refusal": -1,
+            "lastApplication": "private-window-id", "competingProviderRejected": True,
+            "selfOwner": ":1.0", "identityName": "org.plasmafusion.LayoutProbe.p" + "a" * 32,
+        }
+        script = "const probe=" + json.dumps(probe) + ";"
+        script += ("console.info=()=>{};const writer={arguments:[],call:()=>{}};"
+                   "const publish=(function(){with(probe){return ")
+        script += qml_handler("publish", "provider.qml") + ";}})();"
+        script += ("publish('online',[{id:1,consumer:'current',request:1}],':1.10');"
+                   "const text=writer.arguments[0];"
+                   "const messages=JSON.parse(text.slice('var messages = '.length,"
+                   "text.indexOf(';var written=0;')));"
+                   "process.stdout.write(messages[0].packet);")
+        self.assertNotIn("application", self.run_node(script))
+
+    def test_keyboard_trace_records_the_query_it_initiates(self):
+        source = Path(__file__).with_name("consumer.qml").read_text()
+        handler = re.search(r"Keys.onPressed: event => (\{.*?\n            \})", source, re.S)[1]
+        script = (
+            "const records=[];console.info=(name,row)=>records.push(JSON.parse(row));"
+            "const Qt={Key_Space:32,Key_Return:13,Key_Enter:14,Key_Escape:27};"
+            "const Screen={name:'Virtual-0'};const focusQuery={activeFocus:true};"
+            "const probe={boot:'current',requestNumber:7,freshQuery:()=>++probe.requestNumber};"
+            "const event={key:32,isAutoRepeat:false,accepted:false};(event=>"
+        ) + handler + ")(event);process.stdout.write(JSON.stringify(records[0]));"
+        self.assertEqual(self.run_node(script)["request"], 8)
+
+    def run_focus_receipt(self, fault=None):
+        source = Path(__file__).with_name("scenario-bridge.sh").read_text()
+        section = source.split("    queried=false\n", 1)[1]
+        checker = section.split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
+        online = {"boot": "current", "phase": "online", "request": 2,
+                  "packet": {"consumer": "current", "request": 2}}
+        key = {"boot": "current", "key": 32, "activeFocus": True,
+               "screen": "Virtual-0", "request": 3}
+        outbound = {"boot": "current", "request": 3}
+        accepted = {"boot": "current", "phase": "online", "request": 3,
+                    "packet": {"consumer": "current", "request": 3}}
+        wake = {"event": "wake", "rememberedClass": "pf.focus.alpha",
+                "rememberedAlive": True, "rememberedOutput": "Virtual-0",
+                "activeOutput": "Virtual-0", "desktopId": "desktop", "activityId": "activity"}
+        events = [("observation", online), ("keyboard-query", key), ("query", outbound)]
+        if fault == "wrong-outbound":
+            outbound["request"] = 2
+        if fault == "wrong-receiver":
+            accepted["packet"]["consumer"] = "other"
+        if fault == "confirmation-before-key":
+            events.insert(0, ("observation", accepted))
+        elif fault == "confirmation-before-outbound":
+            events.insert(2, ("observation", accepted))
+        elif fault != "pre-key-online-only":
+            events.append(("observation", accepted))
+        with tempfile.TemporaryDirectory(prefix="pf-focus-check-", dir="/tmp/opencode") as scratch:
+            root = Path(scratch)
+            shell = root / "shell.log"
+            shell.write_text("".join(
+                f"qml: layout-probe-{name} {json.dumps(row)}\n" for name, row in events
+            ))
+            native = root / "kwin.log"
+            native.write_text("qml: layout-probe-focus " + json.dumps(wake) + "\n")
+            # Keep the old independent snapshot so the RED case reproduces the mixed-read bug.
+            observations = root / "observations.json"
+            observations.write_text(json.dumps([{"consumer": "current", "observation": online}]))
+            baseline = root / "baseline.json"
+            baseline.write_text(json.dumps({
+                "shellLines": 0, "kwinLines": 1 if fault == "pre-key-wake-only" else 0,
+            }))
+            return subprocess.run(
+                [sys.executable, "-", str(shell), str(native), "current",
+                 str(observations), str(baseline)], input=checker, capture_output=True,
+                text=True, timeout=10, check=False,
+            )
+
+    def test_focus_receipt_follows_the_keys_actual_query_generation(self):
+        result = self.run_focus_receipt()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_focus_receipt_rejects_a_pre_key_online_snapshot(self):
+        result = self.run_focus_receipt("pre-key-online-only")
+        self.assertNotEqual(result.returncode, 0, "old online state certified a new key query")
+
+    def test_focus_receipt_requires_ordered_outbound_and_confirmation(self):
+        for fault in ("wrong-outbound", "wrong-receiver", "confirmation-before-key",
+                      "confirmation-before-outbound", "pre-key-wake-only"):
+            with self.subTest(fault=fault):
+                self.assertNotEqual(self.run_focus_receipt(fault).returncode, 0, fault)
 
 
 class RetirementDeliveryTests(unittest.TestCase):
