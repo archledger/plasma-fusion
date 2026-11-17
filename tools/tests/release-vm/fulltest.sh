@@ -122,6 +122,17 @@ wait_plasma() { # wait for a settled desktop; none within five minutes fails the
     sleep 5
   done
   [ "$up" = yes ] || { log "FAIL: no Plasma session came up"; exit 1; }
+  # Plasma's start-up ends with the splash (plasma-ksplash.service, activating while it is up).
+  # A start-up stage that misses KSplash keeps it up until its own timeout, about 30 s: KSplash's
+  # D-Bus activation from the session before can still be pending at a quick new login, and fail
+  # just after the new splash starts (2026-11-17, the update round: the splash for 31.9 s, the
+  # gesture lock's first change unseen at second 32). Checks wait for the start-up's end.
+  local splash=''
+  for _ in $(seq 1 30); do
+    splash=$(vm ssh "$name" 'systemctl --user is-active plasma-ksplash.service' 2>/dev/null)
+    case $splash in active | activating) sleep 3 ;; *) splash=ended; break ;; esac
+  done
+  [ "$splash" = ended ] || { log "FAIL: the session's start-up did not end (the splash still $splash after 90 s)"; exit 1; }
   sleep 25
   # Plasma's welcome app opens on a first login; it would cover the desktop in the screenshots.
   vm ssh "$name" 'for p in $(pgrep -u pf -x plasma-welcome); do kill "$p"; done' 2>/dev/null || true

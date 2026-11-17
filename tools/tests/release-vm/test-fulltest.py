@@ -8,8 +8,8 @@ a set that is
 half the fork, not locked, not the metapackage's build (by version, or by the repository it came
 from: #197), or whose restore record is wrong; a repository that is there and switched off; a set
 that holds without the lock; a lock list that cannot be read; a status that does not see the fork
-or carries a note; no new session after the logout, or no desktop after it; an idle navigation
-effect; a journal that cannot be read; a switcher that does not switch, or lands on no test
+or carries a note; no new session after the logout, or no desktop after it; a start-up that does
+not end; an idle navigation effect; a journal that cannot be read; a switcher that does not switch, or lands on no test
 window; a tiler without a session; a restore whose plan names another KWin, that leaves the fork
 or the repository, or takes the packages; in switch mode a record directory that is not root's
 alone; a status that takes the session after the restore for a fork installed by hand; a note
@@ -305,6 +305,8 @@ case "$cmd" in
           *) echo "LookAndFeelPackage=org.kde.breeze.desktop" ;;
         esac ;;
       *'date +%s'*) echo 100 ;;
+      *'is-active plasma-ksplash.service'*)
+        if [ "$FAULT" = splash-stuck ]; then echo activating; else echo inactive; fi ;;
       *'grep -m 1 "^PF_VERSION="'*) echo "PF_VERSION='0.7.0'" ;;
       *) exit 0 ;;
     esac ;;
@@ -737,6 +739,11 @@ class FullLaneTest(unittest.TestCase):
     def test_uninstall_that_leaves_the_lock(self):
         result = self.rejected("uninstall-leaves-lock", "FAIL: the uninstall")
         self.assertIn("FAIL kwin is not locked", result.stdout)
+
+    def test_start_up_that_does_not_end(self):
+        # The splash still up: the session's start-up has not ended, and no check runs in it.
+        result = self.rejected("splash-stuck", "FAIL: the session's start-up did not end (the splash still activating after 90 s)")
+        self.assertNotIn("screenshot 01-stock", result.stdout)
 
     def test_vm_that_does_not_come_up(self):
         self.rejected("wait", "FAIL: the VM did not come up")

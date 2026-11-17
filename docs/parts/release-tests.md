@@ -175,7 +175,10 @@ live one. Results: `$PF_VM_HOME/results/NAME-full/`, `NAME-full-switch/` and `NA
 
 Every check is a line in `steps.log` (`ok` or `FAIL`, with what was found); a phase fails at its
 end, with all of its checks known. Every login must bring a new session on tty1 and a running
-shell and KWin within five minutes, or the run fails there. `fresh`, on a system without Plasma
+shell and KWin within five minutes, and the session's start-up must end within 90 seconds after
+that, the splash's unit (`plasma-ksplash.service`) no longer active, or the run fails there. A
+start-up stage that misses KSplash keeps the splash up until its own timeout, and checks made
+before then race the session's start. `fresh`, on a system without Plasma
 Fusion:
 
 | Phase | Checks |
@@ -223,9 +226,9 @@ run on it, and that they work by their fallbacks on stock KWin with the same pac
 does with its property is the subject of the parts' own tests (kwin.md, navigation-cpp.md).
 
 `test-fulltest.py` (CI `build`) runs the lane against a stand-in VM: the three modes pass
-(`update` also with an unchanged pin), and fifty fault tests, one fault each, fail the run, stop
-the VM and keep the overlay: thirty-six for `fresh` and `switch` (from a dry run that changes
-something to a plan that enables another project than the stamped one) and fourteen for
+(`update` also with an unchanged pin), and fifty-one fault tests, one fault each, fail the run,
+stop the VM and keep the overlay: thirty-seven for `fresh` and `switch` (from a dry run that
+changes something to a plan that enables another project than the stamped one) and fourteen for
 `update` (from a move that leaves the live project to an update whose login is in safe mode);
 the file's first lines name them. Not every check has a fault: the lane's plumbing (the copies
 into the VM, a crash collector that cannot count), the wording of the `--full` plan and
