@@ -40,6 +40,8 @@ tools/tests/release-vm/run-all.sh fedora44:copr:splash arch:aur:splash ubuntu261
 # the uninstall; then the switch from the published stock profile
 tools/tests/release-vm/fulltest.sh fedora44
 tools/tests/release-vm/fulltest.sh fedora44 switch
+# and the update from the last release's full profile to a candidate's (ADR 0001's round)
+PF_FULL_REPO=archledger/plasma-fusion-full-candidates tools/tests/release-vm/fulltest.sh fedora44 update
 ```
 
 | Script | What |
@@ -54,8 +56,8 @@ tools/tests/release-vm/fulltest.sh fedora44 switch
 | `greeter-compare.py SHOT` | a greeter screenshot against `design/previews/Login.webp` where the board shows only its background (four regions: mid-left, the sun, the far right, the hills between the session pill and the power buttons), the board scaled and cropped to the screen as the theme fills it: each region's mean colour within 4/255 (`--expect match`) or some region more than 12/255 off (`--expect differ`, another theme). Needs Pillow (on NixOS `nix-shell -p python3Packages.pillow`) |
 | `splashtest.sh NAME LANE` | the boot splash on real boots, in one VM from its base: the kernel arguments of a desktop's boot through the system's boot loader (`quiet splash`; `plymouth.ignore-serial-consoles`, since the VMs also log to a serial console and Plymouth then shows only its text splash; `plymouth.debug` for Plymouth's log; Fedora's `grubby`, a drop-in in `/etc/default/grub.d` on Debian, Ubuntu and neon, `/etc/default/grub` on Arch); the installer as `vmtest.sh` runs it, which must offer the boot splash step; a reboot with the system's own splash (installing the package never changes it), which must not look like the Splash board; `plymouth-install.sh --select`, which must select the theme, with its installed packages recorded; a reboot with it: one frame must match the board (`splash-capture.py`), Plymouth's log must show a pixel display (not the text splash) and the script plugin; no crash; the installer's `uninstall`, which leaves no theme, state or recorded package, and the exact original theme selected again (on Arch, no Plymouth); a reboot without the board's look. Each captured boot runs without the tty1 log-in, since Plasma Fusion's log-in splash (KSplash) looks like the board too: the lane sets the base's autologin drop-in aside before the reboot and logs in after the capture, and the desktop must start. Results in `NAME-splash/` (`steps.log`, each boot's command line, Plymouth's log and capture: `frames.tsv`, the closest frame, the first match, the last frame and a sheet of every frame) |
 | `splash-capture.py QMP OUT -- CMD` | runs `CMD` (the reboot), waits for QEMU's `RESET` event, then a screendump every 0.3 s for 60 s (`PF_SPLASH_SECONDS` in `splashtest.sh`), only the frames that changed kept in order; each measured against `design/previews/Splash.webp`: the logo's three circles where the theme centres its 1440x900 frame at the scale its script picks, the wallpaper where the script scales it to cover the screen (the sun, a plain area, the lower middle, the top): every region within 6/255 in some frame (`--expect match`) or more than 18/255 off in every frame (`--expect differ`). Needs Pillow |
-| `fulltest.sh NAME [fresh\|switch]` | the full profile in one Fedora VM from its base (below, "The full profile's lane"): the installer stamped as a release stamps it, `--full` (dry run, packages, lock, record, setup), a new login (status, both gated features, the tiler, no crash), `--full-restore` and the fallbacks on stock KWin, uninstall; `switch`: the published stock profile first, `--full` on top, uninstall on the full system |
-| `full-guest.sh` | the guest's side of `fulltest.sh`, copied into the VM: the package facts (`pkg`, `from`, `locklist`, `lock`, `record`, `pin`, `tag`, `repo`, `recordfile` lines; `from` names the repository each of the six came from; a package rpm cannot answer for is `error`, not `none`; a lock list dnf cannot read is `failed`, not empty; the repository as `dnf repo list` has it: enabled, disabled or not there), the journal of the session's KWin, the active window (a moment's KWin script), the test windows, the gesture lock as quick settings writes it, the tiler's shortcut |
+| `fulltest.sh NAME [fresh\|switch\|update]` | the full profile in one Fedora VM from its base (below, "The full profile's lane"): the installer stamped as a release stamps it, `--full` (dry run, packages, lock, record, setup), a new login (status, both gated features, the tiler, no crash), `--full-restore` and the fallbacks on stock KWin, uninstall; `switch`: the published stock profile first, `--full` on top, uninstall on the full system; `update`: the last release's full profile from the live project, the move to the candidate's project, `install.sh update` in one rpm transaction to the new pin, the same checks on the new fork, uninstall on the full system |
+| `full-guest.sh` | the guest's side of `fulltest.sh`, copied into the VM: the package facts (`pkg`, `tid`, `from`, `locklist`, `lock`, `record`, `pin`, `tag`, `repo`, `recordfile` lines; `tid` is the rpm transaction that installed each package, rpm's `INSTALLTID`; `from` names the repository each of the six came from; a package rpm cannot answer for is `error`, not `none`; a lock list dnf cannot read is `failed`, not empty; the repository as `dnf repo list` has it: enabled, disabled or not there), the journal of the session's KWin, the active window (a moment's KWin script), the test windows, the gesture lock as quick settings writes it, the tiler's shortcut |
 | `vm-keys.py QMP STEP...` | keys on the VM's keyboard with screenshots in between, through QEMU's QMP socket (`down:alt tap:tab sleep:2 shot:FILE up:alt`): a switcher is on the screen only while its modifier is held, which a shortcut called over the bus cannot do; keys still down at the end are released |
 | `lane-env.sh` | the installer and its test-mode environment for one lane (sourced by `vmtest.sh`, `sddmtest.sh` and `splashtest.sh`; `fulltest.sh` takes the published installer through it) |
 | `refresh.sh NAME...` | each base updated the way its system updates itself (Fedora: `dnf upgrade`, with the RPM database verified, and rebuilt if it fails, before the upgrade and after it; Arch: `pacman -Syu`; KDE neon: `apt-get full-upgrade --allow-downgrades`, as neon's updater; Ubuntu, Debian: `apt-get full-upgrade`; on the apt systems `apt-get update --error-on=any`, since without it an index that failed to download is only a warning and the update exits 0; NixOS: nothing), the Plasma versions after; a failed update, or a VM that cannot be stopped after it, fails it |
@@ -169,11 +171,15 @@ against the VM's KWin, #198) and `--full-repo` (`PF_FULL_REPO`, default the live
 carries a candidate (RELEASING.md, step 2). `PF_PUBLIC=1` takes the published
 installer instead, after a release, and that one names the live project. Before a VM starts, the
 lane refuses a `PF_FULL_REPO` that is not OWNER/NAME, and `PF_PUBLIC=1` with any project but the
-live one. Results: `$PF_VM_HOME/results/NAME-full/` and `NAME-full-switch/`.
+live one. Results: `$PF_VM_HOME/results/NAME-full/`, `NAME-full-switch/` and `NAME-full-update/`.
 
 Every check is a line in `steps.log` (`ok` or `FAIL`, with what was found); a phase fails at its
 end, with all of its checks known. Every login must bring a new session on tty1 and a running
-shell and KWin within five minutes, or the run fails there. `fresh`, on a system without Plasma
+shell and KWin within five minutes, and the session's start-up must end within 90 seconds after
+that, the splash's unit (`plasma-ksplash.service`) read as `inactive` or `failed`, or the run
+fails there (any other state, or one that cannot be read, is read again and counts as no end). A
+start-up stage that misses KSplash keeps the splash up until its own timeout, and checks made
+before then race the session's start. `fresh`, on a system without Plasma
 Fusion:
 
 | Phase | Checks |
@@ -198,16 +204,37 @@ cannot read the record and that it is there with the stock versions, read as roo
 tell whether the uninstall then synced to the recorded versions or to the names alone, since
 both are the same KWin in the VM. The installer's own tests tell the two apart.
 
+`update` is ADR 0001's security-cadence round, from the last release's full profile to a
+candidate's (RELEASING.md, step 2). It starts with the published installer's `--full`, from the
+live project (`lane-env.sh`), with the `--full` package checks against the live project's
+repository, the release's pin and tag in status, and no crash. Its login check is logged, not
+checked: a release from before #199 recorded no KWin version, so on a stock KWin of another
+version than its pin that login is in safe mode, as its users have it until they update. Then
+the VM moves to the stamped project (`dnf copr remove` the live one, `dnf copr enable` the
+candidate's): the candidate's repository enabled, the live one gone, every package, lock and
+record as before. The tree's installer runs `update`. Its dry run takes the lock off, upgrades
+the six packages and the metapackage in one dnf command, installs nothing apart, locks the set
+again and changes nothing. After the update come the `--full` package checks at the pin the stamp
+names, with the six from the stamped project. The metapackage, the six packages and (when the
+pin moves) the KWin packages carry one rpm transaction id (`INSTALLTID`) that no package had
+before; with the pin unchanged the KWin packages keep theirs. The lock holds. Then the new login
+and the features on the new fork as in `fresh`, and `uninstall` on the full system, as in
+`switch`. Before a VM starts, the lane refuses `update` with the live project as `PF_FULL_REPO`
+(and so with `PF_PUBLIC=1`): the live project holds the release it starts from.
+
 What the lane shows of the two gated features is that the fork advertises them, that the features
 run on it, and that they work by their fallbacks on stock KWin with the same packages. What each
 does with its property is the subject of the parts' own tests (kwin.md, navigation-cpp.md).
 
-`test-fulltest.py` (CI `build`) runs the lane against a stand-in VM: both modes pass, and
-thirty-six faults, one test each, fail the run, stop the VM and keep the overlay (from a dry
-run that changes something to a plan that enables another project than the stamped one; the
-file's first lines name them). Not every check has a fault: the lane's plumbing (the copies into
-the VM, a crash collector that cannot count) and the wording of the `--full` plan are covered by
-the passing runs only. Of the stamp, the tests check the project it is given (the live one by
+`test-fulltest.py` (CI `build`) runs the lane against a stand-in VM: the three modes pass
+(`update` also with an unchanged pin), and fifty-three fault tests, one fault each, fail the run,
+stop the VM and keep the overlay: thirty-nine for `fresh` and `switch` (from a dry run that
+changes something to a plan that enables another project than the stamped one) and fourteen for
+`update` (from a move that leaves the live project to an update whose login is in safe mode);
+the file's first lines name them. Not every check has a fault: the lane's plumbing (the copies
+into the VM, a crash collector that cannot count), the wording of the `--full` plan and
+`update`'s check that its transaction is a new one (the pin and repository checks fail first
+wherever it would) are covered by the passing runs only. Of the stamp, the tests check the project it is given (the live one by
 default, the candidates' when named) and that the lock check leaves out that project's
 repository by its exact id.
 

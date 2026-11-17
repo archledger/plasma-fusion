@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# fulltest.sh NAME [fresh|switch]: the full profile's release test in one Fedora VM (ADR 0001's
+# fulltest.sh NAME [fresh|switch|update]: the full profile's release test in one Fedora VM (ADR 0001's
 # verification, docs/full-profile.md), a fresh overlay of its provisioned base. The installer is
 # this tree's, stamped as a release stamps it (packaging/stamp-installer.sh --full-fedora), and
 # the packages are the full Copr project's own builds - the fork tag's KWin and the metapackage:
@@ -22,6 +22,16 @@
 #                    restore record's directory is root's alone here, as the login screen's
 #                    setup leaves it (greeter-apply.sh): the installer runs as the user and
 #                    has to read its record through sudo.
+#   update           the last release's full profile first - the published installer's --full,
+#                    from the live project - then the VM moves to the stamped project (a
+#                    candidate's; the live one holds the release it starts from) and this tree's
+#                    installer runs update: one rpm transaction takes the metapackage, the six
+#                    packages and, when the pin moves, the KWin packages, and the lock comes back
+#                    at the new pin (ADR 0001's security-cadence round, docs/RELEASING.md step 2).
+#                    Then the same checks on the new fork, and uninstall on the full system, as in
+#                    switch. The release's own login check is logged, not checked: one from before
+#                    #199 recorded no KWin version, so on a stock KWin of another version than its
+#                    pin its first login is in safe mode, as its users have it until they update.
 #
 # The gated features (ADR 0001): the switcher's thumbnails (plasmaFusionThumbnailSourceLifecycle-
 # Version: a hidden card lets go of its window; on stock it keeps it) and the navigation effect
@@ -32,8 +42,9 @@
 #
 # PF_PUBLIC=1: after a release, the published installer for --full too. PF_FULL_REPO: the full
 # profile's Copr project the installer is stamped with (default archledger/plasma-fusion-full; a
-# candidate's own project, issue #178, for a candidate: docs/RELEASING.md). Results:
-# ~/pf-vm/results/NAME-full/ (switch: NAME-full-switch/).
+# candidate's own project, issue #178, for a candidate: docs/RELEASING.md); update needs another
+# project than the live one and refuses PF_PUBLIC=1. Results: ~/pf-vm/results/NAME-full/ (switch:
+# NAME-full-switch/, update: NAME-full-update/).
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
@@ -45,15 +56,26 @@ name=$1 mode=${2:-fresh} lane=copr
 case $mode in
   fresh) OUT=$H/results/$name-full ;;
   switch) OUT=$H/results/$name-full-switch ;;
-  *) echo "usage: fulltest.sh NAME [fresh|switch]" >&2; exit 2 ;;
+  update) OUT=$H/results/$name-full-update ;;
+  *) echo "usage: fulltest.sh NAME [fresh|switch|update]" >&2; exit 2 ;;
 esac
 FULL_REPO=${PF_FULL_REPO:-archledger/plasma-fusion-full}
 # OWNER/NAME, as the stamp takes it: it goes into commands the guest's shell runs.
 [[ $FULL_REPO =~ ^[a-z0-9._-]+/[a-z0-9._-]+$ ]] || { echo "PF_FULL_REPO is not a Copr project (OWNER/NAME): '$FULL_REPO'" >&2; exit 2; }
 # dnf's id of the project's repository, whole: the live project's name is a prefix of others.
 FULL_ID="copr:copr.fedorainfracloud.org:${FULL_REPO%%/*}:${FULL_REPO#*/}"
-if [ "${PF_PUBLIC:-}" = 1 ] && [ "$FULL_REPO" != archledger/plasma-fusion-full ]; then
+# The live project, where the published releases' full profile comes from.
+LIVE=archledger/plasma-fusion-full
+LIVE_ID="copr:copr.fedorainfracloud.org:archledger:plasma-fusion-full"
+if [ "${PF_PUBLIC:-}" = 1 ] && [ "$FULL_REPO" != "$LIVE" ]; then
   echo "PF_PUBLIC=1 takes the published installer, which names the live project, not $FULL_REPO" >&2
+  exit 2
+fi
+# The update comes from another project than the release it starts from (and so never with
+# PF_PUBLIC=1, which names the live one): with the live project on both sides there would be
+# nothing to update.
+if [ "$mode" = update ] && [ "$FULL_REPO" = "$LIVE" ]; then
+  echo "update needs PF_FULL_REPO to name the candidate's project: $LIVE holds the release it starts from" >&2
   exit 2
 fi
 rm -rf "$OUT" && mkdir -p "$OUT"
@@ -100,6 +122,24 @@ wait_plasma() { # wait for a settled desktop; none within five minutes fails the
     sleep 5
   done
   [ "$up" = yes ] || { log "FAIL: no Plasma session came up"; exit 1; }
+  # Plasma's start-up ends with the splash (plasma-ksplash.service, activating while it is up).
+  # A start-up stage that misses KSplash keeps it up until its own timeout, about 30 s: KSplash's
+  # D-Bus activation from the session before can still be pending at a quick new login, and fail
+  # just after the new splash starts (2026-11-17, the update round: the splash for 31.9 s, the
+  # gesture lock's first change unseen at second 32). Checks wait for the start-up's end.
+  # Only an explicit end counts: inactive (the splash's oneshot unit has finished; a session
+  # without KSplash reads the same) or failed (it ended with an error). Any other state, or none
+  # read (ssh, the user's service manager), is read again.
+  local splash=''
+  for _ in $(seq 1 30); do
+    splash=$(vm ssh "$name" 'systemctl --user is-active plasma-ksplash.service' 2>/dev/null)
+    case $splash in inactive | failed) break ;; *) sleep 3 ;; esac
+  done
+  case $splash in
+    inactive | failed) ;;
+    '') log "FAIL: the session's start-up state could not be read (systemctl --user over ssh, 90 s)"; exit 1 ;;
+    *) log "FAIL: the session's start-up did not end (the splash still $splash after 90 s)"; exit 1 ;;
+  esac
   sleep 25
   # Plasma's welcome app opens on a first login; it would cover the desktop in the screenshots.
   vm ssh "$name" 'for p in $(pgrep -u pf -x plasma-welcome); do kill "$p"; done' 2>/dev/null || true
@@ -155,7 +195,9 @@ hasnot() { # WHAT FILE PATTERN: no line of the file matches
   fi
 }
 phase() { [ "$bad" = 0 ] || { log "FAIL: $1"; exit 1; }; }
-facts() { vm ssh "$name" "bash ~/full-guest.sh facts $FULL_REPO" >"$OUT/$1" 2>&1 || { log "FAIL: could not read the package facts ($1)"; exit 1; }; }
+facts() { # FILE [OWNER/NAME]: the package facts, the repository line for that project (default the stamped one)
+  vm ssh "$name" "bash ~/full-guest.sh facts ${2:-$FULL_REPO}" >"$OUT/$1" 2>&1 || { log "FAIL: could not read the package facts ($1)"; exit 1; }
+}
 fact() { # FILE KEY [NAME]: "pin EVR" -> EVR; "pkg kwin EVR" -> EVR
   awk -v k="$2" -v n="${3:-}" '$1 == k && (n == "" || $2 == n) { print (n == "" ? $2 : $3); exit }' "$OUT/$1"
 }
@@ -172,10 +214,11 @@ kwinlog() { # FILE
   guest kwinlog >"$OUT/$1" 2>&1 || { log "FAIL: the journal of the session's KWin could not be read ($1)"; exit 1; }
 }
 
-# The package side of the full profile. FILE: facts; the stock KWin it replaced: STOCK[].
+# The package side of the full profile. FILE: facts; ID: the Copr repository the six came from
+# (default the stamped project's); the stock KWin it replaced: STOCK[].
 declare -A STOCK
-check_full_packages() {
-  local f=$1 pin meta p
+check_full_packages() { # FILE [ID]
+  local f=$1 id=${2:-$FULL_ID} pin meta p
   pin=$(fact "$f" pin) meta=$(fact "$f" pkg plasma-fusion-full)
   if is_fork "$pin"; then
     log "  ok   the metapackage's record names the pin: $pin (fork tag $(fact "$f" tag))"
@@ -197,10 +240,38 @@ check_full_packages() {
   for p in $SIX; do want "$p is the metapackage's build" "$(fact "$f" pkg "$p")" "$meta"; done
   # The version alone does not say whose build it is: the stock project can build the same one.
   for p in $SIX; do
-    want "$p comes from the full profile's repository" "$(fact "$f" from "$p")" "$FULL_ID"
+    want "$p comes from the full profile's repository" "$(fact "$f" from "$p")" "$id"
   done
   want "the lock list could be read" "$(fact "$f" locklist)" ok
   want "the full profile's repository is enabled" "$(fact "$f" repo)" enabled
+}
+# The set holds against the distribution's own packages, and by the lock: with the full
+# profile's repository out of the question, a sync to what Fedora offers finds nothing it may
+# do, and no conflict it has to skip. Without the lock dnf ends with the same words, after a
+# "Problem:" report that the metapackage's exact requires stand in the way.
+lock_holds() { # FILE
+  vm ssh "$name" "sudo dnf -q --assumeno --disablerepo='$FULL_ID' distro-sync $KWIN" >"$OUT/$1" 2>&1
+  has "a sync to the distribution's KWin finds nothing to do" "$1" '^Nothing to do'
+  hasnot "the lock leaves the solver nothing to skip" "$1" 'Problem|Skipping packages|No matching repositories'
+}
+# The update in one rpm transaction (the facts' tid lines: rpm's INSTALLTID, the same for every
+# package of one transaction): the metapackage, the six packages and, when the pin moves, the
+# KWin packages, under one id that no package had before. With the pin unchanged the KWin
+# packages stay as they were.
+one_transaction() { # BEFORE AFTER
+  local p t moved="plasma-fusion-full $SIX" others=''
+  [ "$(fact "$1" pin)" = "$(fact "$2" pin)" ] || moved="$KWIN $moved"
+  t=$(fact "$2" tid plasma-fusion-full)
+  if [ -z "$t" ]; then
+    log "  FAIL the metapackage has no rpm transaction"
+    bad=1
+  fi
+  for p in $moved; do [ "$(fact "$2" tid "$p")" = "$t" ] || others="$others $p"; done
+  want "one rpm transaction took the update ($(echo "$moved" | wc -w) packages); others" "${others# }" ""
+  hasnot "the update's transaction is a new one" "$1" "^tid [^ ]+ ${t:-none}$"
+  if [ "$(fact "$1" pin)" = "$(fact "$2" pin)" ]; then
+    for p in $KWIN; do want "$p stays as it was (the pin did not move)" "$(fact "$2" tid "$p")" "$(fact "$1" tid "$p")"; done
+  fi
 }
 # The package side after the way back. FILE: facts; SIX_EVR: what the six packages must be
 # (none after an uninstall).
@@ -269,6 +340,12 @@ if [ "${PF_PUBLIC:-}" != 1 ]; then
     "$OUT/install.sh" >"$OUT/00-stamp.log" 2>&1 ||
     { log "FAIL: could not stamp the installer"; exit 1; }
 fi
+# update: the pin the update must end at, as the stamp has it (the spec's kwin_full_pin).
+NEW_PIN=$(sed -n "s/^PF_FULL_PIN='\([^']*\)'$/\1/p" "$OUT/install.sh" 2>/dev/null)
+if [ "$mode" = update ] && [ -z "$NEW_PIN" ]; then
+  log "FAIL: the stamped installer names no pin to update to"
+  exit 1
+fi
 vm start "$name" run >/dev/null || { log "FAIL: the VM did not start"; exit 1; }
 trap 'cleanup_vm $?' EXIT
 vm wait "$name" >/dev/null || { log "FAIL: the VM did not come up"; exit 1; }
@@ -320,51 +397,111 @@ if [ "$mode" = switch ]; then
   before=06-facts.txt
 fi
 
-# ---------- install.sh --full ----------
+# ---------- update: the last release's full profile first, as it is published ----------
+if [ "$mode" = update ]; then
+  log "the last release's full profile: the published installer's --full, from $LIVE"
+  published install-release.sh || { log "FAIL: could not fetch the published installer"; exit 1; }
+  insession "sh ~/install-release.sh --full --yes" >"$OUT/05-release-install.log" 2>&1
+  rc=$?
+  log "  rc=$rc"
+  [ "$rc" = 0 ] || { log "FAIL: the release's --full"; tail -n 30 "$OUT/05-release-install.log"; exit "$rc"; }
+  facts 06-facts.txt "$LIVE"
+  check_full_packages 06-facts.txt "$LIVE_ID"
+  relogin
+  shot 06-release-full
+  status 06-release-status.log
+  has "status: the release's full profile, its pin and tag" 06-release-status.log "profile: full \(the maintained KWin fork, pinned at $(fact 06-facts.txt pin), fork tag $(fact 06-facts.txt tag)\)"
+  # The release's own login check is logged, not checked (the header: safe mode where the
+  # release recorded no KWin version).
+  log "the release's login check: $(grep -a -m 1 'switched off:' "$OUT/06-release-status.log" | sed 's/^ *//')"
+  crashes "on the release's full profile"
+  phase "the last release's full profile"
+  # The candidate's project in the live one's place: what a release's update finds there.
+  log "the VM moves from $LIVE to $FULL_REPO"
+  vm ssh "$name" ". /etc/os-release && sudo dnf -y copr remove $LIVE && sudo dnf -y copr enable $FULL_REPO fedora-\$VERSION_ID-x86_64" \
+    >"$OUT/07-move.log" 2>&1 || { log "FAIL: the move to $FULL_REPO"; tail -n 20 "$OUT/07-move.log"; exit 1; }
+  facts 07-facts.txt
+  facts 07-live.txt "$LIVE"
+  want "the candidate's project is enabled" "$(fact 07-facts.txt repo)" enabled
+  want "the release's project is gone" "$(fact 07-live.txt repo)" no
+  grep -E '^(pkg|lock|tid|record) ' "$OUT/06-facts.txt" >"$OUT/06-packages.txt"
+  grep -E '^(pkg|lock|tid|record) ' "$OUT/07-facts.txt" >"$OUT/07-packages.txt"
+  same "the move changed no package, lock or record" 07-packages.txt 06-packages.txt
+  phase "the move to the candidate's project"
+fi
+
+# ---------- install.sh --full (update: install.sh update) ----------
 if [ "${PF_PUBLIC:-}" = 1 ]; then
   published install.sh || { log "FAIL: could not fetch the published installer"; exit 1; }
 else
   vm ssh "$name" 'cat >~/install.sh' <"$OUT/install.sh" || { log "FAIL: could not copy the installer into the VM"; exit 1; }
   log "installer: this tree's, $(grep -m 1 '^PF_VERSION=' "$OUT/install.sh") $(grep -m 1 '^PF_FULL_FEDORA=' "$OUT/install.sh") $(grep -m 1 '^PF_FULL_REPO=' "$OUT/install.sh") $(grep -m 1 '^PF_FULL_PIN=' "$OUT/install.sh")"
 fi
-log "installer: --full --dry-run"
-insession "sh ~/install.sh --full --dry-run" >"$OUT/10-dry-run.log" 2>&1
-rc=$?
-log "  rc=$rc $(grep -c . "$OUT/10-dry-run.log") lines"
-[ "$rc" = 0 ] || { log "FAIL: dry run"; exit "$rc"; }
-has "the plan records the stock KWin" 10-dry-run.log 'full-restore\.txt'
-hasf "the plan enables the full profile's repository" 10-dry-run.log "dnf -y copr enable $FULL_REPO fedora-"
-has "the plan names the packages it replaces" 10-dry-run.log 'dnf -y install plasma-fusion-full .*replaces the stock KWin'
-has "the plan locks the set" 10-dry-run.log 'dnf -y versionlock add kwin kwin-common kwin-libs'
-has "the plan states the security cadence" 10-dry-run.log 'security fixes on its weekly cadence'
-facts 10-facts.txt
-same "the dry run changed nothing" 10-facts.txt "$before"
-phase "the dry run"
+if [ "$mode" != update ]; then
+  log "installer: --full --dry-run"
+  insession "sh ~/install.sh --full --dry-run" >"$OUT/10-dry-run.log" 2>&1
+  rc=$?
+  log "  rc=$rc $(grep -c . "$OUT/10-dry-run.log") lines"
+  [ "$rc" = 0 ] || { log "FAIL: dry run"; exit "$rc"; }
+  has "the plan records the stock KWin" 10-dry-run.log 'full-restore\.txt'
+  hasf "the plan enables the full profile's repository" 10-dry-run.log "dnf -y copr enable $FULL_REPO fedora-"
+  has "the plan names the packages it replaces" 10-dry-run.log 'dnf -y install plasma-fusion-full .*replaces the stock KWin'
+  has "the plan locks the set" 10-dry-run.log 'dnf -y versionlock add kwin kwin-common kwin-libs'
+  has "the plan states the security cadence" 10-dry-run.log 'security fixes on its weekly cadence'
+  facts 10-facts.txt
+  same "the dry run changed nothing" 10-facts.txt "$before"
+  phase "the dry run"
 
-log "installer: --full"
-insession "sh ~/install.sh --full --yes" >"$OUT/11-install.log" 2>&1
-rc=$?
-log "  rc=$rc"
-[ "$rc" = 0 ] || { log "FAIL: install --full"; tail -n 30 "$OUT/11-install.log"; exit "$rc"; }
-facts 12-facts.txt
-check_full_packages 12-facts.txt
-# The set holds against the distribution's own packages, and by the lock: with the full
-# profile's repository out of the question, a sync to what Fedora offers finds nothing it may
-# do, and no conflict it has to skip. Without the lock dnf ends with the same words, after a
-# "Problem:" report that the metapackage's exact requires stand in the way.
-vm ssh "$name" "sudo dnf -q --assumeno --disablerepo='$FULL_ID' distro-sync $KWIN" >"$OUT/12-lock-holds.log" 2>&1
-has "a sync to the distribution's KWin finds nothing to do" 12-lock-holds.log '^Nothing to do'
-hasnot "the lock leaves the solver nothing to skip" 12-lock-holds.log 'Problem|Skipping packages|No matching repositories'
-if [ "$mode" = switch ]; then
-  want "the record is where the user cannot read it, and read all the same" \
-    "$(vm ssh "$name" 'cat /var/lib/plasma-fusion/full-restore.txt >/dev/null 2>&1 && echo readable || echo hidden') $(fact 12-facts.txt record kwin)" "hidden ${STOCK[kwin]}"
+  log "installer: --full"
+  insession "sh ~/install.sh --full --yes" >"$OUT/11-install.log" 2>&1
+  rc=$?
+  log "  rc=$rc"
+  [ "$rc" = 0 ] || { log "FAIL: install --full"; tail -n 30 "$OUT/11-install.log"; exit "$rc"; }
+  facts 12-facts.txt
+  check_full_packages 12-facts.txt
+  lock_holds 12-lock-holds.log
+  if [ "$mode" = switch ]; then
+    want "the record is where the user cannot read it, and read all the same" \
+      "$(vm ssh "$name" 'cat /var/lib/plasma-fusion/full-restore.txt >/dev/null 2>&1 && echo readable || echo hidden') $(fact 12-facts.txt record kwin)" "hidden ${STOCK[kwin]}"
+  fi
+  # Before the new login the session still runs the KWin from before: status says so.
+  status 13-status-before-login.log
+  has "status: the full profile, its pin and tag" 13-status-before-login.log "profile: full \(the maintained KWin fork, pinned at $(fact 12-facts.txt pin), fork tag $(fact 12-facts.txt tag)\)"
+  hasf "status: the session still runs the KWin from before" 13-status-before-login.log 'log out and in (the session still runs the KWin from before the profile)'
+  shot 13-after-setup
+  phase "the full profile's packages"
+else
+  log "installer: update --dry-run"
+  insession "sh ~/install.sh update --dry-run" >"$OUT/10-dry-run.log" 2>&1
+  rc=$?
+  log "  rc=$rc $(grep -c . "$OUT/10-dry-run.log") lines"
+  [ "$rc" = 0 ] || { log "FAIL: dry run"; exit "$rc"; }
+  # The lock goes first, one dnf command moves the six packages with the metapackage (which pulls
+  # the new pin), and the lock comes back: nothing is installed apart.
+  steps=$(grep -a -o -E 'dnf -y (versionlock delete|upgrade --refresh|versionlock add|install) ' "$OUT/10-dry-run.log" |
+    sed -E 's/^dnf -y //; s/ $//' | paste -sd, -)
+  want "the plan: the lock off, one upgrade, the lock on" "$steps" "versionlock delete,upgrade --refresh,versionlock add"
+  hasf "the plan's upgrade takes the six packages and the metapackage" 10-dry-run.log "dnf -y upgrade --refresh $SIX plasma-fusion-full"
+  facts 10-facts.txt
+  same "the dry run changed nothing" 10-facts.txt 07-facts.txt
+  phase "the dry run"
+
+  log "installer: update"
+  insession "sh ~/install.sh update --yes" >"$OUT/11-install.log" 2>&1
+  rc=$?
+  log "  rc=$rc"
+  [ "$rc" = 0 ] || { log "FAIL: update"; tail -n 30 "$OUT/11-install.log"; exit "$rc"; }
+  facts 12-facts.txt
+  check_full_packages 12-facts.txt
+  want "the metapackage's record names this tree's pin" "$(fact 12-facts.txt pin)" "$NEW_PIN"
+  one_transaction 07-facts.txt 12-facts.txt
+  lock_holds 12-lock-holds.log
+  # Before the new login the session still runs the release's fork: only the profile is checked.
+  status 13-status-before-login.log
+  has "status: the full profile, its new pin and tag" 13-status-before-login.log "profile: full \(the maintained KWin fork, pinned at $(fact 12-facts.txt pin), fork tag $(fact 12-facts.txt tag)\)"
+  shot 13-after-setup
+  phase "the full profile's packages after the update"
 fi
-# Before the new login the session still runs the KWin from before: status says so.
-status 13-status-before-login.log
-has "status: the full profile, its pin and tag" 13-status-before-login.log "profile: full \(the maintained KWin fork, pinned at $(fact 12-facts.txt pin), fork tag $(fact 12-facts.txt tag)\)"
-hasf "status: the session still runs the KWin from before" 13-status-before-login.log 'log out and in (the session still runs the KWin from before the profile)'
-shot 13-after-setup
-phase "the full profile's packages"
 
 relogin
 shot 20-full-desktop

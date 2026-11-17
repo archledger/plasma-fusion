@@ -7,6 +7,46 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
+## 0.8.1 (2026-11-17)
+
+Tested with Plasma 6.7 and 6.8: Fedora 44's Plasma 6.8.3 in the release tests, whose matrix
+covers Arch, Ubuntu 26.10, Debian testing, KDE neon and NixOS as well. Packaged as before for
+Fedora 44 and 45 (Copr), Arch (AUR), Ubuntu 26.10 (PPA), Debian testing and KDE neon (.deb) and
+NixOS (flake), as six packages; other Debian and Ubuntu family systems with Plasma 6.7 or later
+get the shared part only. The installer refuses other Fedora releases, the RHEL family and other
+Fedora-likes, SteamOS and systems it does not recognise, a Plasma older than 6.7 or of a series
+newer than 6.8, and machines other than x86-64. The full profile stays Fedora 44 only, and moves
+to the KWin fork's 6.8.3.
+
+- **The full profile on KWin 6.8.3:** the pin moves to archledger/kwin `v6.8.3-pf1`, built as
+  `kwin-6.8.3-1.fc44.pf1`: KDE's KWin 6.8.3 with the same fork changes as `v6.8.2-pf5`. Fedora 44
+  ships KWin 6.8.3, so `--full` no longer takes KWin back a version. A machine with 0.8.0's
+  full profile moves to it with `install.sh update`, in one dnf transaction with the
+  metapackage and the six packages, and the version lock ends at the new pin.
+- **The stock profile on KWin 6.8.3:** 0.8.1's Copr builds compile against Fedora's current KWin
+  (6.8.3 on Fedora 44). 0.8.0's were built against 6.8.2, so on 6.8.3 the login check kept their
+  navigation part off and `plasma-fusion status` asked for a rebuild.
+- **A profile choice on a fresh Fedora install:** run from a terminal on a Fedora release with a
+  full profile, without `--full`, the installer asks which profile to install. Stock is the
+  default, and `--yes` alone stays stock (#179).
+- **Profile switches:**
+  - A switch from the stock profile to the full one replaces the six packages with the full
+    project's builds. Their release now sorts above the stock project's (`X.Y.Z-1.fc44.full`),
+    and before, the stock builds stayed (#197).
+  - When a switch changes KWin's version, the installer runs `plasma-fusion update`, so the next
+    login is not in safe mode (#199).
+  - While Fedora's KWin is another version than the pin, the `--full` and `--full-restore`
+    plans name the KWin version change (#198).
+- **`plasma-fusion status` and the decoration:** the decoration part's rebuild note compares its
+  record with the installed KDecoration, not with KWin, which on the full profile is the pinned
+  fork (#194).
+- **The full profile's build** compiles its parts against the pinned KWin. It took the newest
+  `kwin-devel`, which would have been Fedora's 6.8.3 next to a 6.8.2 pin (#191).
+- **Destroyed windows:** the placement, tablet, attach and workspaces scripts treat a window
+  that KWin has destroyed as gone, as snap groups have since 0.8.0 (#182, #184).
+- **The global menu's Search setting** (the top bar's clock pill) names KDE bug 526561, which
+  crashes the search on Plasma 6.8.3 as well as 6.7.5.
+
 ## 0.8.0 (2026-11-14)
 
 Tested with Plasma 6.7 and 6.8. Fedora 44, the ThinkPad X13 Yoga Gen 4 and the ASUS Zenbook run
