@@ -22,10 +22,12 @@ PlasmoidItem {
     property string boundIdentity: ""
     property bool stopped: false
     property bool verifying: false
+    property var checkingPacket: null
     property var pendingPacket: null
 
     function finishVerification(): void {
         verifying = false;
+        checkingPacket = null;
         if (pendingPacket) {
             Qt.callLater(verifyPending);
         }
@@ -38,6 +40,7 @@ PlasmoidItem {
         const packet = pendingPacket;
         pendingPacket = null;
         verifying = true;
+        checkingPacket = packet;
         DBus.SessionBus.asyncCall({
             service: "org.freedesktop.DBus", path: "/org/freedesktop/DBus",
             iface: "org.freedesktop.DBus", member: "GetNameOwner", arguments: ["org.kde.KWin"]
@@ -88,7 +91,7 @@ PlasmoidItem {
         ++accepted;
         observe(packet);
         if (packet.status === "offline") {
-            freshQuery(false);
+            freshQuery(true);
         }
     }
 
@@ -118,6 +121,7 @@ PlasmoidItem {
         pendingPacket = null;
         revision = -1;
         if (showUnknown) {
+            epoch = "";
             phase = "unknown";
             observe(null);
         }
@@ -132,8 +136,42 @@ PlasmoidItem {
     function observe(packet: var): void {
         console.info("layout-probe-observation", JSON.stringify({
             boot: boot, phase: phase, epoch: epoch, revision: revision,
-            accepted: accepted, packet: packet
+            accepted: accepted, packet: packet, request: requestNumber
         }));
+    }
+    DBus.SignalWatcher {
+        enabled: !probe.stopped
+        busType: DBus.BusType.Session
+        service: "org.freedesktop.DBus"
+        path: "/org/freedesktop/DBus"
+        iface: "org.freedesktop.DBus"
+        function dbusNameOwnerChanged(name, previous, current) {
+            // The workspace decoder wraps QString arguments too, not only numeric values.
+            name = String(name);
+            previous = String(previous);
+            current = String(current);
+            if (probe.stopped || previous === "" || previous === current) {
+                return;
+            }
+            const bound = previous === probe.boundOwner
+                && (name === probe.boundIdentity || name === "org.kde.KWin");
+            const packet = probe.checkingPacket;
+            const checking = packet && packet.request === probe.requestNumber
+                && previous === packet.backendOwner
+                && (name === packet.identityName || name === "org.kde.KWin");
+            if (bound || checking) {
+                console.info("layout-probe-invalidated",
+                             JSON.stringify({boot: probe.boot, name: name}));
+                probe.freshQuery(true);
+            }
+        }
+        // These signals concern our own bus connection, not the watched provider lifetime.
+        function dbusNameAcquired(name) {
+        }
+        function dbusNameLost(name) {
+        }
+        function dbusActivatableServicesChanged() {
+        }
     }
     Connections {
         target: Plasmoid.configuration
@@ -144,6 +182,9 @@ PlasmoidItem {
             } catch (error) {
                 return;
             }
+            // Attach the emitter last: packet fields cannot impersonate the receiver lifetime.
+            const received = Object.assign({}, packet, {receiverBoot: probe.boot});
+            console.info("layout-probe-received", JSON.stringify(received));
             if (probe.stopped || !packet || packet.consumer !== probe.boot
                     || packet.request !== probe.requestNumber
                     || typeof packet.epoch !== "string"

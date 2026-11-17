@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Safety checks for the P0 private-HOME seed, using only the Python standard library."""
+"""P0 safety/receipt checks; event-handler tests also require the repository's Node.js tool."""
 
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -27,9 +28,10 @@ class SeedTests(unittest.TestCase):
         self.rules.write_text("// exact staged tiling rules\n")
         self.output = self.root / "build/seed"
 
-    def run_seed(self):
+    def run_seed(self, *extra_args):
         return subprocess.run(
-            [sys.executable, str(PREPARER), "--stage", str(self.stage), "--output", str(self.output)],
+            [sys.executable, str(PREPARER), "--stage", str(self.stage),
+             "--output", str(self.output), *extra_args],
             cwd=self.root, capture_output=True, text=True, timeout=10, check=False,
         )
 
@@ -44,6 +46,7 @@ class SeedTests(unittest.TestCase):
         self.assertTrue((applet / "contents/config/main.xml").is_file())
         self.assertIn("plasmafusion-layout-probeEnabled=true", (self.output / ".config/kwinrc").read_text())
         self.assertIn("ProbeAuthorized=true", (self.output / ".config/kwinrc").read_text())
+        self.assertIn("DropRetirementFrame=false", (self.output / ".config/kwinrc").read_text())
         self.assertFalse((self.output / ".config/plasma-org.kde.plasma.desktop-appletsrc").exists())
 
     def test_refuses_an_existing_seed_without_overwriting_it(self):
@@ -70,9 +73,9 @@ class SeedTests(unittest.TestCase):
         self.assertIn("staged Tiling.js", result.stderr)
         self.assertFalse(self.output.exists())
 
-    def run_check(self):
+    def run_check(self, *extra_args):
         return subprocess.run(
-            [sys.executable, str(PREPARER), "--check-result", str(self.output)],
+            [sys.executable, str(PREPARER), "--check-result", str(self.output), *extra_args],
             cwd=self.root, capture_output=True, text=True, timeout=10, check=False,
         )
 
@@ -110,6 +113,40 @@ class SeedTests(unittest.TestCase):
         self.result_files()
         result = self.run_check()
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_retirement_frame_fault_is_an_explicit_private_seed_setting(self):
+        result = self.run_seed("--drop-retirement-frame")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("DropRetirementFrame=true", (self.output / ".config/kwinrc").read_text())
+
+    def test_seed_manifest_covers_the_fault_setting(self):
+        result = self.run_seed()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        inputs = json.loads((self.output / "probe-inputs.json").read_text())
+        self.assertEqual(inputs["kwinrc"], hashlib.sha256(
+            (self.output / ".config/kwinrc").read_bytes()
+        ).hexdigest())
+
+    def test_loss_scope_does_not_accept_the_first_slice_receipt(self):
+        self.result_files()
+        result = self.run_check("--scope", "silent-retirement")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing probe receipt", result.stderr)
+
+    def test_loss_scope_requires_its_own_explicit_receipt(self):
+        self.result_files()
+        (self.output / "silent-retirement-result.json").write_text(json.dumps({
+            "schema": 1, "passed": True,
+            "checks": ["roundtrip-native", "silent-retirement", "provider-reload"],
+        }))
+        result = self.run_check("--scope", "silent-retirement")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_result_scope_cannot_change_seed_preparation(self):
+        result = self.run_seed("--scope", "silent-retirement")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--scope requires --check-result", result.stderr)
+        self.assertFalse(self.output.exists())
 
 
 class LifecycleSafetyTests(unittest.TestCase):
@@ -284,6 +321,97 @@ class LifecycleSafetyTests(unittest.TestCase):
             self.assertEqual(self.runner.owner_of("org.kde.KWin"), ":1.42")
             query.assert_called_once_with("org.freedesktop.DBus", "/org/freedesktop/DBus",
                                           "org.freedesktop.DBus.GetNameOwner", "org.kde.KWin")
+
+
+class OwnerEventTests(unittest.TestCase):
+    def run_event(self, *, checking=None, bound=True, wrapped=False, service=None):
+        source = Path(__file__).with_name("consumer.qml").read_text()
+        start = source.index("function dbusNameOwnerChanged(")
+        opening = source.index("{", start)
+        depth = 1
+        end = opening + 1
+        while depth:
+            depth += (source[end] == "{") - (source[end] == "}")
+            end += 1
+        handler = source[start:end]
+        identity = "org.plasmafusion.LayoutProbe.ptest"
+        probe = {
+            "stopped": False, "boundOwner": ":1.0" if bound else "",
+            "boundIdentity": identity if bound else "", "checkingPacket": checking,
+            "requestNumber": 3, "phase": "online" if bound else "unknown",
+        }
+        values = [service or identity, ":1.0", ""]
+        script = "const probe=" + json.dumps(probe) + ";\n"
+        script += ("probe.freshQuery = showUnknown => { ++probe.requestNumber;"
+                   "if(showUnknown) probe.phase='unknown'; };\nconsole.info = () => {};\n")
+        script += handler + "\nconst values=" + json.dumps(values) + ";\n"
+        script += ("dbusNameOwnerChanged(...values.map(value => ({toString: () => value})));\n"
+                   if wrapped else "dbusNameOwnerChanged(...values);\n")
+        script += "process.stdout.write(JSON.stringify([probe.phase,probe.requestNumber]));\n"
+        result = subprocess.run(["node", "-"], input=script, capture_output=True, text=True,
+                                timeout=10, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_signal_decodes_workspace_string_wrappers(self):
+        self.assertEqual(self.run_event(wrapped=True), ["unknown", 4])
+
+    def test_loss_during_unbound_current_verification_invalidates(self):
+        packet = {"request": 3, "backendOwner": ":1.0",
+                  "identityName": "org.plasmafusion.LayoutProbe.ptest"}
+        self.assertEqual(self.run_event(checking=packet, bound=False), ["unknown", 4])
+
+    def test_stale_verification_cannot_invalidate_a_new_query(self):
+        packet = {"request": 2, "backendOwner": ":1.0",
+                  "identityName": "org.plasmafusion.LayoutProbe.ptest"}
+        self.assertEqual(self.run_event(checking=packet, bound=False), ["unknown", 3])
+
+    def test_unrelated_name_loss_keeps_the_binding(self):
+        self.assertEqual(self.run_event(service="org.example.Unrelated"), ["online", 3])
+
+    def test_watched_backend_loss_invalidates(self):
+        self.assertEqual(self.run_event(service="org.kde.KWin"), ["unknown", 4])
+
+
+class RetirementDeliveryTests(unittest.TestCase):
+    def run_delivery(self, swapped: bool):
+        scenario = Path(__file__).with_name("scenario-bridge.sh").read_text()
+        section = scenario.split("retirement_received=false\n", 1)[1]
+        checker = section.split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
+        with tempfile.TemporaryDirectory(
+            prefix="pf-layout-delivery-", dir="/tmp/opencode"
+        ) as scratch:
+            root = Path(scratch)
+            before = [{"consumer": boot, "observation": {
+                "epoch": "old", "revision": 4, "packet": {"request": 1},
+            }} for boot in ("a", "b")]
+            after = [{"consumer": boot, "observation": {
+                "phase": "unknown", "packet": None, "epoch": "", "revision": -1, "request": 2,
+            }} for boot in ("a", "b")]
+            (root / "before.json").write_text(json.dumps(before))
+            (root / "after.json").write_text(json.dumps(after))
+            consumers = ("a", "b")
+            receivers = tuple(reversed(consumers)) if swapped else consumers
+            frames = [{"consumer": boot, "receiverBoot": receiver,
+                       "status": "offline", "epoch": "old", "request": 1, "revision": 5}
+                      for boot, receiver in zip(consumers, receivers)]
+            (root / "trace.log").write_text("".join(
+                "qml: layout-probe-received " + json.dumps(frame) + "\n" for frame in frames
+            ))
+            return subprocess.run(
+                [sys.executable, "-", str(root / "before.json"), str(root / "after.json"),
+                 str(root / "trace.log")], input=checker, text=True, capture_output=True,
+                timeout=10, check=False,
+            )
+
+    def test_retirement_delivery_accepts_the_correct_live_receivers(self):
+        result = self.run_delivery(swapped=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_retirement_delivery_rejects_swapped_live_receivers(self):
+        result = self.run_delivery(swapped=True)
+        self.assertNotEqual(result.returncode, 0,
+                            "packet claims alone certified the wrong receivers")
 
 
 if __name__ == "__main__":

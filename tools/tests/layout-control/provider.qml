@@ -29,6 +29,7 @@ Item {
     property string selfOwner: ""
     property var registration: null
     property bool registrationHandled: false
+    property bool dropRetirementFrame: false
 
     function registrationFinished(): void {
         if (!registration || !registration.isFinished || registrationHandled || stopping) {
@@ -202,6 +203,7 @@ Item {
             console.warn("layout-probe: authorization marker absent; probe stays inert");
             return;
         }
+        dropRetirementFrame = KWin.readConfig("DropRetirementFrame", false) === true;
         if (typeof Workspace.transientTiling === "function") {
             const api = Workspace.transientTiling();
             if (api) {
@@ -224,7 +226,11 @@ Item {
     }
     Component.onDestruction: {
         stopping = true;
-        probe.publish("offline", probe.recipients);
+        if (dropRetirementFrame) {
+            console.info("layout-probe: retirement frame deliberately dropped");
+        } else {
+            probe.publish("offline", probe.recipients);
+        }
         if (identityName !== "") {
             identityRelease.arguments = [identityName];
             identityRelease.call();

@@ -14,7 +14,7 @@ SCRIPT_ID = "plasmafusion-layout-probe"
 APPLET_ID = "org.plasmafusion.layoutprobe"
 
 
-def prepare(stage: Path, output: Path) -> None:
+def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False) -> None:
     build = Path.cwd() / "build"
     if build.is_symlink() or not output.resolve().is_relative_to(build.resolve()):
         raise ValueError("output must be under the current worktree's build directory")
@@ -58,11 +58,14 @@ def prepare(stage: Path, output: Path) -> None:
     private_config.mkdir()
     (private_config / "kwinrc").write_text(
         f"[Plugins]\n{SCRIPT_ID}Enabled=true\n\n[Script-{SCRIPT_ID}]\nProbeAuthorized=true\n"
+        f"DropRetirementFrame={'true' if drop_retirement_frame else 'false'}\n"
         "\n[Desktops]\nNumber=2\nRows=1\n"
     )
     (output / "probe-inputs.json").write_text(json.dumps({
         name: hashlib.sha256(data).hexdigest() for name, data in fixtures.items()
-    } | {"Tiling.js": hashlib.sha256(rules.read_bytes()).hexdigest()}, indent=2) + "\n")
+    } | {"Tiling.js": hashlib.sha256(rules.read_bytes()).hexdigest(),
+         "kwinrc": hashlib.sha256((private_config / "kwinrc").read_bytes()).hexdigest()},
+        indent=2) + "\n")
 
 
 def main() -> None:
@@ -70,34 +73,48 @@ def main() -> None:
     parser.add_argument("--stage", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--check-result", type=Path)
+    parser.add_argument("--scope", choices=("first-slice", "silent-retirement"),
+                        default="first-slice")
+    parser.add_argument("--drop-retirement-frame", action="store_true",
+                        help="fault injection in this private test seed only")
     args = parser.parse_args()
     try:
         if args.check_result is not None:
-            if args.stage is not None or args.output is not None:
+            if args.stage is not None or args.output is not None or args.drop_retirement_frame:
                 raise ValueError("--check-result cannot be combined with seed preparation")
-            check_result(args.check_result)
+            check_result(args.check_result, args.scope)
         else:
+            if args.scope != "first-slice":
+                raise ValueError("--scope requires --check-result")
             if args.stage is None or args.output is None:
                 raise ValueError("seed preparation requires --stage and --output")
-            prepare(args.stage.resolve(), args.output)
+            prepare(args.stage.resolve(), args.output,
+                    drop_retirement_frame=args.drop_retirement_frame)
     except (ValueError, OSError) as error:
         parser.exit(2, f"{error}\n")
 
 
-def check_result(directory: Path) -> None:
+def check_result(directory: Path, scope: str = "first-slice") -> None:
     lines = (directory / "scenario.log").read_text().splitlines()
     codes = [line for line in lines if line.startswith(("scenario rc=", "session rc="))]
     if not {"scenario rc=0", "session rc=0"}.issubset(codes) or any(
         line not in {"scenario rc=0", "session rc=0"} for line in codes
     ):
         raise ValueError("scenario did not finish successfully; outer harness status is insufficient")
-    receipt = directory / "layout-probe-result.json"
+    if scope == "first-slice":
+        receipt = directory / "layout-probe-result.json"
+        checks = ["roundtrip-native", "retirement"]
+    elif scope == "silent-retirement":
+        receipt = directory / "silent-retirement-result.json"
+        checks = ["roundtrip-native", "silent-retirement", "provider-reload"]
+    else:
+        raise ValueError("unknown probe receipt scope")
     if not receipt.is_file():
-        raise ValueError("missing probe receipt")
+        raise ValueError(f"missing probe receipt: {receipt.name}")
     result = json.loads(receipt.read_text())
-    if result != {"schema": 1, "passed": True, "checks": ["roundtrip-native", "retirement"]}:
+    if result != {"schema": 1, "passed": True, "checks": checks}:
         raise ValueError("incomplete probe receipt")
-    print("PASS: explicit first-slice receipt and inner scenario/session exit codes")
+    print(f"PASS: explicit {scope} receipt and inner scenario/session exit codes")
 
 
 if __name__ == "__main__":

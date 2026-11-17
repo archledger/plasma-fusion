@@ -109,18 +109,47 @@ bytes including its terminator. The seed preparer refuses an existing output or 
 outside `build/`; it never copies live user configuration. The provider remains inactive without
 `ProbeAuthorized=true` in its private KWin configuration.
 
-The probe saves each request before waking KWin and observes actual receiver memory through
-JSON log records. It checks native capability/refusal, two-widget delivery, graceful retirement,
-alias release, reload with a fresh query, and rejection of a high-revision frame claiming the
-wrong backend connection. Its identity-only alias exports no objects or methods. The receiver
-checks the current KWin owner and the alias owner before accepting an online frame; request and
-revision checks also run after those asynchronous lookups. The relevant version-matched APIs are
+The probe saves each request before waking KWin and records incoming frames separately from
+accepted receiver memory. It checks native capability/refusal, two-widget delivery, graceful
+retirement, alias release, reload with a fresh query, and rejection of a high-revision frame
+claiming the wrong backend connection. Its identity-only alias exports no objects or methods.
+The receiver checks the current KWin owner and the alias owner before accepting an online frame;
+request and revision checks also run after those asynchronous lookups. Owner-loss events clear
+state and advance the query generation even if the final frame never arrives. The current
+in-flight verification is watched too, before its first binding is accepted. The workspace
+decoder wraps string signal arguments; convert them to strings before comparing connection IDs.
+The relevant version-matched APIs are
 [the workspace D-Bus decoder and connection](https://invent.kde.org/plasma/plasma-workspace/-/tree/v6.8.3/components/dbus)
 and [KConfigPropertyMap::writeConfig](https://invent.kde.org/frameworks/kconfig/-/blob/v6.32.0/src/qml/kconfigpropertymap.cpp).
+
+To test loss without a final frame, create another fresh seed with an explicit fault:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-loss --drop-retirement-frame
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-loss tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-loss" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-loss --scope silent-retirement
+```
+
+The fault is off by default, recorded in the seed's KWin configuration and covered by its input
+hashes. The fault case must prove alias disappearance, unchanged KWin connection, no received
+offline frame, unknown receiver state with a newer query, and recovery with a new provider epoch.
+Normal retirement still requires both cached frames to reach their intended live widgets, but
+those frames cannot keep withdrawn state authoritative: receivers become unknown. A delivery
+negative control swaps claimed consumers between receivers; the trace records the emitting
+receiver's lifetime separately, so packet claims alone cannot satisfy delivery. The wrong-backend
+injection permits legitimate queued replies to advance state, while asserting that no
+wrong-owner or injected high revision is accepted. Event-routing unit tests execute the real
+QML handler in Node, including wrapped strings and loss during an unbound verification; real
+session tests remain necessary to validate D-Bus delivery and state transitions.
 
 `--check-result` requires the explicit first-slice receipt and successful inner scenario/session
 codes. The wrapper's exit code alone is insufficient. `reload-result.json` and
 `identity-fence-result.json` record the additional assertions; none of these certifies full G0.
+The silent-retirement scope requires its own receipt and cannot use the first-slice receipt.
 Stale ordering, timeout, target preparation and existing-tiler integration still need their own
 evidence. A shell abort during teardown was also reproduced with the
 probe disabled and zero probe widgets; retain that environment limitation rather than claiming

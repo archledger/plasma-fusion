@@ -44,6 +44,31 @@ PY
     return 1
 }
 
+reload_probe() {
+    local provider="$HOME/.local/share/kwin/scripts/plasmafusion-layout-probe/contents/ui/main.qml"
+    local ready=false
+    qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.loadDeclarativeScript \
+        "$provider" plasmafusion-layout-probe >"$OUT/reload-script-id.txt"
+    qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.start
+    for _ in {1..40}; do
+        if python3 - "$OUT/kwin.log" <<'PY'
+import sys
+with open(sys.argv[1]) as trace:
+    assert sum("layout-probe: initialized " in line for line in trace) == 2
+PY
+        then
+            ready=true
+            break
+        fi
+        sleep 0.1
+    done
+    [[ $ready == true ]] || { echo "FAIL: reloaded provider not initialized" >&2; return 1; }
+    qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut \
+        "Plasma Fusion: Layout Probe Wake"
+    wait_for_phase online 2>"$OUT/reload-wait.log"
+    cp "$OUT/observations-online.json" "$OUT/observations-reloaded.json"
+}
+
 loaded=$(qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded plasmafusion-layout-probe)
 [[ $loaded == true ]] || { echo "FAIL: real declarative probe not loaded" >&2; return 1; }
 qdbus org.kde.kglobalaccel >"$OUT/shortcut-components.txt"
@@ -88,51 +113,103 @@ identity_owner=$(qdbus org.freedesktop.DBus /org/freedesktop/DBus \
     org.freedesktop.DBus.GetNameOwner "$identity_name")
 [[ $identity_owner == "$backend_owner" ]] || return 1
 
-qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript plasmafusion-layout-probe \
-    >"$OUT/unload-result.txt"
-wait_for_phase offline 2>"$OUT/offline-wait.log"
-identity_held=$(qdbus org.freedesktop.DBus /org/freedesktop/DBus \
-    org.freedesktop.DBus.NameHasOwner "$identity_name")
-[[ $identity_held == false ]] || { echo "FAIL: retired alias still owned" >&2; return 1; }
-printf '%s\n' "$identity_held" >"$OUT/retired-identity-owned.txt"
-python3 - "$OUT/observations-online.json" "$OUT/observations-offline.json" <<'PY'
+drop_retirement_frame=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
+    --group Script-plasmafusion-layout-probe --key DropRetirementFrame --default false)
+if [[ $drop_retirement_frame == true ]]; then
+    cp "$OUT/observations-online.json" "$OUT/observations-initial.json"
+    qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript plasmafusion-layout-probe \
+        >"$OUT/unload-result.txt"
+    identity_held=true
+    for _ in {1..40}; do
+        identity_held=$(qdbus org.freedesktop.DBus /org/freedesktop/DBus \
+            org.freedesktop.DBus.NameHasOwner "$identity_name")
+        [[ $identity_held == false ]] && break
+        sleep 0.1
+    done
+    [[ $identity_held == false ]] || { echo "FAIL: quiet retirement kept its alias" >&2; return 1; }
+    printf '%s\n' "$identity_held" >"$OUT/retired-identity-owned.txt"
+    current_backend=$(qdbus org.freedesktop.DBus /org/freedesktop/DBus \
+        org.freedesktop.DBus.GetNameOwner org.kde.KWin)
+    [[ $current_backend == "$backend_owner" ]] || return 1
+    printf '%s\n' "$current_backend" >"$OUT/silent-backend-owner.txt"
+    wait_for_phase unknown 2>"$OUT/silent-loss-wait.log"
+    python3 - "$OUT/observations-initial.json" "$OUT/observations-unknown.json" \
+        "$OUT/kwin.log" "$OUT/plasmashell.log" <<'PY'
 import json, sys
 before = {row["consumer"]: row["observation"] for row in json.load(open(sys.argv[1]))}
 after = {row["consumer"]: row["observation"] for row in json.load(open(sys.argv[2]))}
 assert before.keys() == after.keys()
-for key, current in after.items():
-    assert current["boot"] == before[key]["boot"]
-    assert current["epoch"] == before[key]["epoch"]
-    assert current["revision"] > before[key]["revision"]
-print("PASS: cached retirement publication reached both live widgets")
+for boot, row in after.items():
+    assert row["packet"] is None and row["epoch"] == "" and row["revision"] == -1, row
+    assert row["request"] > before[boot]["packet"]["request"], row
+assert open(sys.argv[3]).read().count("layout-probe: retirement frame deliberately dropped") == 1
+frames = [json.loads(line.split("layout-probe-received ", 1)[1])
+          for line in open(sys.argv[4]) if "layout-probe-received " in line]
+assert not any(frame["status"] == "offline" for frame in frames)
+print("PASS: both live receivers invalidate without a retirement frame; KWin remains unchanged")
 PY
-printf '%s\n' '{"schema":1,"passed":true,"checks":["roundtrip-native","retirement"]}' \
-    >"$OUT/layout-probe-result.json"
-cp "$OUT/observations-online.json" "$OUT/observations-initial.json"
+    reload_probe
+    python3 - "$OUT/observations-initial.json" "$OUT/observations-reloaded.json" <<'PY'
+import json, sys
+before = {row["consumer"]: row["observation"] for row in json.load(open(sys.argv[1]))}
+after = {row["consumer"]: row["observation"] for row in json.load(open(sys.argv[2]))}
+assert before.keys() == after.keys()
+for boot, row in after.items():
+    assert row["epoch"] != before[boot]["epoch"]
+    assert row["packet"]["request"] > before[boot]["packet"]["request"]
+print("PASS: the same live receivers recover only with a fresh query and new provider epoch")
+PY
+    printf '%s\n' \
+        '{"schema":1,"passed":true,' \
+        '"checks":["roundtrip-native","silent-retirement","provider-reload"]}' \
+        >"$OUT/silent-retirement-result.json"
+    return 0
+fi
 
-provider="$HOME/.local/share/kwin/scripts/plasmafusion-layout-probe/contents/ui/main.qml"
-qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.loadDeclarativeScript \
-    "$provider" plasmafusion-layout-probe >"$OUT/reload-script-id.txt"
-qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.start
-ready=false
+cp "$OUT/observations-online.json" "$OUT/observations-initial.json"
+qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript plasmafusion-layout-probe \
+    >"$OUT/unload-result.txt"
+wait_for_phase unknown 2>"$OUT/retirement-wait.log"
+cp "$OUT/observations-unknown.json" "$OUT/observations-retired.json"
+identity_held=$(qdbus org.freedesktop.DBus /org/freedesktop/DBus \
+    org.freedesktop.DBus.NameHasOwner "$identity_name")
+[[ $identity_held == false ]] || { echo "FAIL: retired alias still owned" >&2; return 1; }
+printf '%s\n' "$identity_held" >"$OUT/retired-identity-owned.txt"
+retirement_received=false
 for _ in {1..40}; do
-    if python3 - "$OUT/kwin.log" <<'PY'
-import sys
-with open(sys.argv[1]) as trace:
-    assert sum("layout-probe: initialized " in line for line in trace) == 2
+    if python3 - "$OUT/observations-initial.json" "$OUT/observations-retired.json" \
+        "$OUT/plasmashell.log" 2>>"$OUT/offline-delivery-wait.log" <<'PY'
+import json, sys
+before = {row["consumer"]: row["observation"] for row in json.load(open(sys.argv[1]))}
+after = {row["consumer"]: row["observation"] for row in json.load(open(sys.argv[2]))}
+assert before.keys() == after.keys()
+for boot, current in after.items():
+    assert current["phase"] == "unknown" and current["packet"] is None
+    assert current["epoch"] == "" and current["revision"] == -1
+    assert current["request"] > before[boot]["packet"]["request"]
+frames = [json.loads(line.split("layout-probe-received ", 1)[1])
+          for line in open(sys.argv[3])
+          if line.endswith("\n") and "layout-probe-received " in line]
+offline = {frame["receiverBoot"]: frame for frame in frames if frame["status"] == "offline"}
+assert offline.keys() == before.keys()
+for boot, frame in offline.items():
+    assert frame["consumer"] == boot, "retirement frame reached the wrong live receiver"
+    assert frame["epoch"] == before[boot]["epoch"]
+    assert frame["request"] == before[boot]["packet"]["request"]
+    assert frame["revision"] > before[boot]["revision"]
+print("PASS: cached retirement frame reached both live widgets, and withdrawal invalidated state")
 PY
     then
-        ready=true
+        retirement_received=true
         break
     fi
     sleep 0.1
 done
-[[ $ready == true ]] || { echo "FAIL: reloaded provider not initialized" >&2; return 1; }
-qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut \
-    "Plasma Fusion: Layout Probe Wake"
-wait_for_phase online 2>"$OUT/reload-wait.log"
-cp "$OUT/observations-online.json" "$OUT/observations-reloaded.json"
-python3 - "$OUT/observations-offline.json" "$OUT/observations-reloaded.json" <<'PY'
+[[ $retirement_received == true ]] || { echo "FAIL: missing retirement delivery" >&2; return 1; }
+printf '%s\n' '{"schema":1,"passed":true,"checks":["roundtrip-native","retirement"]}' \
+    >"$OUT/layout-probe-result.json"
+reload_probe
+python3 - "$OUT/observations-initial.json" "$OUT/observations-reloaded.json" <<'PY'
 import json, sys
 before = {row["consumer"]: row["observation"] for row in json.load(open(sys.argv[1]))}
 after = {row["consumer"]: row["observation"] for row in json.load(open(sys.argv[2]))}
@@ -179,12 +256,24 @@ PY
     sleep 0.1
 done
 python3 - "$OUT/observations-reloaded.json" "$OUT/observations-after-stale-backend.json" \
-    "$OUT/plasmashell.log" <<'PY'
+    "$OUT/plasmashell.log" "$shell_owner" <<'PY'
 import json, sys
 before = {row["consumer"]: row["observation"] for row in json.load(open(sys.argv[1]))}
 after = {row["consumer"]: row["observation"] for row in json.load(open(sys.argv[2]))}
-assert before == after, "a frame from the wrong backend changed receiver state"
-assert open(sys.argv[3]).read().count('layout-probe-rejected backend owner ') == 2
+assert before.keys() == after.keys()
+for boot, row in after.items():
+    old = before[boot]
+    assert row["phase"] == "online" and row["epoch"] == old["epoch"]
+    assert row["request"] == old["request"]
+    assert row["packet"]["backendOwner"] == old["packet"]["backendOwner"]
+    assert row["packet"]["identityName"] == old["packet"]["identityName"]
+    # A queued legitimate reply may arrive; it must not be the injected high revision.
+    assert old["revision"] <= row["revision"] < old["revision"] + 10000
+trace = open(sys.argv[3]).read()
+assert trace.count('layout-probe-rejected backend owner ') == 2
+accepted = [json.loads(line.split("layout-probe-observation ", 1)[1])
+            for line in trace.splitlines() if "layout-probe-observation " in line]
+assert all(not row["packet"] or row["packet"]["backendOwner"] != sys.argv[4] for row in accepted)
 print("PASS: wrong-backend high-revision frames rejected by both receivers")
 PY
 printf '%s\n' '{"schema":1,"aliasReleased":true,"staleBackendRejected":true}' \
