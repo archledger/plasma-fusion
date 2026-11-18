@@ -93,10 +93,10 @@ Nothing in these fixtures installs into the logged-in desktop.
 The Python entry point remains `tools/tests/layout-control/test_prepare_seed.py`. Guard cases
 live in `target_guard_tests.py`; consumer inventory, lease and retirement cases live in
 `consumer_lifecycle_tests.py`; cleanup qualification/ownership cases live in `cleanup_tests.py`.
-Combined lifetime, seed and raw-evidence cases live in `mixed_lifetime_tests.py`.
-They share `qml_helpers.py` with the entry point. The driver
-re-exports the classes, preserving existing class selectors and all cases. The support
-module names deliberately do not match `test_*.py`, avoiding duplicate default discovery.
+Combined lifetime, seed and raw-evidence cases live in `mixed_lifetime_tests.py`; output-loss and
+activity-switch cases live in `view_loss_tests.py`. They share `qml_helpers.py` with the entry
+point. The driver re-exports the classes, preserving existing class selectors and all cases. The
+support module names deliberately do not match `test_*.py`, avoiding duplicate default discovery.
 Package-aware imports also preserve `python3 -m unittest` with the entry file's path.
 Target-mode seeds copy and hash `receipts.py`. The shell wait helpers and their Python tests
 call its `target-reply` and `consumer-state` entry points. Complete-line event/native parsing is
@@ -105,7 +105,9 @@ not strengthen the older target checker or settle the production protocol.
 Mixed-lifetime seeds additionally copy and hash `mixed_lifetime.py` and `mixed_scenario.sh`.
 The scenario is sourced after the existing target/retirement prelude, keeping the main Bash
 process responsible for its children and cleanup. Snapshot and partial runtime checks are the
-same functions used by the final combined qualifier.
+same functions used by the final combined qualifier. View-loss seeds instead copy and hash
+`view_loss.py`, `view_loss_scenario.sh` and the `mixed_lifetime.py` complete-line reader that
+checker reuses; the mixed scenario itself is not copied.
 
 Build `topbar kwin` into a private stage, then make a fresh seed under this worktree's `build/`:
 
@@ -393,6 +395,78 @@ behavior is reused unchanged. This is one captured-frame replay and competing-co
 interleaving, not fair arbitration, a mixed shell/KWin process-replacement stress matrix,
 actual activity/output-loss testing, mutating action completion or production tiler integration.
 Those remain separate G0 obligations; this mode does not clear G0/P1 or fix the Qt shutdown bug.
+
+The default-off `--view-loss-probe` mode exercises real output-object loss and activity switches.
+It needs two virtual outputs:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-view --view-loss-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 PFV_OUTPUTS=2 tools/vsession/cvsession.sh \
+    layout-control-view tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-view" 1440x900 240
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-view --scope view-loss
+```
+
+The mode implies the target and focus controls, rejects transport faults and cannot be combined
+with `--mixed-lifetime-probe`. The driver branches right after the target prelude's first
+explicit preparation and keyboard validation, while that validation is still live, and changes
+only the private session:
+
+1. `kscreen-doctor` disables the output holding the controlled app and both bars. The retained
+   validation names the removed output and must be refused `stale-context` without a context.
+   KWin must evacuate the app, still alive, to the remaining output; both bars must follow with
+   unchanged consumer lifetimes and leases.
+2. Re-enabling the output creates a new native output with the same name. The same retained
+   envelope must stay refused in a newer context of that output. A fresh validation click that
+   re-sends the old handle unchanged, apart from its request number, is refused too.
+3. `AddActivity` creates a second activity. After a new explicit preparation and validation on
+   the returned output, `SetCurrentActivity` switches away and back; that handle must be refused
+   on both sides, including a fresh re-send after the return.
+4. With the app remembered again on its own activity, the same control on the other activity
+   opens its popup and sends a keyboard preparation. It must be refused without capturing the
+   app, which is not part of that view.
+5. A final explicit preparation on the original activity must succeed with a new handle.
+
+The driver checks, rather than assumes, KWin's evacuation and restoration of the app and
+Plasma's move of both bars; those were observed on the pinned image, not a guaranteed placement
+policy. Clicks on the app follow a click on empty desktop, so each one is a real activation.
+After an activity switch the next click waits until both bars accepted the switched context;
+one click that raced the shell's own switch handling opened no popup.
+
+In this mode the provider adds a backend-only `layout-probe-view` record to every context
+generation advance. It names the native source (`screens`, `current-activity`, `activities`,
+`activation`, `window-output` and the other window, desktop and shell-identity events) and
+whether a live preparation existed. Each screen entry says whether that native output object was
+present when the provider started or appeared in an earlier record (a bounded history), so a
+same-name replacement reports a new object rather than the name's old one. Whichever record
+first lists the returned name must report it unknown, independent of event order. A diagnostic
+reference to the last activated eligible app supplies its class, output, frame and view
+membership; decisions never read it and it never enters a packet. The wake shortcut adds a
+record without advancing the generation, and the driver uses it to read current geometry. Other
+modes emit none of this, and the wire packets are unchanged.
+
+`view_loss.py` binds each step to the complete shell/backend lines between an exclusive
+`view-mark-*.json`, written before the native action, and the point where the step was confirmed
+(`view-<step>.json`). A required event must carry its own native source, so a broken screens or
+activity handler cannot hide behind a focus change. Each refusal must match its exact native
+verdict, its actual receipt and accepted memory. The final check recomputes every step from its
+window, requires the windows in order without overlap and audits the whole run. Every generation
+advance appears once, in order, with a known source. Until the first output change only the
+original validation may be re-confirmed. Afterwards readiness occurs only for the three explicit
+recovery verdicts, each naming the live app within its own recovery's log span, so a recovered
+handle re-confirmed after a later switch fails. Every accepted ready packet must match the exact
+exchange of one of these verdicts or of a pre-change re-confirmation of the original validation. The
+guarded consumer sends exactly its six explicit requests, the read-only consumer sends no target
+intent, and all accepted state keeps one provider lifetime and both leases. The checker writes
+`view-loss-result.json` from its own check list, and only after this full check passes.
+
+This scope requires `view-loss-result.json`, the view records and inventories, complete traces
+and the independent cleanup evidence. It covers one private two-output layout and one added
+activity on this image. Hot-plugging a new connector, bars spanning several outputs, desktop
+removal, mutating action acknowledgements and production tiler integration remain untested, and
+this mode does not clear G0/P1.
 
 `--check-result` requires the explicit selected-scope receipt, successful inner scenario/session
 codes and independent cleanup qualification. The wrapper's exit code alone is insufficient.

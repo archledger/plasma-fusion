@@ -22,6 +22,11 @@ Item {
     property bool focusProbe: false
     property bool targetProbe: false
     property bool mixedLifetimeProbe: false
+    property bool viewLossProbe: false
+    // Diagnostics for the view-loss case only: decisions never read these references.
+    property var viewLossSubject: null
+    // Bounded history of native output objects present at start or already reported.
+    property var viewLossScreens: []
     property var lastEligibleWindow: null
     property int shellPid: 0
     property string shellPidOwner: ""
@@ -246,6 +251,43 @@ Item {
         }));
     }
 
+    // One record per generation advance, naming the native event that caused it, so a broken
+    // view handler cannot hide behind a focus change. An output is known only if the same native
+    // object was present at start or in an earlier record; a same-name replacement is not.
+    function traceView(reason: string, source: string, from: int, prepared: bool): void {
+        if (!viewLossProbe || stopping) {
+            return;
+        }
+        const active = Workspace.activeWindow;
+        const subject = viewLossSubject;
+        const alive = Tiling.alive(subject) && !!subject.output
+            && Workspace.screens.indexOf(subject.output) >= 0;
+        const frame = alive ? subject.frameGeometry : null;
+        const known = viewLossScreens;
+        console.info("layout-probe-view", JSON.stringify({
+            reason: reason, source: source, from: from, generation: targetGeneration,
+            prepared: prepared,
+            screens: Workspace.screens.map(output => ({
+                name: String(output.name), known: known.indexOf(output) >= 0,
+                x: output.geometry.x, y: output.geometry.y,
+                width: output.geometry.width, height: output.geometry.height
+            })),
+            activityId: String(Workspace.currentActivity), activities: Workspace.activities.length,
+            desktopId: Workspace.currentDesktop ? String(Workspace.currentDesktop.id) : "",
+            activeClass: Tiling.alive(active) ? String(active.resourceClass) : "",
+            activeOutput: Tiling.alive(active) && active.output ? String(active.output.name) : "",
+            subjectClass: alive ? String(subject.resourceClass) : "",
+            subjectOutput: alive ? String(subject.output.name) : "",
+            subjectFrame: frame
+                ? {x: frame.x, y: frame.y, width: frame.width, height: frame.height} : null,
+            subjectInView: alive && Tiling.onWorkspace(
+                subject, Workspace.currentDesktopForScreen(subject.output),
+                String(Workspace.currentActivity), subject.output)
+        }));
+        const added = Workspace.screens.filter(output => known.indexOf(output) < 0);
+        viewLossScreens = known.concat(added).slice(-32);
+    }
+
     // Native references never leave this object. The caller must resolve shellPid for readOwner
     // before preparation; a class/app-id string alone cannot identify a shell surface.
     function shellOwnsFocus(window: var, output: var): bool {
@@ -348,7 +390,7 @@ Item {
         lastFocusedWindow = window;
         // Shell surfaces participate too, even before a preparation exists.
         if (window !== previous || (!eligible && !shell)) {
-            advanceTargetContext("focus-changed");
+            advanceTargetContext("focus-changed", "activation");
         }
         if (opening && targetGeneration === generation + 1 && targetGeneration >= 0) {
             const handoff = {
@@ -369,23 +411,25 @@ Item {
         }
     }
 
-    function targetViewChanged(): void {
+    function targetViewChanged(source: string): void {
         lastEligibleWindow = null;
-        advanceTargetContext("view-changed");
+        advanceTargetContext("view-changed", source);
     }
 
-    function targetMembershipChanged(): void {
+    function targetMembershipChanged(source: string): void {
         lastEligibleWindow = null;
-        advanceTargetContext("target-departed");
+        advanceTargetContext("target-departed", source);
     }
 
-    function targetEligibilityChanged(): void {
+    function targetEligibilityChanged(source: string): void {
         if (!Tiling.eligibleForMaster(lastEligibleWindow)) {
-            targetMembershipChanged();
+            targetMembershipChanged(source);
         }
     }
 
-    function advanceTargetContext(reason: string): void {
+    function advanceTargetContext(reason: string, source: string): void {
+        const from = targetGeneration;
+        const prepared = preparedTarget !== null;
         targetHandoff = null;
         if (targetGeneration >= 0) {
             targetGeneration = targetGeneration < 2147483646 ? targetGeneration + 1 : -1;
@@ -393,6 +437,7 @@ Item {
         invalidateTarget(reason);
         if (probe.targetProbe && !probe.stopping) {
             probe.traceFocus("context-changed");
+            probe.traceView(reason, source, from, prepared);
             probe.scan();
         }
     }
@@ -683,13 +728,13 @@ Item {
             if (!Number.isInteger(pid) || pid <= 0) {
                 probe.shellPid = 0;
                 probe.shellPidOwner = "";
-                probe.targetViewChanged();
+                probe.targetViewChanged("shell-pid");
                 probe.reconcileTargetConsumers(null);
                 probe.finishRead();
                 return;
             }
             if (probe.shellPidOwner !== "" && probe.shellPidOwner !== probe.readOwner) {
-                probe.targetViewChanged();
+                probe.targetViewChanged("shell-owner");
                 probe.targetExchange = null;
             }
             probe.shellPid = pid;
@@ -699,7 +744,7 @@ Item {
         onFailed: {
             probe.shellPid = 0;
             probe.shellPidOwner = "";
-            probe.targetViewChanged();
+            probe.targetViewChanged("shell-lookup");
             probe.reconcileTargetConsumers(null);
             probe.finishRead();
         }
@@ -778,6 +823,7 @@ Item {
         onActivated: {
             console.info("layout-probe: wake received");
             probe.traceFocus("wake");
+            probe.traceView("wake", "wake", probe.targetGeneration, probe.preparedTarget !== null);
             probe.scan();
         }
     }
@@ -785,6 +831,9 @@ Item {
         target: Workspace
         enabled: probe.authorized && !probe.stopping
         function onWindowActivated(window) {
+            if (probe.viewLossProbe && Tiling.eligibleForMaster(window)) {
+                probe.viewLossSubject = window;
+            }
             if (probe.targetProbe) {
                 probe.trackTargetActivation(window);
             } else if (Tiling.eligibleForMaster(window)) {
@@ -802,10 +851,10 @@ Item {
             }
             if (probe.targetProbe && (remembered || (probe.preparedTarget
                     && probe.preparedTarget.window === window))) {
-                probe.targetMembershipChanged();
+                probe.targetMembershipChanged("window-removed");
             } else if (probe.targetProbe && (focused || handed || (probe.preparedTarget
                     && probe.preparedTarget.focusSurface === window))) {
-                probe.advanceTargetContext("focus-changed");
+                probe.advanceTargetContext("focus-changed", "window-removed");
             }
             if (remembered) {
                 probe.lastEligibleWindow = null;
@@ -813,35 +862,35 @@ Item {
             }
         }
         function onCurrentDesktopChanged() {
-            if (probe.targetProbe) probe.targetViewChanged();
+            if (probe.targetProbe) probe.targetViewChanged("current-desktop");
         }
         function onCurrentActivityChanged() {
-            if (probe.targetProbe) probe.targetViewChanged();
+            if (probe.targetProbe) probe.targetViewChanged("current-activity");
         }
         function onScreensChanged() {
-            if (probe.targetProbe) probe.targetViewChanged();
+            if (probe.targetProbe) probe.targetViewChanged("screens");
         }
         function onDesktopsChanged() {
-            if (probe.targetProbe) probe.targetViewChanged();
+            if (probe.targetProbe) probe.targetViewChanged("desktops");
         }
         function onActivitiesChanged() {
-            if (probe.targetProbe) probe.targetViewChanged();
+            if (probe.targetProbe) probe.targetViewChanged("activities");
         }
     }
     Connections {
         target: probe.lastEligibleWindow
         enabled: probe.authorized && probe.targetProbe && !probe.stopping
-        function onDesktopsChanged() { probe.targetMembershipChanged(); }
-        function onActivitiesChanged() { probe.targetMembershipChanged(); }
-        function onOutputChanged() { probe.targetMembershipChanged(); }
-        function onMinimizedChanged() { probe.targetEligibilityChanged(); }
-        function onFullScreenChanged() { probe.targetEligibilityChanged(); }
-        function onMaximizedChanged() { probe.targetEligibilityChanged(); }
-        function onTileChanged() { probe.targetEligibilityChanged(); }
-        function onSkipTaskbarChanged() { probe.targetEligibilityChanged(); }
-        function onSkipSwitcherChanged() { probe.targetEligibilityChanged(); }
-        function onTransientChanged() { probe.targetEligibilityChanged(); }
-        function onModalChanged() { probe.targetEligibilityChanged(); }
+        function onDesktopsChanged() { probe.targetMembershipChanged("window-desktops"); }
+        function onActivitiesChanged() { probe.targetMembershipChanged("window-activities"); }
+        function onOutputChanged() { probe.targetMembershipChanged("window-output"); }
+        function onMinimizedChanged() { probe.targetEligibilityChanged("window-minimized"); }
+        function onFullScreenChanged() { probe.targetEligibilityChanged("window-fullscreen"); }
+        function onMaximizedChanged() { probe.targetEligibilityChanged("window-maximized"); }
+        function onTileChanged() { probe.targetEligibilityChanged("window-tile"); }
+        function onSkipTaskbarChanged() { probe.targetEligibilityChanged("window-skip-taskbar"); }
+        function onSkipSwitcherChanged() { probe.targetEligibilityChanged("window-skip-switcher"); }
+        function onTransientChanged() { probe.targetEligibilityChanged("window-transient"); }
+        function onModalChanged() { probe.targetEligibilityChanged("window-modal"); }
     }
     Component.onCompleted: {
         authorized = KWin.readConfig("ProbeAuthorized", false) === true;
@@ -853,6 +902,10 @@ Item {
         focusProbe = KWin.readConfig("FocusProbe", false) === true;
         targetProbe = KWin.readConfig("TargetProbe", false) === true;
         mixedLifetimeProbe = KWin.readConfig("MixedLifetimeProbe", false) === true;
+        viewLossProbe = targetProbe && KWin.readConfig("ViewLossProbe", false) === true;
+        if (viewLossProbe) {
+            viewLossScreens = Workspace.screens.slice();
+        }
         if (targetProbe) {
             lastFocusedWindow = Workspace.activeWindow;
             if (Tiling.eligibleForMaster(lastFocusedWindow)) {

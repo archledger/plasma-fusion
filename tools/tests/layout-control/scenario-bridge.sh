@@ -388,6 +388,18 @@ PY
         target_request=$(wait_target_reply "$focus_boot" validate true \
             "$target_prepare_request" pf.focus.alpha)
         echo "PASS: explicit preparation and keyboard validation retain the native application"
+        view_loss_probe=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
+            --group Script-plasmafusion-layout-probe --key ViewLossProbe --default false)
+        if [[ $view_loss_probe == true ]]; then
+            # Branch while that validation is still live; this Bash parent keeps child ownership.
+            # shellcheck source=tools/tests/layout-control/view_loss_scenario.sh
+            source "$HOME/.local/lib/layout-control/view_loss_scenario.sh"
+            printf 'quit\n' >&"$focus_input"
+            wait "$focus_client"
+            exec {focus_input}>&-
+            finish_probe_session
+            return 0
+        fi
         python3 - "$OUT/plasmashell.log" "$focus_boot" >"$OUT/target-control.txt" <<'PY'
 import json, sys
 rows = [json.loads(line.split("layout-probe-focus-control ", 1)[1])

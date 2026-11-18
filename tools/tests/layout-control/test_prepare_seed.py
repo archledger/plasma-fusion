@@ -28,6 +28,9 @@ if __package__:
     from .qml_helpers import qml_handler
     # Re-export preserves the existing unittest entry point and class selectors.
     from .target_guard_tests import TargetGuardTests as TargetGuardTests
+    from .view_loss_tests import ViewLossCheckerTests as ViewLossCheckerTests
+    from .view_loss_tests import ViewLossSeedTests as ViewLossSeedTests
+    from .view_loss_tests import ViewLossTraceTests as ViewLossTraceTests
 else:
     from cleanup_tests import CleanupGateTests as CleanupGateTests
     from cleanup_tests import CleanupOwnershipTests as CleanupOwnershipTests
@@ -40,6 +43,9 @@ else:
     from mixed_lifetime_tests import MixedLifetimeSnapshotTests as MixedLifetimeSnapshotTests
     from qml_helpers import qml_handler
     from target_guard_tests import TargetGuardTests as TargetGuardTests
+    from view_loss_tests import ViewLossCheckerTests as ViewLossCheckerTests
+    from view_loss_tests import ViewLossSeedTests as ViewLossSeedTests
+    from view_loss_tests import ViewLossTraceTests as ViewLossTraceTests
 
 PREPARER = Path(__file__).with_name("prepare_seed.py")
 LIFECYCLE = Path(__file__).with_name("lifecycle.py")

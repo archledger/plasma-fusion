@@ -12,9 +12,13 @@ from pathlib import Path
 if __package__:
     from .cleanup import check_cleanup
     from .mixed_lifetime import check_mixed
+    from .view_loss import CHECKS as VIEW_LOSS_CHECKS
+    from .view_loss import check_view_loss
 else:
     from cleanup import check_cleanup
     from mixed_lifetime import check_mixed
+    from view_loss import CHECKS as VIEW_LOSS_CHECKS
+    from view_loss import check_view_loss
 
 HERE = Path(__file__).resolve().parent
 SCRIPT_ID = "plasmafusion-layout-probe"
@@ -24,7 +28,7 @@ APPLET_ID = "org.plasmafusion.layoutprobe"
 def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
              query_timeout_ms: int = 10000, reply_delay_ms: int = 0,
              focus_probe: bool = False, target_probe: bool = False,
-             mixed_lifetime_probe: bool = False) -> None:
+             mixed_lifetime_probe: bool = False, view_loss_probe: bool = False) -> None:
     build = Path.cwd() / "build"
     if build.is_symlink() or not output.resolve().is_relative_to(build.resolve()):
         raise ValueError("output must be under the current worktree's build directory")
@@ -36,7 +40,9 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         raise ValueError("reply delay must be between 0 and 3000 ms")
     if reply_delay_ms and reply_delay_ms <= query_timeout_ms:
         raise ValueError("reply delay must exceed the query deadline for this fault")
-    target_probe = target_probe or mixed_lifetime_probe
+    if mixed_lifetime_probe and view_loss_probe:
+        raise ValueError("mixed-lifetime and view-loss scenarios are separate private cases")
+    target_probe = target_probe or mixed_lifetime_probe or view_loss_probe
     focus_probe = focus_probe or target_probe
     if focus_probe and (drop_retirement_frame or reply_delay_ms):
         raise ValueError("focus observation requires normal transport")
@@ -46,9 +52,13 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
     fixtures = {name: (HERE / name).read_bytes() for name in ("provider.qml", "consumer.qml")}
     focus_helper = (HERE.parent / "lib/heldclient.py").read_bytes() if focus_probe else None
     receipt_helper = (HERE / "receipts.py").read_bytes() if target_probe else None
-    mixed_helpers = ({
-        name: (HERE / name).read_bytes() for name in ("mixed_lifetime.py", "mixed_scenario.sh")
-    } if mixed_lifetime_probe else {})
+    case_names = ()
+    if mixed_lifetime_probe:
+        case_names = ("mixed_lifetime.py", "mixed_scenario.sh")
+    elif view_loss_probe:
+        # The view-loss checker reuses only the mixed checker's complete-line event reader.
+        case_names = ("mixed_lifetime.py", "view_loss.py", "view_loss_scenario.sh")
+    case_helpers = {name: (HERE / name).read_bytes() for name in case_names}
     cleanup_helpers = {
         name: (HERE / name).read_bytes() for name in ("cleanup.py", "lifecycle.py")
     }
@@ -97,6 +107,7 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         f"FocusProbe={'true' if focus_probe else 'false'}\n"
         f"TargetProbe={'true' if target_probe else 'false'}\n"
         f"MixedLifetimeProbe={'true' if mixed_lifetime_probe else 'false'}\n"
+        f"ViewLossProbe={'true' if view_loss_probe else 'false'}\n"
         "\n[Desktops]\nNumber=2\nRows=1\n"
     )
     (private_config / "pfv-env").write_text("PF_LAYOUT_PRIVATE_CONTAINER=1\n")
@@ -116,7 +127,7 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         helper.parent.mkdir(parents=True, exist_ok=True)
         helper.write_bytes(receipt_helper)
         inputs["receipts.py"] = hashlib.sha256(receipt_helper).hexdigest()
-    for name, data in mixed_helpers.items():
+    for name, data in case_helpers.items():
         helper = output / ".local/lib/layout-control" / name
         helper.parent.mkdir(parents=True, exist_ok=True)
         helper.write_bytes(data)
@@ -138,7 +149,7 @@ def main() -> None:
         "--scope",
         choices=("first-slice", "silent-retirement", "reply-ordering",
                  "query-timeout-late", "focus-observation", "target-preparation",
-                  "consumer-retirement", "mixed-lifetimes"),
+                  "consumer-retirement", "mixed-lifetimes", "view-loss"),
         default="first-slice",
     )
     parser.add_argument("--drop-retirement-frame", action="store_true",
@@ -151,12 +162,15 @@ def main() -> None:
                         help="private non-mutating target preparation and validation")
     parser.add_argument("--mixed-lifetime-probe", action="store_true",
                         help="private combined consumer/provider lifetime and replay scenario")
+    parser.add_argument("--view-loss-probe", action="store_true",
+                        help="private output-loss and activity-switch scenario (two outputs)")
     args = parser.parse_args()
     try:
         if args.check_result is not None:
             if (args.stage is not None or args.output is not None or args.drop_retirement_frame
                     or args.query_timeout_ms is not None or args.reply_delay_ms is not None
-                    or args.focus_probe or args.target_probe or args.mixed_lifetime_probe):
+                    or args.focus_probe or args.target_probe or args.mixed_lifetime_probe
+                    or args.view_loss_probe):
                 raise ValueError("--check-result cannot be combined with seed preparation")
             check_result(args.check_result, args.scope)
         else:
@@ -171,7 +185,8 @@ def main() -> None:
                     ),
                     reply_delay_ms=args.reply_delay_ms if args.reply_delay_ms is not None else 0,
                     focus_probe=args.focus_probe, target_probe=args.target_probe,
-                    mixed_lifetime_probe=args.mixed_lifetime_probe)
+                    mixed_lifetime_probe=args.mixed_lifetime_probe,
+                    view_loss_probe=args.view_loss_probe)
     except (ValueError, OSError) as error:
         parser.exit(2, f"{error}\n")
 
@@ -209,6 +224,9 @@ def check_result(directory: Path, scope: str = "first-slice") -> None:
         receipt = directory / "mixed-lifetime-result.json"
         checks = ["roundtrip-native", "consumer-replacement", "provider-reload",
                   "late-frame-rejection", "stale-intent-refusal", "explicit-recovery"]
+    elif scope == "view-loss":
+        receipt = directory / "view-loss-result.json"
+        checks = VIEW_LOSS_CHECKS
     else:
         raise ValueError("unknown probe receipt scope")
     if not receipt.is_file():
@@ -218,6 +236,8 @@ def check_result(directory: Path, scope: str = "first-slice") -> None:
         raise ValueError("incomplete probe receipt")
     if scope == "mixed-lifetimes":
         check_mixed(directory)
+    elif scope == "view-loss":
+        check_view_loss(directory)
     check_cleanup(directory)
     print(f"PASS: explicit {scope} receipt, inner exit codes and separate cleanup qualification")
 
