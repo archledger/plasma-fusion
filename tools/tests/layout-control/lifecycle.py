@@ -145,8 +145,11 @@ def owner_of(name: str) -> str:
         return qdbus("org.freedesktop.DBus", "/org/freedesktop/DBus",
                      "org.freedesktop.DBus.GetNameOwner", name)
     except subprocess.CalledProcessError as error:
-        # qdbus-qt6 reports method errors on stdout in the pinned test image.
-        diagnostic = error.stderr or error.output or ""
+        # A crashed command is not a completed bus method response, even with a known prefix.
+        if error.returncode < 0:
+            raise
+        # Method errors are on stdout; auxiliary locale warnings must not mask them.
+        diagnostic = error.output or error.stderr or ""
         if diagnostic.splitlines()[:1] == ["Error: org.freedesktop.DBus.Error.NameHasNoOwner"]:
             return ""
         raise

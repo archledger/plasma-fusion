@@ -92,7 +92,8 @@ Nothing in these fixtures installs into the logged-in desktop.
 
 The Python entry point remains `tools/tests/layout-control/test_prepare_seed.py`. Guard cases
 live in `target_guard_tests.py`; consumer inventory, lease and retirement cases live in
-`consumer_lifecycle_tests.py`. They share `qml_helpers.py` with the entry point. The driver
+`consumer_lifecycle_tests.py`; cleanup qualification/ownership cases live in `cleanup_tests.py`.
+They share `qml_helpers.py` with the entry point. The driver
 re-exports the classes, preserving existing class selectors and all cases. The support
 module names deliberately do not match `test_*.py`, avoiding duplicate default discovery.
 Package-aware imports also preserve `python3 -m unittest` with the entry file's path.
@@ -119,6 +120,8 @@ name each time: the existing harness puts it twice in a Unix socket path, which 
 bytes including its terminator. The seed preparer refuses an existing output or an output
 outside `build/`; it never copies live user configuration. The provider remains inactive without
 `ProbeAuthorized=true` in its private KWin configuration.
+Every fresh seed also copies/hashes `cleanup.py`, its existing `lifecycle.py` bus helpers and
+the private-container marker in `pfv-env`. Old seeds without these inputs must not be reused.
 
 The probe saves each request before waking KWin and records incoming frames separately from
 accepted receiver memory. It checks native capability/refusal, two-widget delivery, graceful
@@ -329,14 +332,46 @@ competing-bar recovery, mixed lifetimes, action acknowledgements/timeouts,
 real activity/output-loss cases and existing-tiler integration remain separate G0 gates. No
 preparation or validation admits a window, changes its geometry or writes placement memory.
 
-`--check-result` requires the explicit selected-scope receipt and successful inner scenario/session
-codes. The wrapper's exit code alone is insufficient. `reload-result.json` and
+`--check-result` requires the explicit selected-scope receipt, successful inner scenario/session
+codes and independent cleanup qualification. The wrapper's exit code alone is insufficient.
+`reload-result.json` and
 `identity-fence-result.json` record the additional assertions; none of these certifies full G0.
 The silent-retirement scope requires its own receipt and cannot use the first-slice receipt.
 Action completion/timeout behavior, target preparation and existing-tiler integration need their own
-evidence. A shell abort during teardown was also reproduced with the
-probe disabled and zero probe widgets; retain that environment limitation rather than claiming
-crash-free qualification.
+evidence.
+
+The feature-owned cleanup helper captures the original direct shell child, its controller,
+UID/start times, private HOME/runtime and current bus/backend/shell owners before the cases.
+It refuses root, non-container, foreign or symlinked contexts. A later owner cannot replace that
+capture. At successful case ends it rechecks the unique bus owner's PID and opens a
+[process descriptor](https://docs.python.org/3.14/library/os.html#os.pidfd_open), rechecks the
+identity after opening it, and sends one
+[descriptor-bound SIGTERM](https://docs.python.org/3.14/library/signal.html#signal.pidfd_send_signal).
+An exclusive request record is saved before signalling; an interrupted or concurrent attempt
+cannot silently repeat the effect.
+The descriptor wait is bounded; there is no by-PID/group fallback, escalation or retry. Bash,
+the real parent, supplies the actual child wait status. The existing shared EXIT cleanup is
+neither replaced nor suppressed and still runs after an error.
+The shared fixture bus helper prioritizes qdbus's typed stdout method error over auxiliary
+locale stderr; only `NameHasNoOwner` means withdrawal. Other bus failures still fail the run.
+Signal-terminated helper commands remain failures even if they printed that error first.
+
+`cleanup-identity.json`, `cleanup-request.json`, `cleanup-stopped.json` and
+`cleanup-result.json` are separate from
+functional state receipts. Every serialized process copy is type-validated independently;
+numeric equality alone is insufficient. Qualification requires matching records, actual child
+exit0, unchanged bus/backend identities, shell-owner withdrawal, successful inner/outer codes and a
+completed sweep with no residuals or forced SIGKILL. Missing/partial evidence and known fatal
+signatures in retained logs fail, including an abort that occurs despite functional0/0.
+Nonfatal D-Bus/PipeWire warnings and bounded wait-loop assertion failures are not blanket errors;
+this gate does not establish warning-free logs or universal crash freedom.
+
+The original simultaneous-sweep controls reproduce the same normalized Qt D-Bus backtrace with
+zero probe widgets and with the full probe. The affected Qt6.11.2 path matches
+[QTBUG-149316's upstream fix](https://github.com/qt/qtbase/commit/91ec4c85d454802521c76ba861e24b82c9a3b636).
+Shell-first cleanup is a fixture ordering correction, not a patched or tested Qt remedy.
+The original concurrent-sweep failure remains separate negative evidence; its exact dependency
+trigger and frequency remain unproved. See [the blocked queue](../DEFERRED.md).
 
 `lifecycle.py` is the separate, P0-only process-replacement runner:
 

@@ -16,11 +16,19 @@ from unittest import mock
 from xml.etree import ElementTree
 
 if __package__:
+    from .cleanup_tests import CleanupGateTests as CleanupGateTests
+    from .cleanup_tests import CleanupOwnershipTests as CleanupOwnershipTests
+    from .cleanup_tests import CleanupSeedTests as CleanupSeedTests
+    from .cleanup_tests import write_cleanup_fixture
     from .consumer_lifecycle_tests import ConsumerLifecycleTests as ConsumerLifecycleTests
     from .qml_helpers import qml_handler
     # Re-export preserves the existing unittest entry point and class selectors.
     from .target_guard_tests import TargetGuardTests as TargetGuardTests
 else:
+    from cleanup_tests import CleanupGateTests as CleanupGateTests
+    from cleanup_tests import CleanupOwnershipTests as CleanupOwnershipTests
+    from cleanup_tests import CleanupSeedTests as CleanupSeedTests
+    from cleanup_tests import write_cleanup_fixture
     from consumer_lifecycle_tests import ConsumerLifecycleTests as ConsumerLifecycleTests
     from qml_helpers import qml_handler
     from target_guard_tests import TargetGuardTests as TargetGuardTests
@@ -103,6 +111,7 @@ class SeedTests(unittest.TestCase):
         (self.output / "layout-probe-result.json").write_text(json.dumps({
             "schema": 1, "passed": True, "checks": ["roundtrip-native", "retirement"],
         }))
+        write_cleanup_fixture(self.output)
 
     def test_result_check_rejects_outer_zero_with_failed_scenario(self):
         self.result_files(session_status=1)
@@ -486,6 +495,36 @@ class LifecycleSafetyTests(unittest.TestCase):
         )
         with mock.patch.object(self.runner, "qdbus", side_effect=absent):
             self.assertEqual(self.runner.owner_of("org.kde.KWin"), "")
+
+    def test_owner_lookup_method_error_is_not_hidden_by_locale_stderr(self):
+        absent = subprocess.CalledProcessError(
+            2, ["qdbus-qt6"],
+            output="Error: org.freedesktop.DBus.Error.NameHasNoOwner\nCould not get owner\n",
+            stderr='Detected locale "C" with character encoding "ANSI_X3.4-1968", which is not UTF-8.\n'
+                   'Qt depends on a UTF-8 locale, and has switched to "C.UTF-8" instead.\n',
+        )
+        with mock.patch.object(self.runner, "qdbus", side_effect=absent):
+            self.assertEqual(self.runner.owner_of("org.kde.plasmashell"), "")
+
+    def test_owner_lookup_does_not_override_unexpected_method_error_with_stderr(self):
+        denied = subprocess.CalledProcessError(
+            2, ["qdbus-qt6"],
+            output="Error: org.freedesktop.DBus.Error.AccessDenied\n",
+            stderr="Error: org.freedesktop.DBus.Error.NameHasNoOwner\n",
+        )
+        with mock.patch.object(self.runner, "qdbus", side_effect=denied):
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.runner.owner_of("org.kde.plasmashell")
+
+    def test_owner_lookup_never_accepts_a_signal_terminated_method_error(self):
+        crashed = subprocess.CalledProcessError(
+            -6, ["qdbus-qt6"],
+            output="Error: org.freedesktop.DBus.Error.NameHasNoOwner\n",
+            stderr="Aborted (core dumped)\n",
+        )
+        with mock.patch.object(self.runner, "qdbus", side_effect=crashed):
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.runner.owner_of("org.kde.plasmashell")
 
     def test_owner_lookup_uses_one_authoritative_query(self):
         with mock.patch.object(self.runner, "qdbus", return_value=":1.42") as query:

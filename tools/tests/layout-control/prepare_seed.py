@@ -9,6 +9,11 @@ import json
 import shutil
 from pathlib import Path
 
+if __package__:
+    from .cleanup import check_cleanup
+else:
+    from cleanup import check_cleanup
+
 HERE = Path(__file__).resolve().parent
 SCRIPT_ID = "plasmafusion-layout-probe"
 APPLET_ID = "org.plasmafusion.layoutprobe"
@@ -37,6 +42,9 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
     fixtures = {name: (HERE / name).read_bytes() for name in ("provider.qml", "consumer.qml")}
     focus_helper = (HERE.parent / "lib/heldclient.py").read_bytes() if focus_probe else None
     receipt_helper = (HERE / "receipts.py").read_bytes() if target_probe else None
+    cleanup_helpers = {
+        name: (HERE / name).read_bytes() for name in ("cleanup.py", "lifecycle.py")
+    }
     output.mkdir(parents=True, mode=0o700)
     script = output / ".local/share/kwin/scripts" / SCRIPT_ID
     applet = output / ".local/share/plasma/plasmoids" / APPLET_ID
@@ -83,10 +91,12 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         f"TargetProbe={'true' if target_probe else 'false'}\n"
         "\n[Desktops]\nNumber=2\nRows=1\n"
     )
+    (private_config / "pfv-env").write_text("PF_LAYOUT_PRIVATE_CONTAINER=1\n")
     inputs = {
         name: hashlib.sha256(data).hexdigest() for name, data in fixtures.items()
     } | {"Tiling.js": hashlib.sha256(rules.read_bytes()).hexdigest(),
          "kwinrc": hashlib.sha256((private_config / "kwinrc").read_bytes()).hexdigest(),
+         "pfv-env": hashlib.sha256((private_config / "pfv-env").read_bytes()).hexdigest(),
          "main.xml": hashlib.sha256((config / "main.xml").read_bytes()).hexdigest()}
     if focus_helper is not None:
         helper = output / ".local/lib/layout-control/heldclient.py"
@@ -98,6 +108,11 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         helper.parent.mkdir(parents=True, exist_ok=True)
         helper.write_bytes(receipt_helper)
         inputs["receipts.py"] = hashlib.sha256(receipt_helper).hexdigest()
+    for name, data in cleanup_helpers.items():
+        helper = output / ".local/lib/layout-control" / name
+        helper.parent.mkdir(parents=True, exist_ok=True)
+        helper.write_bytes(data)
+        inputs[name] = hashlib.sha256(data).hexdigest()
     (output / "probe-inputs.json").write_text(json.dumps(inputs, indent=2) + "\n")
 
 
@@ -181,7 +196,8 @@ def check_result(directory: Path, scope: str = "first-slice") -> None:
     result = json.loads(receipt.read_text())
     if result != {"schema": 1, "passed": True, "checks": checks}:
         raise ValueError("incomplete probe receipt")
-    print(f"PASS: explicit {scope} receipt and inner scenario/session exit codes")
+    check_cleanup(directory)
+    print(f"PASS: explicit {scope} receipt, inner exit codes and separate cleanup qualification")
 
 
 if __name__ == "__main__":

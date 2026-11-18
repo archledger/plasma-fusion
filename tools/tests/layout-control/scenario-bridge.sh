@@ -11,6 +11,24 @@ set -euo pipefail
     return 64
 }
 
+cleanup_helper="$HOME/.local/lib/layout-control/cleanup.py"
+finish_probe_session() {
+    local owned_pid status
+    owned_pid=$(python3 "$cleanup_helper" signal) || return 1
+    [[ $owned_pid =~ ^[1-9][0-9]*$ ]] || {
+        echo "FAIL: cleanup helper returned no owned child" >&2
+        return 1
+    }
+    if wait "$owned_pid"; then
+        status=0
+    else
+        status=$?
+    fi
+    python3 "$cleanup_helper" confirm "$status"
+}
+# Capture once, before the cases; never replace this identity with a later shell owner.
+python3 "$cleanup_helper" capture
+
 observations() {
     python3 - "$OUT/plasmashell.log" <<'PY'
 import json, sys
@@ -564,6 +582,7 @@ PY
         printf '%s\n' '{"schema":1,"passed":true,' \
             '"checks":["roundtrip-native","guarded-target","consumer-retirement",' \
             '"busy-replay","explicit-recovery"]}' >"$OUT/consumer-retirement-result.json"
+        finish_probe_session
         return 0
     fi
     printf 'quit\n' >&"$focus_input"
@@ -589,6 +608,7 @@ PY
     printf '%s\n' '{"schema":1,"passed":true,' \
         '"checks":["roundtrip-native","panel-keyboard-focus"]}' \
         >"$OUT/focus-observation-result.json"
+    finish_probe_session
     return 0
 fi
 
@@ -683,6 +703,7 @@ PY
     printf '%s\n' '{"schema":1,"passed":true,' \
         '"checks":["roundtrip-native","query-timeout","late-state"]}' \
         >"$OUT/query-timeout-result.json"
+    finish_probe_session
     return 0
 fi
 
@@ -736,6 +757,7 @@ PY
         '{"schema":1,"passed":true,' \
         '"checks":["roundtrip-native","silent-retirement","provider-reload"]}' \
         >"$OUT/silent-retirement-result.json"
+    finish_probe_session
     return 0
 fi
 
@@ -936,3 +958,4 @@ done
 printf '%s\n' '{"schema":1,"passed":true,' \
     '"checks":["roundtrip-native","same-provider-ordering"]}' >"$OUT/reply-ordering-result.json"
 echo "PASS: same-provider ordering plus prior transport/lifetime checks; full G0 remains open"
+finish_probe_session

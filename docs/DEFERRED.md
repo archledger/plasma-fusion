@@ -33,7 +33,7 @@ Feature specifications and implementation plans still define what must be built 
 
 | Item | State / owner | Blocker and evidence | Re-entry condition and first check | Last verified |
 |---|---|---|---|---|
-| None | - | - | - | 2026-11-14 |
+| P0 original concurrent-sweep control | blocked / workspace-layout-control | Installed Qt6.11.2 reaches the null-pending-call path identified by QTBUG-149316 ([upstream issue fix](https://github.com/qt/qtbase/commit/91ec4c85d454802521c76ba861e24b82c9a3b636)). Zero-probe/full-probe controls have matching normalized backtraces; [test evidence and limits](parts/testing.md#workspace-layout-transport-probe-p0). Ordered fixture shutdown does not qualify that concurrent path or fix Qt. | An independently approved fixed-Qt test environment; first rerun the frozen zero-probe/full-probe concurrent controls and inspect actual child statuses, retained crash diagnostics and final residuals. Do not weaken the ordinary fixture cleanup gate. | 2026-11-18 |
 
 Dynamic tiling ships with 0.8.0 in the full profile (Fedora 44); on the stock profile it stays
 unavailable, as KWin itself has no owner for it. Video wallpapers are a separate module, with no

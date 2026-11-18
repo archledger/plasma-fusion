@@ -20,6 +20,9 @@ under `tools/tests/layout-control/` plus one separately approved private-bus lif
 The transient identity-only alias and sixth runner were approved on 2026-11-17.
 Focused test modules were subsequently approved that day, preserving the entry command and all
 original 98 cases. No production changes.
+The owner approved fixture-owned orderly teardown and strict cleanup qualification on
+2026-11-18 (UTC), preserving all 122 cases then present. Shared harness/Qt/native/image/security
+and live-desktop changes remain excluded; G0 is still a separate gate.
 
 - [ ] Prove wake-up, correlated state exchange and script/shell/KWin lifetime invalidation in a
       real isolated shell/fork pair; include stale retained fields and negative controls.

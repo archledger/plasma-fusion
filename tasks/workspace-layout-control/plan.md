@@ -51,6 +51,13 @@ the existing entry command, class selectors and all original 98 cases. Further P
 tests may use focused modules in the same directory; this does not expand production, native,
 shared-harness, packaging or CI scope.
 
+On 2026-11-18 (UTC), the owner approved a fixture-only cleanup implementation: focused helpers,
+strict cleanup qualification/regression tests and matching documentation, preserving the entry
+command and all 122 existing cases. It may order the recorded owned shell's shutdown before
+dependencies, but must not alter shared teardown, Qt/native code, images, security settings or
+the live desktop. Functional success alone cannot certify cleanup, and this approval does not
+clear G0/P1.
+
 ## Source evidence and limits
 
 Inspected at Plasma Fusion main `44412a8901bf15c9f467fd5675795ee42fc3ffb7`:
