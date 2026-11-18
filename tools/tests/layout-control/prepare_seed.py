@@ -36,6 +36,7 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         raise ValueError("missing staged Tiling.js")
     fixtures = {name: (HERE / name).read_bytes() for name in ("provider.qml", "consumer.qml")}
     focus_helper = (HERE.parent / "lib/heldclient.py").read_bytes() if focus_probe else None
+    receipt_helper = (HERE / "receipts.py").read_bytes() if target_probe else None
     output.mkdir(parents=True, mode=0o700)
     script = output / ".local/share/kwin/scripts" / SCRIPT_ID
     applet = output / ".local/share/plasma/plasmoids" / APPLET_ID
@@ -92,6 +93,11 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         helper.parent.mkdir(parents=True)
         helper.write_bytes(focus_helper)
         inputs["heldclient.py"] = hashlib.sha256(focus_helper).hexdigest()
+    if receipt_helper is not None:
+        helper = output / ".local/lib/layout-control/receipts.py"
+        helper.parent.mkdir(parents=True, exist_ok=True)
+        helper.write_bytes(receipt_helper)
+        inputs["receipts.py"] = hashlib.sha256(receipt_helper).hexdigest()
     (output / "probe-inputs.json").write_text(json.dumps(inputs, indent=2) + "\n")
 
 

@@ -342,9 +342,6 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(result, {"refused": False, "later": False, "changed": False, "cleared": True})
 
     def run_target_checker(self, fault=None):
-        source = Path(__file__).with_name("scenario-bridge.sh").read_text()
-        checker = source.split("# Non-mutating target receipt:", 1)[1]
-        checker = checker.split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
         outbound = {"boot": "current", "request": 4}
         observation = {"boot": "current", "request": 4, "phase": "online", "packet": {
             "consumer": "current", "request": 4, "preparation": {
@@ -373,8 +370,9 @@ process.stdout.write(JSON.stringify({
             backend = root / "kwin.log"
             backend.write_text("qml: layout-probe-target " + json.dumps(native) + "\n")
             return subprocess.run(
-                [sys.executable, "-", str(shell), str(backend), "current", "validate",
-                 "false", "3", "-", str(root)], input=checker, capture_output=True,
+                [sys.executable, str(Path(__file__).with_name("receipts.py")), "target-reply",
+                 str(shell), str(backend), "current", "validate", "false", "3", "-", str(root)],
+                capture_output=True,
                 text=True, timeout=10, check=False,
             )
 

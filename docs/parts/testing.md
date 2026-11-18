@@ -96,6 +96,10 @@ live in `target_guard_tests.py`; consumer inventory, lease and retirement cases 
 re-exports the classes, preserving existing class selectors and all cases. The support
 module names deliberately do not match `test_*.py`, avoiding duplicate default discovery.
 Package-aware imports also preserve `python3 -m unittest` with the entry file's path.
+Target-mode seeds copy and hash `receipts.py`. The shell wait helpers and their Python tests
+call its `target-reply` and `consumer-state` entry points. Complete-line event/native parsing is
+shared, while each checker's existing correlation rules remain separate; this extraction does
+not strengthen the older target checker or settle the production protocol.
 
 Build `topbar kwin` into a private stage, then make a fresh seed under this worktree's `build/`:
 

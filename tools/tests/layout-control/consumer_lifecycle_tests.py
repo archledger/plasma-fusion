@@ -441,9 +441,6 @@ process.stdout.write(JSON.stringify({ready:probe.preparedReady,
                                   "current": "new-lease"})
 
     def run_consumer_checker(self, fault=None):
-        source = Path(__file__).with_name("scenario-bridge.sh").read_text()
-        checker = source.split("# Consumer retirement receipt:", 1)[1]
-        checker = checker.split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
         packet = {"consumer": "current", "request": 3, "revision": 17,
                   "targetContext": {"consumerLease": "provider:2"},
                   "preparation": {"intent": "prepare", "ready": False, "reason": "busy", "token": ""}}
@@ -475,9 +472,10 @@ process.stdout.write(JSON.stringify({ready:probe.preparedReady,
             backend = root / "kwin.log"
             backend.write_text("qml: layout-probe-target " + json.dumps(native) + "\n")
             return subprocess.run(
-                [sys.executable, "-", str(shell), str(backend), "current", "16", "prepare",
+                [sys.executable, str(Path(__file__).with_name("receipts.py")), "consumer-state",
+                 str(shell), str(backend), "current", "16", "prepare",
                  "false", "busy", "-", str(root / "current.json")],
-                input=checker, capture_output=True, text=True, timeout=10, check=False,
+                capture_output=True, text=True, timeout=10, check=False,
             )
 
     def test_consumer_receipt_correlates_accepted_state_and_exact_native_revision(self):
