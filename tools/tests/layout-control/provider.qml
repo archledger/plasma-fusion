@@ -21,6 +21,7 @@ Item {
     property var recipients: []
     property bool focusProbe: false
     property bool targetProbe: false
+    property bool mixedLifetimeProbe: false
     property var lastEligibleWindow: null
     property int shellPid: 0
     property string shellPidOwner: ""
@@ -172,6 +173,12 @@ Item {
                     ready: preparation.ready, reason: preparation.reason,
                     targetClass: Tiling.alive(window) ? String(window.resourceClass) : "",
                     targetAlive: Tiling.alive(window)
+                }));
+            }
+            if (probe.mixedLifetimeProbe) {
+                console.info("layout-probe-published", JSON.stringify({
+                    widget: row.id, destination: destination, consumer: row.consumer,
+                    request: row.request, epoch: epoch, revision: revision + 1, status: status
                 }));
             }
             return {id: row.id, packet: JSON.stringify({
@@ -845,6 +852,7 @@ Item {
         dropRetirementFrame = KWin.readConfig("DropRetirementFrame", false) === true;
         focusProbe = KWin.readConfig("FocusProbe", false) === true;
         targetProbe = KWin.readConfig("TargetProbe", false) === true;
+        mixedLifetimeProbe = KWin.readConfig("MixedLifetimeProbe", false) === true;
         if (targetProbe) {
             lastFocusedWindow = Workspace.activeWindow;
             if (Tiling.eligibleForMaster(lastFocusedWindow)) {

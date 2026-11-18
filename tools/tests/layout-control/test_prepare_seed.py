@@ -21,6 +21,10 @@ if __package__:
     from .cleanup_tests import CleanupSeedTests as CleanupSeedTests
     from .cleanup_tests import write_cleanup_fixture
     from .consumer_lifecycle_tests import ConsumerLifecycleTests as ConsumerLifecycleTests
+    from .mixed_lifetime_tests import MixedLifetimeSeedTests as MixedLifetimeSeedTests
+    from .mixed_lifetime_tests import MixedLifetimePublicationTests as MixedLifetimePublicationTests
+    from .mixed_lifetime_tests import MixedLifetimeReceiptTests as MixedLifetimeReceiptTests
+    from .mixed_lifetime_tests import MixedLifetimeSnapshotTests as MixedLifetimeSnapshotTests
     from .qml_helpers import qml_handler
     # Re-export preserves the existing unittest entry point and class selectors.
     from .target_guard_tests import TargetGuardTests as TargetGuardTests
@@ -30,6 +34,10 @@ else:
     from cleanup_tests import CleanupSeedTests as CleanupSeedTests
     from cleanup_tests import write_cleanup_fixture
     from consumer_lifecycle_tests import ConsumerLifecycleTests as ConsumerLifecycleTests
+    from mixed_lifetime_tests import MixedLifetimeSeedTests as MixedLifetimeSeedTests
+    from mixed_lifetime_tests import MixedLifetimePublicationTests as MixedLifetimePublicationTests
+    from mixed_lifetime_tests import MixedLifetimeReceiptTests as MixedLifetimeReceiptTests
+    from mixed_lifetime_tests import MixedLifetimeSnapshotTests as MixedLifetimeSnapshotTests
     from qml_helpers import qml_handler
     from target_guard_tests import TargetGuardTests as TargetGuardTests
 

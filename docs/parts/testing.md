@@ -93,6 +93,7 @@ Nothing in these fixtures installs into the logged-in desktop.
 The Python entry point remains `tools/tests/layout-control/test_prepare_seed.py`. Guard cases
 live in `target_guard_tests.py`; consumer inventory, lease and retirement cases live in
 `consumer_lifecycle_tests.py`; cleanup qualification/ownership cases live in `cleanup_tests.py`.
+Combined lifetime, seed and raw-evidence cases live in `mixed_lifetime_tests.py`.
 They share `qml_helpers.py` with the entry point. The driver
 re-exports the classes, preserving existing class selectors and all cases. The support
 module names deliberately do not match `test_*.py`, avoiding duplicate default discovery.
@@ -101,6 +102,10 @@ Target-mode seeds copy and hash `receipts.py`. The shell wait helpers and their 
 call its `target-reply` and `consumer-state` entry points. Complete-line event/native parsing is
 shared, while each checker's existing correlation rules remain separate; this extraction does
 not strengthen the older target checker or settle the production protocol.
+Mixed-lifetime seeds additionally copy and hash `mixed_lifetime.py` and `mixed_scenario.sh`.
+The scenario is sourced after the existing target/retirement prelude, keeping the main Bash
+process responsible for its children and cleanup. Snapshot and partial runtime checks are the
+same functions used by the final combined qualifier.
 
 Build `topbar kwin` into a private stage, then make a fresh seed under this worktree's `build/`:
 
@@ -331,6 +336,63 @@ It remains a one-slot diagnostic prototype, not the settled production protocol:
 competing-bar recovery, mixed lifetimes, action acknowledgements/timeouts,
 real activity/output-loss cases and existing-tiler integration remain separate G0 gates. No
 preparation or validation admits a window, changes its geometry or writes placement memory.
+
+The default-off `--mixed-lifetime-probe` mode composes these boundaries in one ordinary session:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-mixed --mixed-lifetime-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-mixed tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-mixed" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-mixed --scope mixed-lifetimes
+```
+
+This implies the existing target/focus controls and rejects the other transport faults. After
+the guarded-target and busy-retirement prelude, the driver preserves the surviving consumer,
+creates one replacement widget and reloads only the provider. Native inventories and accepted
+memory must show a new consumer lifetime/lease and provider epoch/alias, while the bus, backend
+and shell connections remain unchanged. Unknown memory is observed before the deferred fresh
+query; online evidence must follow its exact outbound query and native output attachment.
+
+The driver then re-delivers one unmodified captured preparation frame to the replacement and
+two explicitly labeled fence-isolation frames. One changes only the captured frame's surrounding
+provider/query fields to exercise a retired consumer; the other retains the retired provider
+but uses the survivor's current request and a high revision. These are controlled transport
+faults, not new authoritative native acknowledgements. Every exact frame must reach its intended
+live receiver, never become accepted state, and be followed by a newer genuine native response
+on the unchanged exchange. That response drains asynchronous verification; an unchanged snapshot
+immediately after delivery cannot certify rejection.
+
+The survivor's original preparation envelope is replayed once as a labeled driver fault. Its
+exact native `consumer-not-current` refusal must reach that consumer. Restoring its current
+read-only query is not an automatic consumer retry. Both live receivers must then confirm newer
+genuine responses without lease or request replacement. Finally, actual focused Space input
+through the replacement must produce one new explicit preparation of the controlled application.
+The qualifier scans the retained accepted-state/outbound history, not only final state; hidden
+query retries, reused leases, wrong application verdicts and mere success flags fail.
+Every accepted packet is checked against the active request timeline, including transient states
+later overwritten by recovery. Provider replacement permits exactly one next-generation query
+per live consumer, with unknown observed before its deferred send and no unsolicited native
+preparation before reload confirmation. The final explicit input is the only further exchange.
+After the replay refusal reaches its consumer and the restore call completes, an exclusive
+`mixed-restored-boundary.json` records complete-line shell/backend positions. Both recovery
+acknowledgements must follow that boundary; an earlier queued reply cannot stand in for them.
+Receipt precedes asynchronous receiver verification, so a post-boundary observation alone is
+insufficient. Each recovery observation must match its exact receiver-bound receipt after the
+boundary and a later native `layout-probe-published` row with the same widget, destination,
+consumer, request, epoch and revision. That backend-only diagnostic is enabled only for this
+mixed mode and does not add fields to the wire packet. Thus a pre-restoration packet cannot
+qualify merely by completing verification or arriving late after the marker.
+
+This scope requires `mixed-lifetime-result.json`, the `mixed-*` phase/inventory/frame records,
+complete shell/backend traces and the existing independent cleanup evidence. A target,
+consumer-retirement or ordering receipt cannot stand in for it. The provider and consumer QML
+behavior is reused unchanged. This is one captured-frame replay and competing-control
+interleaving, not fair arbitration, a mixed shell/KWin process-replacement stress matrix,
+actual activity/output-loss testing, mutating action completion or production tiler integration.
+Those remain separate G0 obligations; this mode does not clear G0/P1 or fix the Qt shutdown bug.
 
 `--check-result` requires the explicit selected-scope receipt, successful inner scenario/session
 codes and independent cleanup qualification. The wrapper's exit code alone is insufficient.

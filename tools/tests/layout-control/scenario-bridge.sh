@@ -574,6 +574,13 @@ assert before["packet"]["targetContext"]["consumerLease"] == after["packet"]["ta
 assert after["packet"]["preparation"]["ready"] and after["packet"]["preparation"]["token"]
 print("PASS: a new explicit competitor intent succeeds after confirmed holder retirement")
 PY
+        mixed_lifetime_probe=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
+            --group Script-plasmafusion-layout-probe --key MixedLifetimeProbe --default false)
+        if [[ $mixed_lifetime_probe == true ]]; then
+            # Sourcing preserves this Bash parent's ownership of the shell and controlled app.
+            # shellcheck source=tools/tests/layout-control/mixed_scenario.sh
+            source "$HOME/.local/lib/layout-control/mixed_scenario.sh"
+        fi
         printf 'quit\n' >&"$focus_input"
         wait "$focus_client"
         exec {focus_input}>&-
