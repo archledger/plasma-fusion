@@ -87,7 +87,9 @@ repository's baseline from a snapshot run, pass `--baseline <repo>/tools/tests/p
 
 `tools/tests/layout-control/` contains test-only KWin and applet fixtures, not the production
 layout control. The accepted scope and remaining gates are in
-[`tasks/workspace-layout-control/plan.md`](../../tasks/workspace-layout-control/plan.md).
+[`tasks/workspace-layout-control/plan.md`](../../tasks/workspace-layout-control/plan.md), and the
+phase where each open G0 item is met is in
+[`g0-decisions.md`](../../tasks/workspace-layout-control/g0-decisions.md).
 Nothing in these fixtures installs into the logged-in desktop.
 
 The Python entry point remains `tools/tests/layout-control/test_prepare_seed.py`. Guard cases
@@ -244,8 +246,9 @@ native Qt controls/AppletPopup behavior.
 
 This receipt establishes focus/event/output-name feasibility only. The retained observation
 candidate is not a prepared token or guarded captured-view contract: focus-change/view-change
-refusal, competing controls, output-object lifetime validation and tiler integration remain
-separate G0 work. The diagnostic dimensions are not production design values.
+refusal, competing controls and output-object lifetime validation are exercised by the modes
+below, and tiler integration belongs to P1. The diagnostic dimensions are not production design
+values.
 
 The separate `--target-probe` mode exercises non-mutating preparation and validation:
 
@@ -336,9 +339,10 @@ python3 tools/tests/layout-control/prepare_seed.py \
 ```
 
 This requires `consumer-retirement-result.json`; the guarded-target receipt alone is insufficient.
-It remains a one-slot diagnostic prototype, not the settled production protocol: general fair
-competing-bar recovery, mixed lifetimes, action acknowledgements/timeouts,
-real activity/output-loss cases and existing-tiler integration remain separate G0 gates. No
+It remains a one-slot diagnostic prototype, not the settled production protocol. Mixed lifetimes
+and activity/output loss have their own modes below; competing requests from two bars and a
+completion that newer state frames keep are open P0 work; fair arbitration belongs to P7,
+mutating action acknowledgements and timeouts to P5 and existing-tiler integration to P1. No
 preparation or validation admits a window, changes its geometry or writes placement memory.
 
 The default-off `--mixed-lifetime-probe` mode composes these boundaries in one ordinary session:
@@ -396,7 +400,9 @@ consumer-retirement or ordering receipt cannot stand in for it. The provider and
 behavior is reused unchanged. This is one captured-frame replay and competing-control
 interleaving, not fair arbitration, a mixed shell/KWin process-replacement stress matrix,
 actual activity/output-loss testing, mutating action completion or production tiler integration.
-Those remain separate G0 obligations; this mode does not clear G0/P1 or fix the Qt shutdown bug.
+Output and activity loss have their own mode below; fair arbitration and the replacement matrix
+belong to P7, mutating action completion to P5 and tiler integration to P1. This mode does not
+clear G0/P1 or fix the Qt shutdown bug.
 
 The default-off `--view-loss-probe` mode exercises real output-object loss and activity switches.
 It needs two virtual outputs:

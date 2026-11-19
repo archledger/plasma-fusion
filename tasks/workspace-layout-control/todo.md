@@ -27,9 +27,14 @@ and live-desktop changes remain excluded; G0 is still a separate gate.
 - [ ] Prove wake-up, correlated state exchange and script/shell/KWin lifetime invalidation in a
       real isolated shell/fork pair; include stale retained fields and negative controls.
 - [ ] Prove keyboard target preparation, competing-bar ordering and timeout/late reply cases,
-      or record the exact failure rather than invent a native API or polling fallback.
+      or record the exact failure rather than invent a native API or polling fallback. The
+      timeout cases are the query cases; mutating timeouts are P5.
+- [ ] Bound and serialize the read/publish pipeline and count publications; show, without a
+      mutation, that a request's completion, decided once, survives newer state frames while the
+      target's validity is re-checked separately ([g0-decisions.md](g0-decisions.md)).
 - [ ] Record the supported contract, versions, image identity, traces and pass/fail receipt.
       Interim receipt for the owner's review: [g0-receipt.md](g0-receipt.md) (2026-11-19).
+      Decisions on it and the order of the remaining P0 work: [g0-decisions.md](g0-decisions.md).
 
 Verify: run the proposed G0 commands in `plan.md` after creating the fixtures; the scenario exits
 nonzero on a missing/incorrect observation. No SSH or live desktop. Review the receipt before P1.
@@ -50,6 +55,10 @@ Dependencies: G0. Likely files: `placement/main.qml`, a feature-owned provider c
       tiler; startup, shortcut, native teardown and unload produce the required state changes.
 - [ ] Preserve writer/placement/restoration behavior and avoid redundant per-frame publication.
 - [ ] Match the proven transport exactly; absent/refused native support never reports ready.
+- [ ] Meet the conditions in [g0-decisions.md](g0-decisions.md), among them: publish only for a
+      new request or changed state, keep the read/publish pipeline bounded and serialized,
+      version-check every request, keep a single publisher and keep the alias an identity-only
+      lifetime fence. Shortcut updates moved here from G0 item 3.
 
 Verify: fail-first rows in the real-script lifecycle suite; run the spec's `tools/build.sh kwin`,
 tiling/placement node tests and offscreen lifecycle command.
@@ -112,6 +121,9 @@ P1 provider component/helper, `kwin-tests/offscreen/tiling-harness.qml`,
       pending, refused, busy and unconfirmed outcomes without blind mutation retries.
 - [ ] Preserve cross-view teardown-on-refusal semantics, manual precedence, float restoration
       and placement memory; Floating on another view leaves its active session alone.
+- [ ] Prove mutating completion acknowledgements and timeouts, which testing.md listed as G0
+      work ([g0-decisions.md](g0-decisions.md)); P0 shows only that a completion survives newer
+      state frames.
 
 Verify: fail-first lifecycle cases and relevant pure-rule tests; mutate key guards to prove the
 new cases fail without them. Re-run the focused KWin build and tiling/placement/lifecycle suites.
@@ -145,6 +157,9 @@ Dependencies: P6 and source review. Likely files: the G0 scenario/seed fixtures 
       environment; retain red/green and mutation evidence where applicable.
 - [ ] Run the real shell/fork acceptance matrix in independently named isolated sessions,
       including two bars/views, reload/restart, keyboard focus, refusal and late confirmation.
+- [ ] Include fair arbitration across bars and a mixed shell/KWin replacement matrix, which
+      testing.md listed as G0 work, and an absent backend on a stock-KWin image, moved from G0
+      item 3; building that image needs the owner's approval ([g0-decisions.md](g0-decisions.md)).
 - [ ] Preserve evidence, screenshots, versions/OIDs and limits; no new script error/crash or
       native restoration/placement-memory regression in the tested scenarios.
 

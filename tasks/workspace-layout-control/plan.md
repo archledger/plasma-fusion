@@ -58,6 +58,18 @@ dependencies, but must not alter shared teardown, Qt/native code, images, securi
 the live desktop. Functional success alone cannot certify cleanup, and this approval does not
 clear G0/P1.
 
+On 2026-11-19 (UTC), the owner answered the interim receipt's four decisions with "Let proceed
+with your recommendation". The agent wrote and adopted its answers under that delegation; they
+are in [g0-decisions.md](g0-decisions.md) with their reasons, and the final receipt lists them
+for the owner's first review. Under them, the transport below is P1's basis, with conditions,
+and the identity-only alias becomes the production provider-lifetime fence. The alias shows that
+the provider lifetime a frame names is alive on the current KWin connection; it does not show
+which connection wrote the frame, so the "Approved P0 extension" note overstates it. G0 adds a
+request completion, decided once and kept by newer state frames, shown without a mutation.
+Updates from the existing shortcut move from G0 item 3 to P1, and G0 accepts unit evidence for
+an absent backend, with a stock-KWin run in P7.
+Every scope runs natively again at the last G0 tree before the final receipt.
+
 ## Source evidence and limits
 
 Inspected at Plasma Fusion main `44412a8901bf15c9f467fd5675795ee42fc3ffb7`:
@@ -111,12 +123,17 @@ This candidate needs an actual two-process proof of:
 
 1. Wake-up dispatch into the real declarative script, not just a successful D-Bus send.
 2. Delivery to the intended live widget, with fresh consumer/provider lifetimes and ordering.
-3. Native capability/refusal reporting, and updates from the existing shortcut.
+3. Native capability/refusal reporting, and updates from the existing shortcut (on 2026-11-19
+   the shortcut updates moved to P1, and an absent backend is accepted with unit evidence; see
+   [g0-decisions.md](g0-decisions.md)).
 4. Invalidation on script disable/reload, shell restart and KWin owner replacement. Do not
    assume a generic service Boolean or an internal C++ `runningChanged` is a public script signal.
 5. No idle polling, script reload as a command mechanism, global reconfigure per action, new
    daemon or new native RPC/object export. The approved identity-only alias is addressing,
    not a new control interface.
+6. Added on 2026-11-19 (see [g0-decisions.md](g0-decisions.md)): a request completion, decided
+   once, that newer state frames keep while the target's validity is re-checked separately,
+   shown without a mutation.
 
 The concrete envelope encoding, lifecycle identifiers and invalidation path are unresolved
 until G0. Record source, packet/event traces, controls and failure cases. Review that receipt
