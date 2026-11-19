@@ -12,23 +12,29 @@ from pathlib import Path
 if __package__:
     from .cleanup import check_cleanup
     from .mixed_lifetime import check_mixed
+    from .refused_backend import CHECKS as REFUSED_CHECKS
+    from .refused_backend import check_refused
     from .view_loss import CHECKS as VIEW_LOSS_CHECKS
     from .view_loss import check_view_loss
 else:
     from cleanup import check_cleanup
     from mixed_lifetime import check_mixed
+    from refused_backend import CHECKS as REFUSED_CHECKS
+    from refused_backend import check_refused
     from view_loss import CHECKS as VIEW_LOSS_CHECKS
     from view_loss import check_view_loss
 
 HERE = Path(__file__).resolve().parent
 SCRIPT_ID = "plasmafusion-layout-probe"
+OCCUPIER_ID = "plasmafusion-layout-occupier"
 APPLET_ID = "org.plasmafusion.layoutprobe"
 
 
 def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
              query_timeout_ms: int = 10000, reply_delay_ms: int = 0,
              focus_probe: bool = False, target_probe: bool = False,
-             mixed_lifetime_probe: bool = False, view_loss_probe: bool = False) -> None:
+             mixed_lifetime_probe: bool = False, view_loss_probe: bool = False,
+             refused_backend_probe: bool = False) -> None:
     build = Path.cwd() / "build"
     if build.is_symlink() or not output.resolve().is_relative_to(build.resolve()):
         raise ValueError("output must be under the current worktree's build directory")
@@ -42,6 +48,9 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         raise ValueError("reply delay must exceed the query deadline for this fault")
     if mixed_lifetime_probe and view_loss_probe:
         raise ValueError("mixed-lifetime and view-loss scenarios are separate private cases")
+    if refused_backend_probe and (focus_probe or target_probe or mixed_lifetime_probe
+                                  or view_loss_probe or drop_retirement_frame or reply_delay_ms):
+        raise ValueError("the refused-backend case is a separate plain-transport private case")
     target_probe = target_probe or mixed_lifetime_probe or view_loss_probe
     focus_probe = focus_probe or target_probe
     if focus_probe and (drop_retirement_frame or reply_delay_ms):
@@ -49,7 +58,10 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
     rules = stage / ".local/share/kwin/scripts/plasmafusion-placement/contents/ui/Tiling.js"
     if not rules.is_file():
         raise ValueError("missing staged Tiling.js")
-    fixtures = {name: (HERE / name).read_bytes() for name in ("provider.qml", "consumer.qml")}
+    fixture_names = ["provider.qml", "consumer.qml"]
+    if refused_backend_probe:
+        fixture_names.append("occupier.qml")
+    fixtures = {name: (HERE / name).read_bytes() for name in fixture_names}
     focus_helper = (HERE.parent / "lib/heldclient.py").read_bytes() if focus_probe else None
     receipt_helper = (HERE / "receipts.py").read_bytes() if target_probe else None
     case_names = ()
@@ -58,6 +70,9 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
     elif view_loss_probe:
         # The view-loss checker reuses only the mixed checker's complete-line event reader.
         case_names = ("mixed_lifetime.py", "view_loss.py", "view_loss_scenario.sh")
+    elif refused_backend_probe:
+        # So does the refused-backend checker.
+        case_names = ("mixed_lifetime.py", "refused_backend.py", "refused_scenario.sh")
     case_helpers = {name: (HERE / name).read_bytes() for name in case_names}
     cleanup_helpers = {
         name: (HERE / name).read_bytes() for name in ("cleanup.py", "lifecycle.py")
@@ -65,14 +80,16 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
     output.mkdir(parents=True, mode=0o700)
     script = output / ".local/share/kwin/scripts" / SCRIPT_ID
     applet = output / ".local/share/plasma/plasmoids" / APPLET_ID
-    for package, structure, identifier, fixture in (
-        (script, "KWin/Script", SCRIPT_ID, "provider.qml"),
-        (applet, "Plasma/Applet", APPLET_ID, "consumer.qml"),
-    ):
+    packages = [(script, "KWin/Script", SCRIPT_ID, "provider.qml", "Layout transport probe"),
+                (applet, "Plasma/Applet", APPLET_ID, "consumer.qml", "Layout transport probe")]
+    if refused_backend_probe:
+        packages.append((output / ".local/share/kwin/scripts" / OCCUPIER_ID, "KWin/Script",
+                         OCCUPIER_ID, "occupier.qml", "Layout probe provider occupier"))
+    for package, structure, identifier, fixture, title in packages:
         (package / "contents/ui").mkdir(parents=True)
         metadata = {
             "KPackageStructure": structure,
-            "KPlugin": {"Id": identifier, "Name": "Layout transport probe", "Version": "0.1",
+            "KPlugin": {"Id": identifier, "Name": title, "Version": "0.1",
                         "License": "GPL-2.0-or-later", "EnabledByDefault": False},
         }
         if structure == "KWin/Script":
@@ -100,14 +117,23 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
     )
     private_config = output / ".config"
     private_config.mkdir()
+    # In the refused-backend case only the occupier starts with the session; the scenario loads
+    # the probe once the occupier holds the native provider slot.
+    plugins = f"{SCRIPT_ID}Enabled={'false' if refused_backend_probe else 'true'}\n"
+    occupier = ""
+    if refused_backend_probe:
+        plugins += f"{OCCUPIER_ID}Enabled=true\n"
+        occupier = f"\n[Script-{OCCUPIER_ID}]\nOccupierAuthorized=true\n"
     (private_config / "kwinrc").write_text(
-        f"[Plugins]\n{SCRIPT_ID}Enabled=true\n\n[Script-{SCRIPT_ID}]\nProbeAuthorized=true\n"
+        f"[Plugins]\n{plugins}\n[Script-{SCRIPT_ID}]\nProbeAuthorized=true\n"
         f"DropRetirementFrame={'true' if drop_retirement_frame else 'false'}\n"
         f"ReplyDelayMs={reply_delay_ms}\n"
         f"FocusProbe={'true' if focus_probe else 'false'}\n"
         f"TargetProbe={'true' if target_probe else 'false'}\n"
         f"MixedLifetimeProbe={'true' if mixed_lifetime_probe else 'false'}\n"
         f"ViewLossProbe={'true' if view_loss_probe else 'false'}\n"
+        f"RefusedBackendProbe={'true' if refused_backend_probe else 'false'}\n"
+        f"{occupier}"
         "\n[Desktops]\nNumber=2\nRows=1\n"
     )
     (private_config / "pfv-env").write_text("PF_LAYOUT_PRIVATE_CONTAINER=1\n")
@@ -149,7 +175,7 @@ def main() -> None:
         "--scope",
         choices=("first-slice", "silent-retirement", "reply-ordering",
                  "query-timeout-late", "focus-observation", "target-preparation",
-                  "consumer-retirement", "mixed-lifetimes", "view-loss"),
+                  "consumer-retirement", "mixed-lifetimes", "view-loss", "refused-backend"),
         default="first-slice",
     )
     parser.add_argument("--drop-retirement-frame", action="store_true",
@@ -164,13 +190,15 @@ def main() -> None:
                         help="private combined consumer/provider lifetime and replay scenario")
     parser.add_argument("--view-loss-probe", action="store_true",
                         help="private output-loss and activity-switch scenario (two outputs)")
+    parser.add_argument("--refused-backend-probe", action="store_true",
+                        help="private refused native registration scenario (occupier fixture)")
     args = parser.parse_args()
     try:
         if args.check_result is not None:
             if (args.stage is not None or args.output is not None or args.drop_retirement_frame
                     or args.query_timeout_ms is not None or args.reply_delay_ms is not None
                     or args.focus_probe or args.target_probe or args.mixed_lifetime_probe
-                    or args.view_loss_probe):
+                    or args.view_loss_probe or args.refused_backend_probe):
                 raise ValueError("--check-result cannot be combined with seed preparation")
             check_result(args.check_result, args.scope)
         else:
@@ -186,7 +214,8 @@ def main() -> None:
                     reply_delay_ms=args.reply_delay_ms if args.reply_delay_ms is not None else 0,
                     focus_probe=args.focus_probe, target_probe=args.target_probe,
                     mixed_lifetime_probe=args.mixed_lifetime_probe,
-                    view_loss_probe=args.view_loss_probe)
+                    view_loss_probe=args.view_loss_probe,
+                    refused_backend_probe=args.refused_backend_probe)
     except (ValueError, OSError) as error:
         parser.exit(2, f"{error}\n")
 
@@ -227,6 +256,9 @@ def check_result(directory: Path, scope: str = "first-slice") -> None:
     elif scope == "view-loss":
         receipt = directory / "view-loss-result.json"
         checks = VIEW_LOSS_CHECKS
+    elif scope == "refused-backend":
+        receipt = directory / "refused-backend-result.json"
+        checks = REFUSED_CHECKS
     else:
         raise ValueError("unknown probe receipt scope")
     if not receipt.is_file():
@@ -238,6 +270,8 @@ def check_result(directory: Path, scope: str = "first-slice") -> None:
         check_mixed(directory)
     elif scope == "view-loss":
         check_view_loss(directory)
+    elif scope == "refused-backend":
+        check_refused(directory)
     check_cleanup(directory)
     print(f"PASS: explicit {scope} receipt, inner exit codes and separate cleanup qualification")
 

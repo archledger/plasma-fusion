@@ -156,6 +156,30 @@ Item {
         method: "ReleaseName"
     }
 
+    // A public lifecycle label, not authentication. It must differ for every provider lifetime,
+    // so it cannot come from the native token: a refused or absent backend yields a constant.
+    function newLifetimeLabel(): string {
+        const parts = [Date.now(), Math.random(), Math.random(), Math.random(), Math.random()];
+        return Qt.md5(parts.join(":"));
+    }
+
+    // Capability is the native writer's own verdict. The ownership token only decides it and is
+    // never kept, logged or published.
+    function registerNative(): void {
+        epoch = newLifetimeLabel();
+        if (typeof Workspace.transientTiling !== "function") {
+            return;
+        }
+        const api = Workspace.transientTiling();
+        if (!api) {
+            return;
+        }
+        capable = providerAccepted(String(api.registerProvider(probe)));
+        const competing = String(api.registerProvider(competingProvider));
+        competingProviderRejected = !providerAccepted(competing);
+        refusal = api.createTile(null, Workspace.currentDesktop, Qt.rect(0, 0, 0, 0)).result;
+    }
+
     function providerAccepted(token: string): bool {
         // Qt's default UUID text includes braces, including for a refused/null UUID.
         const text = token.startsWith("{") && token.endsWith("}") ? token.slice(1, -1) : token;
@@ -914,17 +938,7 @@ Item {
         }
         const delay = Number(KWin.readConfig("ReplyDelayMs", 0));
         replyDelayMs = delay >= 0 && delay <= 3000 && delay % 1 === 0 ? delay : 0;
-        if (typeof Workspace.transientTiling === "function") {
-            const api = Workspace.transientTiling();
-            if (api) {
-                const token = String(api.registerProvider(probe));
-                // A public lifecycle label, not authentication; never publish the ownership token.
-                epoch = Qt.md5(token);
-                capable = providerAccepted(token);
-                competingProviderRejected = !providerAccepted(String(api.registerProvider(competingProvider)));
-                refusal = api.createTile(null, Workspace.currentDesktop, Qt.rect(0, 0, 0, 0)).result;
-            }
-        }
+        registerNative();
         console.info("layout-probe: initialized", capable, refusal);
         identityName = "org.plasmafusion.LayoutProbe.p" + epoch;
         // Only an alias on the existing connection: no objects or methods are exported.

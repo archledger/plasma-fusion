@@ -94,9 +94,10 @@ The Python entry point remains `tools/tests/layout-control/test_prepare_seed.py`
 live in `target_guard_tests.py`; consumer inventory, lease and retirement cases live in
 `consumer_lifecycle_tests.py`; cleanup qualification/ownership cases live in `cleanup_tests.py`.
 Combined lifetime, seed and raw-evidence cases live in `mixed_lifetime_tests.py`; output-loss and
-activity-switch cases live in `view_loss_tests.py`. They share `qml_helpers.py` with the entry
-point. The driver re-exports the classes, preserving existing class selectors and all cases. The
-support module names deliberately do not match `test_*.py`, avoiding duplicate default discovery.
+activity-switch cases live in `view_loss_tests.py`; refused and absent native backend cases live in
+`refused_backend_tests.py`. They share `qml_helpers.py` with the entry point. The driver
+re-exports the classes, preserving existing class selectors and all cases. The support module
+names deliberately do not match `test_*.py`, avoiding duplicate default discovery.
 Package-aware imports also preserve `python3 -m unittest` with the entry file's path.
 Target-mode seeds copy and hash `receipts.py`. The shell wait helpers and their Python tests
 call its `target-reply` and `consumer-state` entry points. Complete-line event/native parsing is
@@ -107,7 +108,8 @@ The scenario is sourced after the existing target/retirement prelude, keeping th
 process responsible for its children and cleanup. Snapshot and partial runtime checks are the
 same functions used by the final combined qualifier. View-loss seeds instead copy and hash
 `view_loss.py`, `view_loss_scenario.sh` and the `mixed_lifetime.py` complete-line reader that
-checker reuses; the mixed scenario itself is not copied.
+checker reuses; the mixed scenario itself is not copied. Refused-backend seeds copy and hash
+`occupier.qml`, `refused_backend.py`, `refused_scenario.sh` and the same complete-line reader.
 
 Build `topbar kwin` into a private stage, then make a fresh seed under this worktree's `build/`:
 
@@ -468,6 +470,79 @@ and the independent cleanup evidence. It covers one private two-output layout an
 activity on this image. Hot-plugging a new connector, bars spanning several outputs, desktop
 removal, mutating action acknowledgements and production tiler integration remain untested, and
 this mode does not clear G0/P1.
+
+The default-off `--refused-backend-probe` mode exercises a refused native registration over the
+plain transport, without target controls or transport faults:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-refused --refused-backend-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-refused tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-refused" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-refused --scope refused-backend
+```
+
+The fork keeps one native provider slot. `TransientPlacementWriter::registerProvider` (tag
+`v6.8.2-pf5`) returns a null UUID while another provider holds it or while the writer is busy, and
+releases the slot when that provider object is destroyed; the script API returns an empty string
+when there is no writer at all. The seed installs the test-only `occupier.qml` as a second KWin
+script and starts only that one, so the slot is held before the probe exists, as when another
+provider such as the placement script holds it. The occupier logs only its verdict and never
+creates tiles, moves windows or writes configuration. The scenario branches before the startup
+probe check, then:
+
+1. loads the probe, whose registration is refused, and creates the two widgets; both must settle
+   `unsupported`, and no capable state or frame may appear;
+2. reloads the probe while the slot is still held; each consumer must drop the first lifetime's
+   state, and the second refused lifetime must report a different provider label and alias;
+3. unloads the occupier, which releases the slot;
+4. reloads the probe, which is accepted; both widgets settle `online` with a third label.
+
+Each load runs only the script it just loaded, through its own `/Scripting/Script<id>` object.
+`Scripting.start` would re-read `[Plugins]` and unload a loaded script that is disabled there
+(`Scripting::queryScriptsToLoad` in the fork), and this seed disables the probe, so the first
+native run of the scenario, which called it, loaded the probe and destroyed it at once. KWin also
+runs `Scripting.start` whenever its configuration changes, so a KWin reconfigure during the case
+would unload the probe the same way; that fails the case, and nothing in it reconfigures KWin.
+KWin numbers a script by the current script count, so the scenario waits until an unloaded probe
+is really gone before loading the next one, and requires the numbers 1, 1 and 0: the occupier is
+the only other script, until it is unloaded. A different number means the session holds other
+scripts than assumed; the number may then also belong to one of them, whose object `run` would
+reach instead.
+
+The provider takes its public lifetime label from `newLifetimeLabel()` in `registerNative()`,
+independently of the native token and of whether registration succeeded. Before this change the
+label was the MD5 of the token, so every refused lifetime shared one label and alias name, as did
+every lifetime on a KWin without the API. The ownership token is never kept, logged or published.
+
+`refused_backend.py` binds each step to the complete lines between an exclusive
+`refused-mark-*.json`, written before the native action, and the step's confirmation. The final
+check recomputes every step and audits the run up to its last step: three initializations
+reporting refused, refused and accepted, each with the fork's null-output `createTile` refusal
+(`-1`); the occupier registered before the first and released between the second and third;
+three distinct labels with identity names derived from them; capable state only in the accepted
+lifetime; and one backend connection. It writes `refused-backend-result.json` only after that
+check. This scope also requires the independent cleanup evidence.
+
+Three events can end a consumer's binding to the previous lifetime, and they race: its own
+invalidation of the old alias, its acceptance of the old provider's `offline` frame, and the new
+provider's first frame, which carries another label. The check accepts any of them. Whichever
+won, each consumer must report `unknown` with no packet, settle through a request newer than the
+one it settled with before, and never again report the previous label. Before that drop a
+consumer may still accept a newer frame of the previous lifetime: each provider publishes once
+per wake, and a consumer verifies one frame at a time, so a step can be confirmed between two of
+its acceptances. Such a row is accepted only with the previous lifetime's settled state, label,
+alias, capability and request.
+
+This covers a refused registration on this image. A KWin without the transient-tiling API and a
+missing writer are covered by unit cases only. In the qualifying native runs every consumer left
+each lifetime through its own alias invalidation and accepted every frame of a lifetime before the
+next step's mark; the retirement-frame and new-label paths, and a frame accepted after that mark,
+are covered by synthetic checker cases only. The consumers'
+`unsupported` state is a transport observation; no UI exists yet, and this mode does not clear
+G0/P1.
 
 `--check-result` requires the explicit selected-scope receipt, successful inner scenario/session
 codes and independent cleanup qualification. The wrapper's exit code alone is insufficient.

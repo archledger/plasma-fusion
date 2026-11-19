@@ -26,6 +26,11 @@ if __package__:
     from .mixed_lifetime_tests import MixedLifetimeReceiptTests as MixedLifetimeReceiptTests
     from .mixed_lifetime_tests import MixedLifetimeSnapshotTests as MixedLifetimeSnapshotTests
     from .qml_helpers import qml_handler
+    from .refused_backend_tests import OccupierTests as OccupierTests
+    from .refused_backend_tests import RefusedCheckerTests as RefusedCheckerTests
+    from .refused_backend_tests import RefusedRegistrationTests as RefusedRegistrationTests
+    from .refused_backend_tests import RefusedScenarioTests as RefusedScenarioTests
+    from .refused_backend_tests import RefusedSeedTests as RefusedSeedTests
     # Re-export preserves the existing unittest entry point and class selectors.
     from .target_guard_tests import TargetGuardTests as TargetGuardTests
     from .view_loss_tests import ViewLossCheckerTests as ViewLossCheckerTests
@@ -42,6 +47,11 @@ else:
     from mixed_lifetime_tests import MixedLifetimeReceiptTests as MixedLifetimeReceiptTests
     from mixed_lifetime_tests import MixedLifetimeSnapshotTests as MixedLifetimeSnapshotTests
     from qml_helpers import qml_handler
+    from refused_backend_tests import OccupierTests as OccupierTests
+    from refused_backend_tests import RefusedCheckerTests as RefusedCheckerTests
+    from refused_backend_tests import RefusedRegistrationTests as RefusedRegistrationTests
+    from refused_backend_tests import RefusedScenarioTests as RefusedScenarioTests
+    from refused_backend_tests import RefusedSeedTests as RefusedSeedTests
     from target_guard_tests import TargetGuardTests as TargetGuardTests
     from view_loss_tests import ViewLossCheckerTests as ViewLossCheckerTests
     from view_loss_tests import ViewLossSeedTests as ViewLossSeedTests

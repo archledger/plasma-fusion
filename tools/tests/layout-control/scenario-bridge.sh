@@ -87,6 +87,17 @@ PY
     cp "$OUT/observations-online.json" "$OUT/observations-reloaded.json"
 }
 
+refused_backend_probe=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
+    --group Script-plasmafusion-layout-probe --key RefusedBackendProbe --default false)
+if [[ $refused_backend_probe == true ]]; then
+    # Branch before the startup check: this case loads the probe only after the occupier holds
+    # the native provider slot. This Bash parent keeps child ownership.
+    # shellcheck source=tools/tests/layout-control/refused_scenario.sh
+    source "$HOME/.local/lib/layout-control/refused_scenario.sh"
+    finish_probe_session
+    return 0
+fi
+
 loaded=$(qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded plasmafusion-layout-probe)
 [[ $loaded == true ]] || { echo "FAIL: real declarative probe not loaded" >&2; return 1; }
 qdbus org.kde.kglobalaccel >"$OUT/shortcut-components.txt"
