@@ -348,6 +348,15 @@ bars have their own modes below; fair arbitration belongs to P7, mutating action
 and timeouts to P5 and existing-tiler integration to P1. No preparation or validation admits a
 window, changes its geometry or writes placement memory.
 
+Two of the target scenario's Validate clicks are intermittent: the one right after the second app
+closes and the one right after the return to the first desktop, both sent while the probe popup is
+active. In three of 21 native target-mode runs made for the target-mode restart runner (below), ten
+of them on its parent commit's tree, one of these clicks produced no request and no provider
+wake-up, and the reply wait timed out: twice at the desktop step, once after the close. The click
+after the second app activates, sent with the popup inactive, was not lost, though these counts do
+not show that the popup's state matters. Where the click goes is not established. See [the blocked
+queue](../DEFERRED.md).
+
 The default-off `--mixed-lifetime-probe` mode composes these boundaries in one ordinary session:
 
 ```sh
@@ -820,6 +829,53 @@ receiver observations, versions and child exit statuses. Cleanup stops only chil
 and the container ID created by that invocation. Container teardown also removes private
 bus-activated services. Missing receipts, changed bus identity or reused connection identities
 fail the run.
+
+A target-mode seed runs the same restarts and adds the target bootstrap to the receipt
+(`"mode": "target"`, check `target-bootstrap`):
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-lc-target --target-probe
+python3 tools/tests/layout-control/lifecycle.py --name layout-control-lc-target \
+    --seed "$PWD/build/layout-probe/seed-lc-target" --image "$IMAGE"
+python3 tools/tests/layout-control/lifecycle.py \
+    --check-result vsession-out/layout-control-lc-target
+```
+
+Each shell's two receivers count only once their frames carry a view context of their own provider
+lifetime with a consumer lease. Leasing only consumers that a complete inventory confirmed is the
+target-mode inventory rule above; this runner does not test it. Their frames carry neither a
+preparation nor a completion, since a fresh receiver has only queried. No two receivers' leases are
+the same; the restarted shell's receivers get later leases in the same provider epoch, and the
+replacement KWin starts a new epoch. Once the first shell has exited, the saved response fields it
+leaves must hold its receivers' leases (a query's saved request carries an empty lease key too, so
+only responses count). The run keeps that configuration as `shell-1-appletsrc`, and the receipt
+records the leases its responses hold. The second shell therefore starts with retained target frames
+in its widgets' configuration. Before the third starts, the first KWin's teardown leaves its offline
+frames, which carry no lease, in those fields, and that restart has no such control. The receivers
+of both restarted shells still first trace unknown and bind only frames addressed to them, with new
+leases. After the container exits, the runner rechecks the run from its files, as `--check-result`
+also does without writing anything: the receivers recorded for each shell must be in its raw log and
+give the receipt's leases, the receipt's saved leases must be those of the kept configuration's
+responses, and each KWin lifetime's log must pass the replay's serialization rules up to its
+teardown, with at least one read and one publication. Stopping drops a queued delayed publication
+and sends the offline frame even while a publication is outstanding, so nothing from the offline
+frame on is replayed. A plain seed's receipt only adds `"mode": "plain"`; a receipt without a mode
+still checks as plain.
+
+In every target-mode restart run so far with the unchanged provider, its first reads after each
+restart still saw the widgets' retained request fields, which name the previous shell's consumers.
+Under the new shell those are new consumers and took the next leases, one per widget whose retained
+request was read first, before the live receivers sent their own requests: two lease numbers skipped
+at every restart. That order was observed, not guaranteed. Two changed providers failed the target
+run: one that recognized consumers by widget instead of by consumer lifetime gave the restarted
+shell's receivers the previous shell's leases ("two receivers got the same lease"), and one whose
+wake-ups started a read while another was running passed in the container and failed the recheck of
+the first KWin's log. Restarting the lease numbering with each shell is not reliably detected: while
+the retained identities take the reused numbers first, the receivers' leases stay distinct and
+later, and only a receiver whose own request reached the first complete read would get a reused one.
+The runner has no input driver or controlled app, so no prepared intent crosses a restart here; a
+refused intent across a provider reload with consumer replacement is the mixed-lifetime mode's case.
 
 Wayland clients can exit when their compositor stops. This runner proves fresh bootstrap after
 real replacement, not that an old widget survives compositor loss or invalidates correctly

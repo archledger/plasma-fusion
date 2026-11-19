@@ -25,6 +25,8 @@ if __package__:
     from .completion_tests import CompletionScenarioTests as CompletionScenarioTests
     from .completion_tests import CompletionSeedTests as CompletionSeedTests
     from .consumer_lifecycle_tests import ConsumerLifecycleTests as ConsumerLifecycleTests
+    from .lifecycle_target_tests import LifecycleTargetResultTests as LifecycleTargetResultTests
+    from .lifecycle_target_tests import LifecycleTargetTests as LifecycleTargetTests
     from .mixed_lifetime_tests import MixedLifetimeSeedTests as MixedLifetimeSeedTests
     from .mixed_lifetime_tests import MixedLifetimePublicationTests as MixedLifetimePublicationTests
     from .mixed_lifetime_tests import MixedLifetimeReceiptTests as MixedLifetimeReceiptTests
@@ -59,6 +61,8 @@ else:
     from completion_tests import CompletionScenarioTests as CompletionScenarioTests
     from completion_tests import CompletionSeedTests as CompletionSeedTests
     from consumer_lifecycle_tests import ConsumerLifecycleTests as ConsumerLifecycleTests
+    from lifecycle_target_tests import LifecycleTargetResultTests as LifecycleTargetResultTests
+    from lifecycle_target_tests import LifecycleTargetTests as LifecycleTargetTests
     from mixed_lifetime_tests import MixedLifetimeSeedTests as MixedLifetimeSeedTests
     from mixed_lifetime_tests import MixedLifetimePublicationTests as MixedLifetimePublicationTests
     from mixed_lifetime_tests import MixedLifetimeReceiptTests as MixedLifetimeReceiptTests
