@@ -29,6 +29,7 @@ and live-desktop changes remain excluded; G0 is still a separate gate.
 - [ ] Prove keyboard target preparation, competing-bar ordering and timeout/late reply cases,
       or record the exact failure rather than invent a native API or polling fallback.
 - [ ] Record the supported contract, versions, image identity, traces and pass/fail receipt.
+      Interim receipt for the owner's review: [g0-receipt.md](g0-receipt.md) (2026-11-19).
 
 Verify: run the proposed G0 commands in `plan.md` after creating the fixtures; the scenario exits
 nonzero on a missing/incorrect observation. No SSH or live desktop. Review the receipt before P1.
