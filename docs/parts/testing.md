@@ -414,10 +414,11 @@ with `--mixed-lifetime-probe`. The driver branches right after the target prelud
 explicit preparation and keyboard validation, while that validation is still live, and changes
 only the private session:
 
-1. `kscreen-doctor` disables the output holding the controlled app and both bars. The retained
-   validation names the removed output and must be refused `stale-context` without a context.
-   KWin must evacuate the app, still alive, to the remaining output; both bars must follow with
-   unchanged consumer lifetimes and leases.
+1. `kscreen-doctor` disables the output holding the controlled app and the one probe panel,
+   which carries both widgets. The retained validation names the removed output and must be
+   refused `stale-context` without a context. KWin must evacuate the app, still alive, to the
+   remaining output; the panel must follow, and both widgets must keep their consumer lifetimes
+   and leases.
 2. Re-enabling the output creates a new native output with the same name. The same retained
    envelope must stay refused in a newer context of that output. A fresh validation click that
    re-sends the old handle unchanged, apart from its request number, is refused too.
@@ -430,9 +431,9 @@ only the private session:
 5. A final explicit preparation on the original activity must succeed with a new handle.
 
 The driver checks, rather than assumes, KWin's evacuation and restoration of the app and
-Plasma's move of both bars; those were observed on the pinned image, not a guaranteed placement
+Plasma's move of the panel; those were observed on the pinned image, not a guaranteed placement
 policy. Clicks on the app follow a click on empty desktop, so each one is a real activation.
-After an activity switch the next click waits until both bars accepted the switched context;
+After an activity switch the next click waits until both widgets accepted the switched context;
 one click that raced the shell's own switch handling opened no popup.
 
 In this mode the provider adds a backend-only `layout-probe-view` record to every context
