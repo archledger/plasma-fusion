@@ -134,7 +134,33 @@ PY
         >"$OUT/timeout-owner-before.txt"
 fi
 
-evaljs - >"$OUT/widgets-created.txt" <<'JS'
+two_bar_probe=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
+    --group Script-plasmafusion-layout-probe --key TwoBarProbe --default false)
+if [[ $two_bar_probe == true ]]; then
+    # One probe bar per output. A scripted panel starts on screen 0, so the second one is moved to
+    # screen 1. Its consumer can still send its first request for output 0; it refreshes once
+    # when it sees its bar's output change, and the two-bar checker allows for that. Neither panel
+    # floats: a scripted panel floats by default and moves into its floating position after its
+    # control first reports where it is, and a click during that move reached the desktop instead
+    # of the control.
+    outputs=$(kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -c '^Output:')
+    [[ $outputs -ge 2 ]] || { echo "FAIL: the two-bar case needs two outputs" >&2; return 1; }
+    evaljs - >"$OUT/widgets-created.txt" <<'JS'
+var p=new Panel;
+p.location="top";
+p.height=40;
+p.floating=false;
+var a=p.addWidget("org.plasmafusion.layoutprobe");
+var q=new Panel;
+q.location="top";
+q.height=40;
+q.floating=false;
+q.screen=1;
+var b=q.addWidget("org.plasmafusion.layoutprobe");
+print(JSON.stringify([a.id,b.id]));
+JS
+else
+    evaljs - >"$OUT/widgets-created.txt" <<'JS'
 var p=new Panel;
 p.location="top";
 p.height=40;
@@ -142,6 +168,7 @@ var a=p.addWidget("org.plasmafusion.layoutprobe");
 var b=p.addWidget("org.plasmafusion.layoutprobe");
 print(JSON.stringify([a.id,b.id]));
 JS
+fi
 wait_for_phase online 2>"$OUT/online-wait.log"
 backend_owner=$(qdbus org.freedesktop.DBus /org/freedesktop/DBus \
     org.freedesktop.DBus.GetNameOwner org.kde.KWin)
@@ -412,6 +439,18 @@ PY
             # Branch while the accepted preparation is still the holder's current request.
             # shellcheck source=tools/tests/layout-control/completion_scenario.sh
             source "$HOME/.local/lib/layout-control/completion_scenario.sh"
+            printf 'quit\n' >&"$focus_input"
+            wait "$focus_client"
+            exec {focus_input}>&-
+            finish_probe_session
+            return 0
+        fi
+        two_bar_probe=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
+            --group Script-plasmafusion-layout-probe --key TwoBarProbe --default false)
+        if [[ $two_bar_probe == true ]]; then
+            # Branch while the holder's accepted preparation is still its current request.
+            # shellcheck source=tools/tests/layout-control/two_bar_scenario.sh
+            source "$HOME/.local/lib/layout-control/two_bar_scenario.sh"
             printf 'quit\n' >&"$focus_input"
             wait "$focus_client"
             exec {focus_input}>&-

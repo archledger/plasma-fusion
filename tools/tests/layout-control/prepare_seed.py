@@ -16,6 +16,8 @@ if __package__:
     from .mixed_lifetime import check_mixed
     from .refused_backend import CHECKS as REFUSED_CHECKS
     from .refused_backend import check_refused
+    from .two_bar import CHECKS as TWO_BAR_CHECKS
+    from .two_bar import check_two_bar
     from .pipeline import CHECKS as PIPELINE_CHECKS
     from .pipeline import check_pipeline
     from .view_loss import CHECKS as VIEW_LOSS_CHECKS
@@ -27,6 +29,8 @@ else:
     from mixed_lifetime import check_mixed
     from refused_backend import CHECKS as REFUSED_CHECKS
     from refused_backend import check_refused
+    from two_bar import CHECKS as TWO_BAR_CHECKS
+    from two_bar import check_two_bar
     from pipeline import CHECKS as PIPELINE_CHECKS
     from pipeline import check_pipeline
     from view_loss import CHECKS as VIEW_LOSS_CHECKS
@@ -43,7 +47,7 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
              focus_probe: bool = False, target_probe: bool = False,
              mixed_lifetime_probe: bool = False, view_loss_probe: bool = False,
              refused_backend_probe: bool = False, pipeline_probe: bool = False,
-             completion_probe: bool = False) -> None:
+             completion_probe: bool = False, two_bar_probe: bool = False) -> None:
     build = Path.cwd() / "build"
     if build.is_symlink() or not output.resolve().is_relative_to(build.resolve()):
         raise ValueError("output must be under the current worktree's build directory")
@@ -57,6 +61,10 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         raise ValueError("reply delay must exceed the query deadline for this fault")
     if mixed_lifetime_probe and view_loss_probe:
         raise ValueError("mixed-lifetime and view-loss scenarios are separate private cases")
+    if two_bar_probe and (completion_probe or mixed_lifetime_probe or view_loss_probe
+                          or refused_backend_probe or pipeline_probe or drop_retirement_frame
+                          or reply_delay_ms):
+        raise ValueError("the two-bar case is a separate private target case")
     if completion_probe and (mixed_lifetime_probe or view_loss_probe or refused_backend_probe
                              or pipeline_probe or drop_retirement_frame or reply_delay_ms):
         raise ValueError("the completion case is a separate private target case")
@@ -66,7 +74,8 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
     if pipeline_probe and (focus_probe or target_probe or mixed_lifetime_probe or view_loss_probe
                            or refused_backend_probe or drop_retirement_frame or reply_delay_ms):
         raise ValueError("the pipeline case is a separate plain-transport private case")
-    target_probe = target_probe or mixed_lifetime_probe or view_loss_probe or completion_probe
+    target_probe = (target_probe or mixed_lifetime_probe or view_loss_probe or completion_probe
+                    or two_bar_probe)
     focus_probe = focus_probe or target_probe
     if focus_probe and (drop_retirement_frame or reply_delay_ms):
         raise ValueError("focus observation requires normal transport")
@@ -94,6 +103,9 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
     elif completion_probe:
         # So does the completion checker.
         case_names = ("mixed_lifetime.py", "completion.py", "completion_scenario.sh")
+    elif two_bar_probe:
+        # The two-bar checker also applies the completion rules.
+        case_names = ("mixed_lifetime.py", "completion.py", "two_bar.py", "two_bar_scenario.sh")
     case_helpers = {name: (HERE / name).read_bytes() for name in case_names}
     cleanup_helpers = {
         name: (HERE / name).read_bytes() for name in ("cleanup.py", "lifecycle.py")
@@ -156,6 +168,7 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         f"RefusedBackendProbe={'true' if refused_backend_probe else 'false'}\n"
         f"PipelineProbe={'true' if pipeline_probe else 'false'}\n"
         f"CompletionProbe={'true' if completion_probe else 'false'}\n"
+        f"TwoBarProbe={'true' if two_bar_probe else 'false'}\n"
         f"{occupier}"
         "\n[Desktops]\nNumber=2\nRows=1\n"
     )
@@ -199,7 +212,7 @@ def main() -> None:
         choices=("first-slice", "silent-retirement", "reply-ordering",
                  "query-timeout-late", "focus-observation", "target-preparation",
                   "consumer-retirement", "mixed-lifetimes", "view-loss", "refused-backend",
-                  "pipeline", "completion"),
+                  "pipeline", "completion", "two-bar"),
         default="first-slice",
     )
     parser.add_argument("--drop-retirement-frame", action="store_true",
@@ -220,6 +233,8 @@ def main() -> None:
                         help="private wake-up burst against the serialized read/publish pipeline")
     parser.add_argument("--completion-probe", action="store_true",
                         help="private target case: decided completions kept by newer frames")
+    parser.add_argument("--two-bar-probe", action="store_true",
+                        help="private target case: one probe bar per output (two outputs)")
     args = parser.parse_args()
     try:
         if args.check_result is not None:
@@ -227,7 +242,7 @@ def main() -> None:
                     or args.query_timeout_ms is not None or args.reply_delay_ms is not None
                     or args.focus_probe or args.target_probe or args.mixed_lifetime_probe
                     or args.view_loss_probe or args.refused_backend_probe
-                    or args.pipeline_probe or args.completion_probe):
+                    or args.pipeline_probe or args.completion_probe or args.two_bar_probe):
                 raise ValueError("--check-result cannot be combined with seed preparation")
             check_result(args.check_result, args.scope)
         else:
@@ -246,7 +261,8 @@ def main() -> None:
                     view_loss_probe=args.view_loss_probe,
                     refused_backend_probe=args.refused_backend_probe,
                     pipeline_probe=args.pipeline_probe,
-                    completion_probe=args.completion_probe)
+                    completion_probe=args.completion_probe,
+                    two_bar_probe=args.two_bar_probe)
     except (ValueError, OSError) as error:
         parser.exit(2, f"{error}\n")
 
@@ -296,6 +312,9 @@ def check_result(directory: Path, scope: str = "first-slice") -> None:
     elif scope == "completion":
         receipt = directory / "completion-result.json"
         checks = COMPLETION_CHECKS
+    elif scope == "two-bar":
+        receipt = directory / "two-bar-result.json"
+        checks = TWO_BAR_CHECKS
     else:
         raise ValueError("unknown probe receipt scope")
     if not receipt.is_file():
@@ -313,6 +332,8 @@ def check_result(directory: Path, scope: str = "first-slice") -> None:
         check_pipeline(directory)
     elif scope == "completion":
         check_completion(directory)
+    elif scope == "two-bar":
+        check_two_bar(directory)
     check_cleanup(directory)
     print(f"PASS: explicit {scope} receipt, inner exit codes and separate cleanup qualification")
 

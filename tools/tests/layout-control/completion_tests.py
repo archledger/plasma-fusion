@@ -453,7 +453,7 @@ class CompletionRun:
             native = {"consumer": frame["boot"], "request": frame["request"],
                       "intent": frame["intent"], "revision": self.revision,
                       "ready": frame["ready"], "reason": frame["reason"],
-                      "targetClass": "pf.focus.alpha" if frame["ready"] else "",
+                      "targetClass": frame.get("class", "pf.focus.alpha") if frame["ready"] else "",
                       "targetAlive": frame["ready"],
                       "completion": frame.get("native", frame["completion"])}
             if malformed:
@@ -471,7 +471,7 @@ class CompletionRun:
             packet = {"consumer": frame["boot"], "epoch": epoch, "revision": revision,
                       "status": "online", "capable": True, "refusal": -1,
                       "request": frame["request"], "preparation": preparation,
-                      "completion": frame["completion"], "targetContext": None,
+                      "completion": frame["completion"], "targetContext": frame.get("context"),
                       "competingProviderRejected": True, "backendOwner": ":1.0",
                       "identityName": "org.plasmafusion.LayoutProbe.p" + epoch}
             self.shell.append("qml: layout-probe-received "

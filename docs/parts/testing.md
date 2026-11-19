@@ -342,11 +342,11 @@ python3 tools/tests/layout-control/prepare_seed.py \
 ```
 
 This requires `consumer-retirement-result.json`; the guarded-target receipt alone is insufficient.
-It remains a one-slot diagnostic prototype, not the settled production protocol. Mixed lifetimes
-and activity/output loss have their own modes below; competing requests from two bars and a
-completion that newer state frames keep are open P0 work; fair arbitration belongs to P7,
-mutating action acknowledgements and timeouts to P5 and existing-tiler integration to P1. No
-preparation or validation admits a window, changes its geometry or writes placement memory.
+It remains a one-slot diagnostic prototype, not the settled production protocol. Mixed lifetimes,
+activity/output loss, a completion that newer state frames keep and competing requests from two
+bars have their own modes below; fair arbitration belongs to P7, mutating action acknowledgements
+and timeouts to P5 and existing-tiler integration to P1. No preparation or validation admits a
+window, changes its geometry or writes placement memory.
 
 The default-off `--mixed-lifetime-probe` mode composes these boundaries in one ordinary session:
 
@@ -673,6 +673,83 @@ advanced request and a conflicting or malformed row at the decided number are co
 The completion lives in the provider's consumer record, so a provider restart or a shell replacement
 does not carry it over; the consumer gets a new lease and must request again. It is not a mutating
 acknowledgement, which belongs to P5, and this mode does not clear G0/P1.
+
+Two bars, one on each output, compete for the provider's one slot in the default-off
+`--two-bar-probe` target mode, which needs a session with two outputs:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-two-bar --two-bar-probe
+PFV_OUTPUTS=2 PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-two-bar tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-two-bar" 1440x900 240
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-two-bar --scope two-bar
+```
+
+The bridge puts each probe widget on its own panel instead of both on one. A scripted panel
+starts on screen 0
+([ScriptEngine::createContainment](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/scriptengine.cpp)),
+so the second is moved with its `screen` property, which
+[Containment::setScreen](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/containment.cpp)
+passes to the shell to move the panel. That bar's consumer can send its first request for output 0
+before it sees the move; it then refreshes once. Neither panel floats: a scripted panel floats by
+default and moves into its floating position after its control first reports where it is, and a
+click during that move reached the desktop instead of the control. The holder is the bar on the
+first output: it prepares from the app there, as in target mode, and the scenario branches while
+that accepted preparation is still its current request. `two_bar_scenario.sh` then:
+
+1. closes the holder's popup and opens a second app, `pf.focus.beta`, on the other output, whose
+   desktop it clicks first so that KWin places the app there;
+2. opens the other bar's menu from that app and prepares there, which is refused as busy while the
+   holder holds the slot;
+3. with that popup still open, removes the holder's panel, found by its consumer, marks the logs
+   and wakes the provider;
+4. closes the popup, reopens the other bar's menu from its app and prepares again, a new explicit
+   request.
+
+`two_bar.py` replays every native verdict and received frame up to each step, in a window with one
+provider start, and applies the completion rules to both bars. Each bar's output is the screen its
+control last reported, and the two must differ. Once a bar's control has reported that output,
+every frame the bar accepts with a view must carry that output's view, so a frame for the other
+bar's view, or one view shared by both, fails; frames accepted before that report answer the
+request the consumer sent before it saw the move. The other bar's busy refusal must be published
+together with a frame that keeps the holder's accepted completion. The scenario marks the logs once
+the holder's panel is removed. A scripted
+[Containment::remove()](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/containment.cpp)
+destroys the panel, and the
+[destruction](https://github.com/KDE/libplasma/blob/v6.8.3/src/plasma/private/applet_p.cpp)
+signals it before deleting it, which
+[removes it](https://github.com/KDE/libplasma/blob/v6.8.3/src/plasma/corona.cpp) from the
+containments that the scripting
+[`panels()`](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/scriptengine_v1.cpp)
+lists; the undo notification belongs only to a removal from the user interface. The scenario also
+repeats the provider reader's walk after the removal and stops unless the holder's panel and widget
+are gone. So no read started after the mark may answer the holder, while a read already under way
+may. A read publishes before it logs its end, so every publication after the mark must come from
+the latest read started before it, one that has not ended yet. A read that ends without publishing
+answers nobody, so it is the first publication after the first read started after the mark that
+must answer the other bar's refused request, before any context change since the refusal; the
+other bar must accept a frame from that publication or a later one. The refused request must never
+be answered ready again. This provider repeats the stored `busy` outcome then, and a prepare it
+does not handle afresh is only re-validated, never prepared, so only the new explicit request is
+accepted, with `pf.focus.beta`. `two-bar-result.json` is written only after every step record is
+recomputed from the raw logs, and this scope also requires the independent cleanup evidence.
+
+Three changed providers each made the same scenario fail at the step meant to catch them. One that
+lets the other bar's prepare take the held slot failed at the competing request, which was not
+refused as busy. One that gives every bar the active output's view failed at the first step, when
+the other bar accepted the holder's view. One that retries a refused prepare by itself once the slot
+is free, evaluating it again on each read and preparing it afresh while its exchange has no handle,
+failed at the retirement step: it answered the busy request ready with `pf.focus.beta` while the
+completion still said busy. Dropping the stored outcome alone does not do that, because a prepare
+that is not handled afresh is only re-validated: in that run the busy request's later answers
+changed to `consumer-retired` and then `stale-context`, still refusals, and the case passed.
+
+Natively this covers two bars on two outputs of one session, one holder at a time, and a holder
+that retires because its panel is removed. Two controls for the same view, on one panel, are the
+holder and competitor of the target and completion modes. Fair arbitration between bars belongs to
+P7 and double-toggle prevention to P5; this mode does not clear G0/P1.
 
 `--check-result` requires the explicit selected-scope receipt, successful inner scenario/session
 codes and independent cleanup qualification. The wrapper's exit code alone is insufficient.
