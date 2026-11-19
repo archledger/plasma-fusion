@@ -387,5 +387,102 @@ process.stdout.write(JSON.stringify({
                 self.assertNotEqual(self.run_target_checker(fault).returncode, 0)
 
 
+class TargetSettleTests(unittest.TestCase):
+    """The target scenario clicks after a context change only once the shell has applied it."""
+
+    def settle(self, *, provider=7, receiver=7, minimum=7, phase="online", context=True,
+               tail=(), mode="target-settled"):
+        target = {"epoch": "e", "generation": receiver} if context else None
+        packet = {"consumer": "current", "request": 4, "targetContext": target}
+        observation = {"boot": "current", "phase": phase, "epoch": "e", "revision": 9,
+                       "accepted": 3, "packet": packet if phase == "online" else None,
+                       "request": 4}
+        pipeline = ["qml: layout-probe: read started", "qml: layout-probe: publication online 2",
+                    "qml: layout-probe: read finished", "qml: layout-probe: publication writes 2"]
+        backend = [
+            "qml: layout-probe-focus " + json.dumps({"event": "activation",
+                                                    "contextGeneration": provider - 1}),
+            *pipeline,
+            "qml: layout-probe-focus " + json.dumps({"event": "removed",
+                                                    "contextGeneration": provider}),
+            *pipeline, *tail,
+        ]
+        with tempfile.TemporaryDirectory(prefix="pf-settle-", dir="/tmp/opencode") as scratch:
+            shell = Path(scratch) / "plasmashell.log"
+            shell.write_text("qml: layout-probe-observation " + json.dumps(observation) + "\n")
+            kwin = Path(scratch) / "kwin.log"
+            kwin.write_text("\n".join(backend) + "\n")
+            arguments = ([str(shell), str(kwin), "current", str(minimum)]
+                         if mode == "target-settled" else [str(kwin)])
+            return subprocess.run(
+                [sys.executable, str(Path(__file__).with_name("receipts.py")), mode, *arguments],
+                capture_output=True, text=True, timeout=10, check=False)
+
+    def test_a_receiver_with_the_newest_context_and_nothing_outstanding_is_settled(self):
+        result = self.settle()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "7")
+
+    def test_settling_needs_the_provider_to_have_observed_the_change(self):
+        # Before the provider sees the change, its newest context is the old one, which the
+        # receiver already holds.
+        self.assertNotEqual(self.settle(minimum=8).returncode, 0)
+
+    def test_settling_needs_the_receiver_to_hold_the_newest_context(self):
+        for change in ({"receiver": 6}, {"phase": "unknown"}, {"context": False}):
+            with self.subTest(change=change):
+                self.assertNotEqual(self.settle(**change).returncode, 0)
+
+    def test_settling_waits_for_an_outstanding_read_or_publication(self):
+        cases = {
+            "read": (["qml: layout-probe: read started"], False),
+            "publication": (["qml: layout-probe: publication online 2"], False),
+            "offline publication": (["qml: layout-probe: publication offline 2"], False),
+            "failed publication": (["qml: layout-probe: publication online 2",
+                                    "qml: layout-probe: publication failed"], True),
+        }
+        for case, (tail, settled) in cases.items():
+            with self.subTest(case=case):
+                self.assertEqual(self.settle(tail=tail).returncode == 0, settled)
+
+    def test_the_provider_generation_is_its_newest_focus_observation(self):
+        result = self.settle(mode="provider-generation")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "7")
+
+    def test_each_click_after_a_context_change_waits_for_the_shell(self):
+        # Each step's change, and how many context generations it advances at least: the second
+        # app's activation, its close, and the switch to desktop 2 and back.
+        bridge = Path(__file__).with_name("scenario-bridge.sh").read_text()
+        start = bridge.index('echo "PASS: explicit preparation and keyboard validation retain')
+        end = bridge.index('echo "PASS: leaving and returning to the desktop cannot revive')
+        lines = [line.strip() for line in bridge[start:end].splitlines() if line.strip()]
+        clicks = [index for index, line in enumerate(lines)
+                  if line == 'pfinput "click $validate_x $validate_y"']
+        self.assertEqual(len(clicks), 3)
+        changes = (('heldclient.py" pf.focus.beta', 1),
+                   ("printf 'quit\\n' >&\"$target_second_input\"", 1),
+                   ("setCurrentDesktop 2", 2))
+        previous = -1
+        for click, (change, steps) in zip(clicks, changes):
+            with self.subTest(change=change):
+                self.assertEqual(lines[click - 1],
+                                 f'wait_target_settled "$focus_boot" $((generation + {steps}))')
+                trigger = max(index for index in range(previous + 1, click)
+                              if change in lines[index])
+                captures = [index for index in range(previous + 1, trigger)
+                            if lines[index].startswith("generation=$(")
+                            and "provider-generation" in lines[index]]
+                self.assertTrue(captures, "no generation captured before the change")
+            previous = click
+
+    def test_the_settle_wait_runs_the_receipt_and_fails_when_the_shell_never_settles(self):
+        bridge = Path(__file__).with_name("scenario-bridge.sh").read_text()
+        body = bridge.split("    wait_target_settled() {\n", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn('receipts.py" target-settled', body)
+        self.assertIn('"$OUT/plasmashell.log" "$OUT/kwin.log" "$boot" "$minimum"', body)
+        self.assertTrue(body.rstrip().endswith("[[ $settled == true ]]"))
+
+
 if __name__ == "__main__":
     unittest.main()

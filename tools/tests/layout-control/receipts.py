@@ -4,8 +4,13 @@
 """Correlate private target/consumer receipts; never act on a desktop."""
 
 import json
+import re
 import sys
 from pathlib import Path
+
+# A provider publication starts with its status line and ends when its shell script call
+# reports back, as written or failed.
+PUBLICATION = re.compile(r"layout-probe: publication (\S+)")
 
 
 def accepted_exchange(path: str, consumer: str) -> tuple:
@@ -82,10 +87,56 @@ def consumer_state(arguments: list[str]) -> None:
     print(observation["request"], packet["revision"])
 
 
+def provider_context(path: str) -> dict:
+    """The provider's newest focus observation, which carries its current context generation."""
+    return [json.loads(line.split("layout-probe-focus ", 1)[1])
+            for line in open(path)
+            if line.endswith("\n") and "layout-probe-focus " in line][-1]
+
+
+def provider_busy(path: str) -> bool:
+    """Whether a provider read or publication has started and not finished. A publication is a
+    shell script call, which the shell serves on its main thread."""
+    reads = publications = 0
+    for line in open(path):
+        if not line.endswith("\n"):
+            continue
+        if "layout-probe: read started" in line:
+            reads += 1
+        elif "layout-probe: read finished" in line:
+            reads -= 1
+        match = PUBLICATION.search(line)
+        if match:
+            publications += -1 if match.group(1) in ("writes", "failed") else 1
+    return reads != 0 or publications != 0
+
+
+def provider_generation(arguments: list[str]) -> None:
+    generation = provider_context(arguments[1])["contextGeneration"]
+    assert type(generation) is int
+    print(generation)
+
+
+def target_settled(arguments: list[str]) -> None:
+    """The shell has applied a context change: the provider observed it (its generation reached
+    the minimum), the receiver holds that newest context, and no read or publication is
+    outstanding."""
+    _, observation, _ = accepted_exchange(arguments[1], arguments[3])
+    generation = provider_context(arguments[2])["contextGeneration"]
+    assert type(generation) is int and generation >= int(arguments[4])
+    assert observation["phase"] == "online"
+    context = observation["packet"]["targetContext"]
+    assert context and context["generation"] == generation
+    assert not provider_busy(arguments[2])
+    print(generation)
+
+
 def main() -> None:
-    modes = {"target-reply": (target_reply, 9), "consumer-state": (consumer_state, 10)}
+    modes = {"target-reply": (target_reply, 9), "consumer-state": (consumer_state, 10),
+             "target-settled": (target_settled, 5), "provider-generation": (provider_generation, 2)}
     if len(sys.argv) < 2 or sys.argv[1] not in modes:
-        raise SystemExit("usage: receipts.py {target-reply|consumer-state} RECEIPT_ARGUMENTS...")
+        raise SystemExit("usage: receipts.py {target-reply|consumer-state|target-settled|"
+                         "provider-generation} RECEIPT_ARGUMENTS...")
     checker, count = modes[sys.argv[1]]
     arguments = [sys.argv[0], *sys.argv[2:]]
     if len(arguments) != count:

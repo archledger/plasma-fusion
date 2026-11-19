@@ -348,14 +348,21 @@ bars have their own modes below; fair arbitration belongs to P7, mutating action
 and timeouts to P5 and existing-tiler integration to P1. No preparation or validation admits a
 window, changes its geometry or writes placement memory.
 
-Two of the target scenario's Validate clicks are intermittent: the one right after the second app
-closes and the one right after the return to the first desktop, both sent while the probe popup is
-active. In three of 21 native target-mode runs made for the target-mode restart runner (below), ten
-of them on its parent commit's tree, one of these clicks produced no request and no provider
-wake-up, and the reply wait timed out: twice at the desktop step, once after the close. The click
-after the second app activates, sent with the popup inactive, was not lost, though these counts do
-not show that the popup's state matters. Where the click goes is not established. See [the blocked
-queue](../DEFERRED.md).
+Each publication is a shell script call (`evaluateScript`) that the shell serves on its main thread.
+In the instrumented runs most took under 10 ms, but about one in ten took over 100 ms, up to 0.9 s,
+and a click that follows a context change can be sent while the provider is still publishing it. A
+pointer click sent while the shell was serving a publication usually lost its button events: 15 of
+18 such clicks were lost, the button seeing only a late hover, and none of 157 clicks outside a
+publication. Which layer drops them, KWin's delivery or Qt's in the shell, is not established. Once
+a prelude click with no read or publication outstanding also lost a button event: its hover arrived
+at once, its press about 460 ms after it was sent, and its release never did. Both are open in [the
+blocked queue](../DEFERRED.md) (pointer button events). The scenario works around the publication
+case: before each Validate click that follows a context change, it waits until the provider has
+observed the change, the receiver holds the provider's newest context and no read or publication is
+outstanding (`receipts.py target-settled`; the floor is the provider's context generation before the
+change plus the generations the change advances). A read the provider has scheduled but not yet
+started does not show in its log, so the wait cannot see one. With the wait no click was lost in 30
+native target-mode runs; without it about one run in seven had lost one.
 
 The default-off `--mixed-lifetime-probe` mode composes these boundaries in one ordinary session:
 

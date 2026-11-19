@@ -46,6 +46,13 @@ Conditions on P1, from that cost, todo.md's P1 and the receipt's findings for P1
   `tiler.session` (finding 6); consumers do not depend on the observed output-loss placement
   (finding 7).
 
+Risk found later in P0: a publication is an `evaluateScript` call that the shell serves on its main
+thread, and in the target scenario's instrumented runs a pointer click sent while one ran usually
+lost its button events (`docs/DEFERRED.md`, the pointer button events row). If that holds outside
+the test session, users' clicks on panel widgets could be lost the same way while P1 publishes. The
+test scenario only works around it; the final receipt reports it for the owner's review of this
+decision.
+
 ## 2. The identity alias is the production lifetime fence
 
 Decision: yes, as a fence between provider lifetimes, not as authentication.

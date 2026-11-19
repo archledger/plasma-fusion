@@ -276,6 +276,24 @@ PY
         done
         [[ $complete == true ]]
     }
+    # Each publication is a shell script call that the shell serves on its main thread, and one can
+    # take hundreds of milliseconds; a click sent while the shell served one could lose its button
+    # events (docs/DEFERRED.md). As a test-side workaround, a click after a change waits until the
+    # provider has observed it, the receiver holds the newest context, and nothing is outstanding.
+    wait_target_settled() {
+        local boot=$1 minimum=$2 settled=false
+        for _ in {1..40}; do
+            if python3 "$HOME/.local/lib/layout-control/receipts.py" target-settled \
+                "$OUT/plasmashell.log" "$OUT/kwin.log" "$boot" "$minimum" \
+                >/dev/null 2>>"$OUT/target-settle-wait.log"
+            then
+                settled=true
+                break
+            fi
+            sleep 0.1
+        done
+        [[ $settled == true ]]
+    }
     wait_target_popup() {
         local app=$1 ready=false
         for _ in {1..40}; do
@@ -483,6 +501,8 @@ assert control["validateX"] >= 0 and control["validateY"] >= 0
 print(control["validateX"], control["validateY"])
 PY
         read -r validate_x validate_y <"$OUT/target-control.txt"
+        generation=$(python3 "$HOME/.local/lib/layout-control/receipts.py" provider-generation \
+            "$OUT/kwin.log")
         mkfifo "$OUT/target-second.in"
         exec {target_second_input}<>"$OUT/target-second.in"
         python3 "$HOME/.local/lib/layout-control/heldclient.py" pf.focus.beta 430x310 \
@@ -504,6 +524,7 @@ PY
             sleep 0.1
         done
         [[ $beta_seen == true ]] || return 1
+        wait_target_settled "$focus_boot" $((generation + 1))
         pfinput "click $validate_x $validate_y"
         target_request=$(wait_target_reply "$focus_boot" validate false "$target_request" -)
         echo "PASS: another eligible app invalidates the old preparation instead of retargeting"
@@ -511,9 +532,12 @@ PY
         wait_target_popup pf.focus.beta
         pfinput "key space"
         target_request=$(wait_target_reply "$focus_boot" prepare true "$target_request" pf.focus.beta)
+        generation=$(python3 "$HOME/.local/lib/layout-control/receipts.py" provider-generation \
+            "$OUT/kwin.log")
         printf 'quit\n' >&"$target_second_input"
         wait "$target_second"
         exec {target_second_input}>&-
+        wait_target_settled "$focus_boot" $((generation + 1))
         pfinput "click $validate_x $validate_y"
         target_request=$(wait_target_reply "$focus_boot" validate false "$target_request" -)
         echo "PASS: closing a freshly prepared target refuses its old handle"
@@ -537,8 +561,11 @@ PY
         pfinput "key space"
         target_request=$(wait_target_reply "$focus_boot" prepare true "$target_request" pf.focus.alpha)
         [[ $(qdbus org.kde.KWin /KWin org.kde.KWin.currentDesktop) == 1 ]] || return 1
+        generation=$(python3 "$HOME/.local/lib/layout-control/receipts.py" provider-generation \
+            "$OUT/kwin.log")
         [[ $(qdbus org.kde.KWin /KWin org.kde.KWin.setCurrentDesktop 2) == true ]] || return 1
         [[ $(qdbus org.kde.KWin /KWin org.kde.KWin.setCurrentDesktop 1) == true ]] || return 1
+        wait_target_settled "$focus_boot" $((generation + 2))
         pfinput "click $validate_x $validate_y"
         target_request=$(wait_target_reply "$focus_boot" validate false "$target_request" -)
         echo "PASS: leaving and returning to the desktop cannot revive an old preparation"

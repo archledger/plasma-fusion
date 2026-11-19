@@ -45,6 +45,7 @@ if __package__:
     from .refused_backend_tests import RefusedSeedTests as RefusedSeedTests
     # Re-export preserves the existing unittest entry point and class selectors.
     from .target_guard_tests import TargetGuardTests as TargetGuardTests
+    from .target_guard_tests import TargetSettleTests as TargetSettleTests
     from .two_bar_tests import TwoBarCheckerTests as TwoBarCheckerTests
     from .two_bar_tests import TwoBarScenarioTests as TwoBarScenarioTests
     from .two_bar_tests import TwoBarSeedTests as TwoBarSeedTests
@@ -80,6 +81,7 @@ else:
     from refused_backend_tests import RefusedScenarioTests as RefusedScenarioTests
     from refused_backend_tests import RefusedSeedTests as RefusedSeedTests
     from target_guard_tests import TargetGuardTests as TargetGuardTests
+    from target_guard_tests import TargetSettleTests as TargetSettleTests
     from two_bar_tests import TwoBarCheckerTests as TwoBarCheckerTests
     from two_bar_tests import TwoBarScenarioTests as TwoBarScenarioTests
     from two_bar_tests import TwoBarSeedTests as TwoBarSeedTests
