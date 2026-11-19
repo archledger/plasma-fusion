@@ -294,7 +294,8 @@ the handle; context frames contain only their required scalar view IDs and gener
 window IDs, PIDs, classes or placement records. Each context also carries its consumer's public
 freshness lease, not a native writer token or authentication credential. The client copies that
 lease with the frozen menu, original request and accepted preparation contexts; a later update
-cannot replace it in an outstanding intent.
+cannot replace it in an outstanding intent. Each target frame also repeats the consumer's decided
+completion, separately from the preparation (see the completion case below).
 
 Target mode reads a complete native widget inventory separately from parsed requests. At most
 16 widgets and 2048 characters per request are accepted. Unreadable requests leave their widgets
@@ -598,6 +599,80 @@ replayed over the native logs of every other mode's regression run, one provider
 without the teardown retirement frames, with no violation. This mode shows serialization and
 coalescing for one burst on one panel. It does not reduce how often a scan publishes, which the G0
 decisions require of P1, and it does not clear G0/P1.
+
+The completion that newer state frames keep is part of every target frame (G0 decisions, section 3).
+When the provider first handles a consumer's `prepare`, that answer becomes the request's
+completion: accepted with its handle, or refused with its reason. The provider keeps it for the
+consumer's identity, lease and request number. Every later online frame for that consumer, lease and
+number repeats it unchanged until the provider handles a newer request for that consumer, whatever
+that frame's own answer is: a conflicting or malformed row at the same number carries it too. The
+preparation remains the per-frame re-check: a later frame can report the target no longer valid, or
+the context unavailable, while the completion still says the request was accepted. A refused
+request's later preparations repeat the outcome the provider stored, which for a stale-context,
+popup-focus or handle-exhaustion refusal is the generic `refused`; the completion keeps the reason
+the request was given. Until the provider handles a request, its frames carry no completion: while
+the context is unavailable, or while the provider does not know the consumer or its lease. A frame
+for a request older than the newest one the provider has handled for that consumer carries none, and
+neither do validations, queries and retirement frames. A query is never handled, so a replayed row
+of the prepare before it still carries that prepare's completion. The native target verdict records
+the completion it published.
+
+The default-off `--completion-probe` mode checks this natively in target mode:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-completion --completion-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-completion tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-completion" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-completion --scope completion
+```
+
+The scenario branches after the holder's first accepted preparation, while its popup is still
+open. `completion_scenario.sh` then:
+
+1. closes the popup, a context change;
+2. opens the competitor's menu from the app and prepares there, which is refused as busy while
+   the holder holds the slot;
+3. closes that popup;
+4. reopens the holder's menu from the app and creates a virtual desktop while the popup stays
+   active, which makes the menu's captured context stale;
+5. prepares there, which is refused for that stale context;
+6. closes the popup.
+
+Each step is marked before its action. `completion.py` replays every native verdict and received
+frame up to each step, in a window with exactly one provider start, because verdicts do not name
+their provider lifetime. A prepare's deciding answer must carry a completion that restates it, and
+no answer given before the provider touches the consumer's record may introduce one. The checker
+enforces that for an unknown consumer or lease, an older or conflicting request and a malformed
+envelope, but not for an unavailable context: that answer looks like the unavailable refusal a
+decided prepare gets when the provider runs out of handles, so for the holder and the competitor it
+is the steps, which require the expected decisions, that rule it out. Every later verdict for that
+consumer and request number, whatever its intent or answer, must carry the identical completion
+until a verdict shows that the provider handled a newer request for that consumer, and every
+received frame must carry exactly what its verdict published. The checker is stricter than the
+provider in two respects: a consumer re-leased at its decided request fails it, and so does an older
+row that drops its completion after a newer validation the provider handled but answered
+`unavailable`, which happens only after handle exhaustion. It keeps the second on purpose: an early
+unavailable answer to a validation gives the same verdict, and that one must not supersede the
+decision. The steps require the newer frames those actions cause, each accepted from a publication
+after the action. After the context change, a frame keeps the accepted completion while its
+preparation reports the target no longer valid. The publication that decides the competitor's
+refusal also carries a frame that keeps the holder's completion. After each refusal, a later frame
+keeps it. `completion-result.json` is written only after every step record is recomputed from the
+raw logs, and this scope also requires the independent cleanup evidence.
+
+The previous provider published only the per-frame answer. Published as the completion, that answer
+made the same scenario fail at the first context change: a completion changed after its decision. In
+the passing run the stale refusal's preparation changed to `refused` on the next frame while its
+completion kept `stale-context`. Natively this covers one holder and one competitor on one panel and
+output: an accepted completion kept across context changes and another consumer's request, and busy
+and stale-context refusals. A popup-focus refusal, an unavailable context, a replaced consumer, an
+advanced request and a conflicting or malformed row at the decided number are covered by unit cases.
+The completion lives in the provider's consumer record, so a provider restart or a shell replacement
+does not carry it over; the consumer gets a new lease and must request again. It is not a mutating
+acknowledgement, which belongs to P5, and this mode does not clear G0/P1.
 
 `--check-result` requires the explicit selected-scope receipt, successful inner scenario/session
 codes and independent cleanup qualification. The wrapper's exit code alone is insufficient.

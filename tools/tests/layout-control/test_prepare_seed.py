@@ -20,6 +20,10 @@ if __package__:
     from .cleanup_tests import CleanupOwnershipTests as CleanupOwnershipTests
     from .cleanup_tests import CleanupSeedTests as CleanupSeedTests
     from .cleanup_tests import write_cleanup_fixture
+    from .completion_tests import CompletionCheckerTests as CompletionCheckerTests
+    from .completion_tests import CompletionPublicationTests as CompletionPublicationTests
+    from .completion_tests import CompletionScenarioTests as CompletionScenarioTests
+    from .completion_tests import CompletionSeedTests as CompletionSeedTests
     from .consumer_lifecycle_tests import ConsumerLifecycleTests as ConsumerLifecycleTests
     from .mixed_lifetime_tests import MixedLifetimeSeedTests as MixedLifetimeSeedTests
     from .mixed_lifetime_tests import MixedLifetimePublicationTests as MixedLifetimePublicationTests
@@ -47,6 +51,10 @@ else:
     from cleanup_tests import CleanupOwnershipTests as CleanupOwnershipTests
     from cleanup_tests import CleanupSeedTests as CleanupSeedTests
     from cleanup_tests import write_cleanup_fixture
+    from completion_tests import CompletionCheckerTests as CompletionCheckerTests
+    from completion_tests import CompletionPublicationTests as CompletionPublicationTests
+    from completion_tests import CompletionScenarioTests as CompletionScenarioTests
+    from completion_tests import CompletionSeedTests as CompletionSeedTests
     from consumer_lifecycle_tests import ConsumerLifecycleTests as ConsumerLifecycleTests
     from mixed_lifetime_tests import MixedLifetimeSeedTests as MixedLifetimeSeedTests
     from mixed_lifetime_tests import MixedLifetimePublicationTests as MixedLifetimePublicationTests

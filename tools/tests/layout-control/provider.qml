@@ -219,8 +219,21 @@ Item {
             return;
         }
         const messages = rows.map(row => {
-            const preparation = status === "online" && probe.targetProbe
-                ? probe.handleTargetRequest(row) : null;
+            const target = status === "online" && probe.targetProbe;
+            // Read before handling: the consumer's first handling of a request advances it.
+            const actor = target ? probe.targetConsumerFor(row.id, row.consumer) : null;
+            const handled = actor ? actor.request : 0;
+            const preparation = target ? probe.handleTargetRequest(row) : null;
+            if (actor && actor.request === row.request && handled < row.request) {
+                // A prepare's first answer is its completion, decided once; any other request
+                // ends the previous one. Later frames re-check validity in the preparation.
+                actor.completion = row.intent === "prepare" && preparation ? {
+                    request: row.request, intent: "prepare", accepted: preparation.ready,
+                    token: preparation.token, reason: preparation.reason
+                } : null;
+            }
+            const completion = actor && actor.lease === row.consumerLease && actor.completion
+                && actor.completion.request === row.request ? actor.completion : null;
             if (preparation) {
                 const window = probe.preparedTarget ? probe.preparedTarget.window : null;
                 console.info("layout-probe-target", JSON.stringify({
@@ -228,7 +241,7 @@ Item {
                     revision: revision + 1,
                     ready: preparation.ready, reason: preparation.reason,
                     targetClass: Tiling.alive(window) ? String(window.resourceClass) : "",
-                    targetAlive: Tiling.alive(window)
+                    targetAlive: Tiling.alive(window), completion: completion
                 }));
             }
             if (probe.mixedLifetimeProbe) {
@@ -242,6 +255,7 @@ Item {
                 status: status, capable: capable, refusal: refusal,
                 request: row.request,
                 preparation: preparation,
+                completion: completion,
                 targetContext: status === "online" && probe.targetProbe
                     ? probe.captureTargetConsumerContext(row) : null,
                 competingProviderRejected: competingProviderRejected,
@@ -585,7 +599,7 @@ Item {
                 current.push({
                     owner: readOwner, id: widget.id, consumer: widget.consumer,
                     lease: epoch + ":" + (++consumerSerial), confirmed: true,
-                    request: 0, payload: "", outcome: "not-prepared"
+                    request: 0, payload: "", outcome: "not-prepared", completion: null
                 });
             }
         }

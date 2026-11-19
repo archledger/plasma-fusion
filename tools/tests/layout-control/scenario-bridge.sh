@@ -406,6 +406,18 @@ PY
     shot focus-keyboard
     if [[ $target_probe == true ]]; then
         target_prepare_request=$(wait_target_reply "$focus_boot" prepare true 1 pf.focus.alpha)
+        completion_probe=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
+            --group Script-plasmafusion-layout-probe --key CompletionProbe --default false)
+        if [[ $completion_probe == true ]]; then
+            # Branch while the accepted preparation is still the holder's current request.
+            # shellcheck source=tools/tests/layout-control/completion_scenario.sh
+            source "$HOME/.local/lib/layout-control/completion_scenario.sh"
+            printf 'quit\n' >&"$focus_input"
+            wait "$focus_client"
+            exec {focus_input}>&-
+            finish_probe_session
+            return 0
+        fi
         pfinput "key space"
         target_request=$(wait_target_reply "$focus_boot" validate true \
             "$target_prepare_request" pf.focus.alpha)
