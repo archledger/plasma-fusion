@@ -97,7 +97,8 @@ live in `target_guard_tests.py`; consumer inventory, lease and retirement cases 
 `consumer_lifecycle_tests.py`; cleanup qualification/ownership cases live in `cleanup_tests.py`.
 Combined lifetime, seed and raw-evidence cases live in `mixed_lifetime_tests.py`; output-loss and
 activity-switch cases live in `view_loss_tests.py`; refused and absent native backend cases live in
-`refused_backend_tests.py`. They share `qml_helpers.py` with the entry point. The driver
+`refused_backend_tests.py`; read/publish pipeline cases live in `pipeline_tests.py`. They share
+`qml_helpers.py` with the entry point. The driver
 re-exports the classes, preserving existing class selectors and all cases. The support module
 names deliberately do not match `test_*.py`, avoiding duplicate default discovery.
 Package-aware imports also preserve `python3 -m unittest` with the entry file's path.
@@ -112,6 +113,7 @@ same functions used by the final combined qualifier. View-loss seeds instead cop
 `view_loss.py`, `view_loss_scenario.sh` and the `mixed_lifetime.py` complete-line reader that
 checker reuses; the mixed scenario itself is not copied. Refused-backend seeds copy and hash
 `occupier.qml`, `refused_backend.py`, `refused_scenario.sh` and the same complete-line reader.
+Pipeline seeds copy and hash `pipeline.py`, `pipeline_scenario.sh` and the same reader.
 
 Build `topbar kwin` into a private stage, then make a fresh seed under this worktree's `build/`:
 
@@ -549,6 +551,53 @@ next step's mark; the retirement-frame and new-label paths, and a frame accepted
 are covered by synthetic checker cases only. The consumers'
 `unsupported` state is a transport observation; no UI exists yet, and this mode does not clear
 G0/P1.
+
+The read/publish pipeline is serialized in every mode. The provider starts a read only when no
+read or publication is outstanding; a wake-up during either sets one pending flag, so several
+wake-ups coalesce into one later read. The writer's completion or failure resumes the pipeline,
+and a delayed publication (the query-timeout fault) that falls due during a read waits for that
+read. Every mode's reader visits at most 16 widgets of at most 2048 characters each and accepts
+only a well-formed consumer and request; target mode applied these bounds before. The provider
+logs `read started`, `read finished`, each publication it sends and each completion, so a native
+run can replay the pipeline. Two limits remain. Retirement at teardown sends its offline frame at
+once, even while a publication is outstanding. A publication the shell never answers holds the
+pipeline until the D-Bus reply timeout ends it as a failure, which resumes it.
+
+The default-off `--pipeline-probe` mode checks that order natively over the plain transport:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-pipeline --pipeline-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-pipeline tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-pipeline" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-pipeline --scope pipeline
+```
+
+After the first online exchange and its identity checks, `pipeline_scenario.sh` writes an
+exclusive mark and the number of wake-ups it fires, then sends 24 wake-ups concurrently and waits
+only for those clients. `pipeline.py` replays every pipeline event of the run up to the settled
+step: no read may start while a read or publication is outstanding, at most one publication may
+be outstanding, and every wake-up must be followed by a read, so coalesced wake-ups are told
+apart from lost ones. Every wake-up of the burst must arrive, at least one must meet a busy
+pipeline, and the burst must coalesce into fewer reads than wake-ups. Both consumers must end
+online on their current request with a frame the provider published after the mark: the probe's
+revision counter starts at zero and rises by one per message, so the publication lines' message
+counts bound it. A read or publication line the checker does not recognize fails the check. The
+settled record keeps the counts of wake-ups, reads, publications and response saves.
+`pipeline-result.json` is written only after that record is recomputed from the raw logs, and
+this scope also requires the independent cleanup evidence.
+
+With the previous provider and only the two read log lines added, the same scenario failed: a read
+started while a publication was outstanding. Which stage a busy wake-up meets depends on timing: in
+one passing run every busy wake-up arrived during a read, and in another four also arrived while a
+publication was outstanding and were served by the next read. A delayed publication falling due
+during a read and target-mode context scans are covered by unit cases. The same rules were also
+replayed over the native logs of every other mode's regression run, one provider lifetime at a time
+without the teardown retirement frames, with no violation. This mode shows serialization and
+coalescing for one burst on one panel. It does not reduce how often a scan publishes, which the G0
+decisions require of P1, and it does not clear G0/P1.
 
 `--check-result` requires the explicit selected-scope receipt, successful inner scenario/session
 codes and independent cleanup qualification. The wrapper's exit code alone is insufficient.

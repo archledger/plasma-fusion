@@ -53,6 +53,10 @@ Item {
     property bool dropRetirementFrame: false
     property int replyDelayMs: 0
     property var pendingPublication: null
+    // The read/publish pipeline is serialized (plan.md, G0): a read never starts while a
+    // publication is outstanding, and a due delayed publication waits for a running read.
+    property bool publishing: false
+    property bool publicationDue: false
 
     Component {
         id: publicationFactory
@@ -65,23 +69,46 @@ Item {
             triggeredOnStart: false
             onTriggered: {
                 if (delayed.publisher.pendingPublication === delayed) {
-                    delayed.publisher.pendingPublication = null;
-                    if (!delayed.publisher.stopping) {
-                        console.info("layout-probe: delayed publication released");
-                        delayed.publisher.publish("online", delayed.rows, delayed.destination);
-                    }
+                    delayed.publisher.publicationDue = true;
+                    delayed.publisher.releaseDuePublication();
+                } else {
+                    delayed.destroy();
                 }
-                delayed.destroy();
             }
         }
     }
 
     function cancelPublication(): void {
+        publicationDue = false;
         if (pendingPublication) {
             const timer = pendingPublication;
             pendingPublication = null;
             timer.stop();
             timer.destroy();
+        }
+    }
+
+    function releaseDuePublication(): void {
+        if (!publicationDue || reading || publishing || !pendingPublication) {
+            return;
+        }
+        const timer = pendingPublication;
+        pendingPublication = null;
+        publicationDue = false;
+        if (!stopping) {
+            console.info("layout-probe: delayed publication released");
+            publish("online", timer.rows, timer.destination);
+        }
+        timer.destroy();
+    }
+
+    // The outstanding publication finished or failed; either way the pipeline may continue.
+    function publicationFinished(): void {
+        publishing = false;
+        releaseDuePublication();
+        if (again) {
+            again = false;
+            Qt.callLater(probe.scan);
         }
     }
 
@@ -227,6 +254,8 @@ Item {
             + "messages.forEach(function(m) { if(w.id === m.id) { w.currentConfigGroup=['General'];"
             + "w.writeConfig('layoutResponse',m.packet); ++written; } }); }); });print(written);"];
         writer.call();
+        // Outstanding until the writer reports; scan() waits for it.
+        publishing = true;
         console.info("layout-probe: publication", status, messages.length);
     }
 
@@ -238,11 +267,13 @@ Item {
             again = true;
             return;
         }
-        if (reading) {
+        // Wake-ups during a read or a publication coalesce into one later read.
+        if (reading || publishing) {
             again = true;
             return;
         }
         reading = true;
+        console.info("layout-probe: read started");
         ownerLookup.call();
     }
 
@@ -714,6 +745,8 @@ Item {
 
     function finishRead(): void {
         reading = false;
+        console.info("layout-probe: read finished");
+        releaseDuePublication();
         if (again) {
             again = false;
             Qt.callLater(probe.scan);
@@ -776,16 +809,19 @@ Item {
 
     function readMailboxes(): void {
         const target = probe.targetProbe;
-        reader.arguments = ["var rows=[],widgets=[],complete=true;panels().forEach(function(p) {"
+        // Every mode reads at most 16 widgets of at most 2048 characters each, and only a
+        // well-formed consumer and request; target mode also reports the inventory it read.
+        reader.arguments = ["var rows=[],widgets=[],complete=true,seen=0;"
+            + "panels().forEach(function(p) {"
             + "p.widgets('org.plasmafusion.layoutprobe').forEach(function(w) {"
-            + (target ? "if(widgets.length>=16){complete=false;return;}"
-                + "var item={id:w.id,consumer:null};widgets.push(item);" : "")
+            + "if(seen>=16){complete=false;return;}++seen;"
+            + (target ? "var item={id:w.id,consumer:null};widgets.push(item);" : "")
             + "w.currentConfigGroup=['General'];try {var text=w.readConfig('layoutRequest','');"
-            + (target ? "if(text.length>2048)return;" : "")
+            + "if(text.length>2048)return;"
             + "var q=JSON.parse(text);"
-            + (target ? "if(typeof q.consumer!=='string'||!q.consumer.length||q.consumer.length>128"
-                + "||!Number.isInteger(q.request)||q.request<=0||q.request>2147483646)return;"
-                + "item.consumer=q.consumer;" : "")
+            + "if(typeof q.consumer!=='string'||!q.consumer.length||q.consumer.length>128"
+            + "||!Number.isInteger(q.request)||q.request<=0||q.request>2147483646)return;"
+            + (target ? "item.consumer=q.consumer;" : "")
             + "rows.push({id:w.id,consumer:q.consumer,request:q.request,"
             + "version:q.version,intent:q.intent,outputName:q.outputName,token:q.token,"
             + "viewEpoch:q.viewEpoch,viewGeneration:q.viewGeneration,desktopId:q.desktopId,"
@@ -837,8 +873,14 @@ Item {
         path: "/PlasmaShell"
         dbusInterface: "org.kde.PlasmaShell"
         method: "evaluateScript"
-        onFinished: value => console.info("layout-probe: publication writes", String(value[0]))
-        onFailed: console.warn("layout-probe: publication failed")
+        onFinished: value => {
+            console.info("layout-probe: publication writes", String(value[0]));
+            probe.publicationFinished();
+        }
+        onFailed: {
+            console.warn("layout-probe: publication failed");
+            probe.publicationFinished();
+        }
     }
     ShortcutHandler {
         name: "Plasma Fusion: Layout Probe Wake"

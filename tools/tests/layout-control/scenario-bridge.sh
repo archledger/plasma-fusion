@@ -171,6 +171,17 @@ identity_owner=$(qdbus org.freedesktop.DBus /org/freedesktop/DBus \
     org.freedesktop.DBus.GetNameOwner "$identity_name")
 [[ $identity_owner == "$backend_owner" ]] || return 1
 
+pipeline_probe=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
+    --group Script-plasmafusion-layout-probe --key PipelineProbe --default false)
+if [[ $pipeline_probe == true ]]; then
+    # Branch after the first online exchange and its identity checks; this Bash parent keeps
+    # child ownership.
+    # shellcheck source=tools/tests/layout-control/pipeline_scenario.sh
+    source "$HOME/.local/lib/layout-control/pipeline_scenario.sh"
+    finish_probe_session
+    return 0
+fi
+
 focus_probe=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
     --group Script-plasmafusion-layout-probe --key FocusProbe --default false)
 if [[ $focus_probe == true ]]; then

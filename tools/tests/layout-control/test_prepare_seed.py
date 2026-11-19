@@ -25,6 +25,12 @@ if __package__:
     from .mixed_lifetime_tests import MixedLifetimePublicationTests as MixedLifetimePublicationTests
     from .mixed_lifetime_tests import MixedLifetimeReceiptTests as MixedLifetimeReceiptTests
     from .mixed_lifetime_tests import MixedLifetimeSnapshotTests as MixedLifetimeSnapshotTests
+    from .pipeline_tests import DefaultReaderBoundTests as DefaultReaderBoundTests
+    from .pipeline_tests import PipelineCheckerTests as PipelineCheckerTests
+    from .pipeline_tests import PipelineScenarioTests as PipelineScenarioTests
+    from .pipeline_tests import PipelineSeedTests as PipelineSeedTests
+    from .pipeline_tests import PipelineSerializationTests as PipelineSerializationTests
+    from .pipeline_tests import PipelineSourceTests as PipelineSourceTests
     from .qml_helpers import qml_handler
     from .refused_backend_tests import OccupierTests as OccupierTests
     from .refused_backend_tests import RefusedCheckerTests as RefusedCheckerTests
@@ -46,6 +52,12 @@ else:
     from mixed_lifetime_tests import MixedLifetimePublicationTests as MixedLifetimePublicationTests
     from mixed_lifetime_tests import MixedLifetimeReceiptTests as MixedLifetimeReceiptTests
     from mixed_lifetime_tests import MixedLifetimeSnapshotTests as MixedLifetimeSnapshotTests
+    from pipeline_tests import DefaultReaderBoundTests as DefaultReaderBoundTests
+    from pipeline_tests import PipelineCheckerTests as PipelineCheckerTests
+    from pipeline_tests import PipelineScenarioTests as PipelineScenarioTests
+    from pipeline_tests import PipelineSeedTests as PipelineSeedTests
+    from pipeline_tests import PipelineSerializationTests as PipelineSerializationTests
+    from pipeline_tests import PipelineSourceTests as PipelineSourceTests
     from qml_helpers import qml_handler
     from refused_backend_tests import OccupierTests as OccupierTests
     from refused_backend_tests import RefusedCheckerTests as RefusedCheckerTests
