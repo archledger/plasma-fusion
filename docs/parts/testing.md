@@ -97,7 +97,8 @@ live in `target_guard_tests.py`; consumer inventory, lease and retirement cases 
 `consumer_lifecycle_tests.py`; cleanup qualification/ownership cases live in `cleanup_tests.py`.
 Combined lifetime, seed and raw-evidence cases live in `mixed_lifetime_tests.py`; output-loss and
 activity-switch cases live in `view_loss_tests.py`; refused and absent native backend cases live in
-`refused_backend_tests.py`; read/publish pipeline cases live in `pipeline_tests.py`. They share
+`refused_backend_tests.py`; read/publish pipeline cases live in `pipeline_tests.py`; keyboard-entry
+cases live in `keyboard_entry_tests.py`. They share
 `qml_helpers.py` with the entry point. The driver
 re-exports the classes, preserving existing class selectors and all cases. The support module
 names deliberately do not match `test_*.py`, avoiding duplicate default discovery.
@@ -114,6 +115,8 @@ same functions used by the final combined qualifier. View-loss seeds instead cop
 checker reuses; the mixed scenario itself is not copied. Refused-backend seeds copy and hash
 `occupier.qml`, `refused_backend.py`, `refused_scenario.sh` and the same complete-line reader.
 Pipeline seeds copy and hash `pipeline.py`, `pipeline_scenario.sh` and the same reader.
+Keyboard-entry seeds copy and hash `keyboard_entry.py`, `keyboard_scenario.sh` and the same
+reader.
 
 Build `topbar kwin` into a private stage, then make a fresh seed under this worktree's `build/`:
 
@@ -766,6 +769,57 @@ Natively this covers two bars on two outputs of one session, one holder at a tim
 that retires because its panel is removed. Two controls for the same view, on one panel, are the
 holder and competitor of the target and completion modes. Fair arbitration between bars belongs to
 P7 and double-toggle prevention to P5; this mode does not clear G0/P1.
+
+Keyboard entry after panel focus has its own default-off `--keyboard-entry-probe` target mode:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-keyboard --keyboard-entry-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-keyboard tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-keyboard" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-keyboard --scope keyboard-entry
+```
+
+The bridge branches once the controlled app is active and the focus consumer holds a context that
+remembers it, before any pointer opens the popup. `keyboard_scenario.sh` first removes every panel
+without a probe widget: plasmashell's 'Move keyboard focus between panels' shortcut (Meta+Alt+P)
+focuses the first panel, which would otherwise be the session's default one. It then:
+
+1. presses Meta+Alt+P, so the probe panel becomes the active window as a shell dock with the app
+   still remembered; waits until the consumer holds the context after that activation; presses
+   Space, which the panel's focused control takes to open the popup; and presses Space in the popup
+   to prepare. The provider must prepare the remembered app, `pf.focus.alpha`, never the panel;
+2. closes the popup and quits the app, so that the provider remembers nothing, and repeats the same
+   keys from the desktop: the preparation must be refused with no target. With nothing remembered
+   the popup's activation bridges no generation, so the request is refused as stale before any
+   window is chosen (the native runs show `stale-context`); `target_guard_tests.py` covers that
+   choice refusing a shell popup with nothing remembered.
+
+A popup that opens from the app, or from one of the shell's dock or desktop surfaces, may bridge one
+generation with the app the provider remembers (the handoff above). This mode exercises the dock
+part of that rule natively. `target_guard_tests.py` covers both surfaces, two panels in a row, a
+request from before the panel had focus, a dock the shell does not own, a dock on another output
+and a panel with nothing remembered. The key on the panel waits for the consumer to hold the
+panel's context because the popup's request carries the context the consumer held when its control
+was activated, and an older one is refused as stale. The key in the popup deliberately has no
+settle wait (`receipts.py target-settled`), which also waits out reads and publications: a key lost
+while the shell serves a publication would show here, as evidence for the pointer button events row
+in [the blocked queue](../DEFERRED.md), which so far covers pointer events only. `keyboard_entry.py`
+recomputes each step from the raw logs, from a mark set before its shortcut: the panel's activation
+as the shell's dock with the expected app remembered or none, then the popup with nothing activated
+in between, the focus consumer's keyboard preparation after its popup took focus, and the
+provider's first verdict for that request, given in that popup before anything else was activated.
+That verdict decides the request's completion, which a frame the consumer accepted must carry. No
+verdict in the run may name anything but the app or no target.
+`keyboard-entry-result.json` is written only after that recomputation, and this scope also requires
+the independent cleanup evidence. A provider without the dock and desktop part of the handoff
+refused the first keyboard preparation as stale, and the case failed there.
+
+This covers one output and one panel with two probe widgets, with keyboard focus given by the
+shell's own shortcut. The menu's arrow keys, Return and Escape belong to P1's menu; this mode does
+not clear G0/P1.
 
 `--check-result` requires the explicit selected-scope receipt, successful inner scenario/session
 codes and independent cleanup qualification. The wrapper's exit code alone is insufficient.

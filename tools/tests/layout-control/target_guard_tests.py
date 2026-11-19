@@ -294,6 +294,67 @@ process.stdout.write(JSON.stringify({
 """, requests=True)
         self.assertEqual(result, {"ready": True, "generation": 1, "exact": True})
 
+    def keyboard_entry(self, surfaces, *, generation="probe.targetGeneration", remembered="app"):
+        """The panel gets keyboard focus, a key on its focused control opens the popup, and a key in
+        the popup prepares. The request carries the context the consumer held when the popup's
+        control was activated: by default the one after the panels' activations."""
+        return self.run_guard("""
+const dock={deleted:false,normalWindow:false,appletPopup:false,dock:true,desktopWindow:false,
+            output:output,pid:202};
+const surface={...dock,dock:false,desktopWindow:true};
+probe.lastEligibleWindow=""" + remembered + """;
+Workspace.activeWindow=app;
+probe.lastFocusedWindow=app;
+""" + "".join(f"Workspace.activeWindow={name};"
+              "probe.trackTargetActivation(Workspace.activeWindow);\n" for name in surfaces) + """
+const request={version:1,id:7,consumer:'current',request:2,intent:'prepare',
+               consumerLease,
+               outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:""" + generation
+            + """,
+               desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'};
+Workspace.activeWindow=panel;
+probe.trackTargetActivation(panel);
+const reply=probe.handleTargetRequest(request);
+const target=probe.preparedTarget;
+process.stdout.write(JSON.stringify({
+    ready:reply.ready,generation:probe.targetGeneration,
+    app:!!target && target.window===app,focus:!!target && target.focusSurface===panel,
+    shellTarget:!!target && [dock,surface,panel].includes(target.window)
+}));
+""", requests=True)
+
+    def test_keyboard_entry_through_a_panel_or_the_desktop_prepares_the_remembered_app(self):
+        # The dock or desktop branch of the initial menu-opening handoff: the shell surface that had
+        # keyboard focus keeps the remembered app, and the popup it opens may bridge one generation.
+        for surface in ("dock", "surface"):
+            with self.subTest(surface=surface):
+                self.assertEqual(self.keyboard_entry([surface]),
+                                 {"ready": True, "generation": 2, "app": True, "focus": True,
+                                  "shellTarget": False})
+
+    def test_keyboard_entry_across_two_panels_still_bridges_one_generation(self):
+        result = self.keyboard_entry(["dock", "{...dock}"])
+        self.assertEqual(result, {"ready": True, "generation": 3, "app": True, "focus": True,
+                                  "shellTarget": False})
+
+    def test_keyboard_entry_with_a_request_from_before_the_panel_focus_is_refused(self):
+        # A consumer that had not yet seen the panel's activation sends the earlier generation.
+        result = self.keyboard_entry(["dock"], generation="0")
+        self.assertEqual(result, {"ready": False, "generation": 2, "app": False, "focus": False,
+                                  "shellTarget": False})
+
+    def test_keyboard_entry_refuses_when_nothing_can_be_handed_off(self):
+        # Nothing remembered, a dock the shell does not own, or a shell dock on another output than
+        # the popup's: no handoff, so the request from before the popup's activation is stale.
+        refused = {"ready": False, "generation": 2, "app": False, "focus": False,
+                   "shellTarget": False}
+        for case, surfaces, remembered in (("no remembered app", ["dock"], "null"),
+                                           ("foreign dock", ["{...dock,pid:999}"], "app"),
+                                           ("dock on another output",
+                                            ["{...dock,output:otherOutput}"], "app")):
+            with self.subTest(case=case):
+                self.assertEqual(self.keyboard_entry(surfaces, remembered=remembered), refused)
+
     def test_prepare_rejects_stale_provider_or_captured_view_identifiers(self):
         for field, value in (("viewEpoch", "b" * 32), ("desktopId", "desktop-b"),
                              ("activityId", "activity-b"), ("viewOutputName", "Virtual-1")):

@@ -13,6 +13,8 @@ if __package__:
     from .cleanup import check_cleanup
     from .completion import CHECKS as COMPLETION_CHECKS
     from .completion import check_completion
+    from .keyboard_entry import CHECKS as KEYBOARD_ENTRY_CHECKS
+    from .keyboard_entry import check_keyboard_entry
     from .mixed_lifetime import check_mixed
     from .refused_backend import CHECKS as REFUSED_CHECKS
     from .refused_backend import check_refused
@@ -26,6 +28,8 @@ else:
     from cleanup import check_cleanup
     from completion import CHECKS as COMPLETION_CHECKS
     from completion import check_completion
+    from keyboard_entry import CHECKS as KEYBOARD_ENTRY_CHECKS
+    from keyboard_entry import check_keyboard_entry
     from mixed_lifetime import check_mixed
     from refused_backend import CHECKS as REFUSED_CHECKS
     from refused_backend import check_refused
@@ -47,7 +51,8 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
              focus_probe: bool = False, target_probe: bool = False,
              mixed_lifetime_probe: bool = False, view_loss_probe: bool = False,
              refused_backend_probe: bool = False, pipeline_probe: bool = False,
-             completion_probe: bool = False, two_bar_probe: bool = False) -> None:
+             completion_probe: bool = False, two_bar_probe: bool = False,
+             keyboard_entry_probe: bool = False) -> None:
     build = Path.cwd() / "build"
     if build.is_symlink() or not output.resolve().is_relative_to(build.resolve()):
         raise ValueError("output must be under the current worktree's build directory")
@@ -65,6 +70,10 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
                           or refused_backend_probe or pipeline_probe or drop_retirement_frame
                           or reply_delay_ms):
         raise ValueError("the two-bar case is a separate private target case")
+    if keyboard_entry_probe and (two_bar_probe or completion_probe or mixed_lifetime_probe
+                                 or view_loss_probe or refused_backend_probe or pipeline_probe
+                                 or drop_retirement_frame or reply_delay_ms):
+        raise ValueError("the keyboard-entry case is a separate private target case")
     if completion_probe and (mixed_lifetime_probe or view_loss_probe or refused_backend_probe
                              or pipeline_probe or drop_retirement_frame or reply_delay_ms):
         raise ValueError("the completion case is a separate private target case")
@@ -75,7 +84,7 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
                            or refused_backend_probe or drop_retirement_frame or reply_delay_ms):
         raise ValueError("the pipeline case is a separate plain-transport private case")
     target_probe = (target_probe or mixed_lifetime_probe or view_loss_probe or completion_probe
-                    or two_bar_probe)
+                    or two_bar_probe or keyboard_entry_probe)
     focus_probe = focus_probe or target_probe
     if focus_probe and (drop_retirement_frame or reply_delay_ms):
         raise ValueError("focus observation requires normal transport")
@@ -106,6 +115,9 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
     elif two_bar_probe:
         # The two-bar checker also applies the completion rules.
         case_names = ("mixed_lifetime.py", "completion.py", "two_bar.py", "two_bar_scenario.sh")
+    elif keyboard_entry_probe:
+        # Like the view-loss checker, the keyboard-entry checker reuses only the mixed reader.
+        case_names = ("mixed_lifetime.py", "keyboard_entry.py", "keyboard_scenario.sh")
     case_helpers = {name: (HERE / name).read_bytes() for name in case_names}
     cleanup_helpers = {
         name: (HERE / name).read_bytes() for name in ("cleanup.py", "lifecycle.py")
@@ -169,6 +181,7 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         f"PipelineProbe={'true' if pipeline_probe else 'false'}\n"
         f"CompletionProbe={'true' if completion_probe else 'false'}\n"
         f"TwoBarProbe={'true' if two_bar_probe else 'false'}\n"
+        f"KeyboardEntryProbe={'true' if keyboard_entry_probe else 'false'}\n"
         f"{occupier}"
         "\n[Desktops]\nNumber=2\nRows=1\n"
     )
@@ -212,7 +225,7 @@ def main() -> None:
         choices=("first-slice", "silent-retirement", "reply-ordering",
                  "query-timeout-late", "focus-observation", "target-preparation",
                   "consumer-retirement", "mixed-lifetimes", "view-loss", "refused-backend",
-                  "pipeline", "completion", "two-bar"),
+                  "pipeline", "completion", "two-bar", "keyboard-entry"),
         default="first-slice",
     )
     parser.add_argument("--drop-retirement-frame", action="store_true",
@@ -235,6 +248,8 @@ def main() -> None:
                         help="private target case: decided completions kept by newer frames")
     parser.add_argument("--two-bar-probe", action="store_true",
                         help="private target case: one probe bar per output (two outputs)")
+    parser.add_argument("--keyboard-entry-probe", action="store_true",
+                        help="private target case: keyboard entry after panel focus")
     args = parser.parse_args()
     try:
         if args.check_result is not None:
@@ -242,7 +257,8 @@ def main() -> None:
                     or args.query_timeout_ms is not None or args.reply_delay_ms is not None
                     or args.focus_probe or args.target_probe or args.mixed_lifetime_probe
                     or args.view_loss_probe or args.refused_backend_probe
-                    or args.pipeline_probe or args.completion_probe or args.two_bar_probe):
+                    or args.pipeline_probe or args.completion_probe or args.two_bar_probe
+                    or args.keyboard_entry_probe):
                 raise ValueError("--check-result cannot be combined with seed preparation")
             check_result(args.check_result, args.scope)
         else:
@@ -262,7 +278,8 @@ def main() -> None:
                     refused_backend_probe=args.refused_backend_probe,
                     pipeline_probe=args.pipeline_probe,
                     completion_probe=args.completion_probe,
-                    two_bar_probe=args.two_bar_probe)
+                    two_bar_probe=args.two_bar_probe,
+                    keyboard_entry_probe=args.keyboard_entry_probe)
     except (ValueError, OSError) as error:
         parser.exit(2, f"{error}\n")
 
@@ -315,6 +332,9 @@ def check_result(directory: Path, scope: str = "first-slice") -> None:
     elif scope == "two-bar":
         receipt = directory / "two-bar-result.json"
         checks = TWO_BAR_CHECKS
+    elif scope == "keyboard-entry":
+        receipt = directory / "keyboard-entry-result.json"
+        checks = KEYBOARD_ENTRY_CHECKS
     else:
         raise ValueError("unknown probe receipt scope")
     if not receipt.is_file():
@@ -334,6 +354,8 @@ def check_result(directory: Path, scope: str = "first-slice") -> None:
         check_completion(directory)
     elif scope == "two-bar":
         check_two_bar(directory)
+    elif scope == "keyboard-entry":
+        check_keyboard_entry(directory)
     check_cleanup(directory)
     print(f"PASS: explicit {scope} receipt, inner exit codes and separate cleanup qualification")
 

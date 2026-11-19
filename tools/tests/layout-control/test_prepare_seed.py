@@ -49,6 +49,9 @@ if __package__:
     from .two_bar_tests import TwoBarCheckerTests as TwoBarCheckerTests
     from .two_bar_tests import TwoBarScenarioTests as TwoBarScenarioTests
     from .two_bar_tests import TwoBarSeedTests as TwoBarSeedTests
+    from .keyboard_entry_tests import KeyboardEntryCheckerTests as KeyboardEntryCheckerTests
+    from .keyboard_entry_tests import KeyboardEntryScenarioTests as KeyboardEntryScenarioTests
+    from .keyboard_entry_tests import KeyboardEntrySeedTests as KeyboardEntrySeedTests
     from .view_loss_tests import ViewLossCheckerTests as ViewLossCheckerTests
     from .view_loss_tests import ViewLossSeedTests as ViewLossSeedTests
     from .view_loss_tests import ViewLossTraceTests as ViewLossTraceTests
@@ -85,6 +88,9 @@ else:
     from two_bar_tests import TwoBarCheckerTests as TwoBarCheckerTests
     from two_bar_tests import TwoBarScenarioTests as TwoBarScenarioTests
     from two_bar_tests import TwoBarSeedTests as TwoBarSeedTests
+    from keyboard_entry_tests import KeyboardEntryCheckerTests as KeyboardEntryCheckerTests
+    from keyboard_entry_tests import KeyboardEntryScenarioTests as KeyboardEntryScenarioTests
+    from keyboard_entry_tests import KeyboardEntrySeedTests as KeyboardEntrySeedTests
     from view_loss_tests import ViewLossCheckerTests as ViewLossCheckerTests
     from view_loss_tests import ViewLossSeedTests as ViewLossSeedTests
     from view_loss_tests import ViewLossTraceTests as ViewLossTraceTests

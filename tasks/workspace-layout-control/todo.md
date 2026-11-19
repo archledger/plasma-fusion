@@ -35,6 +35,12 @@ and live-desktop changes remain excluded; G0 is still a separate gate.
 - [ ] Record the supported contract, versions, image identity, traces and pass/fail receipt.
       Interim receipt for the owner's review: [g0-receipt.md](g0-receipt.md) (2026-11-19).
       Decisions on it and the order of the remaining P0 work: [g0-decisions.md](g0-decisions.md).
+- [ ] Before the final sweep: the layout-control tests create their scratch directories under a
+      hard-coded directory in `/tmp`, which fails wherever that directory is missing; use the
+      default temporary directory, which follows `TMPDIR`.
+- [ ] Follow-up: the bridge's target waits print nothing on a timeout, in the keyboard-entry
+      scenario as in the target steps, so the log locates a failure only by the last PASS line
+      before it; name the failing wait.
 
 Verify: run the proposed G0 commands in `plan.md` after creating the fixtures; the scenario exits
 nonzero on a missing/incorrect observation. No SSH or live desktop. Review the receipt before P1.

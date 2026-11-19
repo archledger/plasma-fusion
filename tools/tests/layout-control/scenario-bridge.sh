@@ -359,6 +359,16 @@ PY
     read -r focus_x focus_y focus_boot <"$OUT/focus-control.txt"
     if [[ $target_probe == true ]]; then
         wait_target_context "$focus_boot" pf.focus.alpha
+        keyboard_entry_probe=$(kreadconfig6 --file "$HOME/.config/kwinrc" \
+            --group Script-plasmafusion-layout-probe --key KeyboardEntryProbe --default false)
+        if [[ $keyboard_entry_probe == true ]]; then
+            # Branch before any pointer opens the popup, so the panel has keyboard focus first.
+            # The scenario quits the controlled app itself.
+            # shellcheck source=tools/tests/layout-control/keyboard_scenario.sh
+            source "$HOME/.local/lib/layout-control/keyboard_scenario.sh"
+            finish_probe_session
+            return 0
+        fi
     fi
     pfinput "click $focus_x $focus_y"
     popup_seen=false
