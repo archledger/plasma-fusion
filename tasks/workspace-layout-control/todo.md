@@ -5,8 +5,10 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 # Workspace layout control checklist
 
-Status: plan accepted on 2026-11-17; P0 in progress, no production integration. Read [plan.md](plan.md) and the accepted
-[specification](../../SPEC-workspace-layout-control.md). Existing native task files are untouched.
+Status: plan accepted on 2026-11-17; P0 is done apart from one test follow-up (below), and its final
+G0 receipt awaits the owner's review (2026-11-20); no production integration. Read
+[plan.md](plan.md) and the accepted [specification](../../SPEC-workspace-layout-control.md).
+Existing native task files are untouched.
 Paths below are relative to the repository. Proposed new files are not claimed to exist.
 
 Path abbreviations: `clock/` = `packages/plasmoids/org.plasmafusion.clockpill/`;
@@ -24,17 +26,18 @@ The owner approved fixture-owned orderly teardown and strict cleanup qualificati
 2026-11-18 (UTC), preserving all 122 cases then present. Shared harness/Qt/native/image/security
 and live-desktop changes remain excluded; G0 is still a separate gate.
 
-- [ ] Prove wake-up, correlated state exchange and script/shell/KWin lifetime invalidation in a
+- [x] Prove wake-up, correlated state exchange and script/shell/KWin lifetime invalidation in a
       real isolated shell/fork pair; include stale retained fields and negative controls.
-- [ ] Prove keyboard target preparation, competing-bar ordering and timeout/late reply cases,
+- [x] Prove keyboard target preparation, competing-bar ordering and timeout/late reply cases,
       or record the exact failure rather than invent a native API or polling fallback. The
       timeout cases are the query cases; mutating timeouts are P5.
-- [ ] Bound and serialize the read/publish pipeline and count publications; show, without a
+- [x] Bound and serialize the read/publish pipeline and count publications; show, without a
       mutation, that a request's completion, decided once, survives newer state frames while the
       target's validity is re-checked separately ([g0-decisions.md](g0-decisions.md)).
-- [ ] Record the supported contract, versions, image identity, traces and pass/fail receipt.
-      Interim receipt for the owner's review: [g0-receipt.md](g0-receipt.md) (2026-11-19).
-      Decisions on it and the order of the remaining P0 work: [g0-decisions.md](g0-decisions.md).
+- [x] Record the supported contract, versions, image identity, traces and pass/fail receipt.
+      Final receipt for the owner's review: [g0-receipt.md](g0-receipt.md) (2026-11-20; it replaces
+      the interim of 2026-11-19). Decisions on the interim and the order of the P0 work:
+      [g0-decisions.md](g0-decisions.md).
 - [x] Before the final sweep: the layout-control tests create their scratch directories under a
       hard-coded directory in `/tmp`, which fails wherever that directory is missing; use the
       default temporary directory, which follows `TMPDIR`.

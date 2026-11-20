@@ -5,7 +5,7 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 # G0 decisions: workspace layout transport
 
-Recorded on 2026-11-19 (UTC). The [interim receipt](g0-receipt.md) left four decisions to the
+Recorded on 2026-11-19 (UTC). The interim receipt (`0d3d052`) left four decisions to the
 owner. It recommended an order of work and set out options for decision 3, but gave no answers
 to decisions 1, 2 and 4. On 2026-11-19 the owner replied "Let proceed with your recommendation",
 delegating the answers. The agent wrote the answers below that day and adopted them under that
@@ -14,7 +14,10 @@ delegation; the owner had not seen them before. The owner's review of the final 
 each answer, including the changes to the G0 definition, for confirmation, and the owner can
 revise any of them. Nothing here starts P1, changes production code or clears G0.
 
-The receipt describes the probe at `e1977ac`. Since then, `49c65f2` covers a refused native
+Below, "the receipt", its sections and its finding numbers are the interim's (`0d3d052`); the final
+[g0-receipt.md](g0-receipt.md) numbers the interim's findings 6 and 7 as 9 and 10.
+
+The interim receipt described the probe at `e1977ac`. Since then, `49c65f2` covers a refused native
 registration and makes the probe take its public label from a value independent of the native
 token, as the receipt's P1 finding 2 suggests. P1 must do the same.
 

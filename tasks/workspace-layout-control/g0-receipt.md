@@ -3,60 +3,77 @@ SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 SPDX-License-Identifier: CC-BY-SA-4.0
 -->
 
-# G0 interim receipt: workspace layout transport
+# G0 receipt: workspace layout transport
 
-Status: **interim, for the owner's review; not a G0 pass.** Recorded on 2026-11-19 (UTC). The
-fixtures are those of signed local commit `e1977ac1f51f5d976ca28acc102a1a99c51e30b2` (tree
-`53fe91665ec84be670fa4c8e03e0cd4efb960ab2`) on `feat/workspace-layout-control`; the evidence comes
-from that commit and earlier slices, as the qualification baseline shows. The commits after it
-change documentation only. Nothing is pushed.
+Status: **final, for the owner's review; G0 passes only with that review** ([todo.md](todo.md),
+"Checkpoint G0"). Recorded on 2026-11-20 (UTC). The fixtures are those of signed local commit
+`6e133be1a5a276c629378f5242f74e3b699b5bce` (tree `bc19d0922d0ea70c7c72265c3928814b54dc9c29`) on
+`feat/workspace-layout-control`, the last G0 tree, and the final sweep ran on an exact export of
+that tree. The commit that records this receipt changes documentation only. Nothing is pushed.
 
-[plan.md](plan.md) asks G0 to record source, traces, controls and failure cases and to review
-that receipt before settling the contract; review gate 2 covers "G0's real receipt and chosen
-contract" before production integration. This interim receipt records what P0 has shown so far,
-the evidence for it, what that evidence does not cover and the decisions that belong to the
-owner. It changes no fixture and clears neither G0 nor P1. A final receipt follows the open
-obligations.
+This receipt replaces the interim receipt of 2026-11-19 (commit `0d3d052`, kept in
+`p0/g0-interim-receipt`). The interim left four decisions to the owner. On 2026-11-19 the owner
+replied "Let proceed with your recommendation"; the agent's answers, adopted under that delegation,
+are in [g0-decisions.md](g0-decisions.md). The owner's review of this receipt is the owner's first
+review of those answers: the last section lists each one for confirmation, including the changes it
+makes to the G0 definition, and the owner can revise any of them. [plan.md](plan.md)'s review
+gate 2 covers "G0's real receipt and chosen contract" before production integration. Nothing here
+starts P1, changes production code or clears G0 by itself.
 
 ## Reading the evidence
 
 Evidence is kept in the project evidence store under
 `artifacts/plasma-fusion/2026-11-17-desktop-workflow-scope/p0/`, one directory per step, written
-`p0/<name>` below. Each of the 36 directories has a manifest, `SHA256.json` or `SHA256SUMS`. On
-2026-11-19 all 36 manifests (3,109 entries) were recomputed from their files with no mismatch or
-missing file. Three review notes were added after their manifests and are not covered by them:
-`p0/lifecycle-first-restart/REVIEW-1.md`, `p0/lifecycle-review-fixes/REVIEW-2.md` and
-`p0/silent-retirement-green/REVIEW-3.md`. Later directories have a `RESULTS.md`. Earlier ones are
-named by their red or green step and keep the changed source as `changes-after-<commit>.patch`.
-Each task commit's exact tree from `f3e0f50` on appears in its slice's proof: in
-`shipping-tree-*.txt` for the early slices, in export, savepoint or launch records later.
+`p0/<name>` below. Each directory has a manifest, `SHA256.json` or `SHA256SUMS`. On 2026-11-20
+the 46 manifests of the directories that predate this receipt (4,516 entries) were recomputed from
+their files on the storage host, with no mismatch or missing file. The only files they do not cover
+are the three review notes the interim named: `p0/lifecycle-first-restart/REVIEW-1.md`,
+`p0/lifecycle-review-fixes/REVIEW-2.md` and `p0/silent-retirement-green/REVIEW-3.md`. The final
+sweep and that recheck are in `p0/g0-final-receipt`. Every directory from `p0/refused-backend-proof`
+on has a `RESULTS.md` naming the commit, its exact tree, its native runs and its review, as the
+interim's later directories do; the earliest are named by their red or green step and keep the
+changed source as `changes-after-<commit>.patch`.
 
 A native run is the real KWin fork and plasmashell in an isolated container session. Passing a
 scope means `prepare_seed.py --check-result <run> --scope <scope>` succeeded: it needs the scope's
 own receipt, zero inner scenario and session codes and, from `55a921f` on, the independent cleanup
 qualification ([testing.md](../../docs/parts/testing.md#workspace-layout-transport-probe-p0)).
-The process-replacement runner `lifecycle.py` writes its own `lifecycle-result.json` instead and
-is outside that cleanup qualification.
+For the seven scopes from `mixed-lifetimes` on (`mixed-lifetimes`, `view-loss`, `refused-backend`,
+`pipeline`, `completion`, `two-bar` and `keyboard-entry`) it also recomputes the scope's own claims
+from the run's raw logs. The shared `roundtrip-native` check, and view-loss's `guarded-target`, stay
+in-session checks wherever the shared startup check runs; the refused-backend mode skips that check,
+and its checker recomputes the native results and receivers itself. For the seven earlier scopes
+the scenario writes the receipt once its own checks inside the session have passed, and
+`--check-result` checks only the receipt, the codes and the cleanup. The process-replacement runner
+`lifecycle.py` writes its own
+`lifecycle-result.json`; for a target-mode run its `--check-result` recomputes the receivers, the
+leases, the kept leases and the pipeline replay from the run's logs and kept configuration, and for
+a plain run it checks only the receipt. Bus and connection identities come from the receipt in both
+modes. The runner is outside the cleanup qualification.
 
 ## Environment
 
 - Image `localhost/pf-layout-probe:f44-pf5-20261117`, ID
   `1decadab422761dff57b8eda74596f1fd31bd020b4c6c0b4f110fa6fba9765a3`, built in `p0/bootstrap`.
-  Its Containerfile asserts KWin `6.8.2-3.fc44.pf5`, plasma-workspace 6.8.3 and Qt 6.11.2.
-  Later receipts also record KF 6.32 and Python 3.14.10.
+  Recorded at the final sweep with `rpm -q` in the image: plasma-workspace 6.8.3-1.fc44,
+  libplasma 6.8.3-1.fc44, kwin 6.8.2-3.fc44.pf5, qt6-qtbase 6.11.2-3.fc44, kf6-kconfig and
+  kf6-kglobalaccel 6.32.0-1.fc44, python3 3.14.10-2.fc44 and mesa-dri-drivers 26.2.7-1.fc44.
 - The existing `tools/vsession/cvsession.sh`, unchanged: private HOME, session bus and runtime
-  directory, 1440x900 and `PFV_DRI=1`. 57 of the 59 unpacked `compositor.txt` files in `p0/`
-  record AMD Radeon, Mesa 26.2.7 and Linux 7.2.15; two are empty. The view-loss case adds
-  `PFV_OUTPUTS=2`. `lifecycle.py` uses its own container.
-- Every probe scenario, `lifecycle.py` included, adds one probe panel with two probe widgets beside
-  Plasma's default panel, and the mixed case adds its replacement widget to the probe panel. No
-  run puts probe widgets on two bars. The zero-probe teardown controls add none.
-- The cvsession proofs made before focus observation do not record the image ID, and neither do
-  `p0/target-guard-first-attempt`, `p0/target-guard-context-green` and `p0/teardown-baseline`.
-  The process-replacement receipts do. The qualification baseline below therefore uses later
-  runs, which record both image and tree.
+  directory, 1440x900 and `PFV_DRI=1`. All 12 of the final sweep's sessions record AMD Radeon
+  (radeonsi, renoir), OpenGL ES 3.2, Mesa 26.2.7 and Linux 7.3.4-arch1-2 (`compositor.txt`). The
+  view-loss and two-bar modes add `PFV_OUTPUTS=2`. `lifecycle.py` uses its own container. The
+  final sweep ran on CPUs 8-15 under `nice -n 10`.
+- Most scenarios, and `lifecycle.py`, add one probe panel with two probe widgets beside Plasma's
+  default panel, and the mixed case adds its replacement widget to that panel. The two-bar mode
+  adds one probe panel per output, and the keyboard-entry mode removes every panel without a probe
+  widget. The zero-probe teardown controls add none.
+- Every seed copies the placement script's `Tiling.js` from the stage `shipping-snapshot-17`
+  (file dated 2026-11-17); the copy's SHA-256, `85012da2…` in all 16 of the sweep's seed
+  manifests, equals that of `packages/kwin/scripts/plasmafusion-placement/contents/ui/Tiling.js` at
+  `6e133be1` (`checks/tiling-identity.log` in `p0/g0-final-receipt`).
 
-Not covered: KWin 6.8.3, Plasma 6.7, a stock KWin, XWayland, a fixed Qt, real hardware and the
+Not covered: KWin 6.8.3 (the fork has since been released as `v6.8.3-pf1`, while this image runs
+`6.8.2-3.fc44.pf5`), Plasma 6.7, a stock KWin, XWayland, a fixed Qt, real hardware and the
 logged-in desktop.
 
 ## The transport as built
@@ -68,11 +85,11 @@ private KWin configuration. The seed enables only the probe. The placement scrip
 and the probe registers itself as the fork's tiling provider.
 
 1. **Capability.** `Workspace.transientTiling().registerProvider()` returns the native ownership
-   token; `capable` means it was accepted. The probe then registers a second object and calls
-   `createTile` with a null output, and both must be refused (`competingProviderRejected`,
-   refusal `-1`). The scenario asserts all three, and all 78 frames received in `v06` carry them.
-   These are self-tests of the native codes: the probe's own registration was accepted in every
-   passing run.
+   token; `capable` means it was accepted. The token only decides that: it is never kept, logged or
+   published (`49c65f2`). The probe then registers a second object and calls `createTile` with a
+   null output, and both must be refused (`competingProviderRejected`, refusal `-1`). These are
+   self-tests of the native codes. A refused registration is covered natively: consumers settle
+   `unsupported` (`p0/refused-backend-proof`).
 2. **Request.** The consumer writes JSON to its `layoutRequest` field and saves it with
    `writeConfig()`, because desktop scripting reads the saved group, not the unsaved property map.
    Every request has the consumer's boot label and a request number. In target mode the consumer
@@ -80,68 +97,82 @@ and the probe registers itself as the fork's tiling provider.
    the frozen view context and its freshness lease. In target mode the provider checks the version
    only for `prepare` and `validate`: a request without an intent or with `query` is served as a
    plain query, and any other intent is refused as `malformed` before any capture. Default mode
-   reads but ignores `intent` and `version`, so there every request gets an ordinary online frame.
+   reads but ignores `intent` and `version`.
 3. **Wake-up.** The consumer calls `invokeShortcut("Plasma Fusion: Layout Probe Wake")` on
    `org.kde.kglobalaccel` `/component/kwin`. The provider's `ShortcutHandler` has an empty
-   sequence, so no key is bound, and starts a scan. Wake-ups coalesce: one arriving during a read
-   schedules one more scan. In target mode every context change also starts a scan.
+   sequence, so no key is bound, and starts a scan. In target mode every context change also
+   starts a scan.
 4. **Read.** Each scan looks up the current `org.kde.plasmashell` owner with `GetNameOwner` (in
    target mode also its PID with `GetConnectionUnixProcessID`) and calls `evaluateScript` on that
-   unique name to read every probe widget's request.
-   Target mode reads a complete inventory of at most 16 widgets and 2048 characters per request,
-   and an incomplete read unconfirms records without retiring a consumer. The default reader has
-   neither bound.
+   unique name to read every probe widget's request. Every mode reads at most 16 widgets, requests
+   of at most 2048 characters, and only a well-formed consumer and request number (`b960025`).
+   Target mode also reads the complete inventory, and an incomplete read unconfirms records
+   without retiring a consumer.
 5. **Publish.** Every scan re-evaluates every saved request and publishes to every widget with a
    readable request, not only to the requester, through `evaluateScript` on the captured
-   destination, delayed replies included. A publication is sent without waiting for the previous
-   one; only reads are serialized. Data is embedded with `JSON.stringify`, and the shell's applet
-   `writeConfig` saves each response.
-6. **Identity.** Each provider lifetime holds the alias `org.plasmafusion.LayoutProbe.p<epoch>`,
+   destination. The pipeline is serialized (`b960025`): a read starts only when neither a read nor
+   a publication is outstanding, a publication stays outstanding until the shell's writer call
+   reports success or failure, and wake-ups meanwhile coalesce into one later read. Data is
+   embedded with `JSON.stringify`, and the shell's applet `writeConfig` saves each response.
+6. **Identity.** Each provider lifetime holds the alias `org.plasmafusion.LayoutProbe.p<label>`,
    requested with `RequestName` flag 4 (do not queue) and released at teardown. It exports no
-   objects or methods. The epoch is the MD5 of the native ownership token.
+   objects or methods. The label is a fresh public lifetime label, the MD5 of a timestamp and four
+   random numbers, independent of the native token (`49c65f2`); frames carry it as `epoch`. Before
+   that, every refused lifetime shared one label, the MD5 of the null UUID.
 7. **Acceptance.** A consumer accepts an online frame only for its own boot label and current
    request, and only after `GetNameOwner` shows that the current `org.kde.KWin` owner and the
    alias owner are the frame's backend connection. Request and revision order are checked again
    after those lookups. A `NameOwnerChanged` for the bound owner or alias, or for a frame being
    verified, clears state and sends a fresh query. This fences provider lifetimes; it does not
-   authenticate the writer. Any session client that can call `evaluateScript` can write a frame
-   with the current identities: the scenario's own burst frames are written that way and accepted.
+   authenticate the writer (decision 2).
 8. **Retirement.** At teardown the provider publishes a cached `offline` frame to its last
-   recipients. Receivers become unknown; the frame cannot keep state authoritative.
+   recipients. Receivers become unknown; the frame cannot keep state authoritative. A dropped
+   retirement frame is covered too: consumers invalidate on the alias release.
 9. **Deadlines.** Each query owns a one-shot deadline, 100 to 10000 ms and 10000 ms by default.
    Expiry reports unconfirmed. It does not cancel, renumber or retry the query.
 
 In target mode a menu request freezes the confirmed provider lifetime, context generation and
 desktop, activity and output IDs before its deferred send. The first popup input sends `prepare`
-against that frozen context. Only the single recorded eligible-app or panel-to-popup handoff may
-bridge one generation. KWin keeps the captured window, focus surface, desktop and output objects.
-Every focus, membership or view event advances a bounded generation and invalidates the reference
-instead of choosing another window. `validate` rechecks native state; it is not an acknowledgement.
-There is one prepared slot: a competitor is refused `busy`, each consumer's request and refusal
-history is bounded, and a refused or busy request cannot become a later capture. Leases are
-issued monotonically and exhaustion refuses. A shell surface counts only with the verified shell
-PID and the intended native output. Because scans re-evaluate saved requests, one `prepare` can
-be published ready and later refused: in `v06` request 9 was ready at revision 75 and
-`stale-context` at revision 77.
+against that frozen context. Only one recorded handoff may bridge one generation: a popup that
+opens from the remembered eligible app, or from one of the shell's own dock or desktop surfaces on
+the popup's output while that app is remembered (`a5307ad`, the keyboard path). KWin keeps the
+captured window, focus surface, desktop and output objects. Every focus, membership or view event
+advances a bounded generation and invalidates the reference instead of choosing another window.
+`validate` rechecks native state; it is not an acknowledgement. There is one prepared slot: a
+competitor, from the same panel or another bar, is refused `busy`, each consumer's request and
+refusal history is bounded, and a refused or busy request cannot become a later capture. Leases are
+issued monotonically and exhaustion refuses. A shell surface counts only with the verified shell PID
+and the intended native output.
 
-A ready preparation received in `layout-control-v06`, reformatted. The consumer's trace line also
-adds its own `receiverBoot`, which is not on the wire and is omitted here.
+A prepare's completion is decided once (`ee89f25`): when the provider first handles the request,
+its answer, accepted with the handle or refused with the reason, becomes the request's completion,
+and every later frame for that consumer, lease and request carries it unchanged. The frame's
+`preparation` re-checks the target on every publication and is reported separately. In the final
+sweep's keyboard-entry run, request 2 was decided ready at revision 11, and its next five frames
+kept that completion while their preparation reported `stale-context` (`kwin.log:75-115`); request
+3 was decided `stale-context`, and its next frame kept that while its preparation reported
+`refused`.
+
+A ready preparation received in the final sweep's target run, reformatted. The consumer's trace line
+also adds its own `receiverBoot`, which is not on the wire and is omitted here.
 
 ```json
 {
-  "consumer": "1795040089518:0.7750638433230217",
-  "epoch": "d1ddaf2f84f022df0900886594932d48",
+  "consumer": "1795136377362:0.6571302221531695",
+  "epoch": "3ee98326b8e4572aad08e8c759c334ae",
   "revision": 9, "status": "online", "capable": true, "refusal": -1, "request": 2,
   "preparation": {"intent": "prepare", "ready": true, "reason": "",
-                  "token": "d1ddaf2f84f022df0900886594932d48:1"},
-  "targetContext": {"epoch": "d1ddaf2f84f022df0900886594932d48", "generation": 4,
-                    "desktopId": "54956ad7-363a-46ed-96ae-a6554bad684e",
-                    "activityId": "6f50efc6-1c87-42d6-bad9-13cd35f453e9",
+                  "token": "3ee98326b8e4572aad08e8c759c334ae:1"},
+  "completion": {"request": 2, "intent": "prepare", "accepted": true,
+                 "token": "3ee98326b8e4572aad08e8c759c334ae:1", "reason": ""},
+  "targetContext": {"epoch": "3ee98326b8e4572aad08e8c759c334ae", "generation": 4,
+                    "desktopId": "60b4662d-a9ff-4c1d-8387-0915e6cb36d2",
+                    "activityId": "b840e0e7-14d8-4230-9f32-82b9d692535a",
                     "outputName": "Virtual-0",
-                    "consumerLease": "d1ddaf2f84f022df0900886594932d48:1"},
+                    "consumerLease": "3ee98326b8e4572aad08e8c759c334ae:1"},
   "competingProviderRejected": true,
   "backendOwner": ":1.0",
-  "identityName": "org.plasmafusion.LayoutProbe.pd1ddaf2f84f022df0900886594932d48"
+  "identityName": "org.plasmafusion.LayoutProbe.p3ee98326b8e4572aad08e8c759c334ae"
 }
 ```
 
@@ -151,51 +182,39 @@ IDs, PIDs, app classes, titles or placement records.
 
 ## G0 obligations
 
+The items are plan.md's G0 list as amended on 2026-11-19 (decision 3).
+
 | Plan G0 item | Status | Evidence |
 |---|---|---|
-| 1. Wake-up dispatch into the real declarative script | Shown | First-slice receipts: real wake-up, two-widget correlation and native refusal codes (`smoke6`, `u22`) |
-| 2. Delivery to the intended live widget, fresh lifetimes, ordering | Shown for read-only state on one panel | Receiver-recorded delivery of native frames to two widgets (`u22`, `y22`, `m03`); driver-injected low/high/middle frames (`u22`); fresh receivers after restarts with plain-query fixtures (`lc-restart3`). The swapped-receiver negative control is an offline checker test. |
-| 3. Native capability/refusal reporting; updates from the existing shortcut | Partly shown | Native codes are decoded by self-tests (transport item 1). A refused or absent backend as consumers see it (`unsupported`, the `stock` epoch) has no test at any level. Updates from the existing shortcut are open: the placement script does not run in the fixture. |
-| 4. Invalidation on script disable/reload, shell restart, KWin owner replacement | Partly shown | Script unload, then load and start, gives a new epoch and a fresh query, with and without the final frame (`u22`, `y22`, `m03`). In `lc-loss1` and `lc-time1` a stopping KWin also retires the probe: the old shell's consumers receive its offline frames without accepting them and invalidate on the alias release before the shell exits with its compositor (logged, not asserted by `lifecycle.py`). New consumers bootstrap fresh in every passing restart run, as `lifecycle.py` asserts (`lc-restart3`). All restart runs use plain-query fixtures of the `7045b03`, `b137d56` and `3639779` slices. No target-mode fixture was restarted, no consumer outlived its compositor, and the watcher's `org.kde.KWin` branch is unit-tested only. A driver-injected frame claiming the wrong backend is rejected (`u22`). |
-| 5. No idle polling, reload as a command, per-action global reconfigure, daemon or new native RPC/object export | Holds in the fixtures | A source property, not a measurement: scans follow wake-ups and context events, deadlines are one-shot and the alias exports nothing. Requests and every scan's responses are saved applet configuration. |
+| 1. Wake-up dispatch into the real declarative script | Shown | Real wake-ups, two-widget correlation and the native codes (`first-slice`); 24 concurrent wake-ups served by a serialized pipeline (`pipeline`) |
+| 2. Delivery to the intended live widget, fresh lifetimes, ordering | Shown, read-only and non-mutating | Receiver-recorded delivery to two widgets on one panel (`first-slice`, `silent-retirement`, `mixed-lifetimes`) and to probe widgets on two bars, one per output (`two-bar`); ordered, never-regressing state (`reply-ordering`); fresh receivers after every restart (`lifecycle.py`). The swapped-receiver negative control is an offline checker test. |
+| 3. Native capability/refusal reporting | Shown as amended | A refused registration natively: consumers settle `unsupported` on fresh labels, and a later accepted lifetime goes online (`refused-backend`). An absent backend has unit cases only, which G0 accepts; a stock-KWin run waits for P7. Updates from the existing shortcut moved to P1. |
+| 4. Invalidation on script disable/reload, shell restart, KWin owner replacement | Shown | Script unload and reload give a new lifetime and a fresh query, with and without the final frame (`first-slice`, `silent-retirement`); provider reload with consumer replacement rejects replayed frames and an obsolete preparation (`mixed-lifetimes`); `lifecycle.py` restarts Plasma, then KWin and its shell, on one private bus with plain and target-mode seeds, and every new receiver starts unknown and binds fresh. No live consumer sees an `org.kde.KWin` owner change: when the first KWin stops, the second shell's consumers invalidate on the alias release, then exit with their compositor ("The Wayland connection broke"), in every restart run of the final sweep; so the watcher's `org.kde.KWin` branch is unit-tested only. Prepared intents across a restart are unit-tested only too: the runner has no input driver or controlled app. |
+| 5. No idle polling, reload as a command, per-action global reconfigure, daemon or new native RPC/object export | Holds in the fixtures | A source property, not a measurement: scans follow wake-ups and context events, deadlines are one-shot and the alias exports nothing. The pipeline run counts reads, publications and saves. |
+| 6. A request completion, decided once and kept by newer state frames | Shown without a mutation | The holder's accepted completion survives a context change, a competitor's busy refusal and the holder's stale refusal (`completion`); the same rules across two bars (`two-bar`) and on the keyboard path (`keyboard-entry`). A completion lives in the provider's consumer record, so it holds within one provider and shell lifetime: after a provider restart or a shell replacement the consumer must request again under a new lease. |
 
-Open items that plan.md or [todo.md](todo.md) place in G0:
-
-- a bounded and serialized read/publish pipeline (plan.md's G0 section): reads are serialized, but
-  publications are not awaited and the default reader has no bounds;
-- updates from the existing shortcut, which need the existing tiler (plan.md G0 item 3);
-- a refused or absent backend as consumers see it (plan.md G0 item 3);
-- shell and KWin restarts with target-mode fixtures and current code (plan.md G0 item 4);
-- keyboard entry after the panel itself has focus (todo.md's P0 keyboard target preparation and
-  the specification's technical-plan list): every run opens the popup with a pointer click, and
-  the panel never has keyboard focus first;
-- competing requests from probe widgets on two bars (todo.md's P0 competing-bar ordering and the
-  specification);
-- the G0 checkpoint in todo.md: evidence for every claim, the boundary check and the owner's
-  review of the final receipt and any design changes.
-
-testing.md and the P0 proof records also list mutating-action acknowledgements and timeouts, fair
-arbitration and a mixed shell/KWin replacement matrix as G0 work; plan.md and todo.md do not name
-them.
-plan.md puts completion semantics in the contract to establish after G0, and todo.md handles
-mutation outcomes in P5.
+On 2026-11-19 (decision 3) updates from the existing shortcut moved from G0 item 3 to P1, and G0
+accepts unit evidence for an absent backend, with a native stock-KWin run in P7. Acknowledgements
+and timeouts of mutations (P5), fair arbitration and the mixed shell/KWin replacement matrix (P7)
+were G0 work only in testing.md and the proof records; testing.md was corrected, and plan.md and
+todo.md never placed them in G0.
 
 ## Acceptance matrix in P0
 
 | Case (plan.md) | P0 status | Evidence or gap |
 |---|---|---|
-| Cold start or shell restart with old saved fields | Partly shown | Plain queries: saved response fields exist before the first restart, and every new receiver traces unknown with zero accepted frames before a fresh bind (`lc-restart3`). Prepared intents: refused after their busy holder leaves (`w22`) and across provider reload with consumer replacement (`m03`), both within one shell and KWin lifetime; across a restart only in unit tests. No mutation exists to replay. |
-| Stock/absent/disabled/refused backend | Disabled shown; the rest untested | Unload leaves consumers unknown (`y22`). The consumer's `unsupported` state and the provider's `stock` path have no test at any level; no stock-KWin image was run; no UI exists yet. |
-| Existing shortcut on/off | Open | Needs the placement script's tiler (P1). |
+| Cold start or shell restart with old saved fields | Shown without a mutation | Every new receiver traces unknown with zero accepted frames before a fresh bind, after Plasma and after KWin and shell restarts, with saved response fields present before the first restart; with a target-mode seed the second shell starts with the first shell's target frames in its widgets' configuration and still binds only frames addressed to it, with new leases (`lifecycle.py`). Prepared intents are refused across provider reload with consumer replacement (`mixed-lifetimes`); across a restart only in unit tests. No mutation exists to replay. |
+| Stock/absent/disabled/refused backend | Disabled and refused shown; absent by unit cases | Unload leaves consumers unknown (`first-slice`, `silent-retirement`); a refused registration settles them `unsupported` (`refused-backend`); the absent-backend branches are unit cases (`49c65f2`). No stock-KWin image was run, and no UI exists yet. |
+| Existing shortcut on/off | Moved to P1 | Needs the placement script's tiler. |
 | Floating requested on B while A is tiled | Open | Needs mutating requests (P5). |
 | Tiled transfer A→B with B refused | Open | Needs mutating requests (P5). |
-| Keyboard entry after panel focus | Open; a pointer-opened popup is shown | Every run opens the popup with a pointer click, and the panel never has keyboard focus first. In target mode Space in the popup prepares the controlled app, never the panel (`w22`, `v06`); `x22` correlates the key with a query. No activation in `v06` has the panel active, and the dock or desktop branch of the handoff has no test at any level. XWayland is not qualified. |
-| App focus change/close/departure while menu open | Shown, non-mutating | Another app's activation, a close, a desktop leave and return, output removal and an activity switch each refuse the old handle (`w22`, `v06`). |
-| Two controls for one view; two bars for different views | Partly shown | Two widgets on the one probe panel: one prepared slot, and a competitor is refused `busy` and succeeds only after new explicit input once the holder is gone (`w22`, `m03`). Probe widgets on two bars, different views per bar, fair arbitration and double-toggle prevention are untested. |
-| Same provider/view, out-of-order replies | State part shown | Driver-injected low/high/middle frames never regress accepted state (`u22`). Completion acknowledgements do not exist yet. |
-| Timeout followed by late confirmation | Query part shown | With a configured publication delay: unknown, then unconfirmed once, then the valid late state on the same query and provider lifetime, with no retry (`v22`). Mutating timeouts are open; todo.md handles mutation outcomes in P5. |
-| Provider reload/disable, KWin owner replacement | Partly shown | G0 item 4. |
-| Output removal or activity/desktop switch | Shown for one layout | Two virtual outputs, the probe panel and one added activity (`v06`); desktop round trip (`w22`). Hot-plugging a new connector, bars spanning outputs and desktop removal are untested. |
+| Keyboard entry after panel focus | Shown | Plasmashell's own Meta+Alt+P focuses the probe panel; Space opens the popup and Space prepares the remembered app, never the panel, and after the app has quit the same keys are refused, as `stale-context`, with no target (`keyboard-entry`). The dock branch of the handoff runs natively; the desktop branch has unit cases. One output and one panel; XWayland is not qualified, and the menu's arrow keys, Return and Escape belong to P1's menu. |
+| App focus change/close/departure while menu open | Shown, non-mutating | Another app's activation, a close, a desktop leave and return, output removal and an activity switch each refuse the old handle (`target-preparation`, `view-loss`). |
+| Two controls for one view; two bars for different views | Shown without a mutation | Two widgets on one panel: one prepared slot, and a competitor is refused `busy` and succeeds only after new explicit input once the holder is gone (`consumer-retirement`, `mixed-lifetimes`). Probe widgets on two bars, one per output: the other bar's prepare is refused `busy` while the holder's completion is kept, and after the holder's panel is removed a new explicit request from the other bar is accepted on its own output (`two-bar`). Fair arbitration (P7) and double-toggle prevention (P5) are untested. |
+| Same provider/view, out-of-order replies | Shown for state and completion | Driver-injected low, high and middle frames never regress accepted state (`reply-ordering`); a decided completion is never lost or changed by newer frames (`completion`). Mutation acknowledgements are P5. |
+| Timeout followed by late confirmation | Query part shown | With a configured publication delay: unknown, then unconfirmed once, then the valid late state on the same query and provider lifetime, with no retry (`query-timeout-late`). Mutating timeouts are P5. |
+| Provider reload/disable, KWin owner replacement | Shown, with G0 item 4's limits | G0 item 4: no live consumer sees an `org.kde.KWin` owner change. |
+| Output removal or activity/desktop switch | Shown for one layout | Two virtual outputs, the probe panel and one added activity (`view-loss`); a desktop round trip (`target-preparation`). Hot-plugging a new connector, bars spanning outputs and desktop removal are untested. |
 | Manual snap/maximize/fullscreen, placement memory | Open | P0 never admits a window, changes geometry or writes placement memory. |
 | UI input and constrained layout | Open | P4 and P6. |
 
@@ -204,12 +223,12 @@ mutation outcomes in P5.
 | Minimum semantics (plan.md) | Probe |
 |---|---|
 | Explicit query/prepare/set intent | `query`, `prepare` and `validate`; no `set` yet. |
-| Version, consumer and provider lifetime, request identity, state order; revision separate from completion | In target mode `prepare` and `validate` must be `version: 1`; queries, and every request in default mode, are not version-checked. Boot label and lease; epoch, alias and backend connection; request number; revision. No completion acknowledgement exists yet. |
+| Version, consumer and provider lifetime, request identity, state order; revision separate from completion | In target mode `prepare` and `validate` must be `version: 1`; queries, and every request in default mode, are not version-checked. Boot label and lease; label, alias and backend connection; request number; revision; and a prepare's completion, decided once and kept apart from the revision. |
 | View identity checked by the provider | Desktop, activity and output IDs plus the native output object: a same-name output is a new object. |
 | Prepared target stays inside KWin | Yes; frames carry only the opaque handle, scalar view IDs, the generation and the lease. |
-| Same identity and payload is the same intent; serialized; busy outcome | Conflicting reuse is refused and a repeated preparation is never renewed; one slot, competitor `busy`. |
+| Same identity and payload is the same intent; serialized; busy outcome | Conflicting reuse is refused and a repeated preparation is never renewed; one slot, competitor `busy`, also across two bars. |
 | Timeout is unconfirmed; no blind retry; a late update only if valid | Shown for queries only. |
-| Bounds, early rejection, escaping | Target mode only: 16 widgets and 2048 characters, and malformed preparations and unknown intents are refused before any capture. The default reader has no bounds and ignores the intent. One active and one pending verification per consumer, bounded history. `JSON.stringify` embedding. |
+| Bounds, early rejection, escaping | Every mode: 16 widgets, 2048 characters and a well-formed consumer and request. Target mode also refuses malformed preparations and unknown intents before any capture. One active and one pending verification per consumer, bounded history. `JSON.stringify` embedding. |
 
 ## Evidence index
 
@@ -234,33 +253,51 @@ own files.
 | `55a921f` | Owned shell stopped first; cleanup qualified independently | 150 | `teardown-baseline`, `teardown-diagnosis-proof`, `owned-cleanup-proof`, `owned-cleanup-publication-recovery` | Export22 runs `u22` to `y22` pass their six scope checks with cleanup; the export20 cleanup failure is kept |
 | `8429e05` | Consumer replacement with provider reload; replayed frames and an obsolete preparation | 194 | `mixed-lifetime-proof` | `m03` passes `mixed-lifetimes`; `m01`, `m02` superseded |
 | `e1977ac` | Output loss and activity switches | 238 | `view-loss-proof` | `v06` passes `view-loss`; `v01`, `v05` failures kept; `v02` to `v04` superseded |
+| `0d3d052` | Interim G0 receipt | 238 | `g0-interim-receipt` | None (document) |
+| `49c65f2` | Refused native backend; lifetime label independent of the native token; absent-backend unit cases | 275 | `refused-backend-proof` | `rg7` passes `refused-backend`; the pre-fix control `rr3` fails on a reused label |
+| `3a58946` | G0 decisions record | 275 | `g0-decisions-proof` | None (documents) |
+| `b960025` | Bounded, serialized read/publish pipeline with logged reads and publications | 308 | `pipeline-proof` | `pg2` passes `pipeline` (24 wake-ups, 2 reads, 2 publications); controls `pr1`, `pr2` fail |
+| `ee89f25` | A prepare's completion, decided once and kept by newer frames | 357 | `completion-proof` | `cg3` passes `completion`; controls `cr1` to `cr3` fail on a changed completion |
+| `6017dc3` | Probe widgets on two bars with competing requests | 406 | `two-bar-proof` | `tg11` to `tg16` pass `two-bar`; three of the four provider controls fail as designed, the fourth passes as documented |
+| `b3be704` | `lifecycle.py` restarts with a target-mode seed | 432 | `restart-proof` | `t10` to `t12` and plain `p3` pass; controls `ri3` and `ru3` fail |
+| `9f3c66e` | Settle wait before the Validate clicks after a context change (a test-side workaround) | 439 | `settle-proof` | 30 of 30 target repeats pass with the wait; regression `st02` passes 13 scopes |
+| `a5307ad` | Keyboard entry after panel focus; unit cases for the dock and desktop handoff | 461 | `keyboard-proof` | `k03-1` to `k03-10` pass `keyboard-entry`; control `kr03-1` fails at its first step; regression `kb02` passes 14 scopes |
+| `6e133be` | Test scratch directories follow `TMPDIR`; a check against fixed ones | 464 | `scratch-proof` | None needed (no native input changed) |
 
-## Qualification baseline
+## Final native sweep
 
-The latest native pass of each scope, all on image `1decadab4227…`. Every cvsession run listed also
-passed the independent cleanup qualification.
+On 2026-11-20 from 00:57:53 to 01:02:24 (UTC), every scope and the process-replacement runner ran
+once on `g0-final01`, an exact export of `6e133be1`: `git archive` of the commit, whose 1,499 files
+all match their blobs; apart from the sweep's own seeds and runs, the only other files are the
+bytecode caches its Python calls wrote. Image `1decadab4227…` by ID, 180 s per session, 240 s with
+two outputs. Every scope passed `--check-result`, its cleanup qualification included, with inner
+scenario and session codes of 0, and every `lifecycle.py` run passed the runner and its
+`--check-result`, which recomputed the target run's receivers, leases and pipeline. Afterwards
+`podman ps` listed no probe container. The logs are in `p0/g0-final-receipt`.
 
-| Scope | Run | Tree (commit) |
-|---|---|---|
-| `first-slice`, `reply-ordering` | `u22` | `32ca7a2b` (`55a921f`) |
-| `query-timeout-late` | `v22` | `32ca7a2b` (`55a921f`) |
-| `consumer-retirement`, after the guarded-target workflow | `w22` | `32ca7a2b` (`55a921f`) |
-| `focus-observation` | `x22` | `32ca7a2b` (`55a921f`) |
-| `silent-retirement` | `y22` | `32ca7a2b` (`55a921f`) |
-| `mixed-lifetimes` | `m03` | `e1e9e51d` (`8429e05`) |
-| `view-loss` | `v06` | `53fe9166` (`e1977ac`) |
-| Process replacement (`lifecycle.py`, own receipt, no cleanup gate) | `lc-restart3`, `lc-loss1`, `lc-time1` | Plain-query seeds of the `7045b03`, `b137d56` and `3639779` slices |
+| Run (`layout-control-…-g0f1`) | Seed | Scopes | Result |
+|---|---|---|---|
+| `default` | default | `first-slice`, `reply-ordering` | PASS |
+| `refused` | `--refused-backend-probe` | `refused-backend` | PASS |
+| `pipeline` | `--pipeline-probe` | `pipeline` | PASS: 24 wake-ups, 23 of them during the read, 2 reads, 2 publications, 4 saves |
+| `loss` | `--drop-retirement-frame` | `silent-retirement` | PASS |
+| `timeout` | `--query-timeout-ms 200 --reply-delay-ms 2000` | `query-timeout-late` | PASS |
+| `focus` | `--focus-probe` | `focus-observation` | PASS |
+| `target` | `--target-probe` | `target-preparation`, `consumer-retirement` | PASS |
+| `mixed` | `--mixed-lifetime-probe` | `mixed-lifetimes` | PASS |
+| `view` | `--view-loss-probe`, two outputs | `view-loss` | PASS |
+| `completion` | `--completion-probe` | `completion` | PASS |
+| `two-bar` | `--two-bar-probe`, two outputs | `two-bar` | PASS |
+| `keyboard` | `--keyboard-entry-probe` | `keyboard-entry` | PASS |
+| `lc-plain` | default | process replacement | PASS: one bus, two backend and three shell connections |
+| `lc-loss` | `--drop-retirement-frame` | process replacement | PASS: the same |
+| `lc-timeout` | `--query-timeout-ms 200 --reply-delay-ms 2000` | process replacement | PASS: the same |
+| `lc-target` | `--target-probe` | process replacement and `target-bootstrap` | PASS: the same; the three shells' receivers hold leases E1:1-2, E1:5-6 and E2:3-4, and the kept configuration E1:1-2, as in `p0/restart-proof` |
 
-Only `view-loss` has run natively at `e1977ac`, which changed `advanceTargetContext` for every
-target mode. The six ordinary scope checks last ran at `55a921f` and `mixed-lifetimes` at
-`8429e05`. Since `55a921f`, `provider.qml` gained 90 lines and lost 29, all mode-gated diagnostics
-and source labels. The unit runners cover every mode. `v06` runs only the target prelude's first
-preparation and validation before its own branch. The process-replacement runner last ran with a
-`3639779`-slice fixture, before `55a921f` changed its bus helper (method errors are read from
-stdout first, and a crashed helper stays a failure). It has never run a target-mode seed. In each
-passing restart run `kamd` and the old shell exit 255 when the first KWin stops ("The Wayland
-connection broke"), and `lc-restart1` also loses `kded`. The third shell then starts a new
-activity manager through D-Bus activation, which the runner does not track.
+These 16 runs qualify this receipt; each step proof holds its slice's own GREEN and RED runs. One
+pass per scope shows that the final tree passes each one, not how often a run fails: before the
+settle workaround the target mode lost a click in about one run in seven, and in none of 30 runs
+after it (`p0/settle-proof`).
 
 ## Defects, failures and limits
 
@@ -269,88 +306,117 @@ activity manager through D-Bus activation, which the runner does not track.
   [QTBUG-149316](https://github.com/qt/qtbase/commit/91ec4c85d454802521c76ba861e24b82c9a3b636),
   with zero probe widgets and with the full probe (`p0/teardown-diagnosis-proof`). Its exact
   trigger and frequency are unproved. The fixtures stop the owned shell first; that ordering is
-  not a Qt fix. The item is in [DEFERRED.md](../../docs/DEFERRED.md); re-entry needs an approved
-  fixed-Qt environment.
+  not a Qt fix. The row is blocked in [DEFERRED.md](../../docs/DEFERRED.md); re-entry needs an
+  approved fixed-Qt environment.
+- Pointer button events lost or delayed ([DEFERRED.md](../../docs/DEFERRED.md), "P0 pointer
+  button events lost or delayed"). In the target scenario's instrumented runs a click sent
+  while the shell served a provider publication usually lost its button events: 15 of 18 such
+  clicks, against none of 157 outside one (`p0/settle-proof`). Once, in a prelude click with no
+  read or publication outstanding, the press arrived about 460 ms late and the release never did.
+  Which layer drops them, KWin's delivery or Qt's in the shell, is not established. The target
+  scenario waits before its Validate clicks after a context change, a test-side workaround, not a
+  fix. Decision 1 makes these publications P1's transport (below).
+- The shared prelude's single-panel click timing stays deferred
+  ([DEFERRED.md](../../docs/DEFERRED.md), "P0 single-panel prelude click timing").
 - Before `55a921f`, successful runs still printed plasmashell teardown aborts
   (`p0/consumer-retirement-proof`). Qualification now fails on known fatal signatures, which does
   not establish warning-free logs or crash freedom in general.
 - `v05` failed because a click raced the shell's activity switch, and plasmashell then aborted in
-  the failure-path teardown (the D-Bus-loss class). The driver now waits until both widgets accept
-  the switched context. The failure-path abort was not tested again.
-- KWin's evacuation of the app and Plasma's move of the panel on output loss were observed on
-  this image. They are not a guaranteed placement policy.
+  the failure-path teardown. The driver now waits until both widgets accept the switched context.
+  The failure-path abort was not tested again.
+- KWin's evacuation of the app and Plasma's move of the panel on output loss were observed on this
+  image. They are not a guaranteed placement policy.
 - `p0/view-loss-proof/RESULTS.md`, the `e1977ac` commit message and two comments in the hashed
-  view-loss fixtures call the panel's two widgets "both bars", as the part page did until the
-  commit before this receipt. The fixtures keep that wording so their seed hashes stay valid.
+  view-loss fixtures call the panel's two widgets "both bars". The fixtures keep that wording so
+  their seed hashes stay valid; the two-bar mode is the case with two bars.
+- The keyboard-entry mode covers one output and one panel, with focus given by plasmashell's own
+  shortcut. The dock branch of the handoff runs natively; the desktop branch has unit cases only.
+- With a target-mode seed, two lease numbers are skipped at every restart. By inference from the
+  row counts and lease numbers, they went to the consumers named by the widgets' retained request
+  fields, which the first reads after the restart still saw; the provider does not log consumer
+  identities for queries. That order was observed, not guaranteed, and a provider that restarted
+  its lease numbering with each shell would not be reliably detected (`p0/restart-proof`).
+- The pipeline is shown for one burst of 24 wake-ups on one panel and output
+  (`p0/pipeline-proof`). Busy wake-ups met an outstanding publication in `pg2`, but in the final
+  sweep all 23 met the read. At teardown the offline frame is sent even while a publication is
+  outstanding, and a publication the shell never answers holds the pipeline until the D-Bus reply
+  timeout, which was not measured.
+- The bridge's target waits print nothing on a timeout, so a failing run is located only by the
+  last PASS line before it; naming the wait is a [todo.md](todo.md) follow-up.
 - No clean-LSP claim: host language tooling cannot resolve the image's KWin imports.
 
 ## Findings for P1
 
-1. No query is version-checked, and default mode checks no request; only target-mode `prepare`
-   and `validate` are checked. P1 can version and check every request.
-2. The public epoch is the MD5 of the native ownership token. Nothing requires a published value
-   derived from that credential; P1 can publish an independent random label.
+1. No query is version-checked, and default mode version-checks no request: only target-mode
+   `prepare` and `validate` are, though every mode drops malformed rows (`b960025`). P1 must version
+   and check every request (decision 1).
+2. The public label is now independent of the native token (`49c65f2`). P1 must do the same: a
+   refused or absent backend must not share one label.
 3. Both directions are saved configuration, and saved fields survive restarts, so rejecting
-   retained fields at start is mandatory. Natively that is shown for plain queries; for prepared
-   intents it is shown only within one shell and KWin lifetime.
+   retained fields at start is mandatory. Natively that is shown for plain queries and for the
+   target bootstrap; for prepared intents only within one shell and KWin lifetime.
 4. Saved requests are re-evaluated on every scan. A saved mutating request must take effect at most
-   once per request identity, however often it is read again.
-5. Publications are not awaited and the default reader is unbounded, an open G0 item above. P1
-   must keep the read/publish pipeline bounded and serialized either way.
-6. In the fixture the probe holds the fork's provider registration itself. In production the
+   once per request identity, however often it is read again; the decided completion shows how an
+   answer can stay fixed while validity is re-checked.
+5. The probe's pipeline is bounded and serialized; P1 must keep it so, and publish only for a new
+   request or changed state (decision 1). In the final sweep's pipeline run, 24 concurrent
+   wake-ups, 23 of them during the read, were served by 2 reads and 2 publications, 4 saves in all.
+6. A publication is an `evaluateScript` call that the shell serves on its main thread, and pointer
+   clicks sent during one were usually lost in the test session (above). P1 relies on these
+   publications while users interact with the panel, so that row's re-entry comes first: reproduce
+   it without the probe and find the dropping layer.
+7. The identity alias tells provider lifetimes apart, not scripts. P1 must keep a single
+   publisher; a leftover probe or a second copy of the placement script would make consumers drop
+   one lifetime and bind to the other on every frame (decision 2).
+8. With nothing remembered, a popup's preparation is refused `stale-context`, because no handoff
+   bridges the popup's activation, while a request carrying the popup's own context would reach
+   the target choice and be refused there (unit cases; its reason, `no-target`, follows from the
+   code), a path that has not run natively. No retry can succeed until an app has focus, so P1's
+   menu should not present that refusal as retryable.
+9. In the fixture the probe holds the fork's provider registration itself. In production the
    placement script owns that registration and `tiler.session`, so the provider logic belongs
    there, as P1's planned files already assume.
-7. Output-loss placement was observed, not specified; consumers must not depend on it.
+10. Output-loss placement was observed, not specified; consumers must not depend on it.
+11. The image's KWin is `6.8.2-3.fc44.pf5`, and the fork has since been released as
+    `v6.8.3-pf1`. P1's real-session work needs the transport rechecked on the fork it targets.
 
-## Decisions for the owner
+## Decisions for the owner to confirm
 
-1. Is this transport the basis for P1: saved request and response fields, a sequence-less wake-up
-   and `evaluateScript` on the captured unique shell connection? Each request costs one save and
-   one wake-up. Each scan costs a shell-owner lookup (in target mode also a PID lookup), two shell
-   script calls (read and publish) and one save per widget with a readable request, and each
-   online frame costs its receiver two `GetNameOwner` calls. In target mode every context change
-   adds a scan. In `v06`, 12 consumer requests and 16 wake-ups, the driver's included, came with
-   39 publications to both widgets: 78 response saves. P1's checklist already asks to avoid
-   redundant per-frame publication.
-2. Does the identity-only alias, approved for P0 only, become the production owner fence? It
-   fences provider lifetimes and does not authenticate the writer (transport item 7).
-3. How should the open items be met? Some answers change the G0 definition and say so.
-   - The bounded, serialized read/publish pipeline is in plan.md's G0 section. Fixing it in the
-     probe is a P0 fixture change, for example waiting for each publication to finish before the
-     next read and bounding the default reader. Accepting it as a P1 requirement instead changes
-     the G0 definition.
-   - Updates from the existing shortcut are plan.md G0 item 3. They need the placement script to
-     publish, which P0 excludes, so proving them in P1 changes the G0 definition.
-   - Keyboard entry after panel focus, probe widgets on two bars, restarts with target-mode
-     fixtures and a refused backend stay within P0 fixture scope. How to give the panel keyboard
-     focus in the isolated session is not yet established, and an absent backend also needs a
-     stock-KWin test image.
-   - Action acknowledgements and timeouts are G0 work in testing.md and the proof records, not in
-     plan.md or todo.md. Deferring them to P5 appears consistent with both (todo.md's P0
-     "timeout/late reply cases" do not say whether they include mutations); testing.md would then
-     be corrected. plan.md's G0 section also says to stop if the candidate cannot satisfy the
-     accepted specification, which bears on whether a transport-level acknowledgement belongs in
-     G0. Kept in P0, the
-     probe could call the native functions the placement script uses: `createTile` and
-     `admitTile` return result codes synchronously, and `admitTile` needs the provider token,
-     which the probe discards after hashing. The probe would then admit windows, which its own
-     contract forbids (`provider.qml`, testing.md), and the placement script's session policy
-     would still be untested. A probe-owned simulated mode would exercise only the transport part:
-     plan.md allows a stand-in only to match an observed API and forbids building UI on a
-     transport that only works in a stand-in.
-   - Fair arbitration and a mixed shell/KWin replacement matrix are G0 work only in testing.md and
-     the proof records; moving them to P7 would mean correcting testing.md. Competing-bar ordering
-     is in todo.md's P0 list, so moving it would change the G0 definition.
-4. Before sign-off, should every scope be run natively again at the final G0 tree?
+The four decisions were delegated on 2026-11-19 and answered in [g0-decisions.md](g0-decisions.md),
+which gives the reasons; confirm or revise each.
 
-Recommended order: answer 1 to 4 first. The P0 fixture cases that plan.md and todo.md place in
-G0 come next. A refused backend and keyboard focus of the panel have no test at any level, but
-each first needs a way to produce that state in the isolated session. Probe widgets on two bars,
-the pipeline fix if decision 3 keeps it in G0, and a current target-mode seed through
-`lifecycle.py` extend existing mechanisms; the restart case would cover query, inventory and
-lease bootstrap, but not prepared intents across a restart, because the runner has neither an
-input driver nor a controlled app. Acknowledgement and timeout work follows decision 3. In P0 it
-would exercise the transport part of "Timeout followed by late confirmation", and with the
-native-call option also the native result codes; qualification stays with the real lifecycle
-suites. If decision 4 is yes, the sweep runs at the final tree, and the final receipt replaces
-this one.
+1. **The transport is the basis for P1:** saved request and response fields, a sequence-less
+   wake-up and `evaluateScript` on the captured unique shell connection. Its cost: each request
+   costs one save and one wake-up; each scan, a shell-owner lookup (in target mode also a PID
+   lookup), two shell script calls and one save per widget with a readable request; and each online
+   frame, two `GetNameOwner` calls by its receiver. That is acceptable only if publications stay
+   rare. The conditions are: publish only for a new request or changed state and count
+   publications; keep the pipeline bounded and serialized; version and check every request; reject
+   retained fields at start and apply a saved mutating request at most once per request identity;
+   keep the provider logic in the placement script; and do not let consumers depend on the
+   observed output-loss placement. **Risk for this decision:** in the test session, pointer clicks
+   sent while the shell served a publication usually lost their button events (15 of 18), and the
+   layer is unknown. If that holds outside the test session, users' clicks on panel widgets could
+   be lost while P1 publishes. The fixtures only work around it.
+2. **The identity-only alias becomes the production provider-lifetime fence,** not writer
+   authentication: any unsandboxed session client can write a frame, as the probe's own injection
+   tests do, and could equally drive KWin and the shell. Conditions: identity-only, requested
+   without queueing and released at teardown, named from the independent lifetime label, and a
+   single publisher.
+3. **Where the open items are met.**
+   - Changes to the G0 definition, which plan.md records: a request completion, decided once and
+     kept by newer frames, is added (G0 item 6); updates from the existing shortcut move to P1; and
+     an absent backend is accepted with unit evidence, with a stock-KWin run in P7, whose test image
+     needs the owner's approval then.
+   - Corrections to testing.md; only it and the proof records had placed these in G0, never
+     plan.md or todo.md: acknowledgements and timeouts of mutations go to P5, and fair arbitration
+     and the mixed shell/KWin replacement matrix to P7.
+   - Kept in P0 and done: the bounded, serialized pipeline, a refused backend, probe widgets on two
+     bars with competing requests, restarts with a target-mode seed and keyboard entry after panel
+     focus.
+4. **Every scope ran natively again at the final G0 tree** with the process-replacement runs, and
+   this receipt replaces the interim one (above).
+
+If all four stand, G0 passes with this receipt, and P1 can start on the conditions of decisions 1
+and 2 and the findings above. If decision 1 is reversed, G0 returns a blocker for scope review, as
+plan.md's stop rule says.
