@@ -6,7 +6,9 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 # Implementation plan: workspace layout control
 
 Status: **Accepted on 2026-11-17.** The [specification](../../SPEC-workspace-layout-control.md) is
-accepted, including its two refinements. P0 is authorized; later review gates still apply.
+accepted, including its two refinements. P0 is done apart from one test follow-up
+([todo.md](todo.md)), and G0 passed on 2026-11-20 at review gate 2 (below); later review gates
+still apply.
 The owner also approved the P0 extension described below on 2026-11-17.
 Tasks are in [todo.md](todo.md). The owner selected this separate folder to preserve the existing
 native-tiling `tasks/plan.md` and `tasks/todo.md`.
@@ -39,7 +41,8 @@ The probe may register one transient, identity-only session-bus name per provide
 It adds no D-Bus objects or RPC methods and grants no privilege; its owner identifies the
 actual publishing connection independently of the current `org.kde.KWin` owner. Registration
 must not queue for an occupied name, and retirement must release it without looking up torn-down
-native context. This remains test-only until the G0 contract review.
+native context. This remained test-only until the G0 contract review; decision 2, confirmed on
+2026-11-20, makes it the production provider-lifetime fence ([g0-decisions.md](g0-decisions.md)).
 
 A sixth test file may provide a separate lifecycle runner whose private bus outlives individual
 compositor processes. It must use its own image/container, HOME, runtime directory and results,
@@ -69,6 +72,12 @@ request completion, decided once and kept by newer state frames, shown without a
 Updates from the existing shortcut move from G0 item 3 to P1, and G0 accepts unit evidence for
 an absent backend, with a stock-KWin run in P7.
 Every scope runs natively again at the last G0 tree before the final receipt.
+
+On 2026-11-20 the owner reviewed the final receipt: confirmed decisions 2 to 4, held decision 1
+for a click reproduction without the probe, and then confirmed it with the one condition the
+reproduction added, that each publication stays under a time limit which P1 proposes and its
+lifecycle tests measure ([g0-receipt.md](g0-receipt.md), decision 1). G0 passed. For now the
+owner chose not to report upstream the QtWayland release defect that the reproduction found.
 
 ## Source evidence and limits
 
@@ -254,7 +263,8 @@ do not weaken it. Do not add CI wiring or dependencies without coordination.
 ## Review gates and stops
 
 1. Owner reviews this conditional plan before G0 work.
-2. Review G0's real receipt and chosen contract before production integration.
+2. Review G0's real receipt and chosen contract before production integration. Passed on
+   2026-11-20.
 3. Review the read-only state path and explicit-request tests before enabling the menu.
 4. Review final source, real-session evidence and remaining limitations before requesting merge.
 

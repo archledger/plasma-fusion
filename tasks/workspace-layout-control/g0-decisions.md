@@ -12,7 +12,8 @@ delegating the answers. The agent wrote the answers below that day and adopted t
 delegation; the owner had not seen them before. The owner's review of the final G0 receipt
 (todo.md, "Checkpoint G0") is therefore the owner's first review of them: the final receipt lists
 each answer, including the changes to the G0 definition, for confirmation, and the owner can
-revise any of them. Nothing here starts P1, changes production code or clears G0.
+revise any of them. Nothing here starts P1, changes production code or clears G0. On 2026-11-20
+the owner confirmed all four, decision 1 with one added condition (below), and G0 passed.
 
 Below, "the receipt", its sections and its finding numbers are the interim's (`0d3d052`); the final
 [g0-receipt.md](g0-receipt.md) numbers the interim's findings 6 and 7 as 9 and 10.
@@ -63,7 +64,8 @@ whole run; every click sent while the shell served a script call then arrived wh
 returned. The probe's lost clicks show the same signature, though the probe has not run with a
 held pointer, and nothing ran on hardware. What remains is latency, so the final receipt proposes
 one more condition for the owner to confirm: keep each publication short, under a bound that P1
-proposes and its lifecycle tests measure (`g0-receipt.md`, decision 1).
+proposes and its lifecycle tests measure (`g0-receipt.md`, decision 1). The owner confirmed this
+decision with that condition the same day, and G0 passed.
 
 ## 2. The identity alias is the production lifetime fence
 

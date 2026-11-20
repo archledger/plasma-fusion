@@ -5,11 +5,12 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 # G0 receipt: workspace layout transport
 
-Status: **final, for the owner's review; G0 passes only with that review** ([todo.md](todo.md),
-"Checkpoint G0"). Recorded on 2026-11-20 (UTC). The fixtures are those of signed local commit
-`6e133be1a5a276c629378f5242f74e3b699b5bce` (tree `bc19d0922d0ea70c7c72265c3928814b54dc9c29`) on
-`feat/workspace-layout-control`, the last G0 tree, and the final sweep ran on an exact export of
-that tree. The commit that records this receipt changes documentation only. Nothing is pushed.
+Status: **final; the owner reviewed it and confirmed its four decisions, so G0 passed on
+2026-11-20** ([todo.md](todo.md), "Checkpoint G0"). Recorded on 2026-11-20 (UTC). The fixtures
+are those of signed local commit `6e133be1a5a276c629378f5242f74e3b699b5bce` (tree
+`bc19d0922d0ea70c7c72265c3928814b54dc9c29`) on `feat/workspace-layout-control`, the last G0 tree,
+and the final sweep ran on an exact export of that tree. The commit that records this receipt
+changes documentation only. Nothing is pushed.
 
 This receipt replaces the interim receipt of 2026-11-19 (commit `0d3d052`, kept in
 `p0/g0-interim-receipt`). The interim left four decisions to the owner. On 2026-11-19 the owner
@@ -370,8 +371,8 @@ after it (`p0/settle-proof`).
    shell handles no input until it returns. In the click reproduction a click sent during a call
    arrived when the call ended; it was lost only when pressed before the shell had bound a new
    pointer, or released just before its pointer went away (above). P1 relies on publications while
-   users interact with the panel, so if the owner confirms the condition in decision 1, P1 keeps
-   each publication short and measures its length.
+   users interact with the panel, so under decision 1's condition, which the owner confirmed, P1
+   keeps each publication under a time limit it proposes and measures its length.
 7. The identity alias tells provider lifetimes apart, not scripts. P1 must keep a single
    publisher; a leftover probe or a second copy of the placement script would make consumers drop
    one lifetime and bind to the other on every frame (decision 2).
@@ -392,6 +393,7 @@ after it (`p0/settle-proof`).
 The four decisions were delegated on 2026-11-19 and answered in [g0-decisions.md](g0-decisions.md),
 which gives the reasons; confirm or revise each. On 2026-11-20 the owner confirmed decisions 2 to 4
 and held decision 1 until a click reproduction without the probe; its result is under decision 1.
+The owner then confirmed decision 1 with the condition it adds, and G0 passed.
 
 1. **The transport is the basis for P1:** saved request and response fields, a sequence-less
    wake-up and `evaluateScript` on the captured unique shell connection. Its cost: each request
@@ -412,8 +414,8 @@ and held decision 1 until a click reproduction without the probe; its result is 
    of 18 sent during a publication) show the same signature, a late hover and no press, but the
    probe has not run with a held pointer. What remains is latency: the shell handles no input
    while it serves a publication, and in the instrumented runs about one publication in ten took
-   over 100 ms, up to 0.9 s. That adds a condition for the owner to confirm: keep each
-   publication short, under a bound that P1 proposes and its lifecycle tests measure. Separately,
+   over 100 ms, up to 0.9 s. That adds a condition, confirmed by the owner: keep each publication
+   short, under a bound that P1 proposes and its lifecycle tests measure. Separately,
    a QtWayland defect can leave a button pressed when the last pointer device goes away right
    after a click while the shell is busy; it is open in [DEFERRED.md](../../docs/DEFERRED.md).
 2. **The identity-only alias becomes the production provider-lifetime fence,** not writer

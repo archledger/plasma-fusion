@@ -5,9 +5,9 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 # Workspace layout control checklist
 
-Status: plan accepted on 2026-11-17; P0 is done apart from one test follow-up (below). Of its final
-G0 receipt's decisions the owner confirmed 2 to 4 on 2026-11-20 and holds 1, for which the receipt
-now gives the click reproduction's result; no production integration. Read
+Status: plan accepted on 2026-11-17; P0 is done apart from one test follow-up (below), and G0
+passed on 2026-11-20, when the owner confirmed the final receipt's four decisions; P1 has not
+started; no production integration. Read
 [plan.md](plan.md) and the accepted [specification](../../SPEC-workspace-layout-control.md).
 Existing native task files are untouched.
 Paths below are relative to the repository. Proposed new files are not claimed to exist.
@@ -51,9 +51,12 @@ nonzero on a missing/incorrect observation. No SSH or live desktop. Review the r
 
 ## Checkpoint G0
 
-- [ ] Every transport/lifecycle claim has actual evidence, including negative controls.
-- [ ] The chosen contract fits the accepted no-native-change/no-daemon/no-polling boundary.
-- [ ] Owner reviews the receipt and any design changes before production integration.
+- [x] Every transport/lifecycle claim has actual evidence, including negative controls.
+- [x] The chosen contract fits the accepted no-native-change/no-daemon/no-polling boundary.
+- [x] Owner reviews the receipt and any design changes before production integration.
+
+Passed on 2026-11-20: the owner reviewed [g0-receipt.md](g0-receipt.md) and confirmed its four
+decisions, decision 1 after the click reproduction and with its publication time limit (P1).
 
 ## P1: Expose authoritative provider snapshots
 
@@ -69,6 +72,9 @@ Dependencies: G0. Likely files: `placement/main.qml`, a feature-owned provider c
       new request or changed state, keep the read/publish pipeline bounded and serialized,
       version-check every request, keep a single publisher and keep the alias an identity-only
       lifetime fence. Shortcut updates moved here from G0 item 3.
+- [ ] Keep each publication under a time limit that P1 proposes, and measure publication length
+      in the lifecycle tests: the shell handles no input while it serves one (decision 1,
+      confirmed on 2026-11-20).
 
 Verify: fail-first rows in the real-script lifecycle suite; run the spec's `tools/build.sh kwin`,
 tiling/placement node tests and offscreen lifecycle command.
