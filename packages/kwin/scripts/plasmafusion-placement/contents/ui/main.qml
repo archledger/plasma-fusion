@@ -174,6 +174,9 @@ Item {
             nativeWriter = false;
             api = null;
             nativeRefused = true;
+            // The refusal's text is no token: keep none, so providerToken stays empty for
+            // every session that has no accepted registration.
+            providerToken = "";
             return;
         }
         log("registered as the placement provider");
@@ -937,8 +940,9 @@ Item {
                 api = Workspace.transientTiling();
                 if (!api) {
                     // The facade exists (the detection saw the function) but answers nothing:
-                    // leave the tiler off without interrupting the script - the placement
-                    // memory keeps working, as it does through a refused provider.
+                    // leave the tiler off without interrupting the script. The placement memory
+                    // is off as well: registerWithWriter met the same silence and disabled it
+                    // for the session, as it does a refused provider.
                     apiAvailable = false;
                     log("tiling: the native facade did not answer; the tiler stays off this session");
                     return apiAvailable;
@@ -982,6 +986,7 @@ Item {
             disconnectMinimizeHandlers();
             session = Tiling.createSession();
             cellRects = {};
+            reportSession();
             log("tiling: off (native teardown)");
             releaseMaster(master, float, tile, output);
         }
@@ -1485,6 +1490,20 @@ Item {
             }
             relayout();
             log("tiling: on (" + session.stack.length + " stack window(s))");
+            reportSession();
+        }
+
+        // The layout provider is told where a session starts or ends: on or off, and the view
+        // it tiles as a bar names one - the desktop's id, the activity, the output's name.
+        // Only a live session's view is read; both resets hand in a session that is off, so
+        // the script's teardown reads nothing of KWin here (see going).
+        function reportSession() {
+            if (!session.active) {
+                layoutProvider.setSession(false, "", "", "");
+                return;
+            }
+            layoutProvider.setSession(true, String(session.desktop.id), String(session.activity),
+                                      String(session.output.name));
         }
 
         // Whether the session's master has left its tile. The native layer releases the
@@ -1648,6 +1667,7 @@ Item {
             disconnectMinimizeHandlers();
             session = Tiling.createSession();
             cellRects = {};
+            reportSession();
             // The master's native restore: the Window Restore action (Meta+Backspace's path)
             // for that window, through the facade - the scripting Workspace has no slot for
             // the action, and it addresses a window, not whichever is active. KWin raises and
@@ -1968,6 +1988,18 @@ Item {
         onActivated: tiler.focusPrevious()
     }
 
+    // What the bars' layout controls are told about tiling (LayoutProvider.qml). Capable on the
+    // native verdict alone: the writer accepted the registration (nativeWriter stays true only
+    // then), the memory loaded from it, and the tiler's facade is complete - so the legacy
+    // lane, a refused registration and a facade without restoreWindow never report ready, and
+    // a memory that loads late turns it capable then. The session goes in through
+    // tiler.reportSession.
+    LayoutProvider {
+        id: layoutProvider
+        objectName: "layoutProvider"
+        nativeCapable: root.nativeWriter && root.loaded && tiler.apiAvailable
+    }
+
     // ---------------------------------------------------------------- start and stop
 
     Component.onCompleted: {
@@ -2001,6 +2033,7 @@ Item {
         if (tiler.apiAvailable && nativeWriter) {
             tiler.adoptStranded(windows);
         }
+        layoutProvider.start();
     }
 
     // Disabled or KWin going away: the newest record goes out one last time, best effort (the D-Bus
@@ -2010,10 +2043,12 @@ Item {
     // left connected would call into a destroyed context, and every disable/enable cycle would add
     // another.
     Component.onDestruction: {
-        // See going. Nothing of the script answers anything from here on: the memory's window
-        // handlers go first, then the tiler's own connections, and only then does the
-        // session end (tiler.teardown).
+        // See going. Nothing of the script answers anything from here on: the layout provider
+        // goes offline first, then the memory's window handlers go, then the tiler's own
+        // connections, and only then does the session end (tiler.teardown) - which moves the
+        // provider no more.
         going = true;
+        layoutProvider.retire();
         for (const key in watched) {
             disconnectHandlers(watched[key]);
         }

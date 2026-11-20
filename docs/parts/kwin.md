@@ -1109,6 +1109,16 @@ Offline (laptop):
    in its restore hook), an ignored app's live join records nothing, and a reflow-starved
    member's late cell commit is quieted by the float restore. Mutation-checked: skipping
    `admitTile`, skipping the untoggle's `releaseTile` and ignoring the teardown each fail it.
+   Every run also follows the script's layout provider (see "The layout provider's state"):
+   its revisions run 1, 2, ..., one per change and each a real one, and no two runs share its
+   lifetime label. The default run checks it at every toggle, untoggle and native teardown (a
+   live join, a refused tree and a refused admission move nothing; the press on another
+   desktop ends one session and reports the new one on the invoked desktop), the facade
+   without `restoreWindow` and the refused registration stay incapable (the latter keeping no
+   token), the unload runs see it go offline once, before the teardown, a run
+   (`scenario: "late-memory"`) has the writer answer the memory's first read with nothing
+   (incapable until the read retry finds the memory) and one (`scenario: "provider-rules"`)
+   checks the provider's own rules without the script.
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
 bus, 1440x900). Seeds: `packages/kwin/tests/vsession/make-seed.sh STAGE_HOME SEED dark|light`
@@ -2000,6 +2010,32 @@ module with a mock `TransientTilingApi` and drives the native admission, the sta
 writes, the untoggle, the native teardown and a refused tree (see the Tests list). The mock
 and the stand-in `Workspace` answer only what the compositor answers: a call the mock takes
 and KWin does not is a failure only hardware shows.
+
+### The layout provider's state
+
+The bars' layout controls (the workspace layout control, `SPEC-workspace-layout-control.md`)
+are to learn from this script whether supported tiling is available and whether a session is
+on for their view; the script stays the only authority. `contents/ui/LayoutProvider.qml` keeps
+that state for it. Nothing is published yet: the transport comes in later steps.
+
+- `capable` is the native verdict while online, and false while offline. The script binds the
+  verdict (`nativeCapable`): the writer accepted the registration (`nativeWriter`), the memory
+  loaded from it (`loaded`, late if the read retry finds it) and the tiler's facade is complete
+  (`tiler.apiAvailable`). The legacy lane, a refused registration and a facade without
+  `restoreWindow` never report ready.
+- `active` and the session's view as a bar names one - `desktopId`, `activityId`,
+  `outputName` - come from the tiler (`tiler.reportSession`) at the end of a start and right
+  after each reset, the untoggle's and the native teardown's. The view is the session's own:
+  the one the shortcut was invoked on.
+- `revision` is 1 once the script has started (`start()`, at the end of
+  `Component.onCompleted`), then moves once per change of the above or of `online`, and
+  never otherwise: a relayout, a live join, a refused tree or a refused admission move nothing.
+- `online` lasts from `start()` until `retire()`, which `Component.onDestruction` calls right
+  after it sets `going`: the provider goes offline once, with no capability or session left,
+  before the teardown's untoggle, which moves it no more and reads nothing of KWin for it.
+- `label` is drawn fresh for each instance (the MD5 of a timestamp and four random numbers, as
+  the layout probe draws its own). It owes nothing to the native token, which the provider is
+  never given; a refused registration keeps no token either (`providerToken` is cleared).
 
 ### What it rides
 

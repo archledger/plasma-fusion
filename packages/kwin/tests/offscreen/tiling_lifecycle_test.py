@@ -129,6 +129,27 @@ def run_harness(initial=None):
     return instance
 
 
+provider_labels = {}
+
+
+def check_provider(instance, name):
+    """The run's layout provider (LayoutProvider.qml), as the harness recorded it: revisions
+    1, 2, ... one per state, each a change of what a bar would be told, and a lifetime label
+    no earlier run had."""
+    states = [dict(state) for state in instance.property("providerStates").toVariant() or []]
+    check(bool(states), "%s: the run followed the script's layout provider" % name)
+    for index, state in enumerate(states):
+        check(state.get("revision") == index + 1,
+              "%s: the provider's revisions run 1, 2, ... (state %d has %s)" % (name, index, state.get("revision")))
+        if index:
+            check(dict(state, revision=0) != dict(states[index - 1], revision=0),
+                  "%s: revision %s moved with nothing changed (%s)" % (name, state.get("revision"), state))
+    label = str(instance.property("providerLabel") or "")
+    check(label != "" and label not in provider_labels.values(),
+          "%s: the provider's lifetime label is its own (%r, earlier runs %r)" % (name, label, provider_labels))
+    provider_labels[name] = label
+
+
 def retire(instance, name):
     """End a run whose results have been read. The stand-in Workspace is one object for the
     whole engine, so a script left alive answers the next run's windows as well: with its
@@ -138,7 +159,10 @@ def retire(instance, name):
     throw on that path shows only as the engine's message, so the lines of the retirement
     are read for one. (Until 2026-11-14 one such line was let through, a readConfig of the
     engine's teardown: it was the script's own handler answering its teardown's writes, the
-    path that crashed KWin, and no teardown reads a setting now.)"""
+    path that crashed KWin, and no teardown reads a setting now.)
+
+    The layout provider's record is read first (check_provider), while the run is alive."""
+    check_provider(instance, name)
     before_retire = len(messages)
     instance.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
@@ -248,6 +272,21 @@ refused_reads = [call.get("op") for call in refused_provider.property("readCalls
 check(not refused_reads, "refused-provider: a refused provider reads nothing of the writer, got %s"
       % refused_reads)
 retire(refused_provider, "refused-provider")
+
+# A writer with no answer for the memory's first read, as at load time before its snapshot is
+# ready: the layout provider starts incapable and turns capable when the read retry finds the
+# memory, one revision later; a toggle before that starts nothing (the harness checks).
+late_memory = run_harness({"scenario": "late-memory"})
+for problem in list(late_memory.property("problems").toVariant() or []):
+    failures.append(str(problem))
+retire(late_memory, "late-memory")
+
+# The layout provider's own rules, without the script: what start(), setSession() and retire()
+# move and what they leave alone (the harness checks).
+provider_rules = run_harness({"scenario": "provider-rules"})
+for problem in list(provider_rules.property("problems").toVariant() or []):
+    failures.append(str(problem))
+retire(provider_rules, "provider-rules")
 
 # A third run: the master a native teardown released without restoring it (a removed desktop, a
 # second window of its app, a move of the master). The harness asserts the geometry, the settle

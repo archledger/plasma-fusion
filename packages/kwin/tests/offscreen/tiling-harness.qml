@@ -19,7 +19,12 @@
     A third (scenario: "unload") unloads the script mid-session as KWin unloads a declarative
     script: the driver makes it in a context of its own and deletes that context first
     (KWinScript in tiling_lifecycle_test.py). Another (scenario: "refused-provider") has the
-    writer refuse the provider registration with the fork's null UUID.
+    writer refuse the provider registration with the fork's null UUID, and one
+    ("late-memory") has it answer the memory's first read with nothing; "provider-rules"
+    checks the layout provider's own rules without the script. Every run follows the
+    script's layout provider (LayoutProvider.qml) - online, capable, the session and its view,
+    one revision per change - and the driver checks that order and that no two runs share a
+    lifetime label.
     Context properties from the driver: packagesRoot (a directory holding
     scripts/plasmafusion-placement), config prefill through the KWin context object.
 */
@@ -61,6 +66,12 @@ Item {
     property var facadeCalls: []
     // The facade's read-only calls, apart: the runs' exact facadeCalls lists stay as they are.
     property var readCalls: []
+    // The script's layout provider (LayoutProvider.qml), its states as they moved - the one
+    // it started with, then one entry per revision - and its lifetime label (trackProvider;
+    // the driver checks the order and that no two runs share a label).
+    property var provider: null
+    property var providerStates: []
+    property string providerLabel: ""
     property var snapshot: ({})
     property var script: null
     property var tileShortcut: null
@@ -112,6 +123,9 @@ Item {
         // "refused-provider").
         readonly property string grantedToken: "{5d3c9a1e-7b2f-4c6d-8e9a-0b1c2d3e4f5a}"
         property string providerAnswer: grantedToken
+        // How many snapshot() calls the writer leaves unanswered, as at load time before its
+        // snapshot is ready (scenario "late-memory").
+        property int snapshotSilences: 0
         // The native admission can land the window on the tile before it returns (a client
         // whose size already fits needs no configure): the mock then moves the window inside
         // admitTile.
@@ -291,6 +305,10 @@ Item {
         }
         function snapshot() {
             harness.readCalls = harness.readCalls.concat([{ op: "snapshot" }]);
+            if (snapshotSilences > 0) {
+                snapshotSilences -= 1;
+                return null;
+            }
             return { entries: entries };
         }
         function hasTree() {
@@ -492,6 +510,24 @@ Item {
     }
 
     Component.onCompleted: {
+        if (scenario === "provider-rules") {
+            try {
+                runProviderRules();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
+        if (scenario === "late-memory") {
+            try {
+                runLateMemory();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
         if (scenario === "refused-provider") {
             try {
                 runRefusedProvider();
@@ -669,7 +705,148 @@ Item {
             fail("the Tile Workspace shortcut was not registered");
             return "";
         }
+        trackProvider();
         return masterKey;
+    }
+
+    // The layout provider the script made: its states are recorded from now on, one entry
+    // per revision, and its label kept for the driver.
+    function trackProvider() {
+        for (let i = 0; i < script.data.length; ++i) {
+            if (script.data[i] && script.data[i].objectName === "layoutProvider") {
+                provider = script.data[i];
+            }
+        }
+        if (!provider) {
+            fail("the script made a layout provider");
+            return;
+        }
+        follow(provider);
+    }
+
+    function follow(made) {
+        provider = made;
+        providerLabel = made.label;
+        const take = () => { providerStates = providerStates.concat([providerState()]); };
+        take();
+        made.revisionChanged.connect(take);
+    }
+
+    function providerState() {
+        return provider ? { revision: provider.revision, online: provider.online, capable: provider.capable,
+                            active: provider.active, desktopId: provider.desktopId,
+                            activityId: provider.activityId, outputName: provider.outputName } : null;
+    }
+
+    // The provider moved `moves` revisions since the state `before` and now reads `fields`.
+    function expectProvider(what, before, moves, fields) {
+        const now = providerState();
+        if (!now || !before) {
+            fail(what + ": the script's layout provider is there");
+            return;
+        }
+        if (now.revision !== before.revision + moves) {
+            fail(what + ": the provider's revision moved " + (now.revision - before.revision) + " time(s), not " + moves);
+        }
+        for (const field in fields) {
+            if (now[field] !== fields[field]) {
+                fail(what + ": the provider's " + field + " is " + JSON.stringify(now[field])
+                     + ", not " + JSON.stringify(fields[field]));
+            }
+        }
+    }
+
+    // A lifetime label that owes nothing to the native token (P0's probe once derived it from
+    // the token, so every refused lifetime shared one).
+    function expectOwnLabel(what, token) {
+        const bare = token.replace(/^\{|\}$/g, "");
+        if (!/^[0-9a-f]{32}$/.test(providerLabel) || providerLabel === Qt.md5(token) || providerLabel === Qt.md5(bare)) {
+            fail(what + ": the provider's label is its own, not the token's (got " + providerLabel + ")");
+        }
+    }
+
+    // The layout provider's own rules, on instances of its own (no script): nothing before
+    // start(), a first state at revision 1, one move per change and only while online, start()
+    // once, one move to go offline and nothing after it, and a label per instance.
+    function runProviderRules() {
+        const base = "file://" + packagesRoot + "/scripts/plasmafusion-placement/contents/ui/";
+        const component = Qt.createComponent(base + "LayoutProvider.qml");
+        if (component.status !== Component.Ready) {
+            fail("provider-rules: LayoutProvider.qml did not load: " + component.errorString());
+            done = true;
+            return;
+        }
+        const p = component.createObject(harness);
+        const state = () => [p.revision, p.online, p.capable, p.active, p.desktopId, p.activityId,
+                             p.outputName].join("|");
+        const expect = (what, wanted) => {
+            if (state() !== wanted) {
+                fail("provider-rules: " + what + ": got " + state() + ", not " + wanted);
+            }
+        };
+        p.nativeCapable = true;
+        p.setSession(true, "11", "a", "Virtual-1");
+        expect("nothing before start()", "0|false|false|false|||");
+        p.start();
+        expect("start()", "1|true|true|false|||");
+        follow(p);
+        p.setSession(false, "", "", "");
+        expect("a report that changes nothing", "1|true|true|false|||");
+        p.setSession(true, "11", "a", "Virtual-1");
+        expect("a session", "2|true|true|true|11|a|Virtual-1");
+        p.start();
+        expect("start() again", "2|true|true|true|11|a|Virtual-1");
+        p.setSession(true, "12", "a", "Virtual-1");
+        expect("the session on another view", "3|true|true|true|12|a|Virtual-1");
+        p.nativeCapable = false;
+        expect("capability lost", "4|true|false|true|12|a|Virtual-1");
+        p.retire();
+        expect("retire()", "5|false|false|false|||");
+        p.retire();
+        p.nativeCapable = true;
+        p.setSession(true, "11", "a", "Virtual-1");
+        p.start();
+        expect("nothing after retire()", "5|false|false|false|||");
+        const other = component.createObject(harness);
+        if (!/^[0-9a-f]{32}$/.test(p.label) || other.label === p.label) {
+            fail("provider-rules: each instance draws a label of its own (" + p.label + ", " + other.label + ")");
+        }
+        other.destroy();
+        done = true;
+    }
+
+    // The writer has no answer for the memory's first read, as at load time before its snapshot
+    // is ready: the read retry (2 s) finds the memory. The layout provider starts incapable and
+    // turns capable then, one revision later; a toggle before that starts nothing and moves
+    // nothing, and one after it starts a session.
+    function runLateMemory() {
+        facade.snapshotSilences = 1;
+        if (setup() === "") {
+            done = true;
+            return;
+        }
+        if (script.loaded) {
+            fail("late-memory: the memory waits for the writer's answer");
+        }
+        expectProvider("late-memory: at start", { revision: 1 }, 0, { online: true, capable: false, active: false });
+        let before = providerState();
+        steps = [
+            { name: "a toggle before the memory loaded", run: function () {
+                tileShortcut.activated();
+                if (calls("createTile").length !== 0) {
+                    fail("late-memory: no session before the memory loaded");
+                }
+                expectProvider("late-memory: a toggle before the memory loaded", before, 0, { capable: false, active: false });
+            } },
+            { name: "the memory's read retry", until: () => script.loaded, run: function () {
+                expectProvider("late-memory: the memory loaded", before, 1, { online: true, capable: true, active: false });
+                before = providerState();
+                tileShortcut.activated();
+                expectProvider("late-memory: a toggle once capable", before, 1, { active: true, desktopId: "11" });
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
     }
 
     // The writer refuses the provider registration as the fork does while another provider holds
@@ -706,6 +883,7 @@ Item {
             done = true;
             return;
         }
+        trackProvider();
         // The legacy transport's calls: the script's evaluateScript DBusCalls.
         const shellScriptCalls = () => {
             let count = 0;
@@ -750,6 +928,14 @@ Item {
                 if (shellScriptCalls() !== 0) {
                     fail("refused-provider: no shell script call replaces the refused native writer");
                 }
+                // The layout provider: online, never capable, nothing moved; a label of its own
+                // (P0's probe had derived it from the token, so every refused lifetime shared
+                // one), and the refusal's text is not kept as a token.
+                expectProvider("refused-provider", { revision: 1 }, 0, { online: true, capable: false, active: false });
+                expectOwnLabel("refused-provider", facade.providerAnswer);
+                if (script.providerToken !== "") {
+                    fail("refused-provider: a refused registration keeps no token (got " + script.providerToken + ")");
+                }
             } }
         ];
         stepSince = Date.now();
@@ -775,6 +961,7 @@ Item {
         let cellA = null;
         let asked = 0;
         let toggledAt = 0;
+        let revisionBeforeUnload = 0;
         steps = [
             { name: "the script as KWin makes it", until: () => kwinScript !== null, run: function () {
                 if (adopt(kwinScript) === "") {
@@ -784,6 +971,7 @@ Item {
                 if (calls("admitTile").length !== 1 || !master.tile) {
                     throw "unload: no session started (admissions " + calls("admitTile").length + ")";
                 }
+                expectProvider("unload: the session", { revision: 1 }, 1, { online: true, active: true });
                 cellA = facade.plain(winA.frameGeometry);
                 if (facade.same(cellA, floatA)) {
                     throw "unload: the stack window was given no cell (at " + JSON.stringify(winA.frameGeometry) + ")";
@@ -811,6 +999,7 @@ Item {
                     facade.vacate();
                 }
                 asked = facadeCalls.length;
+                revisionBeforeUnload = provider ? provider.revision : 0;
                 unloadWanted = true;
             } },
             { name: "the script unloaded as KWin unloads it", until: () => unloaded, run: function () {
@@ -828,6 +1017,14 @@ Item {
                 }
                 if (unloadVacated && !facade.same(master.frameGeometry, floatMaster)) {
                     fail("unload (vacated): the released master went back to its float (at " + JSON.stringify(master.frameGeometry) + ")");
+                }
+                // The provider went offline before the teardown, once, with no capability or
+                // session left to report: the teardown's own untoggle moved nothing after that.
+                const last = providerStates[providerStates.length - 1];
+                if (!last || last.revision !== revisionBeforeUnload + 1 || last.online || last.capable || last.active
+                        || last.desktopId !== "") {
+                    fail("unload" + (unloadVacated ? " (vacated)" : "") + ": the provider went offline once, with no"
+                         + " capability or session (before " + revisionBeforeUnload + ", got " + JSON.stringify(last) + ")");
                 }
                 // Nothing of the script answers anything any more.
                 const gone = facadeCalls.length;
@@ -938,6 +1135,13 @@ Item {
             return;
         }
         const desktop = firstDesktop;
+        // The layout provider as the script started: online, no session, and capable where the
+        // writer accepted the registration, the memory loaded and the facade is complete - not
+        // with a facade without restoreWindow, whatever the writer says; its label is its own.
+        expectProvider("the provider at start", { revision: 1 }, 0,
+                       { online: true, capable: !legacyFacade, active: false, desktopId: "", outputName: "" });
+        expectOwnLabel("the provider at start", facade.grantedToken);
+        let providerBefore = providerState();
 
         if (legacyFacade) {
             // ---- a facade without restoreWindow: no session, the memory's transport intact ----
@@ -946,6 +1150,7 @@ Item {
             if (calls("createTile").length !== 0) {
                 fail("a facade without restoreWindow starts no session");
             }
+            expectProvider("a facade without restoreWindow", providerBefore, 0, { capable: false, active: false });
             if (calls("registerProvider").length !== 1) {
                 fail("the placement memory still registered as the provider");
             }
@@ -968,13 +1173,16 @@ Item {
                 fail("a fork build that cannot say what it keeps of a window gets no record for the toggle (records "
                      + masterRecorded.length + ", admissions " + calls("admitTile").length + ")");
             }
+            expectProvider("interim: a refused admission", providerBefore, 0, { capable: true, active: false });
             // And a session all the same where the memory has the window's own place.
             facade.entries[masterKey] = { x: 40, y: 80, width: 620, height: 420 };
             tileShortcut.activated();
             if (!master.tile || calls("record").filter(c => c.window === "master").length !== 0) {
                 fail("the window is admitted from its own place there, with nothing recorded");
             }
+            expectProvider("interim: the session", providerBefore, 1, { capable: true, active: true });
             tileShortcut.activated();
+            expectProvider("interim: the untoggle", providerBefore, 2, { active: false });
             snapshot = ({ createTile: calls("createTile").length, admitTile: calls("admitTile").length,
                           restoreWindow: calls("restoreWindow").length });
             done = true;
@@ -1035,6 +1243,10 @@ Item {
         if (calls("releaseTile").length !== 0) {
             fail("releaseTile before any untoggle");
         }
+        // The provider: the session on, for the view it tiles as a bar names one.
+        expectProvider("toggle on", providerBefore, 1,
+                       { active: true, desktopId: "11", activityId: "a", outputName: "Virtual-1" });
+        providerBefore = providerState();
 
         // ---- a live window joins mid-session ----
         const winC = mk({ internalId: "c", resourceClass: "org.fusion.mail",
@@ -1056,9 +1268,14 @@ Item {
         if (cells[0].y !== column.y || cells[2].y + cells[2].height !== column.y + column.height || cells[0].y + cells[0].height > cells[1].y || cells[1].y + cells[1].height > cells[2].y) {
             fail("the relaid column covers the area without overlap: " + JSON.stringify(cells));
         }
+        // A window joining and the relayout change nothing a bar is told.
+        expectProvider("a live window joining", providerBefore, 0, { active: true });
 
         // ---- untoggle: the floats back, the master's native restore, the tree released ----
         tileShortcut.activated();
+        expectProvider("the untoggle", providerBefore, 1,
+                       { active: false, desktopId: "", activityId: "", outputName: "" });
+        providerBefore = providerState();
         if (!rectIs(winA.frameGeometry, 700, 120, 300, 320) || !rectIs(winB.frameGeometry, 760, 480, 300, 300)
                 || !rectIs(winC.frameGeometry, 300, 500, 260, 260)) {
             fail("the untoggle restored the saved floats (got " + JSON.stringify(winA.frameGeometry) + " "
@@ -1078,6 +1295,8 @@ Item {
         if (calls("createTile").length !== 2) {
             fail("the second toggle started a second session");
         }
+        expectProvider("the second session", providerBefore, 1, { active: true, desktopId: "11" });
+        providerBefore = providerState();
         facade.treeAlive = false;
         facade.treeChanged();
         if (!rectIs(winA.frameGeometry, 700, 120, 300, 320) || !rectIs(winB.frameGeometry, 760, 480, 300, 300)) {
@@ -1086,6 +1305,9 @@ Item {
         if (calls("releaseTile").length !== 1) {
             fail("the native teardown does not release an already-ended tree");
         }
+        expectProvider("the native teardown", providerBefore, 1,
+                       { active: false, desktopId: "", activityId: "", outputName: "" });
+        providerBefore = providerState();
         // the session is gone: the next toggle starts a session instead of un-toggling
         tileShortcut.activated();
         if (calls("createTile").length !== 3) {
@@ -1095,6 +1317,8 @@ Item {
         if (calls("releaseTile").length !== 2) {
             fail("the third session released its tree");
         }
+        expectProvider("the third session on and off", providerBefore, 2, { active: false });
+        providerBefore = providerState();
 
         // ---- a refused tree: no session, no geometry write ----
         facade.refuseCreate = true;
@@ -1106,6 +1330,7 @@ Item {
         if (!rectIs(winA.frameGeometry, before.x, before.y, before.width, before.height)) {
             fail("a refused tree writes no geometry");
         }
+        expectProvider("a refused tree", providerBefore, 0, { active: false });
         facade.refuseCreate = false;
 
         // ---- a refused admission: the tree released, no session, no geometry write ----
@@ -1123,6 +1348,7 @@ Item {
         if (!rectIs(winA.frameGeometry, before.x, before.y, before.width, before.height)) {
             fail("a refused admission writes no geometry");
         }
+        expectProvider("a refused admission", providerBefore, 0, { active: false });
         facade.refuseAdmit = false;
 
         // ---- the admission lands the master before it returns: nothing is recorded ----
@@ -1140,6 +1366,8 @@ Item {
         }
         facade.landOnAdmit = false;
         tileShortcut.activated(); // untoggle it
+        expectProvider("a session admitted on landing, on and off", providerBefore, 2, { active: false });
+        providerBefore = providerState();
 
         // ---- the invoked view survives the untoggle of another view's session ----
         // A session on the first desktop, then a second desktop with its own window; the
@@ -1158,6 +1386,8 @@ Item {
         ws.currentDesktop = desktop;
         ws.activeWindow = master;
         tileShortcut.activated(); // the session on the first desktop
+        expectProvider("the session on the first desktop", providerBefore, 1, { active: true, desktopId: "11" });
+        providerBefore = providerState();
         const desktop1Session = calls("createTile").length;
         ws.currentDesktop = desktop2;
         ws.activeWindow = m2;
@@ -1183,9 +1413,15 @@ Item {
         if (ws.activeWindow !== m2) {
             fail("the focus returned to the window the shortcut was invoked on");
         }
+        // The provider: the first session's end, then the new one on the view the shortcut was
+        // invoked on - not the desktop the old master's activation carried back.
+        expectProvider("the invocation on the other desktop", providerBefore, 2,
+                       { active: true, desktopId: "12", activityId: "a", outputName: "Virtual-1" });
+        providerBefore = providerState();
         facade.onRestore = null;
         ws.currentDesktop = desktop2;
         tileShortcut.activated(); // untoggle it (still the invoked view)
+        expectProvider("the untoggle on the other desktop", providerBefore, 1, { active: false, desktopId: "" });
 
         // ---- a manual move of an ignored app's stack window detaches it (late phase) ----
         // org.fusion.files is in IgnoreApps: the memory never records it, but the tiler's
