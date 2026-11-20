@@ -5,9 +5,8 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 # Workspace layout control checklist
 
-Status: plan accepted on 2026-11-17; P0 is done apart from one test follow-up (below), and G0
-passed on 2026-11-20, when the owner confirmed the final receipt's four decisions; P1 has not
-started; no production integration. Read
+Status: plan accepted on 2026-11-17; P0 is done, and G0 passed on 2026-11-20, when the owner
+confirmed the final receipt's four decisions; P1 has not started; no production integration. Read
 [plan.md](plan.md) and the accepted [specification](../../SPEC-workspace-layout-control.md).
 Existing native task files are untouched.
 Paths below are relative to the repository. Proposed new files are not claimed to exist.
@@ -42,9 +41,10 @@ and live-desktop changes remain excluded; G0 is still a separate gate.
 - [x] Before the final sweep: the layout-control tests create their scratch directories under a
       hard-coded directory in `/tmp`, which fails wherever that directory is missing; use the
       default temporary directory, which follows `TMPDIR`.
-- [ ] Follow-up: the bridge's target waits print nothing on a timeout, in the keyboard-entry
+- [x] Follow-up: the bridge's target waits print nothing on a timeout, in the keyboard-entry
       scenario as in the target steps, so the log locates a failure only by the last PASS line
-      before it; name the failing wait.
+      before it; name the failing wait. Each now prints one FAIL line naming itself, what it
+      waited for and the log of its last check (2026-11-20).
 
 Verify: run the proposed G0 commands in `plan.md` after creating the fixtures; the scenario exits
 nonzero on a missing/incorrect observation. No SSH or live desktop. Review the receipt before P1.

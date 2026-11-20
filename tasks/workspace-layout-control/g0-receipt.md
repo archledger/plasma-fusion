@@ -348,7 +348,8 @@ after it (`p0/settle-proof`).
   outstanding, and a publication the shell never answers holds the pipeline until the D-Bus reply
   timeout, which was not measured.
 - The bridge's target waits print nothing on a timeout, so a failing run is located only by the
-  last PASS line before it; naming the wait is a [todo.md](todo.md) follow-up.
+  last PASS line before it; naming the wait is a [todo.md](todo.md) follow-up. Done after G0, on
+  2026-11-20: each wait now prints one FAIL line naming itself.
 - No clean-LSP claim: host language tooling cannot resolve the image's KWin imports.
 
 ## Findings for P1

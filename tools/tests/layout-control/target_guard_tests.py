@@ -15,6 +15,33 @@ else:
     from qml_helpers import qml_handler
 
 
+def run_bridge_wait(name: str, arguments: list[str], *, checks_pass: bool):
+    """Run one of the bridge's target waits on its own, as the bridge defines it.
+
+    The function's text is cut from scenario-bridge.sh and run in bash under the bridge's own
+    errexit settings. python3 is stubbed to pass or fail every check, writing one "check" line to
+    its stderr, which the wait sends to its own log; sleep only records its argument, and evaljs
+    only reads the script it is given. Returns the bash result and the scratch files' texts.
+    """
+    bridge = Path(__file__).with_name("scenario-bridge.sh").read_text()
+    head = f"    {name}() {{\n"
+    assert bridge.count(head) == 1, name
+    body = bridge.split(head, 1)[1].split("\n    }\n", 1)[0]
+    script = ("set -euo pipefail\n"
+              f"python3() {{ echo check >&2; return {0 if checks_pass else 1}; }}\n"
+              'sleep() { echo "$1" >>"$OUT/sleeps"; }\n'
+              "evaljs() { cat >/dev/null; }\n"
+              f"{name}() {{\n{body}\n}}\n"
+              f'{name} "$@"\n')
+    with tempfile.TemporaryDirectory(prefix="pf-layout-wait-") as scratch:
+        result = subprocess.run(["/usr/bin/bash", "-c", script, name, *arguments],
+                                env={"PATH": "/usr/bin:/bin", "OUT": scratch, "HOME": scratch},
+                                capture_output=True, text=True, timeout=30, check=False)
+        files = {path.name: path.read_text() for path in Path(scratch).iterdir()
+                 if path.is_file()}
+    return result, files
+
+
 class TargetGuardTests(unittest.TestCase):
     def run_guard(self, action, *, requests=False):
         rules = (Path(__file__).resolve().parents[3] /
@@ -542,7 +569,67 @@ class TargetSettleTests(unittest.TestCase):
         body = bridge.split("    wait_target_settled() {\n", 1)[1].split("\n    }\n", 1)[0]
         self.assertIn('receipts.py" target-settled', body)
         self.assertIn('"$OUT/plasmashell.log" "$OUT/kwin.log" "$boot" "$minimum"', body)
-        self.assertTrue(body.rstrip().endswith("[[ $settled == true ]]"))
+        never, _ = run_bridge_wait("wait_target_settled", ["current", "8"], checks_pass=False)
+        self.assertEqual(never.returncode, 1, never.stderr)
+
+
+class TargetWaitTimeoutTests(unittest.TestCase):
+    """Each of the bridge's target waits names itself when it gives up.
+
+    The bridge runs under errexit, so a wait that only returned non-zero stopped the scenario with
+    nothing in its log after the last PASS line; the keyboard-entry scenario uses three of them.
+    """
+
+    # The wait, arguments as the bridge passes them, the label its FAIL line starts with, what it
+    # must name from the arguments, and the log that holds the reason its last check failed.
+    WAITS = (
+        ("wait_target_reply", ["current", "validate", "false", "5", "-"], "target reply",
+         ("validate reply", "ready false", "after request 5", "for no app"),
+         "target-reply-wait.log"),
+        ("wait_target_reply", ["current", "prepare", "true", "1", "pf.focus.alpha"],
+         "target reply", ("prepare reply", "ready true", "after request 1", "for pf.focus.alpha"),
+         "target-reply-wait.log"),
+        ("wait_target_context", ["current", "pf.focus.alpha"], "target context",
+         ("remembering pf.focus.alpha",), "target-context-wait.log"),
+        ("wait_consumer_state", ["current", "4", "prepare", "false", "busy", "-"],
+         "consumer state", ("after revision 4", "prepare ready false", "reason busy",
+                            "for no app"), "consumer-state-wait.log"),
+        ("wait_consumer_state", ["current", "6", "prepare", "true", "-", "pf.focus.alpha"],
+         "consumer state", ("after revision 6", "prepare ready true", "reason none",
+                            "for pf.focus.alpha"), "consumer-state-wait.log"),
+        ("wait_target_settled", ["current", "8"], "target settle",
+         ("at or after context generation 8",), "target-settle-wait.log"),
+        ("wait_target_popup", ["pf.focus.beta"], "target popup",
+         ("with pf.focus.beta remembered",), "target-popup-wait.log"),
+        ("wait_second_app_active", [], "second app", ("pf.focus.beta",),
+         "target-second-wait.log"),
+        ("wait_owned_consumer_removed", [], "consumer removal",
+         ("remaining owned probe widget",), "consumer-removal-wait.log"),
+    )
+
+    def test_each_target_wait_names_itself_and_its_log_when_it_times_out(self):
+        for name, arguments, label, named, log in self.WAITS:
+            with self.subTest(wait=name, arguments=arguments):
+                result, files = run_bridge_wait(name, arguments, checks_pass=False)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                lines = result.stderr.splitlines()
+                self.assertEqual(len(lines), 1, result.stderr)
+                self.assertTrue(lines[0].startswith(f"FAIL: {label}: "), lines[0])
+                for fragment in (*named, f"(last check: {log})"):
+                    self.assertIn(fragment, lines[0])
+                self.assertEqual(result.stdout, "")
+                # The log the line names is the one all 40 checks wrote to, 0.1 s apart.
+                self.assertEqual(files.get(log, "").splitlines(), ["check"] * 40)
+                self.assertEqual(files["sleeps"].splitlines(), ["0.1"] * 40)
+
+    def test_each_target_wait_returns_quietly_once_its_check_passes(self):
+        for name, arguments, _, _, log in self.WAITS:
+            with self.subTest(wait=name, arguments=arguments):
+                result, files = run_bridge_wait(name, arguments, checks_pass=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stderr, "")
+                self.assertEqual(files.get(log, "").splitlines(), ["check"])
+                self.assertNotIn("sleeps", files)
 
 
 if __name__ == "__main__":

@@ -6,9 +6,8 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 # Implementation plan: workspace layout control
 
 Status: **Accepted on 2026-11-17.** The [specification](../../SPEC-workspace-layout-control.md) is
-accepted, including its two refinements. P0 is done apart from one test follow-up
-([todo.md](todo.md)), and G0 passed on 2026-11-20 at review gate 2 (below); later review gates
-still apply.
+accepted, including its two refinements. P0 is done, and G0 passed on 2026-11-20 at review gate 2
+(below); later review gates still apply.
 The owner also approved the P0 extension described below on 2026-11-17.
 Tasks are in [todo.md](todo.md). The owner selected this separate folder to preserve the existing
 native-tiling `tasks/plan.md` and `tasks/todo.md`.

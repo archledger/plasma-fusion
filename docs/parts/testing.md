@@ -376,6 +376,12 @@ change plus the generations the change advances). A read the provider has schedu
 started does not show in its log, so the wait cannot see one. With the wait no click was lost in 30
 native target-mode runs; without it about one run in seven had lost one.
 
+The bridge's target waits (for a reply, the consumer's context, a consumer state, the shell to
+settle, the popup, the second app's activation and the owned consumer's removal) each check 40
+times, 0.1 s apart. One that gives up prints a single FAIL line naming the wait, what it waited for
+and the log that holds its last check's reason; the bridge runs under errexit, so that line is the
+last the scenario writes (`TargetWaitTimeoutTests`).
+
 The default-off `--mixed-lifetime-probe` mode composes these boundaries in one ordinary session:
 
 ```sh

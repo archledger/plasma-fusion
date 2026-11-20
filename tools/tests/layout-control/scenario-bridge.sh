@@ -228,7 +228,11 @@ if [[ $focus_probe == true ]]; then
             fi
             sleep 0.1
         done
-        [[ $complete == true ]]
+        [[ $complete == true ]] || {
+            echo "FAIL: target reply: no $intent reply, ready $ready, after request $previous" \
+                "for ${app/#-/no app} (last check: target-reply-wait.log)" >&2
+            return 1
+        }
     }
     wait_target_context() {
         local boot=$1 app=$2 ready=false
@@ -258,7 +262,11 @@ PY
             fi
             sleep 0.1
         done
-        [[ $ready == true ]]
+        [[ $ready == true ]] || {
+            echo "FAIL: target context: no online context remembering $app" \
+                "(last check: target-context-wait.log)" >&2
+            return 1
+        }
     }
     wait_consumer_state() {
         local boot=$1 previous=$2 intent=$3 ready=$4 reason=$5 app=$6 complete=false
@@ -274,7 +282,12 @@ PY
             fi
             sleep 0.1
         done
-        [[ $complete == true ]]
+        [[ $complete == true ]] || {
+            echo "FAIL: consumer state: no state after revision $previous with $intent ready" \
+                "$ready, reason ${reason/#-/none}, for ${app/#-/no app}" \
+                "(last check: consumer-state-wait.log)" >&2
+            return 1
+        }
     }
     # Each publication is a shell script call that the shell serves on its main thread, and one can
     # take hundreds of milliseconds; a click sent while the shell served one could lose its button
@@ -292,7 +305,11 @@ PY
             fi
             sleep 0.1
         done
-        [[ $settled == true ]]
+        [[ $settled == true ]] || {
+            echo "FAIL: target settle: the shell did not settle at or after context generation" \
+                "$minimum (last check: target-settle-wait.log)" >&2
+            return 1
+        }
     }
     wait_target_popup() {
         local app=$1 ready=false
@@ -314,7 +331,64 @@ PY
             fi
             sleep 0.1
         done
-        [[ $ready == true ]]
+        [[ $ready == true ]] || {
+            echo "FAIL: target popup: no shell popup active with $app remembered" \
+                "(last check: target-popup-wait.log)" >&2
+            return 1
+        }
+    }
+    wait_second_app_active() {
+        local seen=false
+        for _ in {1..40}; do
+            if python3 - "$OUT/kwin.log" 2>>"$OUT/target-second-wait.log" <<'PY'
+import json, sys
+rows = [json.loads(line.split("layout-probe-focus ", 1)[1])
+        for line in open(sys.argv[1])
+        if line.endswith("\n") and "layout-probe-focus " in line]
+assert any(row["activeClass"] == "pf.focus.beta" and row["activeEligible"] for row in rows)
+PY
+            then
+                seen=true
+                break
+            fi
+            sleep 0.1
+        done
+        [[ $seen == true ]] || {
+            echo "FAIL: second app: pf.focus.beta never became the active eligible window" \
+                "(last check: target-second-wait.log)" >&2
+            return 1
+        }
+    }
+    # The shell lists exactly one probe widget, the owned one that was not removed.
+    wait_owned_consumer_removed() {
+        local removed=false
+        for _ in {1..40}; do
+            evaljs - >"$OUT/consumer-widgets-after.json" <<'JS'
+var rows=[];
+panels().forEach(function(p){p.widgets('org.plasmafusion.layoutprobe').forEach(function(w){
+    rows.push({id:w.id,type:w.type});
+});});
+print(JSON.stringify(rows));
+JS
+            if python3 - "$OUT/consumer-widgets-after.json" "$OUT/consumer-removed.json" \
+                "$OUT/widgets-created.txt" 2>>"$OUT/consumer-removal-wait.log" <<'PY'
+import json, sys
+rows, removed, owned = [json.load(open(path)) for path in sys.argv[1:]]
+assert len(rows) == 1 and rows[0]["id"] in owned
+assert rows[0]["id"] != removed["removedId"]
+assert rows[0]["type"] == "org.plasmafusion.layoutprobe"
+PY
+            then
+                removed=true
+                break
+            fi
+            sleep 0.1
+        done
+        [[ $removed == true ]] || {
+            echo "FAIL: consumer removal: the shell does not list just the remaining owned" \
+                "probe widget (last check: consumer-removal-wait.log)" >&2
+            return 1
+        }
     }
     qdbus org.freedesktop.DBus /org/freedesktop/DBus \
         org.freedesktop.DBus.GetConnectionUnixProcessID org.kde.plasmashell \
@@ -518,22 +592,7 @@ PY
         python3 "$HOME/.local/lib/layout-control/heldclient.py" pf.focus.beta 430x310 \
             <"$OUT/target-second.in" >"$OUT/target-second.log" 2>&1 &
         target_second=$!
-        beta_seen=false
-        for _ in {1..40}; do
-            if python3 - "$OUT/kwin.log" 2>>"$OUT/target-second-wait.log" <<'PY'
-import json, sys
-rows = [json.loads(line.split("layout-probe-focus ", 1)[1])
-        for line in open(sys.argv[1])
-        if line.endswith("\n") and "layout-probe-focus " in line]
-assert any(row["activeClass"] == "pf.focus.beta" and row["activeEligible"] for row in rows)
-PY
-            then
-                beta_seen=true
-                break
-            fi
-            sleep 0.1
-        done
-        [[ $beta_seen == true ]] || return 1
+        wait_second_app_active
         wait_target_settled "$focus_boot" $((generation + 1))
         pfinput "click $validate_x $validate_y"
         target_request=$(wait_target_reply "$focus_boot" validate false "$target_request" -)
@@ -624,30 +683,7 @@ print(JSON.stringify({removedId:removedId,consumer:boot}));
 """)
 PY
         evaljs "$OUT/consumer-remove.js" >"$OUT/consumer-removed.json"
-        consumer_removed=false
-        for _ in {1..40}; do
-            evaljs - >"$OUT/consumer-widgets-after.json" <<'JS'
-var rows=[];
-panels().forEach(function(p){p.widgets('org.plasmafusion.layoutprobe').forEach(function(w){
-    rows.push({id:w.id,type:w.type});
-});});
-print(JSON.stringify(rows));
-JS
-            if python3 - "$OUT/consumer-widgets-after.json" "$OUT/consumer-removed.json" \
-                "$OUT/widgets-created.txt" 2>>"$OUT/consumer-removal-wait.log" <<'PY'
-import json, sys
-rows, removed, owned = [json.load(open(path)) for path in sys.argv[1:]]
-assert len(rows) == 1 and rows[0]["id"] in owned
-assert rows[0]["id"] != removed["removedId"]
-assert rows[0]["type"] == "org.plasmafusion.layoutprobe"
-PY
-            then
-                consumer_removed=true
-                break
-            fi
-            sleep 0.1
-        done
-        [[ $consumer_removed == true ]] || return 1
+        wait_owned_consumer_removed
         competitor_revision=$(python3 - "$OUT/consumer-busy-before.json" <<'PY'
 import json, sys
 print(json.load(open(sys.argv[1]))["packet"]["revision"])
