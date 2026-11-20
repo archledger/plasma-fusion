@@ -422,7 +422,7 @@ process.stdout.write(JSON.stringify({
             events.reverse()
         elif fault == "received-not-accepted":
             events[-1] = ("received", observation)
-        with tempfile.TemporaryDirectory(prefix="pf-target-check-", dir="/tmp/opencode") as scratch:
+        with tempfile.TemporaryDirectory(prefix="pf-target-check-") as scratch:
             root = Path(scratch)
             shell = root / "shell.log"
             shell.write_text("".join(
@@ -468,7 +468,7 @@ class TargetSettleTests(unittest.TestCase):
                                                     "contextGeneration": provider}),
             *pipeline, *tail,
         ]
-        with tempfile.TemporaryDirectory(prefix="pf-settle-", dir="/tmp/opencode") as scratch:
+        with tempfile.TemporaryDirectory(prefix="pf-settle-") as scratch:
             shell = Path(scratch) / "plasmashell.log"
             shell.write_text("qml: layout-probe-observation " + json.dumps(observation) + "\n")
             kwin = Path(scratch) / "kwin.log"

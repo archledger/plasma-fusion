@@ -287,7 +287,7 @@ process.stdout.write(JSON.stringify(frames));
 
 class CompletionSeedTests(unittest.TestCase):
     def setUp(self):
-        scratch = tempfile.TemporaryDirectory(prefix="pf-completion-seed-", dir="/tmp/opencode")
+        scratch = tempfile.TemporaryDirectory(prefix="pf-completion-seed-")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
         self.stage = self.root / "build/stage"
@@ -602,7 +602,7 @@ class CompletionRun:
 
 class CompletionCheckerTests(unittest.TestCase):
     def setUp(self):
-        scratch = tempfile.TemporaryDirectory(prefix="pf-completion-check-", dir="/tmp/opencode")
+        scratch = tempfile.TemporaryDirectory(prefix="pf-completion-check-")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
         write_cleanup_fixture(self.root)

@@ -57,7 +57,7 @@ def write_cleanup_fixture(directory: Path) -> dict:
 
 class CleanupGateTests(unittest.TestCase):
     def setUp(self):
-        self.scratch = tempfile.TemporaryDirectory(prefix="pf-cleanup-gate-", dir="/tmp/opencode")
+        self.scratch = tempfile.TemporaryDirectory(prefix="pf-cleanup-gate-")
         self.addCleanup(self.scratch.cleanup)
         self.root = Path(self.scratch.name)
         (self.root / "scenario.log").write_text("scenario rc=0\nsession rc=0\n")
@@ -176,7 +176,7 @@ class CleanupOwnershipTests(unittest.TestCase):
         self.module = importlib.import_module(
             f"{__package__}.cleanup" if __package__ else "cleanup"
         )
-        self.scratch = tempfile.TemporaryDirectory(prefix="pf-cleanup-owner-", dir="/tmp/opencode")
+        self.scratch = tempfile.TemporaryDirectory(prefix="pf-cleanup-owner-")
         self.addCleanup(self.scratch.cleanup)
         self.records = write_cleanup_fixture(Path(self.scratch.name))
         self.identity = self.records["cleanup-identity.json"]
@@ -416,7 +416,7 @@ class CleanupOwnershipTests(unittest.TestCase):
 
 class CleanupSeedTests(unittest.TestCase):
     def setUp(self):
-        self.scratch = tempfile.TemporaryDirectory(prefix="pf-cleanup-seed-", dir="/tmp/opencode")
+        self.scratch = tempfile.TemporaryDirectory(prefix="pf-cleanup-seed-")
         self.addCleanup(self.scratch.cleanup)
         self.root = Path(self.scratch.name)
         self.stage = self.root / "build/stage"

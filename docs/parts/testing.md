@@ -102,6 +102,10 @@ cases live in `keyboard_entry_tests.py`. They share
 `qml_helpers.py` with the entry point. The driver
 re-exports the classes, preserving existing class selectors and all cases. The support module
 names deliberately do not match `test_*.py`, avoiding duplicate default discovery.
+Cases make their scratch directories in the default temporary directory, which follows `TMPDIR`;
+`ScratchDirectoryTests` rejects a directory fixed in the source, given to a tempfile function or
+assigned to `tempfile.tempdir`: a string literal or a name only ever assigned string literals, as
+the whole value, or inside a larger expression if one of those literals is absolute.
 Package-aware imports also preserve `python3 -m unittest` with the entry file's path.
 Target-mode seeds copy and hash `receipts.py`. The shell wait helpers and their Python tests
 call its `target-reply` and `consumer-state` entry points. Complete-line event/native parsing is

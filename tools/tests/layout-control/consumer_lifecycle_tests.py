@@ -463,7 +463,7 @@ process.stdout.write(JSON.stringify({ready:probe.preparedReady,
             events[-1] = ("received", observation)
         elif fault == "out-of-order":
             events.reverse()
-        with tempfile.TemporaryDirectory(prefix="pf-consumer-check-", dir="/tmp/opencode") as scratch:
+        with tempfile.TemporaryDirectory(prefix="pf-consumer-check-") as scratch:
             root = Path(scratch)
             shell = root / "shell.log"
             shell.write_text("".join(

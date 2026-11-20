@@ -254,7 +254,7 @@ class PipelineSourceTests(unittest.TestCase):
 
 class PipelineSeedTests(unittest.TestCase):
     def setUp(self):
-        scratch = tempfile.TemporaryDirectory(prefix="pf-pipeline-seed-", dir="/tmp/opencode")
+        scratch = tempfile.TemporaryDirectory(prefix="pf-pipeline-seed-")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
         self.stage = self.root / "build/stage"
@@ -420,7 +420,7 @@ class PipelineRun:
 
 class PipelineCheckerTests(unittest.TestCase):
     def setUp(self):
-        scratch = tempfile.TemporaryDirectory(prefix="pf-pipeline-check-", dir="/tmp/opencode")
+        scratch = tempfile.TemporaryDirectory(prefix="pf-pipeline-check-")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
         write_cleanup_fixture(self.root)

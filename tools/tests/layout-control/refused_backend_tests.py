@@ -247,7 +247,7 @@ process.stdout.write(JSON.stringify({authorized:occupier.authorized, accepted:oc
 
 class RefusedSeedTests(unittest.TestCase):
     def setUp(self):
-        scratch = tempfile.TemporaryDirectory(prefix="pf-refused-seed-", dir="/tmp/opencode")
+        scratch = tempfile.TemporaryDirectory(prefix="pf-refused-seed-")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
         self.stage = self.root / "build/stage"
@@ -448,7 +448,7 @@ class RefusedRun:
 
 class RefusedCheckerTests(unittest.TestCase):
     def setUp(self):
-        scratch = tempfile.TemporaryDirectory(prefix="pf-refused-check-", dir="/tmp/opencode")
+        scratch = tempfile.TemporaryDirectory(prefix="pf-refused-check-")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
         write_cleanup_fixture(self.root)

@@ -82,7 +82,7 @@ class LifecycleTargetTests(unittest.TestCase):
         self.runner = runner()
 
     def test_the_seeds_target_flag_selects_target_mode(self):
-        with tempfile.TemporaryDirectory(dir="/tmp/opencode") as scratch:
+        with tempfile.TemporaryDirectory() as scratch:
             home = Path(scratch)
             (home / ".config").mkdir()
             config = home / ".config/kwinrc"
@@ -225,7 +225,7 @@ class LifecycleTargetResultTests(unittest.TestCase):
     """The host-side check recomputes a target run from its raw logs."""
 
     def setUp(self):
-        scratch = tempfile.TemporaryDirectory(prefix="pf-lifecycle-target-", dir="/tmp/opencode")
+        scratch = tempfile.TemporaryDirectory(prefix="pf-lifecycle-target-")
         self.addCleanup(scratch.cleanup)
         self.output = Path(scratch.name)
         self.runner = runner()

@@ -47,7 +47,7 @@ def connections_handler(target: str, name: str) -> str:
 
 class ViewLossSeedTests(unittest.TestCase):
     def setUp(self):
-        scratch = tempfile.TemporaryDirectory(prefix="pf-view-seed-", dir="/tmp/opencode")
+        scratch = tempfile.TemporaryDirectory(prefix="pf-view-seed-")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
         self.stage = self.root / "build/stage"
@@ -785,7 +785,7 @@ class ViewLossFixture:
 
 class ViewLossCheckerTests(unittest.TestCase):
     def setUp(self):
-        scratch = tempfile.TemporaryDirectory(prefix="pf-view-check-", dir="/tmp/opencode")
+        scratch = tempfile.TemporaryDirectory(prefix="pf-view-check-")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
 

@@ -3,8 +3,10 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """P0 safety/receipt checks; event-handler tests also require the repository's Node.js tool."""
 
+import ast
 import hashlib
 import importlib.util
+import inspect
 import json
 import re
 import subprocess
@@ -103,7 +105,7 @@ LIFECYCLE = Path(__file__).with_name("lifecycle.py")
 
 class SeedTests(unittest.TestCase):
     def setUp(self):
-        self.scratch = tempfile.TemporaryDirectory(prefix="pf-layout-seed-", dir="/tmp/opencode")
+        self.scratch = tempfile.TemporaryDirectory(prefix="pf-layout-seed-")
         self.addCleanup(self.scratch.cleanup)
         self.root = Path(self.scratch.name)
         self.stage = self.root / "build/stage"
@@ -393,7 +395,7 @@ class SeedTests(unittest.TestCase):
 
 class LifecycleSafetyTests(unittest.TestCase):
     def setUp(self):
-        self.scratch = tempfile.TemporaryDirectory(prefix="pf-layout-lifecycle-", dir="/tmp/opencode")
+        self.scratch = tempfile.TemporaryDirectory(prefix="pf-layout-lifecycle-")
         self.addCleanup(self.scratch.cleanup)
         self.root = Path(self.scratch.name)
         self.seed = self.root / "build/seed"
@@ -984,7 +986,7 @@ process.stdout.write(JSON.stringify({
             events.insert(2, ("observation", accepted))
         elif fault != "pre-key-online-only":
             events.append(("observation", accepted))
-        with tempfile.TemporaryDirectory(prefix="pf-focus-check-", dir="/tmp/opencode") as scratch:
+        with tempfile.TemporaryDirectory(prefix="pf-focus-check-") as scratch:
             root = Path(scratch)
             shell = root / "shell.log"
             shell.write_text("".join(
@@ -1027,9 +1029,7 @@ class RetirementDeliveryTests(unittest.TestCase):
         scenario = Path(__file__).with_name("scenario-bridge.sh").read_text()
         section = scenario.split("retirement_received=false\n", 1)[1]
         checker = section.split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
-        with tempfile.TemporaryDirectory(
-            prefix="pf-layout-delivery-", dir="/tmp/opencode"
-        ) as scratch:
+        with tempfile.TemporaryDirectory(prefix="pf-layout-delivery-") as scratch:
             root = Path(scratch)
             before = [{"consumer": boot, "observation": {
                 "epoch": "old", "revision": 4, "packet": {"request": 1},
@@ -1061,6 +1061,128 @@ class RetirementDeliveryTests(unittest.TestCase):
         result = self.run_delivery(swapped=True)
         self.assertNotEqual(result.returncode, 0,
                             "packet claims alone certified the wrong receivers")
+
+
+# The tempfile functions that take a directory, and the index of `dir` among their parameters.
+TEMPFILE_DIR_POSITION = {
+    name: list(inspect.signature(getattr(tempfile, name)).parameters).index("dir")
+    for name in ("TemporaryDirectory", "NamedTemporaryFile", "TemporaryFile",
+                 "SpooledTemporaryFile", "mkdtemp", "mkstemp", "mktemp")}
+
+
+def string_names(tree: ast.AST) -> dict[str, set[str]]:
+    """Names the module only ever assigns string literals, with those literals. Any other
+    assignment target, loop or `with` target included, or a parameter of the same name, excludes
+    a name; imports, definitions and `except` or `match` captures are not counted."""
+    literals: dict[str, set[str]] = {}
+    from_literal = set()
+    for node in ast.walk(tree):
+        if (isinstance(node, (ast.Assign, ast.AnnAssign)) and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)):
+            for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
+                if isinstance(target, ast.Name):
+                    literals.setdefault(target.id, set()).add(node.value.value)
+                    from_literal.add(target)
+    bound_otherwise = {node.id for node in ast.walk(tree)
+                       if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store)
+                       and node not in from_literal}
+    bound_otherwise |= {node.arg for node in ast.walk(tree) if isinstance(node, ast.arg)}
+    return {name: values for name, values in literals.items() if name not in bound_otherwise}
+
+
+def fixed_directory(value: ast.expr, names: dict[str, set[str]]) -> bool:
+    """A string literal, or a name only ever assigned string literals, fixes the directory as the
+    whole value; inside a larger expression it does if one of those literals is absolute."""
+    def texts(node: ast.AST) -> set[str]:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return {node.value}
+        return names.get(node.id, set()) if isinstance(node, ast.Name) else set()
+
+    if texts(value):
+        return True
+    return any(text.startswith("/") for part in ast.walk(value) for text in texts(part))
+
+
+def directory_values(node: ast.AST) -> list[ast.expr]:
+    """The directories that a tempfile call or an assignment to `tempfile.tempdir` sets."""
+    if isinstance(node, ast.Call):
+        func = node.func
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+        if name not in TEMPFILE_DIR_POSITION:
+            return []
+        values = [keyword.value for keyword in node.keywords if keyword.arg == "dir"]
+        if len(node.args) > TEMPFILE_DIR_POSITION[name]:
+            values.append(node.args[TEMPFILE_DIR_POSITION[name]])
+        return values
+    if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        if any(isinstance(target, ast.Attribute) and target.attr == "tempdir"
+               and isinstance(target.value, ast.Name) and target.value.id == "tempfile"
+               for target in targets):
+            return [node.value]
+    return []
+
+
+def hard_coded_scratch_directories(source: str) -> list[int]:
+    """Lines that fix a tempfile directory in the source. `dir="."` counts, and so does any string
+    starting with "/" inside the expression, even one that is not a path; None and computed
+    directories do not. Not covered, for example: attributes such as `self.root`, imported names,
+    names assigned an f-string or a concatenation, bytes paths, `**` and starred arguments,
+    home-relative paths, an aliased `tempfile`, patching or `setattr` of `tempfile.tempdir`, and a
+    forced `TMPDIR`."""
+    tree = ast.parse(source)
+    names = string_names(tree)
+    return [node.lineno for node in ast.walk(tree)
+            if any(fixed_directory(value, names) for value in directory_values(node))]
+
+
+class ScratchDirectoryTests(unittest.TestCase):
+    def test_scratch_directories_follow_the_default_temporary_directory(self):
+        # A hard-coded directory fails wherever it is missing; the default one follows TMPDIR.
+        fixed = [f"{path.name}:{line}" for path in sorted(PREPARER.parent.glob("*.py"))
+                 for line in hard_coded_scratch_directories(path.read_text())]
+        self.assertEqual(fixed, [])
+
+    def test_a_directory_fixed_in_the_source_is_found_in_any_form(self):
+        for case, source in {
+            "a string": 'tempfile.TemporaryDirectory(dir="/tmp/x")',
+            "a relative string": 'tempfile.TemporaryFile(dir="scratch")',
+            "a bare name": 'TemporaryDirectory(dir="/tmp/x")',
+            # Only the directory's slot holds a string, so a wrong index cannot land on another.
+            "positional": 'tempfile.mkdtemp(None, None, "/tmp/x")',
+            "positional, later":
+                'tempfile.NamedTemporaryFile(None, -1, None, None, None, None, "/x")',
+            "a module constant": 'SCRATCH = "/tmp/x"\ntempfile.mkstemp(dir=SCRATCH)',
+            "an annotated constant": 'SCRATCH: str = "/tmp/x"\ntempfile.mkstemp(dir=SCRATCH)',
+            "a local name": 'def f():\n    base = "/tmp/x"\n    tempfile.mkdtemp(dir=base)',
+            "a name assigned two strings":
+                'base = "/tmp/a"\nbase = "/tmp/b"\ntempfile.mkdtemp(dir=base)',
+            "a path": 'tempfile.mkdtemp(dir=Path("/tmp/x"))',
+            "a constant inside a path": 'ROOT = "/tmp"\ntempfile.mkdtemp(dir=Path(ROOT, name))',
+            "a join": 'tempfile.SpooledTemporaryFile(dir=os.path.join("/tmp", name))',
+            "an f-string": 'tempfile.mktemp(dir=f"/tmp/{name}")',
+            "the module default": 'tempfile.tempdir = "/tmp/x"',
+        }.items():
+            with self.subTest(case=case):
+                self.assertEqual(hard_coded_scratch_directories(source), [source.count("\n") + 1])
+
+    def test_a_computed_or_default_directory_is_allowed(self):
+        for case, source in {
+            "the default": 'tempfile.TemporaryDirectory(prefix="pf-")',
+            "computed": "tempfile.mkdtemp(dir=self.output)",
+            "inside a computed one": 'tempfile.mkstemp(dir=Path(self.root, "sub"))',
+            "a relative constant inside a computed one":
+                'SUB = "sub"\ntempfile.mkdtemp(dir=Path(self.root, SUB))',
+            "a name also bound otherwise":
+                'base = "/tmp/x"\nbase = Path(scratch)\ntempfile.mkdtemp(dir=base)',
+            "a parameter": 'BASE = "/tmp/x"\ndef f(BASE):\n    tempfile.mkdtemp(dir=BASE)',
+            "None": "tempfile.TemporaryDirectory(dir=None)",
+            "another function": 'shutil.copytree(source, "/tmp/x")',
+            "another object's tempdir": 'settings.tempdir = "/tmp/x"',
+            "another tempfile setting": 'tempfile.template = "pf-"',
+        }.items():
+            with self.subTest(case=case):
+                self.assertEqual(hard_coded_scratch_directories(source), [])
 
 
 if __name__ == "__main__":

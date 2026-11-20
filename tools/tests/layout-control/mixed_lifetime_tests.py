@@ -26,7 +26,7 @@ MIXED = Path(__file__).with_name("mixed_lifetime.py")
 
 class MixedLifetimeSeedTests(unittest.TestCase):
     def setUp(self):
-        scratch = tempfile.TemporaryDirectory(prefix="pf-mixed-seed-", dir="/tmp/opencode")
+        scratch = tempfile.TemporaryDirectory(prefix="pf-mixed-seed-")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
         self.stage = self.root / "build/stage"
@@ -141,7 +141,7 @@ class MixedLifetimeSnapshotTests(unittest.TestCase):
             packet["targetContext"] = None
         elif fault == "duplicate-native-id":
             pass
-        with tempfile.TemporaryDirectory(prefix="pf-mixed-memory-", dir="/tmp/opencode") as scratch:
+        with tempfile.TemporaryDirectory(prefix="pf-mixed-memory-") as scratch:
             root = Path(scratch)
             inventory = [{"id": 8, "request": query, "response": packet}]
             if fault == "duplicate-native-id":
@@ -399,7 +399,7 @@ class MixedLifetimeReceiptTests(unittest.TestCase):
 
     def run_check(self, fault=None, *, survivor_lease_changed=False, replacement_retry=False,
                   unsolicited_prepare=False, early_recovery=False, defer_recovery=None):
-        with tempfile.TemporaryDirectory(prefix="pf-mixed-check-", dir="/tmp/opencode") as scratch:
+        with tempfile.TemporaryDirectory(prefix="pf-mixed-check-") as scratch:
             root = Path(scratch)
             self.fixture(root, survivor_lease_changed=survivor_lease_changed,
                          replacement_retry=replacement_retry, unsolicited_prepare=unsolicited_prepare,
@@ -632,7 +632,7 @@ class MixedLifetimeReceiptTests(unittest.TestCase):
         ).returncode, 0)
 
     def test_restoration_boundary_cannot_be_silently_replaced_by_a_later_attempt(self):
-        with tempfile.TemporaryDirectory(prefix="pf-mixed-boundary-", dir="/tmp/opencode") as scratch:
+        with tempfile.TemporaryDirectory(prefix="pf-mixed-boundary-") as scratch:
             root = Path(scratch)
             self.fixture(root)
             path = root / "mixed-restored-boundary.json"
@@ -646,7 +646,7 @@ class MixedLifetimeReceiptTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), original)
 
     def test_generated_frames_write_only_the_captured_current_widget_lifetimes(self):
-        with tempfile.TemporaryDirectory(prefix="pf-mixed-frame-", dir="/tmp/opencode") as scratch:
+        with tempfile.TemporaryDirectory(prefix="pf-mixed-frame-") as scratch:
             root = Path(scratch)
             self.fixture(root)
             expected = json.loads((root / "mixed-frames.json").read_text())
@@ -678,7 +678,7 @@ const panels=()=>[{widgets:()=>controls}];
             })
 
     def test_frame_generation_never_overwrites_a_previous_injection_record(self):
-        with tempfile.TemporaryDirectory(prefix="pf-mixed-frame-", dir="/tmp/opencode") as scratch:
+        with tempfile.TemporaryDirectory(prefix="pf-mixed-frame-") as scratch:
             root = Path(scratch)
             self.fixture(root)
             previous = (root / "mixed-frames.json").read_bytes()
@@ -691,7 +691,7 @@ const panels=()=>[{widgets:()=>controls}];
             self.assertEqual((root / "mixed-frames.json").read_bytes(), previous)
 
     def test_runtime_partial_checks_and_final_scope_use_the_same_raw_qualifier(self):
-        with tempfile.TemporaryDirectory(prefix="pf-mixed-runtime-", dir="/tmp/opencode") as scratch:
+        with tempfile.TemporaryDirectory(prefix="pf-mixed-runtime-") as scratch:
             root = Path(scratch)
             self.fixture(root)
             for mode in ("late", "refusal", "progress", "check"):
