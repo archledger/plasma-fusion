@@ -1138,6 +1138,30 @@ Offline (laptop):
    answers each end the read and keep the requests and refusals; after a retirement nothing is
    read, they stay, and the shell's late answers reach neither them nor the journal. The driver
    counts the journal's lines.
+   A run (`scenario: "publication"`) drives the publication side on the real script, with a
+   second output on the session's desktop and activity. The first read's five rows - two
+   requests on the session's output, one on the second output, one for an output KWin does not
+   have, one refused - get one call on the read's connection, whose script, run against fake
+   panels as the shell would, writes each clock widget's response field (General group) with
+   exactly the frame wanted, a hostile consumer label intact and no raw line separator in the
+   code. A wake and a state change during that publication wait for it; the toggle then goes to
+   the two widgets on the session's view and never to the one on the second output; a read with
+   nothing new writes nothing; an untoggle during a read goes out at the read's end; a widget no
+   longer read is forgotten and, read again, told again alone; a new request is answered alone,
+   at the same revision; a failed publication lets the wake during it read and writes its frame
+   again; another shell is told everything. With the session on, a bar on its output but another
+   desktop, then one on its output and desktop but another activity, are not tiled, and the
+   second output on a desktop of its own is told that one (`currentDesktopForScreen`); off and
+   on in one turn tell nothing, and two changes in one turn go out once. The retirement, with
+   that publication still outstanding, moves the revision, sends the offline frame to all five,
+   then releases the name; a change queued before it publishes nothing, and the late answers -
+   the outstanding publication's among them - reach nothing.
+   The refused-provider run reads one request and gets an online answer that is not capable,
+   and the unload rows check that the name goes last, after the offline state's revision, with
+   no frame when no request was read. The driver counts each publication's line with its frames
+   and what the shell wrote, the failed one's and the offline frames' once each. Every run's
+   setup returns the engine's one stand-in Workspace to its declared outputs and desktops,
+   whatever an earlier run left (a second display, a desktop of an output's own).
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
 bus, 1440x900). Seeds: `packages/kwin/tests/vsession/make-seed.sh STAGE_HOME SEED dark|light`
@@ -2036,8 +2060,8 @@ and KWin does not is a failure only hardware shows.
 The bars' layout controls (the workspace layout control, `SPEC-workspace-layout-control.md`)
 are to learn from this script whether supported tiling is available and whether a session is
 on for their view; the script stays the only authority. `contents/ui/LayoutProvider.qml` keeps
-that state for it, the lifetime's identity name on the session bus, and the requests the bars
-send. Nothing is answered yet: the publication comes in a later step.
+that state for it, the lifetime's identity name on the session bus, the requests the bars send
+and the answers it publishes to them.
 
 - `capable` is the native verdict while online, and false while offline. The script binds the
   verdict (`nativeCapable`): the writer accepted the registration (`nativeWriter`), the memory
@@ -2066,9 +2090,10 @@ send. Nothing is answered yet: the publication comes in a later step.
   connection, KWin's - is read (`GetNameOwner`), and only a unique connection name makes the
   identity ready and is kept as its owner (`selfOwner`, set before `identityReady`, so whatever
   reacts to the flag finds the owner). `retire()` releases it (`ReleaseName`) with the name it
-  stored, dropping a request still pending, so nothing of a torn-down context is looked up and
-  a late answer reaches nothing. A name not granted, or an owner that cannot be read, is said
-  once and leaves the lifetime without an identity; none of it moves the revision.
+  stored, last - after the offline frame (below) - dropping a request still pending, so nothing
+  of a torn-down context is looked up and a late answer reaches nothing. A name not granted, or
+  an owner that cannot be read, is said once and leaves the lifetime without an identity; none
+  of it moves the revision.
 - The requests come the probe's way too. A bar's clock (`org.plasmafusion.clockpill`) is to save
   its request in its `layoutRequest` field (General group) and wake the provider with "Plasma
   Fusion: Refresh Layout Controls", a shortcut with no key; no clock sends one yet. The provider
@@ -2084,8 +2109,37 @@ send. Nothing is answered yet: the publication comes in a later step.
   reason - `version`, `intent` or `output` (`refusals`); a row without one is dropped. A read
   that finds no shell - no owner, or one that is no unique connection - ends quietly; one the
   shell fails or answers malformed is said once; either keeps the last requests and refusals. A
-  read that comes back says what it found. Nothing is answered yet, and a retirement ends a read
-  in flight: the answers that come after it reach nothing.
+  read that comes back says what it found. A retirement ends a read in flight: the answers that
+  come after it reach nothing.
+- The answers go back the same way. Each request and refusal of the last read gets a frame in
+  its clock's `layoutResponse` field (General group), and a publication writes all its frames
+  with one `evaluateScript` call on the connection the requests came from. A frame says
+  `version` 1, the `consumer` and `request` it answers, the provider's lifetime - `epoch` (the
+  label), `identityName` and `backendOwner` (the identity's owner, KWin's connection, which a
+  bar checks against the bus) - and the state's `revision` and `status` (`online`); then
+  `capable`, `view` - the bar's view as the provider resolves it from the bar's output: that
+  output's current desktop (`currentDesktopForScreen`), the current activity and the output's
+  name, or null for an output KWin does not have - and `tiled`, whether a session tiles that
+  view. A refused request's frame carries `refused` and its reason instead of the state. No
+  window, title or token travels; the frames go as JSON data, the two line separators an older
+  engine does not take raw in a string escaped. A provider that is not capable answers all the
+  same, with `capable` false: the bars learn it from the authority rather than from a deadline,
+  for one frame per new request. A widget is written again only when what its frame says
+  changes - a new request, a state change, its view, another shell connection - or when it
+  comes back to the read after leaving it (the record keeps only the widgets read), so a read
+  that finds nothing new publishes nothing (decision 1). One publication at a time, never
+  during a read: a state change waits for the end of its turn and for the pipeline - the
+  changes of one turn go out once, and ones that end where they began tell nothing - and the
+  wakes during a publication make one read after it. A publication that comes back is said
+  once, with its frames, how many the shell wrote and how long it took from the call to its
+  answer - an upper bound of the time the shell took no input (decision 1); a failed one is
+  said once and changes no record, so its frames go out with the next publication. The
+  retirement moves the revision, sends the offline frame (`status` offline, nothing capable or
+  tiled) to every request and refusal it kept, then releases the name; nothing that answers
+  after it reaches anything. A view is resolved at each publication, so a frame written for
+  another reason carries the bar's view as it is then, at the same revision: a change of a view
+  alone moves nothing yet - a later step moves the revision for it - nor does any limit apply
+  to a publication's length yet.
 
 ### What it rides
 

@@ -511,6 +511,15 @@ Item {
     }
 
     Component.onCompleted: {
+        if (scenario === "publication") {
+            try {
+                runPublication();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
         if (scenario === "read-pipeline") {
             try {
                 runReadPipeline();
@@ -658,6 +667,10 @@ Item {
     // The view and the three windows, before any script.
     function setupView() {
         const ws = KWinStubs.Workspace;
+        // The stand-in Workspace is the engine's: every run starts from its declared outputs and
+        // desktops, whatever an earlier run left (a second display, a desktop of an output's own).
+        ws.screens = Qt.binding(() => [ws.activeScreen]);
+        ws.outputDesktops = ({});
         // The view: desktop {id: 11}, activity "a", the stub's single screen.
         const desktop = { id: 11 };
         firstDesktop = desktop;
@@ -825,6 +838,437 @@ Item {
                                               outputName: "Virtual-1" }, extra || {}));
     }
 
+    // The layout provider's writer script as plasmashell runs it: each panel lists its widgets
+    // by applet id, and a widget writes its config in the group it was given. Fakes stand in
+    // for them; what the script printed, and every write it made.
+    function runWriterScript(script, panelWidgets) {
+        let printed = null;
+        const writes = [];
+        const panelsFake = () => panelWidgets.map(widgets => ({
+            widgets: type => widgets.filter(w => w.type === type).map(w => ({
+                id: w.id, currentConfigGroup: [],
+                writeConfig: function (key, value) {
+                    writes.push({ id: w.id, group: JSON.stringify(this.currentConfigGroup), key: key, value: value });
+                }
+            }))
+        }));
+        (new Function("panels", "print", script))(panelsFake, text => { printed = text; });
+        return { printed: printed, writes: writes };
+    }
+
+    // A value as JSON with its keys sorted at every level, to compare frames whatever order
+    // their fields were made in.
+    function canonical(value) {
+        if (value === null || value === undefined || typeof value !== "object") {
+            return JSON.stringify(value === undefined ? null : value);
+        }
+        if (Array.isArray(value)) {
+            return "[" + value.map(canonical).join(",") + "]";
+        }
+        return "{" + Object.keys(value).sort().map(key => JSON.stringify(key) + ":" + canonical(value[key])).join(",") + "}";
+    }
+
+    // The frames the writer's call `index` carries, by widget, as the shell stores them when
+    // the clock's widgets `ids` are on a panel.
+    function framesOf(p, index, ids) {
+        const frames = {};
+        if (!p.writer || index >= p.writer.callLog.length) {
+            return frames;
+        }
+        const run = runWriterScript(p.writer.callLog[index][0],
+                                    [ids.map(id => ({ type: "org.plasmafusion.clockpill", id: id }))]);
+        for (const write of run.writes) {
+            frames[write.id] = JSON.parse(write.value);
+        }
+        return frames;
+    }
+
+    // The frame an online provider sends a row: the version, the request it answers, the
+    // provider's lifetime and the state's order, then `fields` (the state, or the refusal).
+    function frameWanted(p, row, fields) {
+        return Object.assign({ version: 1, consumer: row.consumer, request: row.request, epoch: p.label,
+                               identityName: p.identityName, backendOwner: ":1.42", revision: p.revision,
+                               status: "online" }, fields);
+    }
+
+    // The publication side of the layout provider's pipeline, on the real script: each request
+    // and refusal the last read found is answered in its clock's response field, by one shell
+    // script call on the connection the requests came from; a frame says whether a session tiles
+    // the bar's own view - its output, that output's current desktop, the current activity - and
+    // no other; a widget is written again only when what its frame says changes - a new request,
+    // a state change, its view, a new shell, or its return to the read - and never during a read
+    // or another publication, the wakes and state changes meanwhile waiting and coalescing; a
+    // failed publication changes no record and lets the pipeline go on; the retirement sends the
+    // offline frame to every request and refusal it kept, then releases the name.
+    function runPublication() {
+        if (setup() === "") {
+            done = true;
+            return;
+        }
+        const ws = KWinStubs.Workspace;
+        const p = provider;
+        const w = p.writer;
+        if (!w || w.calls !== 0 || !p.capable) {
+            fail("publication: a capable provider whose writer has written nothing yet (writer " + (w ? w.calls : "none")
+                 + ", capable " + p.capable + ")");
+            done = true;
+            return;
+        }
+        // A second output, on the same desktop and activity: a bar there shares everything with
+        // the session's view but its output.
+        const second = { name: "Virtual-2", geometry: Qt.rect(1440, 0, 1440, 900), devicePixelRatio: 1 };
+        ws.screens = [ws.activeScreen, second];
+        const otherDesktop = { id: 12 };
+        DBusStubs.SessionBus.answer(expectIdentityRequest("publication", p), [{ value: 1 }]);
+        p.identityLookup.finished([":1.42"]);
+        p.shellLookup.finished([":1.9"]);
+        const hostile = "q\"'\\\n</s>${x}\u2028\u2029";
+        const rows = [
+            { id: 1, consumer: "c1", request: 1, version: 1, intent: "query", outputName: "Virtual-1" },
+            { id: 3, consumer: hostile, request: 3, version: 1, intent: "query", outputName: "Virtual-1" },
+            { id: 5, consumer: "c5", request: 5, version: 1, intent: "query", outputName: "Gone-1" },
+            { id: 12, consumer: "c12", request: 12, version: 2, intent: "query", outputName: "Virtual-1" },
+            { id: 21, consumer: "c21", request: 21, version: 1, intent: "query", outputName: "Virtual-2" }
+        ];
+        // The rows as the clocks hold them now: a later step renews one request at a time.
+        const current = rows.map(row => Object.assign({}, row));
+        const renew = (id, request) => {
+            current.find(row => row.id === id).request = request;
+        };
+        const now = () => JSON.stringify(current);
+        const row = id => current.find(entry => entry.id === id);
+        if (w.calls !== 0) {
+            fail("publication: nothing is published before the read comes back (writes " + w.calls + ")");
+        }
+        p.reader.finished([now()]);
+        // One publication, right after the read, to the connection the requests came from.
+        if (w.calls !== 1 || w.service !== ":1.9" || w.path !== "/PlasmaShell" || w.dbusInterface !== "org.kde.PlasmaShell"
+                || w.method !== "evaluateScript" || w.callLog[0].length !== 1) {
+            fail("publication: the read's answers go out by evaluateScript on the connection the requests came from (got "
+                 + w.calls + " " + w.service + " " + w.path + " " + w.dbusInterface + " " + w.method + ")");
+            done = true;
+            return;
+        }
+        // The writer script, run as the shell runs it: the clock's widgets only, each in the General
+        // group's response field, the frames carried as data (no raw line separator in the code).
+        const script = w.callLog[0][0];
+        if (/[\u2028\u2029]/.test(script)) {
+            fail("publication: the writer script carries no raw line separator: the frames travel as data");
+        }
+        const clock = "org.plasmafusion.clockpill";
+        const run = runWriterScript(script, [
+            [{ type: clock, id: 1 }, { type: "org.kde.plasma.digitalclock", id: 3 }, { type: clock, id: 3 }],
+            [{ type: clock, id: 5 }, { type: clock, id: 12 }, { type: clock, id: 99 }, { type: clock, id: 21 }]
+        ]);
+        const general = JSON.stringify(["General"]);
+        const targets = run.writes.map(write => [write.id, write.group, write.key]);
+        if (JSON.stringify(targets) !== JSON.stringify([[1, general, "layoutResponse"], [3, general, "layoutResponse"],
+                                                       [5, general, "layoutResponse"], [12, general, "layoutResponse"],
+                                                       [21, general, "layoutResponse"]])
+                || String(run.printed) !== "5") {
+            fail("publication: the clock's widgets that asked are written, each in its response field, and counted (got "
+                 + JSON.stringify(targets) + ", printed " + run.printed + ")");
+        }
+        // Each frame: the version, the request it answers, the provider's lifetime, the state's
+        // order and the state - the capability, the bar's view as the provider resolves it from
+        // the bar's output (none for an output it does not know) and whether a session tiles it;
+        // a refusal carries its reason instead of the state. Nothing else.
+        const view = { desktopId: "11", activityId: "a", outputName: "Virtual-1" };
+        const secondView = { desktopId: "11", activityId: "a", outputName: "Virtual-2" };
+        const first = {};
+        for (const write of run.writes) {
+            first[write.id] = JSON.parse(write.value);
+        }
+        const wanted = {
+            1: frameWanted(p, rows[0], { capable: true, view: view, tiled: false }),
+            3: frameWanted(p, rows[1], { capable: true, view: view, tiled: false }),
+            5: frameWanted(p, rows[2], { capable: true, view: null, tiled: false }),
+            12: frameWanted(p, rows[3], { refused: "version" }),
+            21: frameWanted(p, rows[4], { capable: true, view: secondView, tiled: false })
+        };
+        for (const id of [1, 3, 5, 12, 21]) {
+            if (canonical(first[id]) !== canonical(wanted[id])) {
+                fail("publication: the frame for widget " + id + " (got " + canonical(first[id]) + ", not "
+                     + canonical(wanted[id]) + ")");
+            }
+        }
+        const atFirst = p.revision;
+        // While it is outstanding a wake reads nothing and a state change publishes nothing.
+        p.wake.activated();
+        if (p.shellLookup.calls !== 1) {
+            fail("publication: no read starts while a publication is outstanding (lookups " + p.shellLookup.calls + ")");
+        }
+        tileShortcut.activated();
+        if (!p.active || p.revision !== atFirst + 1) {
+            fail("publication: the toggle started a session (active " + p.active + ", revision " + p.revision + ")");
+        }
+        const all = [1, 3, 5, 12, 21];
+        const ids = frames => JSON.stringify(Object.keys(frames).sort());
+        // A session on Virtual-1 tiles widgets 1 and 3's view, never 21's on Virtual-2.
+        const sessionTold = got => ids(got) === JSON.stringify(["1", "3"]) && got[1].tiled === true && got[3].tiled === true;
+        let since = Date.now();
+        steps = [
+            { name: "a state change waits for the publication", until: () => Date.now() - since >= 100, run: function () {
+                if (w.calls !== 1) {
+                    fail("publication: a state change waits for the outstanding publication (writes " + w.calls + ")");
+                }
+                // The shell says it wrote four of the five: the count is said with the publication.
+                w.finished([4]);
+                // Then it goes out, to the widgets it changes and only those: the bars on the
+                // session's view, not the one on the other output.
+                const got = framesOf(p, 1, all);
+                if (w.calls !== 2 || !sessionTold(got)
+                        || canonical(got[1]) !== canonical(frameWanted(p, rows[0], { capable: true, view: view, tiled: true }))
+                        || canonical(got[3]) !== canonical(frameWanted(p, rows[1], { capable: true, view: view, tiled: true }))) {
+                    fail("publication: a session on the bars' view is told to the widgets it changes, once the publication"
+                         + " answered, and to no bar on another output (writes " + w.calls + ", got " + canonical(got) + ")");
+                }
+                since = Date.now();
+            } },
+            { name: "the wake waits for every publication", until: () => Date.now() - since >= 100, run: function () {
+                if (p.shellLookup.calls !== 1) {
+                    fail("publication: the wake waits while a publication is outstanding (lookups " + p.shellLookup.calls + ")");
+                }
+                w.finished([2]);
+            } },
+            { name: "the wake's read", until: () => p.shellLookup.calls === 2, run: function () {
+                // The same requests and the same state: nothing is written again.
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([now()]);
+                if (w.calls !== 2 || p.reading || p.publishing) {
+                    fail("publication: a read that finds nothing new publishes nothing (writes " + w.calls + ")");
+                }
+                p.wake.activated();
+            } },
+            { name: "a state change during a read", until: () => p.shellLookup.calls === 3, run: function () {
+                p.shellLookup.finished([":1.9"]);
+                // The read is in flight: the untoggle waits for its end.
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "the read's end releases it", until: () => Date.now() - since >= 100, run: function () {
+                if (w.calls !== 2) {
+                    fail("publication: a state change waits for the read in flight (writes " + w.calls + ")");
+                }
+                p.reader.finished([now()]);
+                const got = framesOf(p, 2, all);
+                if (w.calls !== 3 || ids(got) !== JSON.stringify(["1", "3"]) || got[1].tiled !== false || got[3].tiled !== false) {
+                    fail("publication: the untoggle goes out at the read's end, to the widgets it changes (writes " + w.calls
+                         + ", got " + canonical(got) + ")");
+                }
+                w.finished([2]);
+                p.wake.activated();
+            } },
+            { name: "a widget that left the read", until: () => p.shellLookup.calls === 4, run: function () {
+                // Widget 5 is not read (its request went): nothing to tell, and its record goes.
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([JSON.stringify(current.filter(entry => entry.id !== 5))]);
+                if (w.calls !== 3 || p.sent[5] !== undefined || p.sent[1] === undefined) {
+                    fail("publication: a widget no longer read is told nothing and forgotten (writes " + w.calls + ", record "
+                         + JSON.stringify(Object.keys(p.sent)) + ")");
+                }
+                p.wake.activated();
+            } },
+            { name: "a widget that came back", until: () => p.shellLookup.calls === 5, run: function () {
+                // Read again, it is told again, and alone.
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([now()]);
+                const got = framesOf(p, 3, all);
+                if (w.calls !== 4 || ids(got) !== JSON.stringify(["5"])
+                        || canonical(got[5]) !== canonical(frameWanted(p, rows[2], { capable: true, view: null, tiled: false }))) {
+                    fail("publication: a widget read again is told again, alone (writes " + w.calls + ", got " + canonical(got) + ")");
+                }
+                w.finished([1]);
+                p.wake.activated();
+            } },
+            { name: "a new request", until: () => p.shellLookup.calls === 6, run: function () {
+                p.shellLookup.finished([":1.9"]);
+                renew(1, 2);
+                p.reader.finished([now()]);
+                // Answered alone, with the state as it stands (the revision has not moved).
+                const got = framesOf(p, 4, all);
+                if (w.calls !== 5 || ids(got) !== JSON.stringify(["1"])
+                        || canonical(got[1]) !== canonical(frameWanted(p, row(1), { capable: true, view: view, tiled: false }))) {
+                    fail("publication: a new request is answered alone, with the state as it stands (writes " + w.calls
+                         + ", got " + canonical(got) + ")");
+                }
+                // A wake during it, then the publication fails: the failure changes no record and the
+                // pipeline goes on - the wake's read follows, and writes the frame again.
+                p.wake.activated();
+                w.failed();
+                if (p.publishing) {
+                    fail("publication: a failed publication ends");
+                }
+            } },
+            { name: "the read after a failed publication", until: () => p.shellLookup.calls === 7, run: function () {
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([now()]);
+                if (w.calls !== 6 || ids(framesOf(p, 5, all)) !== JSON.stringify(["1"])) {
+                    fail("publication: what a failed publication said is written again (writes " + w.calls + ")");
+                }
+                w.finished([1]);
+                p.wake.activated();
+            } },
+            { name: "a new shell", until: () => p.shellLookup.calls === 8, run: function () {
+                // Another shell connection was told nothing: every frame goes to it.
+                p.shellLookup.finished([":1.10"]);
+                p.reader.finished([now()]);
+                if (w.calls !== 7 || w.service !== ":1.10" || ids(framesOf(p, 6, all)) !== JSON.stringify(["1", "12", "21", "3", "5"])) {
+                    fail("publication: a new shell is told every frame (writes " + w.calls + " to " + w.service + ")");
+                }
+                w.finished([5]);
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "the toggle", until: () => w.calls === 8 || Date.now() - since >= 300, run: function () {
+                const got = framesOf(p, 7, all);
+                if (w.calls !== 8 || !sessionTold(got)) {
+                    fail("publication: the toggle is told to the bars on its view, not to the one on another output (writes "
+                         + w.calls + ", got " + canonical(got) + ")");
+                }
+                w.finished([2]);
+                // The session's output switches to another desktop (the session stays where it
+                // was), and widget 3 asks again.
+                ws.outputDesktops = { "Virtual-1": otherDesktop };
+                renew(3, 4);
+                p.wake.activated();
+            } },
+            { name: "a desktop switch on the session's output", until: () => p.shellLookup.calls === 9, run: function () {
+                p.shellLookup.finished([":1.10"]);
+                p.reader.finished([now()]);
+                // The bars there are on another desktop now: nothing of theirs is tiled. (Widget
+                // 1's frame changed without a state change: its view moved.)
+                const got = framesOf(p, 8, all);
+                if (w.calls !== 9 || ids(got) !== JSON.stringify(["1", "3"]) || got[1].tiled !== false || got[3].tiled !== false
+                        || got[1].view.desktopId !== "12" || got[3].request !== 4) {
+                    fail("publication: a bar on the session's output but another desktop is not tiled (writes " + w.calls
+                         + ", got " + canonical(got) + ")");
+                }
+                w.finished([2]);
+                // The desktop back, the activity switched, and widget 1 asks again.
+                ws.outputDesktops = ({});
+                ws.currentActivity = "b";
+                renew(1, 3);
+                p.wake.activated();
+            } },
+            { name: "an activity switch", until: () => p.shellLookup.calls === 10, run: function () {
+                p.shellLookup.finished([":1.10"]);
+                p.reader.finished([now()]);
+                const got = framesOf(p, 9, all);
+                if (w.calls !== 10 || ids(got) !== JSON.stringify(["1", "21", "3"])
+                        || [1, 3, 21].some(id => got[id].tiled !== false || got[id].view.activityId !== "b")) {
+                    fail("publication: a bar on the session's output and desktop but another activity is not tiled (writes "
+                         + w.calls + ", got " + canonical(got) + ")");
+                }
+                w.finished([3]);
+                // The activity back; the second output on a desktop of its own; widget 21 asks again.
+                ws.currentActivity = "a";
+                ws.outputDesktops = { "Virtual-2": otherDesktop };
+                renew(21, 22);
+                p.wake.activated();
+            } },
+            { name: "a desktop of the output's own", until: () => p.shellLookup.calls === 11, run: function () {
+                p.shellLookup.finished([":1.10"]);
+                p.reader.finished([now()]);
+                // Each output's own current desktop: 21's is the other one; 1 and 3 are back on
+                // the session's view.
+                const got = framesOf(p, 10, all);
+                if (w.calls !== 11 || ids(got) !== JSON.stringify(["1", "21", "3"]) || got[1].tiled !== true
+                        || got[3].tiled !== true || canonical(got[21]) !== canonical(frameWanted(p, row(21), {
+                            capable: true, view: { desktopId: "12", activityId: "a", outputName: "Virtual-2" }, tiled: false }))) {
+                    fail("publication: each bar's view is its own output's current desktop (writes " + w.calls + ", got "
+                         + canonical(got) + ")");
+                }
+                w.finished([3]);
+                // Off and on in one turn: nothing new to tell (every view stays as it was told).
+                tileShortcut.activated();
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "off and on in one turn", until: () => Date.now() - since >= 200, run: function () {
+                if (w.calls !== 11) {
+                    fail("publication: changes that end where they began tell nothing (writes " + w.calls + ")");
+                }
+                // The session's end and the capability lost in one turn: one publication, of the
+                // state both left.
+                tileShortcut.activated();
+                p.nativeCapable = false;
+                since = Date.now();
+            } },
+            { name: "two changes in one turn", until: () => w.calls > 11 || Date.now() - since >= 300, run: function () {
+                const got = framesOf(p, 11, all);
+                if (w.calls !== 12 || ids(got) !== JSON.stringify(["1", "21", "3", "5"]) || got[1].capable !== false
+                        || got[1].tiled !== false || got[5].capable !== false || got[21].capable !== false
+                        || got[1].revision !== p.revision) {
+                    fail("publication: two changes in one turn go out once, as they left the state (writes " + w.calls
+                         + ", got " + canonical(got) + ")");
+                }
+                since = Date.now();
+            } },
+            { name: "the retirement", until: () => Date.now() - since >= 100, run: function () {
+                if (w.calls !== 12 || !p.publishing) {
+                    fail("publication: one publication for two changes in one turn, still outstanding (writes " + w.calls + ")");
+                }
+                // With that publication outstanding and a change right before it, the retirement
+                // ends the one and drops the other's publication: it moves the revision, sends the
+                // offline frame to every request and refusal it kept, on the connection they came
+                // from - whatever is in flight there - then releases the name.
+                const order = [];
+                p.revisionChanged.connect(() => {
+                    if (!p.online) {
+                        order.push("revision");
+                    }
+                });
+                w.callsChanged.connect(() => order.push("frame"));
+                p.identityRelease.callsChanged.connect(() => order.push("release"));
+                tileShortcut.activated();
+                p.retire();
+                if (JSON.stringify(order) !== JSON.stringify(["revision", "frame", "release"])) {
+                    fail("publication: the retirement moves the revision, then sends the offline frame, then releases the name"
+                         + " (got " + JSON.stringify(order) + ")");
+                }
+                const got = framesOf(p, 12, all);
+                for (const kept of current) {
+                    const offline = { version: 1, consumer: kept.consumer, request: kept.request, epoch: p.label,
+                                      identityName: p.identityName, backendOwner: ":1.42", revision: p.revision,
+                                      status: "offline", capable: false, view: null, tiled: false };
+                    if (canonical(got[kept.id]) !== canonical(offline)) {
+                        fail("publication: the offline frame for widget " + kept.id + " (got " + canonical(got[kept.id])
+                             + ", not " + canonical(offline) + ")");
+                    }
+                }
+                if (w.calls !== 13 || w.service !== ":1.10" || p.publishing) {
+                    fail("publication: the offline frame goes out once, where the requests came from, and ends the"
+                         + " publication in flight (writes " + w.calls + " to " + w.service + ", publishing " + p.publishing + ")");
+                }
+                since = Date.now();
+            } },
+            { name: "after the retirement", until: () => Date.now() - since >= 200, run: function () {
+                // The change queued before the retirement published nothing, and late answers -
+                // the outstanding publication's among them - reach nothing.
+                if (w.calls !== 13) {
+                    fail("publication: a change queued before the retirement publishes nothing (writes " + w.calls + ")");
+                }
+                w.finished([4]);
+                w.failed();
+                p.shellLookup.failed();
+                p.reader.finished([now()]);
+                p.wake.activated();
+                if (w.calls !== 13 || p.shellLookup.calls !== 11 || p.publishing || p.reading) {
+                    fail("publication: after the retirement nothing is published or read (writes " + w.calls + ", lookups "
+                         + p.shellLookup.calls + ")");
+                }
+                // The stand-in Workspace is the engine's: its outputs, desktops and activity as the
+                // later runs expect them.
+                ws.screens = Qt.binding(() => [ws.activeScreen]);
+                ws.outputDesktops = ({});
+                ws.currentActivity = "a";
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
+
     // The read side of the layout provider's pipeline, on the real script: a dedicated wake
     // shortcut with no key; one read once the identity is ready and for each later wake, the
     // wakes during a read coalesced into one later read; the shell's owner looked up first and
@@ -927,6 +1371,12 @@ Item {
             { id: 18, consumer: "c18", request: 0, version: 1, intent: "query", outputName: "Virtual-1" }
         ]);
         r.finished([answer]);
+        // The read's answers go out at once (the publication run checks them); answered here, so
+        // the pipeline goes on.
+        if (p.writer.calls !== 1) {
+            fail("read-pipeline: the read's answers go out once (writes " + p.writer.calls + ")");
+        }
+        p.writer.finished([7]);
         const requests = JSON.stringify(p.requests.map(q => [q.id, q.consumer, q.request, q.outputName]));
         if (requests !== JSON.stringify([[1, "c1", 1, "Virtual-1"], [3, hostile, 3, "Virtual-1"]])) {
             fail("read-pipeline: the version-1 queries for a named output are the requests (got " + requests + ")");
@@ -1290,8 +1740,20 @@ Item {
                 expectProvider("refused-provider", { revision: 1 }, 0, { online: true, capable: false, active: false });
                 expectOwnLabel("refused-provider", facade.providerAnswer);
                 // The identity marks the lifetime, not the capability: an incapable provider
-                // asks for its name all the same.
-                expectIdentityRequest("refused-provider", provider);
+                // asks for its name all the same - and answers the bars all the same: online, not
+                // capable, nothing tiled.
+                DBusStubs.SessionBus.answer(expectIdentityRequest("refused-provider", provider), [{ value: 1 }]);
+                provider.identityLookup.finished([":1.42"]);
+                provider.shellLookup.finished([":1.9"]);
+                const asked = { id: 1, consumer: "c1", request: 1, version: 1, intent: "query", outputName: "Virtual-1" };
+                provider.reader.finished([JSON.stringify([asked])]);
+                const told = framesOf(provider, 0, [1]);
+                const unsupported = frameWanted(provider, asked, {
+                    capable: false, view: { desktopId: "11", activityId: "a", outputName: "Virtual-1" }, tiled: false });
+                if (!provider.writer || provider.writer.calls !== 1 || canonical(told[1]) !== canonical(unsupported)) {
+                    fail("refused-provider: an incapable provider answers a request, online and not capable (got "
+                         + canonical(told[1]) + ", not " + canonical(unsupported) + ")");
+                }
                 if (script.providerToken !== "") {
                     fail("refused-provider: a refused registration keeps no token (got " + script.providerToken + ")");
                 }
@@ -1364,14 +1826,15 @@ Item {
                 }
                 asked = facadeCalls.length;
                 revisionBeforeUnload = provider ? provider.revision : 0;
-                // What the retirement released, read as it moves the revision (the provider is
-                // gone once the unload is over).
+                // What the retirement released, read as it releases (the provider is gone once the
+                // unload is over): the revision already moved for the offline state, and no
+                // offline frame went out, as no request was read.
                 const retiring = provider;
                 identityAtUnload = retiring.identityName;
-                retiring.revisionChanged.connect(() => {
-                    if (!retiring.online) {
-                        releasedAtRetire = [].concat(retiring.identityRelease.callLog);
-                    }
+                // (On callLogChanged: the stand-in counts a call before it logs its arguments.)
+                retiring.identityRelease.callLogChanged.connect(() => {
+                    releasedAtRetire = { log: [].concat(retiring.identityRelease.callLog), revision: retiring.revision,
+                                         online: retiring.online, frames: retiring.writer ? retiring.writer.calls : -1 };
                 });
                 unloadWanted = true;
             } },
@@ -1400,10 +1863,13 @@ Item {
                          + " capability or session (before " + revisionBeforeUnload + ", got " + JSON.stringify(last) + ")");
                 }
                 // The identity name is released once, by the retirement, with the name it stored:
-                // nothing of a torn-down context is looked up for it.
-                if (JSON.stringify(releasedAtRetire) !== JSON.stringify([[identityAtUnload]])) {
-                    fail("unload" + (unloadVacated ? " (vacated)" : "") + ": the retirement releases the identity name once"
-                         + " (got " + JSON.stringify(releasedAtRetire) + ")");
+                // nothing of a torn-down context is looked up for it. It goes last, after the
+                // offline state's revision.
+                if (!releasedAtRetire || JSON.stringify(releasedAtRetire.log) !== JSON.stringify([[identityAtUnload]])
+                        || releasedAtRetire.revision !== revisionBeforeUnload + 1 || releasedAtRetire.online
+                        || releasedAtRetire.frames !== 0) {
+                    fail("unload" + (unloadVacated ? " (vacated)" : "") + ": the retirement releases the identity name once,"
+                         + " after the offline state's revision, with no frame to send (got " + JSON.stringify(releasedAtRetire) + ")");
                 }
                 // Nothing of the script answers anything any more.
                 const gone = facadeCalls.length;

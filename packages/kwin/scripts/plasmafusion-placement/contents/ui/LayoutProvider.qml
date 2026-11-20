@@ -12,8 +12,8 @@ import org.kde.plasma.workspace.dbus as DBus
 // trust (the workspace layout control, P1). The script stays the only authority: it binds
 // `nativeCapable` to its native verdict and hands the session in where the tiler starts or ends
 // one (main.qml, tiler.reportSession). This object keeps that state, its revision, a lifetime
-// label and the lifetime's identity name on the session bus; it is never given the native
-// token.
+// label and the lifetime's identity name on the session bus, reads the bars' requests and
+// answers them; it is never given the native token.
 //
 // Read the state on revisionChanged: a change sets the fields first and moves the revision
 // last, once.
@@ -30,8 +30,10 @@ QtObject {
     // Whether supported tiling is available: the verdict while online, false while offline, so
     // no state carries a capability that changed after its revision.
     property bool capable: false
-    // The state's order: 1 at start(), then one step for each change of what a reader is
-    // told - capability, the session or its view, going offline - and none otherwise.
+    // The state's order: 1 at start(), then one step for each change of the provider's state -
+    // capability, the session or its view, going offline - and none otherwise. A bar's frame
+    // also carries the bar's own view, which for now changes without a step (a later step moves
+    // the revision for it too).
     property int revision: 0
     // The session, and the view it tiles as a bar names one.
     property bool active: false
@@ -138,6 +140,46 @@ QtObject {
         onFailed: provider.readFailed()
     }
 
+    // What the bars are told (the probe's transport, publication side): a frame per request in
+    // the clock's own response field (`layoutResponse`, General group), all of them written by
+    // one shell script call on the connection the requests came from. A frame names the protocol
+    // version and the request it answers, the provider's lifetime - its label (`epoch`), identity
+    // name and owner, which a bar checks against the bus - and the state's order and status; then
+    // the capability and the bar's view as the provider resolves it from the bar's output, with
+    // whether a session tiles it, or for a refused request its reason. Nothing of a window
+    // travels, and never the native token.
+    readonly property string responseField: "layoutResponse"
+    // The connection the last read came from: its answers go there.
+    property string replyOwner: ""
+    // What each widget was last told there, without the revision: a widget whose frame would say
+    // the same is not written again (decision 1: publish only for a new request or a changed
+    // state). The connection it was told on; another is told everything.
+    property var sent: ({})
+    property string sentOwner: ""
+    // One publication at a time and never during a read: whether one is due, and the one in
+    // flight - its frames and when it went out, for its length.
+    property bool publishing: false
+    property bool publicationDue: false
+    property var pending: null
+
+    property DBusCall writer: DBusCall {
+        path: "/PlasmaShell"
+        dbusInterface: "org.kde.PlasmaShell"
+        method: "evaluateScript"
+        onFinished: value => provider.publicationFinished(String(value[0]))
+        onFailed: provider.publicationFailed()
+    }
+
+    // A state change is told once the changes of its turn are done: the untoggle reports the
+    // session's end before it restores the windows, and a press on another desktop ends one
+    // session and starts the next - one publication says where they left the state.
+    onRevisionChanged: {
+        if (online) {
+            publicationDue = true;
+            Qt.callLater(provider.releaseDue);
+        }
+    }
+
     // The identity's arrival is the first read: the requests the clocks saved before this
     // lifetime are read too, and the wakes that came before it are that read.
     onIdentityReadyChanged: {
@@ -221,12 +263,13 @@ QtObject {
     }
 
     // A read: the shell's owner first, then the clocks' requests from that connection. None
-    // before the identity is ready (its arrival reads) or once offline, and one at a time.
+    // before the identity is ready (its arrival reads) or once offline, and one at a time, never
+    // during a publication (decision 1's serialized pipeline).
     function scan(): void {
         if (!online) {
             return;
         }
-        if (!identityReady || reading) {
+        if (!identityReady || reading || publishing) {
             again = true;
             return;
         }
@@ -296,6 +339,17 @@ QtObject {
         }
         requests = accepted;
         refusals = refused;
+        // The answers go where the requests came from, and the record keeps only the widgets
+        // read; what is new goes out once the read is over.
+        replyOwner = reader.service;
+        const read = {};
+        for (const row of accepted.concat(refused)) {
+            if (sent[row.id] !== undefined) {
+                read[row.id] = sent[row.id];
+            }
+        }
+        sent = read;
+        publicationDue = true;
         console.info("plasmafusion-placement: layout provider: read " + accepted.length + " request(s), "
                      + refused.length + " refused");
         finishRead();
@@ -322,19 +376,148 @@ QtObject {
 
     function finishRead(): void {
         reading = false;
+        continuePipeline();
+    }
+
+    // The pipeline's next step once a read or a publication is over: a publication that is due,
+    // then the read the wakes meanwhile asked for.
+    function continuePipeline(): void {
+        releaseDue();
         if (again) {
             again = false;
             Qt.callLater(provider.scan);
         }
     }
 
-    // The script is going: offline, with no capability or session left to report, and the
-    // identity name released - a request still pending is dropped, so its answer reaches
-    // nothing. Nothing moves after this.
+    function releaseDue(): void {
+        if (!online || !identityReady || reading || publishing || !publicationDue) {
+            return;
+        }
+        publicationDue = false;
+        publish();
+    }
+
+    // The frames that say something new, in one call to the connection the requests came from.
+    function publish(): void {
+        if (!replyOwner.startsWith(":")) {
+            return;
+        }
+        if (sentOwner !== replyOwner) {
+            sent = ({});
+            sentOwner = replyOwner;
+        }
+        const messages = [];
+        for (const row of requests.concat(refusals)) {
+            const frame = frameFor(row);
+            const said = JSON.stringify(Object.assign({}, frame, { revision: 0 }));
+            if (sent[row.id] !== said) {
+                messages.push({ id: row.id, packet: JSON.stringify(frame), said: said });
+            }
+        }
+        if (messages.length === 0) {
+            return;
+        }
+        pending = { messages: messages, at: Date.now() };
+        publishing = true;
+        write(replyOwner, messages);
+    }
+
+    function frameFor(row: var): var {
+        const frame = { version: 1, consumer: row.consumer, request: row.request, epoch: label,
+                        identityName: identityName, backendOwner: selfOwner, revision: revision,
+                        status: "online" };
+        if (row.reason !== undefined) {
+            frame.refused = row.reason;
+            return frame;
+        }
+        const view = viewOf(row.outputName);
+        frame.capable = capable;
+        frame.view = view;
+        frame.tiled = active && view !== null && view.desktopId === desktopId
+            && view.activityId === activityId && view.outputName === outputName;
+        return frame;
+    }
+
+    // A bar's view as KWin has it now: the output of that name, its current desktop and the
+    // current activity; none for an output KWin does not have.
+    function viewOf(name: string): var {
+        const outputs = Workspace.screens.filter(output => String(output.name) === name);
+        if (outputs.length !== 1) {
+            return null;
+        }
+        const desktop = Workspace.currentDesktopForScreen(outputs[0]);
+        if (!desktop || desktop.id === undefined || desktop.id === null || String(desktop.id) === "") {
+            return null;
+        }
+        return { desktopId: String(desktop.id), activityId: String(Workspace.currentActivity), outputName: name };
+    }
+
+    function write(destination: string, messages: var): void {
+        writer.service = destination;
+        writer.arguments = [writerScript(messages)];
+        writer.call();
+    }
+
+    // The writer: the frames as data - JSON text, which is JavaScript but for the two line
+    // separators an engine before ES2019 does not take raw in a string, so those go escaped -
+    // matched to the clock's widgets by id. It prints how many it wrote.
+    function writerScript(messages: var): string {
+        let data = JSON.stringify(messages.map(message => ({ id: message.id, packet: message.packet })));
+        for (const code of [0x2028, 0x2029]) {
+            data = data.split(String.fromCharCode(code)).join("\\" + "u" + code.toString(16));
+        }
+        return "var messages=" + data + ",written=0;"
+            + "panels().forEach(function(p) {"
+            + "p.widgets('" + requestApplet + "').forEach(function(w) {"
+            + "messages.forEach(function(m) {"
+            + "if(w.id===m.id){w.currentConfigGroup=['General'];w.writeConfig('" + responseField
+            + "',m.packet);++written;}"
+            + "}); }); });"
+            + "print(written);";
+    }
+
+    // A publication came back: what it carried is what those widgets were told. It is said with
+    // how many the shell wrote - fewer, a widget had gone - and its length from call to answer,
+    // an upper bound of the time the shell took no input (decision 1).
+    function publicationFinished(written: string): void {
+        if (!online || !publishing) {
+            return;
+        }
+        const done = pending;
+        pending = null;
+        publishing = false;
+        const told = Object.assign({}, sent);
+        for (const message of done.messages) {
+            told[message.id] = message.said;
+        }
+        sent = told;
+        console.info("plasmafusion-placement: layout provider: published " + done.messages.length + " frame(s), "
+                     + written + " written, in " + (Date.now() - done.at) + " ms");
+        continuePipeline();
+    }
+
+    // A failed publication is said once and changes no record: what it carried goes out again
+    // with the next publication.
+    function publicationFailed(): void {
+        if (!online || !publishing) {
+            return;
+        }
+        pending = null;
+        publishing = false;
+        console.warn("plasmafusion-placement: layout provider: the bars' layout state could not be published");
+        continuePipeline();
+    }
+
+    // The script is going: offline, with no capability or session left to report, the bars
+    // told so, and the identity name released - a request still pending is dropped, so its
+    // answer reaches nothing. Nothing moves after this.
     function retire(): void {
         if (!online) {
             return;
         }
+        // The offline frame names the owner the lifetime's frames named; with no identity, none
+        // went out.
+        const owner = identityReady ? selfOwner : "";
         online = false;
         capable = false;
         active = false;
@@ -343,17 +526,38 @@ QtObject {
         outputName = "";
         identityReady = false;
         selfOwner = "";
-        // A read in flight ends here, and its answers reach nothing; the last requests stay as
-        // the recipients of what is said at the end.
+        // A read or a publication in flight ends here, and its answers reach nothing; the last
+        // requests stay as the recipients of what is said at the end.
         reading = false;
         again = false;
+        publishing = false;
+        publicationDue = false;
+        pending = null;
         if (registration) {
-            const pending = registration;
+            const request = registration;
             registration = null;
-            pending.destroy();
+            request.destroy();
+        }
+        // The offline state, then its frame - to every request and refusal kept, on the
+        // connection they came from, whatever is in flight there, which carries an older state -
+        // and only then the name's release, as the layout probe did.
+        revision += 1;
+        if (owner !== "") {
+            sendOffline(owner);
         }
         identityRelease.arguments = [identityName];
         identityRelease.call();
-        revision += 1;
+    }
+
+    function sendOffline(owner: string): void {
+        const rows = requests.concat(refusals);
+        if (!replyOwner.startsWith(":") || rows.length === 0) {
+            return;
+        }
+        write(replyOwner, rows.map(row => ({ id: row.id, packet: JSON.stringify({
+            version: 1, consumer: row.consumer, request: row.request, epoch: label,
+            identityName: identityName, backendOwner: owner, revision: revision, status: "offline",
+            capable: false, view: null, tiled: false }) })));
+        console.info("plasmafusion-placement: layout provider: sent " + rows.length + " offline frame(s)");
     }
 }
