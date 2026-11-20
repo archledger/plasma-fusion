@@ -18,7 +18,8 @@
     maximized, settled at the next toggle - and the admission's retries.
     A third (scenario: "unload") unloads the script mid-session as KWin unloads a declarative
     script: the driver makes it in a context of its own and deletes that context first
-    (KWinScript in tiling_lifecycle_test.py).
+    (KWinScript in tiling_lifecycle_test.py). Another (scenario: "refused-provider") has the
+    writer refuse the provider registration with the fork's null UUID.
     Context properties from the driver: packagesRoot (a directory holding
     scripts/plasmafusion-placement), config prefill through the KWin context object.
 */
@@ -58,6 +59,8 @@ Item {
     property int stepIndex: 0
     property var problems: []
     property var facadeCalls: []
+    // The facade's read-only calls, apart: the runs' exact facadeCalls lists stay as they are.
+    property var readCalls: []
     property var snapshot: ({})
     property var script: null
     property var tileShortcut: null
@@ -93,15 +96,22 @@ Item {
         return fakeWindow.createObject(harness, over);
     }
 
-    // The mock facade: every method the script can call, each one recorded in facadeCalls, and
-    // no method the fork's facade does not have (kwin src/scripting/transienttilingapi.h) - a
-    // call the mock answers and the compositor cannot is a failure only hardware would show.
+    // The mock facade: every method the script can call, each one recorded - in facadeCalls, or
+    // in readCalls for the read-only ones (floatingFrame, windowBinding, snapshot, hasTree,
+    // masterWindowRect) - and no method the fork's facade does not have (kwin
+    // src/scripting/transienttilingapi.h) - a call the mock answers and the compositor cannot is
+    // a failure only hardware would show.
     // createTile also snapshots the stack windows' geometry at call time - invariant 8 (the
     // native admission before any stack write) is checkable from that snapshot.
     QtObject {
         id: facade
         property bool refuseCreate: false
         property bool refuseAdmit: false
+        // The token the mock grants, as the fork writes one (a braced UUID), and what
+        // registerProvider answers: that token, or the fork's refusal (scenario
+        // "refused-provider").
+        readonly property string grantedToken: "{5d3c9a1e-7b2f-4c6d-8e9a-0b1c2d3e4f5a}"
+        property string providerAnswer: grantedToken
         // The native admission can land the window on the tile before it returns (a client
         // whose size already fits needs no configure): the mock then moves the window inside
         // admitTile.
@@ -215,7 +225,7 @@ Item {
             let result = 0;
             if (!held) {
                 result = 1;
-            } else if (token !== "harness-token") {
+            } else if (token !== grantedToken) {
                 result = 2;
             } else if (held.provider !== undefined && held.provider !== token && !successorSettle) {
                 result = 2; // a fork that keeps the record to the provider that admitted the window
@@ -237,12 +247,13 @@ Item {
         }
         // The record's floating frame, owned or released; null without a record.
         function floatingFrame(w) {
+            harness.readCalls = harness.readCalls.concat([{ op: "floatingFrame" }]);
             const f = floatings[String(window(w).internalId)];
             return f ? Qt.rect(f.x, f.y, f.width, f.height) : Qt.rect(0, 0, 0, 0);
         }
         function registerProvider(item) {
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "registerProvider" }]);
-            return "harness-token";
+            return providerAnswer;
         }
         function trackWindow(w, key) {
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "trackWindow", window: String(w.internalId), key: key }]);
@@ -265,6 +276,7 @@ Item {
             return true;
         }
         function windowBinding(w) {
+            harness.readCalls = harness.readCalls.concat([{ op: "windowBinding" }]);
             const key = tracked[String(w.internalId)];
             return key === undefined ? "" : key;
         }
@@ -277,9 +289,18 @@ Item {
             }
             return 0; // Accepted
         }
-        function snapshot() { return { entries: entries }; }
-        function hasTree() { return treeAlive; }
-        function masterWindowRect() { return masterRect; }
+        function snapshot() {
+            harness.readCalls = harness.readCalls.concat([{ op: "snapshot" }]);
+            return { entries: entries };
+        }
+        function hasTree() {
+            harness.readCalls = harness.readCalls.concat([{ op: "hasTree" }]);
+            return treeAlive;
+        }
+        function masterWindowRect() {
+            harness.readCalls = harness.readCalls.concat([{ op: "masterWindowRect" }]);
+            return masterRect;
+        }
         // A record the native layer keeps of a window, which the script under test knows
         // nothing of: a release left the window where it stands before the script was loaded.
         function keepRecord(w, floating) {
@@ -471,6 +492,15 @@ Item {
     }
 
     Component.onCompleted: {
+        if (scenario === "refused-provider") {
+            try {
+                runRefusedProvider();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
         if (scenario === "stranded") {
             try {
                 runStranded();
@@ -642,6 +672,90 @@ Item {
         return masterKey;
     }
 
+    // The writer refuses the provider registration as the fork does while another provider holds
+    // its slot or the writer is busy: the facade answers a null QUuid's text. The memory stays
+    // disabled for the session and takes no other transport: it never loads - the gate of every
+    // write, record and toggle and of the teardown write - so no window is tracked or recorded,
+    // no shell script call goes out, and a toggle starts no tree. A record an earlier instance
+    // left stays held: settling it needs the registration. The run checks past the script's
+    // longest delayed call (flush and readRetry, 2 s) that the writer heard nothing but the
+    // registration, read-only calls included; the driver reads the calls again after the run.
+    function runRefusedProvider() {
+        facade.providerAnswer = "{00000000-0000-0000-0000-000000000000}";
+        setupView();
+        const floatA = facade.plain(winA.frameGeometry);
+        const managed = facade.plain(facade.masterRect);
+        winA.frameGeometry = Qt.rect(managed.x, managed.y, managed.width, managed.height);
+        const held = facade.heldRecords;
+        held.a = { target: managed, floating: floatA, placedByUser: false,
+                   provider: "earlier-token" };
+        facade.heldRecords = held;
+        const floats = facade.floatings;
+        floats.a = floatA;
+        facade.floatings = floats;
+        const base = "file://" + packagesRoot + "/scripts/plasmafusion-placement/contents/ui/";
+        const component = Qt.createComponent(base + "main.qml");
+        if (component.status !== Component.Ready) {
+            fail("refused-provider: main.qml did not load: " + component.errorString());
+            done = true;
+            return;
+        }
+        script = component.createObject(harness);
+        if (!script) {
+            fail("refused-provider: the script was not made");
+            done = true;
+            return;
+        }
+        // The legacy transport's calls: the script's evaluateScript DBusCalls.
+        const shellScriptCalls = () => {
+            let count = 0;
+            for (let i = 0; i < script.data.length; ++i) {
+                const child = script.data[i];
+                if (child && child.method === "evaluateScript") {
+                    count += child.calls;
+                }
+            }
+            return count;
+        };
+        for (let i = 0; i < script.data.length; ++i) {
+            const child = script.data[i];
+            if (child && child.name === "Plasma Fusion: Tile Workspace") {
+                tileShortcut = child;
+            }
+        }
+        if (!tileShortcut) {
+            fail("refused-provider: the Tile Workspace shortcut was not registered");
+            done = true;
+            return;
+        }
+        let since = 0;
+        steps = [
+            { name: "a toggle", run: function () {
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "past the script's delayed calls", until: () => Date.now() - since >= 2500, run: function () {
+                if (script.loaded || !script.nativeRefused) {
+                    fail("refused-provider: the memory stays unloaded and refused (loaded " + script.loaded
+                         + ", nativeRefused " + script.nativeRefused + ")");
+                }
+                const ops = JSON.stringify(facadeCalls.map(c => c.op));
+                if (ops !== JSON.stringify(["registerProvider"])) {
+                    fail("refused-provider: registerProvider is the only recorded facade call (got " + ops + ")");
+                }
+                if (readCalls.length !== 0) {
+                    fail("refused-provider: a refused provider reads nothing of the writer (got "
+                         + JSON.stringify(readCalls.map(c => c.op)) + ")");
+                }
+                if (shellScriptCalls() !== 0) {
+                    fail("refused-provider: no shell script call replaces the refused native writer");
+                }
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
+
     // The script unloaded mid-session as KWin unloads a declarative script: the object that
     // owns it goes, and with it, first, the script's own context with the KWin context
     // property, so the script's Component.onDestruction runs while that context is being torn
@@ -792,7 +906,7 @@ Item {
                 tileShortcut.activated();
             } },
             { name: "the toggle answered", until: () => strandedSuccessor ? !!winA.tile : admitsOfA().length >= 1 + script.admitRetryLimit, run: function () {
-                const answers = JSON.stringify(admitsOfA().map(c => c.token === "harness-token"));
+                const answers = JSON.stringify(admitsOfA().map(c => c.token === facade.grantedToken));
                 if (strandedSuccessor) {
                     if (!winA.tile || calls("admitTile").length !== 1) {
                         fail("stranded: the window is admitted at the first toggle (admissions " + calls("admitTile").length + ")");
@@ -886,7 +1000,7 @@ Item {
         if (admitted[0].window !== "master" || admitted[0].key !== masterKey) {
             fail("the master was admitted under its app key (got " + admitted[0].window + "/" + admitted[0].key + ")");
         }
-        if (admitted[0].token !== "harness-token") {
+        if (admitted[0].token !== facade.grantedToken) {
             fail("admitTile carried the provider token (got " + admitted[0].token + ")");
         }
         if (admitted[0].generation !== created[0].generation) {

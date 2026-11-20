@@ -222,6 +222,33 @@ check((interim_counts or {}).get("createTile") == 2 and (interim_counts or {}).g
       "interim facade: one refused admission, one session started and restored, got %s" % interim_counts)
 retire(interim, "interim facade")
 
+# A run against a writer that refuses the provider registration as the fork does while another
+# provider holds its slot or the writer is busy (a null QUuid's text): the memory stays disabled
+# for the session and takes no other transport, and a toggle starts no tree. The harness checks
+# the calls past the script's longest delayed call; the journal says the refusal once and never
+# claims the registration.
+before = len(messages)
+refused_provider = run_harness({"scenario": "refused-provider"})
+for problem in list(refused_provider.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+check(sum("the writer refused the provider registration" in message for message in journal) == 1,
+      "refused-provider: the refusal was said once")
+check(not any("registered as the placement provider" in message for message in journal),
+      "refused-provider: a null UUID is not a registration")
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "refused-provider: a refused provider throws nothing, got %s" % thrown)
+# Read again run_harness's 1.3 s after the run, which ends 2.5 s after its toggle: the
+# registration is the only thing a refused provider asks of the writer, read-only calls included.
+refused_calls = refused_provider.property("facadeCalls").toVariant() or []
+refused_ops = [call.get("op") for call in refused_calls]
+check(refused_ops == ["registerProvider"],
+      "refused-provider: registerProvider is the only recorded facade call, got %s" % refused_ops)
+refused_reads = [call.get("op") for call in refused_provider.property("readCalls").toVariant() or []]
+check(not refused_reads, "refused-provider: a refused provider reads nothing of the writer, got %s"
+      % refused_reads)
+retire(refused_provider, "refused-provider")
+
 # A third run: the master a native teardown released without restoring it (a removed desktop, a
 # second window of its app, a move of the master). The harness asserts the geometry, the settle
 # answers and the records step by step; the journal lines are checked here.

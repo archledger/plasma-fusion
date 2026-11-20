@@ -493,7 +493,14 @@ holding the record until then. A facade without the question (an older fork) nev
 either: those windows keep their records in the session cache. When the
 writer refuses the provider registration — or the facade exists but answers nothing — the
 memory stays disabled for the session — a native
-session must not bypass the sole native writer. The native lane runs only on the fork's KWin;
+session must not bypass the sole native writer. The writer grants a random UUID, which the
+facade answers as text with its braces; it refuses with the null UUID while another provider
+holds its slot or it is busy, and the facade answers with empty text when there is no writer at
+all. Only a well-formed UUID other than the null one counts as a registration
+(`Placement.providerRefused`, the rule `providerAccepted` in
+`tools/tests/layout-control/provider.qml` applies). The dynamic tiler is off with the memory:
+its shortcut starts no session while the memory has not loaded.
+The native lane runs only on the fork's KWin;
 the session scenarios in CI exercise the stock and backport lanes, which take the legacy
 transport, and the node suite drives the registration, identity-binding, refused-binding,
 event-sequence and reconciliation rules (`packages/kwin/tests/placement.test.js`). On stock KWin or older forks
@@ -1048,7 +1055,10 @@ Offline (laptop):
    the memory has the window's own place), the native
    `treeChanged`
    teardown (floats back, no release of an ended tree, the next toggle lays out again) and a
-   refused tree (no admission, no geometry write); two runs (`scenario: "unload"`) make the
+   refused tree (no admission, no geometry write); a run (`scenario: "refused-provider"`) has the
+   writer refuse the provider registration with the fork's null UUID (the memory never loads;
+   2.5 s after a toggle, past the script's 2 s timers, the writer has had no other call, read-only
+   ones included, and no shell script call went out); two runs (`scenario: "unload"`) make the
    script as KWin makes a declarative script - its own context with the `KWin` property,
    owned with the component and the root object by one object (`KWinScript`) - and unload it
    the same way, the context first, past the memory's quiet second: once in a live session,
