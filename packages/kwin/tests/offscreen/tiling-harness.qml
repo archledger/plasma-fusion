@@ -31,6 +31,7 @@
 
 import QtQuick
 import org.kde.kwin as KWinStubs
+import org.kde.plasma.workspace.dbus as DBusStubs
 
 Item {
     id: harness
@@ -756,6 +757,33 @@ Item {
         }
     }
 
+    // A provider's RequestName calls on the stand-in session bus. One engine runs every
+    // scenario, so a run's own are those for its provider's name.
+    function identityRequests(p) {
+        return DBusStubs.SessionBus.calls.filter(c => c.message.member === "RequestName" && c.message.arguments
+                                                 && c.message.arguments[0] === p.identityName);
+    }
+
+    // One RequestName, as the layout probe asks for its own name: for the name the lifetime
+    // label makes, to the bus itself, without queueing (flag 4), with an explicit signature so
+    // the plugin sends the flags as a uint32. The pending reply, for the test to answer.
+    function expectIdentityRequest(what, p) {
+        if (p.identityName !== "org.plasmafusion.LayoutProvider.p" + p.label) {
+            fail(what + ": the identity name is the prefix and the lifetime label (got " + p.identityName + ")");
+        }
+        const requests = identityRequests(p);
+        if (requests.length !== 1) {
+            fail(what + ": one RequestName for the identity name (got " + requests.length + ")");
+            return null;
+        }
+        const m = requests[0].message;
+        if (m.service !== "org.freedesktop.DBus" || m.path !== "/org/freedesktop/DBus" || m.iface !== "org.freedesktop.DBus"
+                || m.signature !== "(su)" || m.arguments.length !== 2 || m.arguments[1] !== 4) {
+            fail(what + ": RequestName goes to the bus without queueing, (su) with flag 4 (got " + JSON.stringify(m) + ")");
+        }
+        return requests[0].reply;
+    }
+
     // A lifetime label that owes nothing to the native token (P0's probe once derived it from
     // the token, so every refused lifetime shared one).
     function expectOwnLabel(what, token) {
@@ -790,6 +818,12 @@ Item {
         p.start();
         expect("start()", "1|true|true|false|||");
         follow(p);
+        // A name the bus refuses (another connection holds it) is no identity: nothing is
+        // looked up.
+        DBusStubs.SessionBus.answer(expectIdentityRequest("provider-rules", p), [{ value: 3 }]);
+        if (p.identityLookup.calls !== 0 || p.identityReady) {
+            fail("provider-rules: a refused name is no identity, and nothing is looked up");
+        }
         p.setSession(false, "", "", "");
         expect("a report that changes nothing", "1|true|true|false|||");
         p.setSession(true, "11", "a", "Virtual-1");
@@ -807,11 +841,91 @@ Item {
         p.setSession(true, "11", "a", "Virtual-1");
         p.start();
         expect("nothing after retire()", "5|false|false|false|||");
+        // The name is released once, by the first retire(), granted or not.
+        if (JSON.stringify(p.identityRelease.callLog) !== JSON.stringify([[p.identityName]])) {
+            fail("provider-rules: retire() releases the name once (got " + JSON.stringify(p.identityRelease.callLog) + ")");
+        }
         const other = component.createObject(harness);
         if (!/^[0-9a-f]{32}$/.test(p.label) || other.label === p.label) {
             fail("provider-rules: each instance draws a label of its own (" + p.label + ", " + other.label + ")");
         }
+        if (identityRequests(other).length !== 0 || other.identityRelease.calls !== 0) {
+            fail("provider-rules: a provider that never started asks for no name and releases none");
+        }
         other.destroy();
+        // A granted name whose owner cannot be read is no identity either.
+        const unread = component.createObject(harness);
+        unread.start();
+        DBusStubs.SessionBus.answer(expectIdentityRequest("provider-rules (unread owner)", unread), [{ value: 1 }]);
+        unread.identityLookup.failed();
+        if (unread.identityLookup.calls !== 1 || unread.identityReady || unread.selfOwner !== "") {
+            fail("provider-rules: a name whose owner cannot be read is no identity");
+        }
+        unread.retire();
+        unread.destroy();
+        // A bus error is no identity.
+        const denied = component.createObject(harness);
+        denied.start();
+        DBusStubs.SessionBus.answer(expectIdentityRequest("provider-rules (bus error)", denied), [],
+                                    "org.freedesktop.DBus.Error.AccessDenied");
+        if (denied.identityLookup.calls !== 0 || denied.identityReady) {
+            fail("provider-rules: a bus error is no identity, and nothing is looked up");
+        }
+        denied.retire();
+        denied.destroy();
+        // An owner that is no unique connection name is no identity.
+        const odd = component.createObject(harness);
+        odd.start();
+        DBusStubs.SessionBus.answer(expectIdentityRequest("provider-rules (odd owner)", odd), [{ value: 1 }]);
+        odd.identityLookup.finished(["org.example.NotUnique"]);
+        if (odd.identityReady || odd.selfOwner !== "") {
+            fail("provider-rules: an owner that is no unique connection name is no identity, and is not kept (got "
+                 + odd.identityReady + ", " + odd.selfOwner + ")");
+        }
+        odd.retire();
+        odd.destroy();
+        // A held identity goes with the retirement, and an owner read that arrives after it
+        // makes none.
+        const held = component.createObject(harness);
+        // The owner is set before the flag: whatever reacts to identityReady finds it.
+        let ownerAtReady = null;
+        held.identityReadyChanged.connect(() => {
+            if (held.identityReady) {
+                ownerAtReady = held.selfOwner;
+            }
+        });
+        held.start();
+        DBusStubs.SessionBus.answer(expectIdentityRequest("provider-rules (held)", held), [{ value: 1 }]);
+        held.identityLookup.finished([":1.7"]);
+        if (!held.identityReady || held.selfOwner !== ":1.7" || ownerAtReady !== ":1.7") {
+            fail("provider-rules: a granted name with its owner is the identity, the owner set before the flag (got "
+                 + held.identityReady + ", " + held.selfOwner + ", at the flag " + ownerAtReady + ")");
+        }
+        held.retire();
+        if (held.identityReady || held.selfOwner !== "") {
+            fail("provider-rules: the retirement ends the identity");
+        }
+        held.destroy();
+        const lateOwner = component.createObject(harness);
+        lateOwner.start();
+        DBusStubs.SessionBus.answer(expectIdentityRequest("provider-rules (late owner)", lateOwner), [{ value: 1 }]);
+        lateOwner.retire();
+        lateOwner.identityLookup.finished([":1.8"]);
+        if (lateOwner.identityReady || lateOwner.selfOwner !== "") {
+            fail("provider-rules: an owner read after the retirement makes no identity");
+        }
+        lateOwner.destroy();
+        // A retirement before the answer drops the pending request: a late answer reaches
+        // nothing.
+        const early = component.createObject(harness);
+        early.start();
+        const earlyReply = expectIdentityRequest("provider-rules (early retirement)", early);
+        early.retire();
+        DBusStubs.SessionBus.answer(earlyReply, [{ value: 1 }]);
+        if (early.registration !== null || early.identityLookup.calls !== 0 || early.identityReady) {
+            fail("provider-rules: a retirement drops the pending request, and a late answer reaches nothing");
+        }
+        early.destroy();
         done = true;
     }
 
@@ -829,6 +943,7 @@ Item {
             fail("late-memory: the memory waits for the writer's answer");
         }
         expectProvider("late-memory: at start", { revision: 1 }, 0, { online: true, capable: false, active: false });
+        expectIdentityRequest("late-memory: at start", provider);
         let before = providerState();
         steps = [
             { name: "a toggle before the memory loaded", run: function () {
@@ -933,6 +1048,9 @@ Item {
                 // one), and the refusal's text is not kept as a token.
                 expectProvider("refused-provider", { revision: 1 }, 0, { online: true, capable: false, active: false });
                 expectOwnLabel("refused-provider", facade.providerAnswer);
+                // The identity marks the lifetime, not the capability: an incapable provider
+                // asks for its name all the same.
+                expectIdentityRequest("refused-provider", provider);
                 if (script.providerToken !== "") {
                     fail("refused-provider: a refused registration keeps no token (got " + script.providerToken + ")");
                 }
@@ -962,6 +1080,8 @@ Item {
         let asked = 0;
         let toggledAt = 0;
         let revisionBeforeUnload = 0;
+        let identityAtUnload = "";
+        let releasedAtRetire = null;
         steps = [
             { name: "the script as KWin makes it", until: () => kwinScript !== null, run: function () {
                 if (adopt(kwinScript) === "") {
@@ -972,6 +1092,9 @@ Item {
                     throw "unload: no session started (admissions " + calls("admitTile").length + ")";
                 }
                 expectProvider("unload: the session", { revision: 1 }, 1, { online: true, active: true });
+                // The identity granted, so the unload has a name to release.
+                DBusStubs.SessionBus.answer(expectIdentityRequest("unload", provider), [{ value: 1 }]);
+                provider.identityLookup.finished([":1.42"]);
                 cellA = facade.plain(winA.frameGeometry);
                 if (facade.same(cellA, floatA)) {
                     throw "unload: the stack window was given no cell (at " + JSON.stringify(winA.frameGeometry) + ")";
@@ -1000,6 +1123,15 @@ Item {
                 }
                 asked = facadeCalls.length;
                 revisionBeforeUnload = provider ? provider.revision : 0;
+                // What the retirement released, read as it moves the revision (the provider is
+                // gone once the unload is over).
+                const retiring = provider;
+                identityAtUnload = retiring.identityName;
+                retiring.revisionChanged.connect(() => {
+                    if (!retiring.online) {
+                        releasedAtRetire = [].concat(retiring.identityRelease.callLog);
+                    }
+                });
                 unloadWanted = true;
             } },
             { name: "the script unloaded as KWin unloads it", until: () => unloaded, run: function () {
@@ -1025,6 +1157,12 @@ Item {
                         || last.desktopId !== "") {
                     fail("unload" + (unloadVacated ? " (vacated)" : "") + ": the provider went offline once, with no"
                          + " capability or session (before " + revisionBeforeUnload + ", got " + JSON.stringify(last) + ")");
+                }
+                // The identity name is released once, by the retirement, with the name it stored:
+                // nothing of a torn-down context is looked up for it.
+                if (JSON.stringify(releasedAtRetire) !== JSON.stringify([[identityAtUnload]])) {
+                    fail("unload" + (unloadVacated ? " (vacated)" : "") + ": the retirement releases the identity name once"
+                         + " (got " + JSON.stringify(releasedAtRetire) + ")");
                 }
                 // Nothing of the script answers anything any more.
                 const gone = facadeCalls.length;
@@ -1142,6 +1280,21 @@ Item {
                        { online: true, capable: !legacyFacade, active: false, desktopId: "", outputName: "" });
         expectOwnLabel("the provider at start", facade.grantedToken);
         let providerBefore = providerState();
+        // The identity alias: requested once at start; its owner is looked up only once the
+        // name is granted, then known - this connection, KWin's; none of it moves the revision.
+        const identityReply = expectIdentityRequest("the provider at start", provider);
+        if (provider.identityLookup.calls !== 0 || provider.identityReady) {
+            fail("the identity's owner is looked up only once the name is granted");
+        }
+        DBusStubs.SessionBus.answer(identityReply, [{ value: 1 }]);
+        if (JSON.stringify(provider.identityLookup.callLog) !== JSON.stringify([[provider.identityName]])) {
+            fail("the granted name's owner is looked up once (got " + JSON.stringify(provider.identityLookup.callLog) + ")");
+        }
+        provider.identityLookup.finished([":1.42"]);
+        if (!provider.identityReady || provider.selfOwner !== ":1.42") {
+            fail("the identity is ready, with its owner (got " + provider.identityReady + ", " + provider.selfOwner + ")");
+        }
+        expectProvider("the identity granted", providerBefore, 0, {});
 
         if (legacyFacade) {
             // ---- a facade without restoreWindow: no session, the memory's transport intact ----

@@ -282,10 +282,20 @@ for problem in list(late_memory.property("problems").toVariant() or []):
 retire(late_memory, "late-memory")
 
 # The layout provider's own rules, without the script: what start(), setSession() and retire()
-# move and what they leave alone (the harness checks).
+# move and what they leave alone, and its identity name refused, denied, unread and dropped by
+# an early retirement (the harness checks). Each name that is no identity is said once.
+before = len(messages)
 provider_rules = run_harness({"scenario": "provider-rules"})
 for problem in list(provider_rules.property("problems").toVariant() or []):
     failures.append(str(problem))
+journal = messages[before:]
+check(sum("the identity name was not granted" in message for message in journal) == 2,
+      "provider-rules: a refused name and a bus error are each said once")
+check(sum("the identity name's owner could not be read" in message for message in journal) == 1,
+      "provider-rules: an owner that cannot be read is said once")
+# The answers arrive in signal handlers, where a throw shows only in the journal.
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "provider-rules: nothing threw, got %s" % thrown)
 retire(provider_rules, "provider-rules")
 
 # A third run: the master a native teardown released without restoring it (a removed desktop, a

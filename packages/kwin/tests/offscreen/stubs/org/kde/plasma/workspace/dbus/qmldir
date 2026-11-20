@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Stand-in org.kde.plasma.workspace.dbus module for the offscreen lifecycle (test use only):
+# found before the system module on the harness's import path, so nothing reaches a bus.
+module org.kde.plasma.workspace.dbus
+singleton SessionBus 1.0 SessionBus.qml

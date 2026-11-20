@@ -1118,7 +1118,13 @@ Offline (laptop):
    token), the unload runs see it go offline once, before the teardown, a run
    (`scenario: "late-memory"`) has the writer answer the memory's first read with nothing
    (incapable until the read retry finds the memory) and one (`scenario: "provider-rules"`)
-   checks the provider's own rules without the script.
+   checks the provider's own rules without the script. Its identity name is checked against a
+   stand-in `org.kde.plasma.workspace.dbus` (`tests/offscreen/stubs/`, found before the system
+   module, so nothing reaches a bus): every run asks for it once, without queueing; the
+   default run grants it and sees the owner read only then; the unload runs see the
+   retirement release it once; and the provider-rules run refuses it, answers a bus error, an
+   owner that cannot be read or is no unique name, and retires before the answer and before
+   the owner's - none makes an identity, and the driver reads each refusal from the journal once.
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
 bus, 1440x900). Seeds: `packages/kwin/tests/vsession/make-seed.sh STAGE_HOME SEED dark|light`
@@ -2016,7 +2022,8 @@ and KWin does not is a failure only hardware shows.
 The bars' layout controls (the workspace layout control, `SPEC-workspace-layout-control.md`)
 are to learn from this script whether supported tiling is available and whether a session is
 on for their view; the script stays the only authority. `contents/ui/LayoutProvider.qml` keeps
-that state for it. Nothing is published yet: the transport comes in later steps.
+that state for it, and the lifetime's identity name on the session bus. Nothing is published
+yet: the request pipeline and the publication come in later steps.
 
 - `capable` is the native verdict while online, and false while offline. The script binds the
   verdict (`nativeCapable`): the writer accepted the registration (`nativeWriter`), the memory
@@ -2036,6 +2043,18 @@ that state for it. Nothing is published yet: the transport comes in later steps.
 - `label` is drawn fresh for each instance (the MD5 of a timestamp and four random numbers, as
   the layout probe draws its own). It owes nothing to the native token, which the provider is
   never given; a refused registration keeps no token either (`providerToken` is cleared).
+- The identity name, `org.plasmafusion.LayoutProvider.p` and the label, is the layout probe's
+  transport from P0: a fence between provider lifetimes, not authentication, with no object
+  exported. `start()` asks for it whatever the capability, without queueing (`RequestName`
+  with flag 4, through `org.kde.plasma.workspace.dbus` with an explicit `(su)` signature, so
+  the plugin sends the flags as a uint32: its source is the same at plasma-workspace 6.7.5 and
+  6.8.3, and a 6.8.3 session granted the name); once it is granted, its owner - this
+  connection, KWin's - is read (`GetNameOwner`), and only a unique connection name makes the
+  identity ready and is kept as its owner (`selfOwner`, set before `identityReady`, so whatever
+  reacts to the flag finds the owner). `retire()` releases it (`ReleaseName`) with the name it
+  stored, dropping a request still pending, so nothing of a torn-down context is looked up and
+  a late answer reaches nothing. A name not granted, or an owner that cannot be read, is said
+  once and leaves the lifetime without an identity; none of it moves the revision.
 
 ### What it rides
 
