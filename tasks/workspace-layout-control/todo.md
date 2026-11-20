@@ -5,8 +5,9 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 # Workspace layout control checklist
 
-Status: plan accepted on 2026-11-17; P0 is done apart from one test follow-up (below), and its final
-G0 receipt awaits the owner's review (2026-11-20); no production integration. Read
+Status: plan accepted on 2026-11-17; P0 is done apart from one test follow-up (below). Of its final
+G0 receipt's decisions the owner confirmed 2 to 4 on 2026-11-20 and holds 1, for which the receipt
+now gives the click reproduction's result; no production integration. Read
 [plan.md](plan.md) and the accepted [specification](../../SPEC-workspace-layout-control.md).
 Existing native task files are untouched.
 Paths below are relative to the repository. Proposed new files are not claimed to exist.

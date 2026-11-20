@@ -360,10 +360,15 @@ In the instrumented runs most took under 10 ms, but about one in ten took over 1
 and a click that follows a context change can be sent while the provider is still publishing it. A
 pointer click sent while the shell was serving a publication usually lost its button events: 15 of
 18 such clicks were lost, the button seeing only a late hover, and none of 157 clicks outside a
-publication. Which layer drops them, KWin's delivery or Qt's in the shell, is not established. Once
-a prelude click with no read or publication outstanding also lost a button event: its hover arrived
-at once, its press about 460 ms after it was sent, and its release never did. Both are open in [the
-blocked queue](../DEFERRED.md) (pointer button events). The scenario works around the publication
+publication. A reproduction without the probe lost clicks the same way and traced it to the test
+input: every `pfinput` run is its own EIS input client with its own pointer, and the session has no
+other, so a shell busy with a script call when a run connects binds its pointer only after the
+call, and nothing sent to the pointer before that reaches it; the late hover is the enter that
+follows the bind. With one input client held connected for the run, every click sent during a call
+arrived when the call returned. The probe itself has not run with a held pointer. Once a prelude
+click with no read or publication outstanding lost its release instead: its hover arrived at once,
+its press about 460 ms after it was sent, and its release never did. Untraced, it matches a
+QtWayland defect ([the blocked queue](../DEFERRED.md)). The scenario works around the publication
 case: before each Validate click that follows a context change, it waits until the provider has
 observed the change, the receiver holds the provider's newest context and no read or publication is
 outstanding (`receipts.py target-settled`; the floor is the provider's context generation before the
@@ -809,8 +814,9 @@ and a panel with nothing remembered. The key on the panel waits for the consumer
 panel's context because the popup's request carries the context the consumer held when its control
 was activated, and an older one is refused as stale. The key in the popup deliberately has no
 settle wait (`receipts.py target-settled`), which also waits out reads and publications: a key lost
-while the shell serves a publication would show here, as evidence for the pointer button events row
-in [the blocked queue](../DEFERRED.md), which so far covers pointer events only. `keyboard_entry.py`
+while the shell serves a publication would show here. None has been: in the reproduction's traces
+(target mode, above) the seat has its keyboard from the shell's start, so a key, unlike a pointer
+event, never waits for the shell to bind a new device. `keyboard_entry.py`
 recomputes each step from the raw logs, from a mark set before its shortcut: the panel's activation
 as the shell's dock with the expected app remembered or none, then the popup with nothing activated
 in between, the focus consumer's keyboard preparation after its popup took focus, and the

@@ -308,14 +308,19 @@ after it (`p0/settle-proof`).
   trigger and frequency are unproved. The fixtures stop the owned shell first; that ordering is
   not a Qt fix. The row is blocked in [DEFERRED.md](../../docs/DEFERRED.md); re-entry needs an
   approved fixed-Qt environment.
-- Pointer button events lost or delayed ([DEFERRED.md](../../docs/DEFERRED.md), "P0 pointer
-  button events lost or delayed"). In the target scenario's instrumented runs a click sent
-  while the shell served a provider publication usually lost its button events: 15 of 18 such
-  clicks, against none of 157 outside one (`p0/settle-proof`). Once, in a prelude click with no
-  read or publication outstanding, the press arrived about 460 ms late and the release never did.
-  Which layer drops them, KWin's delivery or Qt's in the shell, is not established. The target
-  scenario waits before its Validate clicks after a context change, a test-side workaround, not a
-  fix. Decision 1 makes these publications P1's transport (below).
+- Pointer button events lost or delayed, reproduced without the probe on 2026-11-20
+  (`p0/click-repro`; a completed entry in [DEFERRED.md](../../docs/DEFERRED.md)). In the target
+  scenario's instrumented runs a click sent while the shell served a provider publication usually
+  lost its button events: 15 of 18 such clicks, against none of 157 outside one
+  (`p0/settle-proof`). A reproduction without the probe lost clicks the same way and traced it to
+  the test input: each `pfinput` run brings its own pointer, which a shell busy with a script call
+  binds only after the call, so the click never reaches it. With a pointer held for the whole run,
+  all 58 clicks sent during a call arrived, 1-18 ms after it ended. The probe itself has not run
+  with a held pointer, nothing ran on hardware, and the target scenario keeps its wait before the
+  Validate clicks. The prelude click whose press came about 460 ms late and whose release never
+  did matches, untraced, a QtWayland defect, which stays open
+  ([DEFERRED.md](../../docs/DEFERRED.md), "P0 QtWayland loses a held-back pointer release when the
+  pointer goes away"). Decision 1 makes publications P1's transport (below).
 - The shared prelude's single-panel click timing stays deferred
   ([DEFERRED.md](../../docs/DEFERRED.md), "P0 single-panel prelude click timing").
 - Before `55a921f`, successful runs still printed plasmashell teardown aborts
@@ -361,10 +366,12 @@ after it (`p0/settle-proof`).
 5. The probe's pipeline is bounded and serialized; P1 must keep it so, and publish only for a new
    request or changed state (decision 1). In the final sweep's pipeline run, 24 concurrent
    wake-ups, 23 of them during the read, were served by 2 reads and 2 publications, 4 saves in all.
-6. A publication is an `evaluateScript` call that the shell serves on its main thread, and pointer
-   clicks sent during one were usually lost in the test session (above). P1 relies on these
-   publications while users interact with the panel, so that row's re-entry comes first: reproduce
-   it without the probe and find the dropping layer.
+6. A publication is an `evaluateScript` call that the shell serves on its main thread, and the
+   shell handles no input until it returns. In the click reproduction a click sent during a call
+   arrived when the call ended; it was lost only when pressed before the shell had bound a new
+   pointer, or released just before its pointer went away (above). P1 relies on publications while
+   users interact with the panel, so if the owner confirms the condition in decision 1, P1 keeps
+   each publication short and measures its length.
 7. The identity alias tells provider lifetimes apart, not scripts. P1 must keep a single
    publisher; a leftover probe or a second copy of the placement script would make consumers drop
    one lifetime and bind to the other on every frame (decision 2).
@@ -383,7 +390,8 @@ after it (`p0/settle-proof`).
 ## Decisions for the owner to confirm
 
 The four decisions were delegated on 2026-11-19 and answered in [g0-decisions.md](g0-decisions.md),
-which gives the reasons; confirm or revise each.
+which gives the reasons; confirm or revise each. On 2026-11-20 the owner confirmed decisions 2 to 4
+and held decision 1 until a click reproduction without the probe; its result is under decision 1.
 
 1. **The transport is the basis for P1:** saved request and response fields, a sequence-less
    wake-up and `evaluateScript` on the captured unique shell connection. Its cost: each request
@@ -394,10 +402,20 @@ which gives the reasons; confirm or revise each.
    publications; keep the pipeline bounded and serialized; version and check every request; reject
    retained fields at start and apply a saved mutating request at most once per request identity;
    keep the provider logic in the placement script; and do not let consumers depend on the
-   observed output-loss placement. **Risk for this decision:** in the test session, pointer clicks
-   sent while the shell served a publication usually lost their button events (15 of 18), and the
-   layer is unknown. If that holds outside the test session, users' clicks on panel widgets could
-   be lost while P1 publishes. The fixtures only work around it.
+   observed output-loss placement. **Risk for this decision, revised on 2026-11-20 after the click
+   reproduction (`p0/click-repro`):** in the reproduction, clicks sent while the shell served a
+   script call were lost only when the test input brought a new pointer for the click, as every
+   `pfinput` run does: a busy shell binds that pointer only after the call. With one pointer held
+   for the whole run, as a mouse or touchpad would be (only the virtual session ran), all 58
+   clicks sent during a call arrived, each 1-18 ms after the call ended. The calls were busy
+   loops, 8 of them after writing a frame as a publication does. The probe's own lost clicks (15
+   of 18 sent during a publication) show the same signature, a late hover and no press, but the
+   probe has not run with a held pointer. What remains is latency: the shell handles no input
+   while it serves a publication, and in the instrumented runs about one publication in ten took
+   over 100 ms, up to 0.9 s. That adds a condition for the owner to confirm: keep each
+   publication short, under a bound that P1 proposes and its lifecycle tests measure. Separately,
+   a QtWayland defect can leave a button pressed when the last pointer device goes away right
+   after a click while the shell is busy; it is open in [DEFERRED.md](../../docs/DEFERRED.md).
 2. **The identity-only alias becomes the production provider-lifetime fence,** not writer
    authentication: any unsandboxed session client can write a frame, as the probe's own injection
    tests do, and could equally drive KWin and the shell. Conditions: identity-only, requested

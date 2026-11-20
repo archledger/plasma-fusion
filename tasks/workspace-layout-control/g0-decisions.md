@@ -56,6 +56,15 @@ the test session, users' clicks on panel widgets could be lost the same way whil
 test scenario only works around it; the final receipt reports it for the owner's review of this
 decision.
 
+Revised on 2026-11-20, after the owner confirmed decisions 2 to 4 and held this one for a click
+reproduction without the probe: the reproduction lost clicks only when the test input brought a
+new pointer for the click, as every `pfinput` run does, and none with one pointer held for the
+whole run; every click sent while the shell served a script call then arrived when the call
+returned. The probe's lost clicks show the same signature, though the probe has not run with a
+held pointer, and nothing ran on hardware. What remains is latency, so the final receipt proposes
+one more condition for the owner to confirm: keep each publication short, under a bound that P1
+proposes and its lifecycle tests measure (`g0-receipt.md`, decision 1).
+
 ## 2. The identity alias is the production lifetime fence
 
 Decision: yes, as a fence between provider lifetimes, not as authentication.
