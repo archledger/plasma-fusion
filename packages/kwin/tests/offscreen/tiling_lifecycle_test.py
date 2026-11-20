@@ -302,12 +302,12 @@ thrown = [message for message in journal if "TypeError" in message or "Reference
 check(not thrown, "read-pipeline: nothing threw, got %s" % thrown)
 retire(read_pipeline, "read-pipeline")
 
-# The publication side of the pipeline on the real script: the frames, each bar's own view, where
-# and when they go, what is not written again, a failure, a new shell, the changes coalesced, and
-# the retirement's offline frame before the name's release (the harness checks). Each publication
-# that came back says once how many frames it carried, how many the shell wrote and how long it
-# took; the failed one is said once, and so are the offline frames; the eleven reads say what
-# they found; nothing throws.
+# The publication side of the pipeline on the real script: the frames, each bar's own view and its
+# changes, where and when they go, what is not written again, a failure, a new shell, the changes
+# coalesced, and the retirement's offline frame before the name's release (the harness checks).
+# Each publication that came back says once how many frames it carried, how many the shell wrote
+# and how long it took; the failed one is said once, and so are the offline frames; the thirteen
+# reads say what they found; nothing throws.
 before = len(messages)
 publication = run_harness({"scenario": "publication"})
 for problem in list(publication.property("problems").toVariant() or []):
@@ -316,7 +316,8 @@ journal = messages[before:]
 published = [re.fullmatch(r"plasmafusion-placement: layout provider: published (\d+) frame\(s\), (\d+) written,"
                           r" in (\d+) ms", message) for message in journal]
 counts = [(int(match.group(1)), int(match.group(2))) for match in published if match]
-check(counts == [(5, 4), (2, 2), (2, 2), (1, 1), (1, 1), (5, 5), (2, 2), (2, 2), (3, 3), (3, 3)],
+check(counts == [(5, 4), (2, 2), (2, 2), (1, 1), (1, 1), (5, 5), (2, 2), (2, 2), (1, 1), (1, 1), (2, 2), (3, 3),
+                  (3, 3), (1, 1), (1, 1), (1, 1), (1, 1)],
       "publication: each publication that came back before the retirement says its frames and what the shell wrote"
       " once, got %s" % counts)
 check(sum("the bars' layout state could not be published" in message for message in journal) == 1,
@@ -325,8 +326,9 @@ check(sum(message == "plasmafusion-placement: layout provider: sent 5 offline fr
       "publication: the offline frames are said once")
 reads = [message for message in journal if "layout provider: read " in message]
 five = "plasmafusion-placement: layout provider: read 4 request(s), 1 refused"
-check(reads == [five] * 3 + ["plasmafusion-placement: layout provider: read 3 request(s), 1 refused"] + [five] * 7,
-      "publication: each of the eleven reads that came back says what it found, got %s" % reads)
+four = "plasmafusion-placement: layout provider: read 3 request(s), 1 refused"
+check(reads == [five] * 3 + [four] + [five] * 6 + [four] + [five] * 2,
+      "publication: each of the thirteen reads that came back says what it found, got %s" % reads)
 thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
 check(not thrown, "publication: nothing threw, got %s" % thrown)
 retire(publication, "publication")

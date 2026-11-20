@@ -1149,13 +1149,21 @@ Offline (laptop):
    nothing new writes nothing; an untoggle during a read goes out at the read's end; a widget no
    longer read is forgotten and, read again, told again alone; a new request is answered alone,
    at the same revision; a failed publication lets the wake during it read and writes its frame
-   again; another shell is told everything. With the session on, a bar on its output but another
-   desktop, then one on its output and desktop but another activity, are not tiled, and the
-   second output on a desktop of its own is told that one (`currentDesktopForScreen`); off and
-   on in one turn tell nothing, and two changes in one turn go out once. The retirement, with
-   that publication still outstanding, moves the revision, sends the offline frame to all five,
-   then releases the name; a change queued before it publishes nothing, and the late answers -
-   the outstanding publication's among them - reach nothing.
+   again; another shell is told everything. With the session on, each view change - as KWin
+   signals it, with no read - goes out at once, at a newer revision, to the bars it changes: the
+   session's output on another desktop (no bar there tiled; a request after it is answered
+   alone), the desktop back while a read is out (the read, back in the same turn, answers with
+   the stored view at its revision, and the change follows at a newer one), the activity
+   switched with the second output on a desktop of its own in one turn (one step; no bar on the
+   other activity tiled; `currentDesktopForScreen`), the activity back, the second output
+   unplugged (no view) and plugged back; a signal that changes no bar's view moves nothing, nor
+   does a change of an output whose only bar has left the read, which is told the view as it is
+   when it comes back; a request that names another output is resolved for it. Off and on in
+   one turn tell nothing, and two changes in one turn go out once. The retirement, with that
+   publication still outstanding and a state change and a view change queued before it, moves
+   the revision, sends the offline frame to all five, then releases the name; neither queued
+   change nor a view change after it moves or publishes anything, and the late answers - the
+   outstanding publication's among them - reach nothing.
    The refused-provider run reads one request and gets an online answer that is not capable,
    and the unload rows check that the name goes last, after the offline state's revision, with
    no frame when no request was read. The driver counts each publication's line with its frames
@@ -2073,8 +2081,9 @@ and the answers it publishes to them.
   after each reset, the untoggle's and the native teardown's. The view is the session's own:
   the one the shortcut was invoked on.
 - `revision` is 1 once the script has started (`start()`, at the end of
-  `Component.onCompleted`), then moves once per change of the above or of `online`, and
-  never otherwise: a relayout, a live join, a refused tree or a refused admission move nothing.
+  `Component.onCompleted`), then moves once per change of the above, of `online` or of a bar's
+  own view (`views`, below), and never otherwise: a relayout, a live join, a refused tree or a
+  refused admission move nothing.
 - `online` lasts from `start()` until `retire()`, which `Component.onDestruction` calls right
   after it sets `going`: the provider goes offline once, with no capability or session left,
   before the teardown's untoggle, which moves it no more and reads nothing of KWin for it.
@@ -2136,10 +2145,16 @@ and the answers it publishes to them.
   said once and changes no record, so its frames go out with the next publication. The
   retirement moves the revision, sends the offline frame (`status` offline, nothing capable or
   tiled) to every request and refusal it kept, then releases the name; nothing that answers
-  after it reaches anything. A view is resolved at each publication, so a frame written for
-  another reason carries the bar's view as it is then, at the same revision: a change of a view
-  alone moves nothing yet - a later step moves the revision for it - nor does any limit apply
-  to a publication's length yet.
+  after it reaches anything. No limit applies to a publication's length yet.
+- Each request's view is resolved when the request is read - a widget's first request, or one
+  that names another output; a request renewed for the same output keeps its view - and kept
+  (`views`, only for the widgets read): a frame carries the kept view, never a newer one than
+  its revision. A change of a desktop, the activity or the outputs - `currentDesktopChanged`,
+  which KWin sends for every output whose desktop changed (with or without desktops per output,
+  the same at 6.7.5 and 6.8.3), `currentActivityChanged`, `screensChanged` - resolves them all
+  again, once per turn, and when one differs moves the revision: the bars whose view changed
+  are told at once, at the newer revision, with no read. A change no bar's view sees moves
+  nothing, and nothing is watched offline.
 
 ### What it rides
 

@@ -758,7 +758,8 @@ Item {
     function providerState() {
         return provider ? { revision: provider.revision, online: provider.online, capable: provider.capable,
                             active: provider.active, desktopId: provider.desktopId,
-                            activityId: provider.activityId, outputName: provider.outputName } : null;
+                            activityId: provider.activityId, outputName: provider.outputName,
+                            views: JSON.stringify(provider.views === undefined ? null : provider.views) } : null;
     }
 
     // The provider moved `moves` revisions since the state `before` and now reads `fields`.
@@ -919,6 +920,7 @@ Item {
         const second = { name: "Virtual-2", geometry: Qt.rect(1440, 0, 1440, 900), devicePixelRatio: 1 };
         ws.screens = [ws.activeScreen, second];
         const otherDesktop = { id: 12 };
+        const thirdDesktop = { id: 13 };
         DBusStubs.SessionBus.answer(expectIdentityRequest("publication", p), [{ value: 1 }]);
         p.identityLookup.finished([":1.42"]);
         p.shellLookup.finished([":1.9"]);
@@ -934,6 +936,9 @@ Item {
         const current = rows.map(row => Object.assign({}, row));
         const renew = (id, request) => {
             current.find(row => row.id === id).request = request;
+        };
+        const retarget = (id, request, outputName) => {
+            Object.assign(current.find(row => row.id === id), { request: request, outputName: outputName });
         };
         const now = () => JSON.stringify(current);
         const row = id => current.find(entry => entry.id === id);
@@ -1007,6 +1012,8 @@ Item {
         // A session on Virtual-1 tiles widgets 1 and 3's view, never 21's on Virtual-2.
         const sessionTold = got => ids(got) === JSON.stringify(["1", "3"]) && got[1].tiled === true && got[3].tiled === true;
         let since = Date.now();
+        // The revision before a view change, for the step that checks it moved once.
+        let atView = 0;
         steps = [
             { name: "a state change waits for the publication", until: () => Date.now() - since >= 100, run: function () {
                 if (w.calls !== 1) {
@@ -1128,65 +1135,194 @@ Item {
                 }
                 w.finished([2]);
                 // The session's output switches to another desktop (the session stays where it
-                // was), and widget 3 asks again.
+                // was), as KWin says it - a signal for that output: the bars there are told at once,
+                // at a newer revision, with no read.
+                atView = p.revision;
                 ws.outputDesktops = { "Virtual-1": otherDesktop };
+                ws.currentDesktopChanged();
+                since = Date.now();
+            } },
+            { name: "a desktop switch on the session's output", until: () => w.calls === 9 || Date.now() - since >= 300, run: function () {
+                const got = framesOf(p, 8, all);
+                if (w.calls !== 9 || p.shellLookup.calls !== 8 || p.revision !== atView + 1 || ids(got) !== JSON.stringify(["1", "3"])
+                        || got[1].tiled !== false || got[3].tiled !== false || got[1].view.desktopId !== "12"
+                        || got[3].view.desktopId !== "12" || got[1].revision !== p.revision) {
+                    fail("publication: a desktop switch on the session's output is told at once, at a newer revision, to the"
+                         + " bars there, none tiled (writes " + w.calls + ", lookups " + p.shellLookup.calls + ", revision "
+                         + p.revision + " after " + atView + ", got " + canonical(got) + ")");
+                }
+                w.finished([2]);
+                // Then widget 3 asks again: its answer alone - the others were told already.
                 renew(3, 4);
                 p.wake.activated();
             } },
-            { name: "a desktop switch on the session's output", until: () => p.shellLookup.calls === 9, run: function () {
-                p.shellLookup.finished([":1.10"]);
-                p.reader.finished([now()]);
-                // The bars there are on another desktop now: nothing of theirs is tiled. (Widget
-                // 1's frame changed without a state change: its view moved.)
-                const got = framesOf(p, 8, all);
-                if (w.calls !== 9 || ids(got) !== JSON.stringify(["1", "3"]) || got[1].tiled !== false || got[3].tiled !== false
-                        || got[1].view.desktopId !== "12" || got[3].request !== 4) {
-                    fail("publication: a bar on the session's output but another desktop is not tiled (writes " + w.calls
-                         + ", got " + canonical(got) + ")");
-                }
-                w.finished([2]);
-                // The desktop back, the activity switched, and widget 1 asks again.
-                ws.outputDesktops = ({});
-                ws.currentActivity = "b";
-                renew(1, 3);
-                p.wake.activated();
-            } },
-            { name: "an activity switch", until: () => p.shellLookup.calls === 10, run: function () {
+            { name: "a request after the drift", until: () => p.shellLookup.calls === 9, run: function () {
                 p.shellLookup.finished([":1.10"]);
                 p.reader.finished([now()]);
                 const got = framesOf(p, 9, all);
-                if (w.calls !== 10 || ids(got) !== JSON.stringify(["1", "21", "3"])
-                        || [1, 3, 21].some(id => got[id].tiled !== false || got[id].view.activityId !== "b")) {
-                    fail("publication: a bar on the session's output and desktop but another activity is not tiled (writes "
+                if (w.calls !== 10 || ids(got) !== JSON.stringify(["3"]) || got[3].request !== 4 || got[3].view.desktopId !== "12"
+                        || got[3].revision !== p.revision) {
+                    fail("publication: after the drift a new request is answered alone, the drift told already (writes "
                          + w.calls + ", got " + canonical(got) + ")");
                 }
-                w.finished([3]);
-                // The activity back; the second output on a desktop of its own; widget 21 asks again.
-                ws.currentActivity = "a";
-                ws.outputDesktops = { "Virtual-2": otherDesktop };
-                renew(21, 22);
+                w.finished([1]);
+                // A signal that changes no bar's view moves nothing.
+                atView = p.revision;
+                ws.currentDesktopChanged();
+                since = Date.now();
+            } },
+            { name: "a signal that changes nothing", until: () => Date.now() - since >= 200, run: function () {
+                if (p.revision !== atView || w.calls !== 10) {
+                    fail("publication: a signal that changes no bar's view moves nothing (revision " + p.revision + " after "
+                         + atView + ", writes " + w.calls + ")");
+                }
+                // Widget 1 asks again; its read will cross a view change.
+                renew(1, 3);
                 p.wake.activated();
             } },
-            { name: "a desktop of the output's own", until: () => p.shellLookup.calls === 11, run: function () {
+            { name: "a read that crosses a view change", until: () => p.shellLookup.calls === 10, run: function () {
                 p.shellLookup.finished([":1.10"]);
+                // The desktop comes back while the read is out, and the read comes back in the same
+                // turn, before the change is resolved: the answer carries the view as the state tells
+                // it - the stored one, at the revision it goes with - never a newer one.
+                atView = p.revision;
+                ws.outputDesktops = ({});
+                ws.currentDesktopChanged();
                 p.reader.finished([now()]);
-                // Each output's own current desktop: 21's is the other one; 1 and 3 are back on
-                // the session's view.
                 const got = framesOf(p, 10, all);
-                if (w.calls !== 11 || ids(got) !== JSON.stringify(["1", "21", "3"]) || got[1].tiled !== true
-                        || got[3].tiled !== true || canonical(got[21]) !== canonical(frameWanted(p, row(21), {
-                            capable: true, view: { desktopId: "12", activityId: "a", outputName: "Virtual-2" }, tiled: false }))) {
-                    fail("publication: each bar's view is its own output's current desktop (writes " + w.calls + ", got "
-                         + canonical(got) + ")");
+                if (w.calls !== 11 || ids(got) !== JSON.stringify(["1"]) || got[1].request !== 3 || got[1].view.desktopId !== "12"
+                        || got[1].revision !== atView) {
+                    fail("publication: a read that crosses a view change answers with the view its revision tells (writes "
+                         + w.calls + ", got " + canonical(got) + ")");
+                }
+                w.finished([1]);
+                since = Date.now();
+            } },
+            { name: "the crossed change goes out", until: () => w.calls === 12 || Date.now() - since >= 300, run: function () {
+                // Then the change: 1 and 3 back on the session's view, at a newer revision.
+                const got = framesOf(p, 11, all);
+                if (w.calls !== 12 || p.revision !== atView + 1 || ids(got) !== JSON.stringify(["1", "3"]) || got[1].tiled !== true
+                        || got[3].tiled !== true || got[1].view.desktopId !== "11" || got[1].revision !== p.revision) {
+                    fail("publication: the view change a read crossed goes out after it, at a newer revision (writes " + w.calls
+                         + ", revision " + p.revision + " after " + atView + ", got " + canonical(got) + ")");
+                }
+                w.finished([2]);
+                // The activity switched and the second output on a desktop of its own, in one turn:
+                // one step, one publication.
+                atView = p.revision;
+                ws.currentActivity = "b";
+                ws.outputDesktops = { "Virtual-2": otherDesktop };
+                ws.currentDesktopChanged();
+                since = Date.now();
+            } },
+            { name: "two view changes in one turn", until: () => w.calls === 13 || Date.now() - since >= 300, run: function () {
+                const got = framesOf(p, 12, all);
+                if (w.calls !== 13 || p.revision !== atView + 1 || ids(got) !== JSON.stringify(["1", "21", "3"])
+                        || [1, 3, 21].some(id => got[id].tiled !== false || got[id].view.activityId !== "b")
+                        || got[1].view.desktopId !== "11" || got[21].view.desktopId !== "12") {
+                    fail("publication: two view changes in one turn go out once - a bar on the session's output and desktop"
+                         + " but another activity is not tiled, the second output on its own desktop (writes " + w.calls
+                         + ", revision " + p.revision + " after " + atView + ", got " + canonical(got) + ")");
                 }
                 w.finished([3]);
+                // The activity back: 1 and 3 are on the session's view again.
+                atView = p.revision;
+                ws.currentActivity = "a";
+                since = Date.now();
+            } },
+            { name: "the activity back", until: () => w.calls === 14 || Date.now() - since >= 300, run: function () {
+                // 1 and 3 on the session's view again; 21 on its output's own desktop
+                // (currentDesktopForScreen).
+                const got = framesOf(p, 13, all);
+                if (w.calls !== 14 || p.revision !== atView + 1 || ids(got) !== JSON.stringify(["1", "21", "3"])
+                        || got[1].tiled !== true || got[3].tiled !== true
+                        || canonical(got[21]) !== canonical(frameWanted(p, row(21), {
+                            capable: true, view: { desktopId: "12", activityId: "a", outputName: "Virtual-2" }, tiled: false }))) {
+                    fail("publication: the activity back tiles the session's view again, each bar on its own output's desktop"
+                         + " (writes " + w.calls + ", got " + canonical(got) + ")");
+                }
+                w.finished([3]);
+                // The second output unplugged: its bar's view is gone.
+                atView = p.revision;
+                ws.screens = [ws.activeScreen];
+                since = Date.now();
+            } },
+            { name: "an output unplugged", until: () => w.calls === 15 || Date.now() - since >= 300, run: function () {
+                const got = framesOf(p, 14, all);
+                if (w.calls !== 15 || p.revision !== atView + 1 || ids(got) !== JSON.stringify(["21"]) || got[21].view !== null
+                        || got[21].tiled !== false) {
+                    fail("publication: an output unplugged leaves its bar with no view, told at once (writes " + w.calls + ", got "
+                         + canonical(got) + ")");
+                }
+                w.finished([1]);
+                // Plugged back, on its own desktop still: told again.
+                atView = p.revision;
+                ws.screens = [ws.activeScreen, second];
+                since = Date.now();
+            } },
+            { name: "an output plugged back", until: () => w.calls === 16 || Date.now() - since >= 300, run: function () {
+                const got = framesOf(p, 15, all);
+                if (w.calls !== 16 || p.revision !== atView + 1 || ids(got) !== JSON.stringify(["21"]) || !got[21].view
+                        || got[21].view.desktopId !== "12" || got[21].view.outputName !== "Virtual-2") {
+                    fail("publication: an output plugged back gives its bar its view again (writes " + w.calls + ", got "
+                         + canonical(got) + ")");
+                }
+                w.finished([1]);
+                // Widget 21 leaves the read (its request went).
+                p.wake.activated();
+            } },
+            { name: "a widget that left the read, its output moved", until: () => p.shellLookup.calls === 11, run: function () {
+                p.shellLookup.finished([":1.10"]);
+                p.reader.finished([JSON.stringify(current.filter(entry => entry.id !== 21))]);
+                if (w.calls !== 16 || !p.views || p.views[21] !== undefined) {
+                    fail("publication: a widget no longer read is told nothing, and its view is forgotten (writes " + w.calls
+                         + ", views " + JSON.stringify(Object.keys(p.views || {})) + ")");
+                }
+                // Its output moves to a third desktop: no view that is kept changed, so nothing moves.
+                atView = p.revision;
+                ws.outputDesktops = { "Virtual-2": thirdDesktop };
+                ws.currentDesktopChanged();
+                since = Date.now();
+            } },
+            { name: "a change no kept view sees", until: () => Date.now() - since >= 200, run: function () {
+                if (p.revision !== atView || w.calls !== 16) {
+                    fail("publication: a change of an output no kept request is on moves nothing (revision " + p.revision
+                         + " after " + atView + ", writes " + w.calls + ")");
+                }
+                // Widget 21 is read again: its view is resolved now - the third desktop.
+                p.wake.activated();
+            } },
+            { name: "the widget back", until: () => p.shellLookup.calls === 12, run: function () {
+                p.shellLookup.finished([":1.10"]);
+                p.reader.finished([now()]);
+                const got = framesOf(p, 16, all);
+                if (w.calls !== 17 || ids(got) !== JSON.stringify(["21"]) || got[21].view.desktopId !== "13") {
+                    fail("publication: a widget read again is told its view as it is now, not the one it left with (writes "
+                         + w.calls + ", got " + canonical(got) + ")");
+                }
+                w.finished([1]);
+                // Widget 1's panel moved to the second output: its next request names it.
+                retarget(1, 4, "Virtual-2");
+                p.wake.activated();
+            } },
+            { name: "a request for another output", until: () => p.shellLookup.calls === 13, run: function () {
+                p.shellLookup.finished([":1.10"]);
+                p.reader.finished([now()]);
+                // Resolved for the output it names now: the second output's view, not tiled.
+                const got = framesOf(p, 17, all);
+                if (w.calls !== 18 || ids(got) !== JSON.stringify(["1"]) || canonical(got[1]) !== canonical(frameWanted(p, row(1), {
+                        capable: true, view: { desktopId: "13", activityId: "a", outputName: "Virtual-2" }, tiled: false }))) {
+                    fail("publication: a request that names another output is resolved for it (writes " + w.calls + ", got "
+                         + canonical(got) + ")");
+                }
+                w.finished([1]);
                 // Off and on in one turn: nothing new to tell (every view stays as it was told).
                 tileShortcut.activated();
                 tileShortcut.activated();
                 since = Date.now();
             } },
             { name: "off and on in one turn", until: () => Date.now() - since >= 200, run: function () {
-                if (w.calls !== 11) {
+                if (w.calls !== 18) {
                     fail("publication: changes that end where they began tell nothing (writes " + w.calls + ")");
                 }
                 // The session's end and the capability lost in one turn: one publication, of the
@@ -1195,9 +1331,9 @@ Item {
                 p.nativeCapable = false;
                 since = Date.now();
             } },
-            { name: "two changes in one turn", until: () => w.calls > 11 || Date.now() - since >= 300, run: function () {
-                const got = framesOf(p, 11, all);
-                if (w.calls !== 12 || ids(got) !== JSON.stringify(["1", "21", "3", "5"]) || got[1].capable !== false
+            { name: "two changes in one turn", until: () => w.calls > 18 || Date.now() - since >= 300, run: function () {
+                const got = framesOf(p, 18, all);
+                if (w.calls !== 19 || ids(got) !== JSON.stringify(["1", "21", "3", "5"]) || got[1].capable !== false
                         || got[1].tiled !== false || got[5].capable !== false || got[21].capable !== false
                         || got[1].revision !== p.revision) {
                     fail("publication: two changes in one turn go out once, as they left the state (writes " + w.calls
@@ -1206,13 +1342,13 @@ Item {
                 since = Date.now();
             } },
             { name: "the retirement", until: () => Date.now() - since >= 100, run: function () {
-                if (w.calls !== 12 || !p.publishing) {
+                if (w.calls !== 19 || !p.publishing) {
                     fail("publication: one publication for two changes in one turn, still outstanding (writes " + w.calls + ")");
                 }
-                // With that publication outstanding and a change right before it, the retirement
-                // ends the one and drops the other's publication: it moves the revision, sends the
-                // offline frame to every request and refusal it kept, on the connection they came
-                // from - whatever is in flight there - then releases the name.
+                // With that publication outstanding, and a state change and a view change right
+                // before it, the retirement ends the one and drops the others: it moves the revision,
+                // sends the offline frame to every request and refusal it kept, on the connection
+                // they came from - whatever is in flight there - then releases the name.
                 const order = [];
                 p.revisionChanged.connect(() => {
                     if (!p.online) {
@@ -1222,12 +1358,14 @@ Item {
                 w.callsChanged.connect(() => order.push("frame"));
                 p.identityRelease.callsChanged.connect(() => order.push("release"));
                 tileShortcut.activated();
+                ws.outputDesktops = { "Virtual-1": otherDesktop };
+                ws.currentDesktopChanged();
                 p.retire();
                 if (JSON.stringify(order) !== JSON.stringify(["revision", "frame", "release"])) {
                     fail("publication: the retirement moves the revision, then sends the offline frame, then releases the name"
                          + " (got " + JSON.stringify(order) + ")");
                 }
-                const got = framesOf(p, 12, all);
+                const got = framesOf(p, 19, all);
                 for (const kept of current) {
                     const offline = { version: 1, consumer: kept.consumer, request: kept.request, epoch: p.label,
                                       identityName: p.identityName, backendOwner: ":1.42", revision: p.revision,
@@ -1237,24 +1375,31 @@ Item {
                              + ", not " + canonical(offline) + ")");
                     }
                 }
-                if (w.calls !== 13 || w.service !== ":1.10" || p.publishing) {
+                if (w.calls !== 20 || w.service !== ":1.10" || p.publishing) {
                     fail("publication: the offline frame goes out once, where the requests came from, and ends the"
                          + " publication in flight (writes " + w.calls + " to " + w.service + ", publishing " + p.publishing + ")");
                 }
+                // Offline, the views are watched no more: neither the view change queued before the
+                // retirement nor one after it moves or publishes anything.
+                atView = p.revision;
+                ws.outputDesktops = ({});
+                ws.currentDesktopChanged();
                 since = Date.now();
             } },
             { name: "after the retirement", until: () => Date.now() - since >= 200, run: function () {
-                // The change queued before the retirement published nothing, and late answers -
-                // the outstanding publication's among them - reach nothing.
-                if (w.calls !== 13) {
-                    fail("publication: a change queued before the retirement publishes nothing (writes " + w.calls + ")");
+                // The change queued before the retirement and the view change after it published
+                // nothing, and late answers - the outstanding publication's among them - reach
+                // nothing.
+                if (w.calls !== 20 || p.revision !== atView) {
+                    fail("publication: neither a change queued before the retirement nor a view change after it moves or"
+                         + " publishes anything (writes " + w.calls + ", revision " + p.revision + " after " + atView + ")");
                 }
                 w.finished([4]);
                 w.failed();
                 p.shellLookup.failed();
                 p.reader.finished([now()]);
                 p.wake.activated();
-                if (w.calls !== 13 || p.shellLookup.calls !== 11 || p.publishing || p.reading) {
+                if (w.calls !== 20 || p.shellLookup.calls !== 13 || p.publishing || p.reading) {
                     fail("publication: after the retirement nothing is published or read (writes " + w.calls + ", lookups "
                          + p.shellLookup.calls + ")");
                 }

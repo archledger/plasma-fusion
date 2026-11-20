@@ -30,10 +30,9 @@ QtObject {
     // Whether supported tiling is available: the verdict while online, false while offline, so
     // no state carries a capability that changed after its revision.
     property bool capable: false
-    // The state's order: 1 at start(), then one step for each change of the provider's state -
-    // capability, the session or its view, going offline - and none otherwise. A bar's frame
-    // also carries the bar's own view, which for now changes without a step (a later step moves
-    // the revision for it too).
+    // The state's order: 1 at start(), then one step for each change of what a reader is told -
+    // capability, the session or its view, a bar's own view (views), going offline - and none
+    // otherwise.
     property int revision: 0
     // The session, and the view it tiles as a bar names one.
     property bool active: false
@@ -156,6 +155,28 @@ QtObject {
     // state). The connection it was told on; another is told everything.
     property var sent: ({})
     property string sentOwner: ""
+    // Each request's view as the state tells it, by widget: the output it names and that output's
+    // view as resolved then. A read resolves the view of a widget's first request, or of one that
+    // names another output (a request renewed for the same output keeps its view); a change of a
+    // desktop, the activity or the outputs resolves them all again, and moves the revision when
+    // one differs - so a frame never carries a view newer than its revision.
+    property var views: ({})
+    // KWin says each output's change of desktop on its own (VirtualDesktopManager::currentChanged,
+    // for every output whose desktop changed, with or without desktops per output - the same at
+    // 6.7.5 and 6.8.3); the changes of one turn are resolved once.
+    property Connections viewWatch: Connections {
+        target: Workspace
+        enabled: provider.online
+        function onCurrentDesktopChanged() {
+            Qt.callLater(provider.viewsMoved);
+        }
+        function onCurrentActivityChanged() {
+            Qt.callLater(provider.viewsMoved);
+        }
+        function onScreensChanged() {
+            Qt.callLater(provider.viewsMoved);
+        }
+    }
     // One publication at a time and never during a read: whether one is due, and the one in
     // flight - its frames and when it went out, for its length.
     property bool publishing: false
@@ -349,6 +370,15 @@ QtObject {
             }
         }
         sent = read;
+        // A request keeps the view it was told while it names the same output; a widget's first
+        // request, or one that names another output, is resolved now.
+        const resolved = {};
+        for (const row of accepted) {
+            const kept = views[row.id];
+            resolved[row.id] = kept && kept.outputName === row.outputName ? kept
+                : { outputName: row.outputName, view: viewOf(row.outputName) };
+        }
+        views = resolved;
         publicationDue = true;
         console.info("plasmafusion-placement: layout provider: read " + accepted.length + " request(s), "
                      + refused.length + " refused");
@@ -430,12 +460,35 @@ QtObject {
             frame.refused = row.reason;
             return frame;
         }
-        const view = viewOf(row.outputName);
+        const view = views[row.id] ? views[row.id].view : null;
         frame.capable = capable;
         frame.view = view;
         frame.tiled = active && view !== null && view.desktopId === desktopId
             && view.activityId === activityId && view.outputName === outputName;
         return frame;
+    }
+
+    // A change of a desktop, the activity or the outputs: every request's view resolved again, and
+    // one step of the revision when one of them differs (its publication follows). Nothing moves
+    // for a change no bar's view sees.
+    function viewsMoved(): void {
+        if (!online) {
+            return;
+        }
+        const now = {};
+        let moved = false;
+        for (const row of requests) {
+            const view = viewOf(row.outputName);
+            const kept = views[row.id];
+            now[row.id] = { outputName: row.outputName, view: view };
+            if (!kept || JSON.stringify(kept.view) !== JSON.stringify(view)) {
+                moved = true;
+            }
+        }
+        if (moved) {
+            views = now;
+            revision += 1;
+        }
     }
 
     // A bar's view as KWin has it now: the output of that name, its current desktop and the
