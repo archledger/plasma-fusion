@@ -281,6 +281,26 @@ for problem in list(late_memory.property("problems").toVariant() or []):
     failures.append(str(problem))
 retire(late_memory, "late-memory")
 
+# The read side of the layout provider's pipeline on the real script: the wake shortcut, one read
+# once the identity is ready, the wakes during a read coalesced, the shell side's bounds and the
+# provider's own checks of every row, each failure (the harness checks). A failed read and each
+# of the three malformed answers are said once each; nothing throws.
+before = len(messages)
+read_pipeline = run_harness({"scenario": "read-pipeline"})
+for problem in list(read_pipeline.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+check(sum("the bars' requests could not be read" in message for message in journal) == 1,
+      "read-pipeline: a failed read is said once")
+check(sum("the bars' requests came back malformed" in message for message in journal) == 3,
+      "read-pipeline: each malformed answer is said once")
+reads = [message for message in journal if "layout provider: read " in message]
+check(reads == ["plasmafusion-placement: layout provider: read 2 request(s), 5 refused"] * 2,
+      "read-pipeline: each of the two reads that came back says what it found, got %s" % reads)
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "read-pipeline: nothing threw, got %s" % thrown)
+retire(read_pipeline, "read-pipeline")
+
 # The layout provider's own rules, without the script: what start(), setSession() and retire()
 # move and what they leave alone, and its identity name refused, denied, unread and dropped by
 # an early retirement (the harness checks). Each name that is no identity is said once.

@@ -83,6 +83,70 @@ QtObject {
         method: "ReleaseName"
     }
 
+    // What the bars ask for, read from the shell (the layout probe's P0 transport): a bar's
+    // clock saves its request in a field of its own and wakes the provider through a shortcut
+    // with no key; the provider reads every clock's request with one shell script call on the
+    // shell's unique connection. The reads are bounded as the probe's - at most 16 widgets,
+    // requests of at most 2048 characters, a consumer label of 1 to 128 characters and a request
+    // number of 1 to 2147483646 - copy only the fields P1 needs, and carry widget data as JSON,
+    // never as code.
+    readonly property string requestApplet: "org.plasmafusion.clockpill"
+    readonly property string readerScript: "var rows=[],seen=0;"
+        + "panels().forEach(function(p) {"
+        + "p.widgets('" + requestApplet + "').forEach(function(w) {"
+        + "if(seen>=16){return;}++seen;"
+        + "w.currentConfigGroup=['General'];try {var text=w.readConfig('layoutRequest','');"
+        + "if(text.length>2048)return;"
+        + "var q=JSON.parse(text);"
+        + "if(typeof q.consumer!=='string'||!q.consumer.length||q.consumer.length>128"
+        + "||!Number.isInteger(q.request)||q.request<=0||q.request>2147483646)return;"
+        + "rows.push({id:w.id,consumer:q.consumer,request:q.request,version:q.version,"
+        + "intent:q.intent,outputName:q.outputName});"
+        + "}catch(e){} }); });"
+        + "print(JSON.stringify(rows));"
+    // What the last read found: the queries to answer, and the rows refused before any action,
+    // each with its widget, consumer, request and reason. A failed read keeps them as they were.
+    property var requests: []
+    property var refusals: []
+    // A read in flight, and whether a wake came meanwhile: one read at a time, and the wakes
+    // during it make one more read after it.
+    property bool reading: false
+    property bool again: false
+
+    property ShortcutHandler wake: ShortcutHandler {
+        name: "Plasma Fusion: Refresh Layout Controls"
+        text: i18n("Refresh the layout controls on the bars (the bars use this; it needs no key)")
+        sequence: ""
+        onActivated: provider.scan()
+    }
+
+    property DBusCall shellLookup: DBusCall {
+        service: "org.freedesktop.DBus"
+        path: "/org/freedesktop/DBus"
+        dbusInterface: "org.freedesktop.DBus"
+        method: "GetNameOwner"
+        arguments: ["org.kde.plasmashell"]
+        onFinished: value => provider.shellFound(String(value[0]))
+        onFailed: provider.shellLost()
+    }
+
+    property DBusCall reader: DBusCall {
+        path: "/PlasmaShell"
+        dbusInterface: "org.kde.PlasmaShell"
+        method: "evaluateScript"
+        onFinished: value => provider.readFinished(String(value[0]))
+        onFailed: provider.readFailed()
+    }
+
+    // The identity's arrival is the first read: the requests the clocks saved before this
+    // lifetime are read too, and the wakes that came before it are that read.
+    onIdentityReadyChanged: {
+        if (identityReady) {
+            again = false;
+            scan();
+        }
+    }
+
     // A verdict that changes while online (a memory that loads late) is a new state; one that
     // changes while offline is no state at all.
     onNativeCapableChanged: {
@@ -156,6 +220,114 @@ QtObject {
         revision += 1;
     }
 
+    // A read: the shell's owner first, then the clocks' requests from that connection. None
+    // before the identity is ready (its arrival reads) or once offline, and one at a time.
+    function scan(): void {
+        if (!online) {
+            return;
+        }
+        if (!identityReady || reading) {
+            again = true;
+            return;
+        }
+        reading = true;
+        shellLookup.call();
+    }
+
+    // The shell's owner: only a unique connection is read from. An answer that comes once the
+    // read is over (retire() ends it) reaches nothing, here and below.
+    function shellFound(owner: string): void {
+        if (!reading) {
+            return;
+        }
+        if (!owner.startsWith(":")) {
+            finishRead();
+            return;
+        }
+        reader.service = owner;
+        reader.arguments = [readerScript];
+        reader.call();
+    }
+
+    function shellLost(): void {
+        if (reading) {
+            finishRead();
+        }
+    }
+
+    function readFailed(): void {
+        if (!reading) {
+            return;
+        }
+        console.warn("plasmafusion-placement: layout provider: the bars' requests could not be read");
+        finishRead();
+    }
+
+    // The shell's answer, checked again here: at most 16 rows, each with a well-formed identity
+    // (a row without one cannot be answered and is dropped), then a version-1 query for a named
+    // output; every other row is refused before any action, with its reason.
+    function readFinished(text: string): void {
+        if (!reading) {
+            return;
+        }
+        let rows = null;
+        try {
+            rows = JSON.parse(text);
+        } catch (e) {
+            rows = null;
+        }
+        if (!Array.isArray(rows) || rows.length > 16) {
+            console.warn("plasmafusion-placement: layout provider: the bars' requests came back malformed");
+            finishRead();
+            return;
+        }
+        const accepted = [];
+        const refused = [];
+        for (const row of rows) {
+            const checked = checkedRow(row);
+            if (checked === null) {
+                continue;
+            }
+            if (checked.reason !== undefined) {
+                refused.push(checked);
+            } else {
+                accepted.push(checked);
+            }
+        }
+        requests = accepted;
+        refusals = refused;
+        console.info("plasmafusion-placement: layout provider: read " + accepted.length + " request(s), "
+                     + refused.length + " refused");
+        finishRead();
+    }
+
+    function checkedRow(row) {
+        if (row === null || typeof row !== "object" || !Number.isInteger(row.id)
+                || typeof row.consumer !== "string" || row.consumer.length < 1 || row.consumer.length > 128
+                || !Number.isInteger(row.request) || row.request < 1 || row.request > 2147483646) {
+            return null;
+        }
+        const identity = { id: row.id, consumer: row.consumer, request: row.request };
+        if (row.version !== 1) {
+            return Object.assign(identity, { reason: "version" });
+        }
+        if (row.intent !== "query") {
+            return Object.assign(identity, { reason: "intent" });
+        }
+        if (typeof row.outputName !== "string" || row.outputName.length < 1 || row.outputName.length > 128) {
+            return Object.assign(identity, { reason: "output" });
+        }
+        return Object.assign(identity, { outputName: row.outputName });
+    }
+
+    function finishRead(): void {
+        reading = false;
+        if (again) {
+            again = false;
+            Qt.callLater(provider.scan);
+        }
+    }
+
     // The script is going: offline, with no capability or session left to report, and the
     // identity name released - a request still pending is dropped, so its answer reaches
     // nothing. Nothing moves after this.
@@ -171,6 +343,10 @@ QtObject {
         outputName = "";
         identityReady = false;
         selfOwner = "";
+        // A read in flight ends here, and its answers reach nothing; the last requests stay as
+        // the recipients of what is said at the end.
+        reading = false;
+        again = false;
         if (registration) {
             const pending = registration;
             registration = null;

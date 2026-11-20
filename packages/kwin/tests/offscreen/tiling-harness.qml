@@ -511,6 +511,15 @@ Item {
     }
 
     Component.onCompleted: {
+        if (scenario === "read-pipeline") {
+            try {
+                runReadPipeline();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
         if (scenario === "provider-rules") {
             try {
                 runProviderRules();
@@ -791,6 +800,238 @@ Item {
         if (!/^[0-9a-f]{32}$/.test(providerLabel) || providerLabel === Qt.md5(token) || providerLabel === Qt.md5(bare)) {
             fail(what + ": the provider's label is its own, not the token's (got " + providerLabel + ")");
         }
+    }
+
+    // The layout provider's reader script as plasmashell runs it: `panels()` and `print()` are
+    // the shell's, each panel lists its widgets by applet id, and a widget reads its saved
+    // config. Fakes stand in for them; the script's printed answer, parsed.
+    function runReaderScript(script, panelWidgets) {
+        let printed = null;
+        const panelsFake = () => panelWidgets.map(widgets => ({
+            widgets: type => widgets.filter(w => w.type === type).map(w => ({
+                id: w.id, currentConfigGroup: [],
+                readConfig: function (key, fallback) {
+                    return JSON.stringify(this.currentConfigGroup) === JSON.stringify(["General"]) && key === "layoutRequest"
+                        ? w.text : fallback;
+                }
+            }))
+        }));
+        (new Function("panels", "print", script))(panelsFake, text => { printed = text; });
+        return printed === null ? null : JSON.parse(printed);
+    }
+
+    function query(consumer, request, extra) {
+        return JSON.stringify(Object.assign({ consumer: consumer, request: request, version: 1, intent: "query",
+                                              outputName: "Virtual-1" }, extra || {}));
+    }
+
+    // The read side of the layout provider's pipeline, on the real script: a dedicated wake
+    // shortcut with no key; one read once the identity is ready and for each later wake, the
+    // wakes during a read coalesced into one later read; the shell's owner looked up first and
+    // the requests read from it; the shell side bounded and copying only what P1 needs, the
+    // provider checking every row again with its version, intent and output.
+    function runReadPipeline() {
+        if (setup() === "") {
+            done = true;
+            return;
+        }
+        const p = provider;
+        const clock = "org.plasmafusion.clockpill";
+        // The wake: a shortcut of its own, needing no key, that toggles nothing.
+        if (!p.wake || p.wake.name !== "Plasma Fusion: Refresh Layout Controls" || p.wake.sequence !== ""
+                || typeof p.wake.text !== "string" || p.wake.text.length === 0) {
+            fail("read-pipeline: the wake is the shortcut \"Plasma Fusion: Refresh Layout Controls\", with no key");
+            done = true;
+            return;
+        }
+        // Before the identity is ready a wake reads nothing; once it is, one read starts.
+        p.wake.activated();
+        p.wake.activated();
+        if (p.shellLookup.calls !== 0 || calls("createTile").length !== 0) {
+            fail("read-pipeline: a wake before the identity is ready reads nothing and toggles nothing");
+        }
+        DBusStubs.SessionBus.answer(expectIdentityRequest("read-pipeline", p), [{ value: 1 }]);
+        p.identityLookup.finished([":1.42"]);
+        if (JSON.stringify(p.shellLookup.callLog) !== JSON.stringify([["org.kde.plasmashell"]])
+                || p.shellLookup.method !== "GetNameOwner") {
+            fail("read-pipeline: one read once the identity is ready, starting with the shell's owner (got "
+                 + JSON.stringify(p.shellLookup.callLog) + ")");
+        }
+        // The read goes to the shell's unique connection.
+        p.shellLookup.finished([":1.9"]);
+        const r = p.reader;
+        if (r.calls !== 1 || r.service !== ":1.9" || r.path !== "/PlasmaShell" || r.dbusInterface !== "org.kde.PlasmaShell"
+                || r.method !== "evaluateScript" || r.callLog[0].length !== 1) {
+            fail("read-pipeline: the requests are read with evaluateScript on the shell's unique connection (got "
+                 + r.calls + " " + r.service + " " + r.path + " " + r.dbusInterface + " " + r.method + ")");
+            done = true;
+            return;
+        }
+        // The shell side, run as plasmashell runs it: at most 16 widgets, at most 2048
+        // characters, a well-formed consumer and request, the clock's widgets only, and only
+        // the fields P1 needs; widget data travels as JSON, never as code.
+        const script = r.callLog[0][0];
+        // A request of exactly 2048 characters: the default outputName ("Virtual-1") replaced by
+        // a pad that makes up the rest.
+        const wide = query("c-wide", 7);
+        const pad = "x".repeat(2048 - wide.length + "Virtual-1".length);
+        const exact = query("c-wide", 7, { outputName: pad });
+        const hostile = "q\"'\\\n</s>${x}";
+        const rows = runReaderScript(script, [
+            [{ type: clock, id: 1, text: query("c1", 1) },
+             { type: "org.kde.plasma.digitalclock", id: 2, text: query("c2", 2) },
+             { type: clock, id: 3, text: query(hostile, 3, { title: "not copied", token: "not copied" }) },
+             { type: clock, id: 4, text: "{not json" },
+             { type: clock, id: 5, text: query("", 5) },
+             { type: clock, id: 6, text: query("c".repeat(129), 6) },
+             { type: clock, id: 7, text: query("c7", 0) },
+             { type: clock, id: 8, text: query("c8", 2147483647) },
+             { type: clock, id: 9, text: query("c9", 1.5) },
+             { type: clock, id: 10, text: exact },
+             { type: clock, id: 11, text: exact + " " }],
+            [{ type: clock, id: 12, text: query("c12", 12, { version: 2 }) }]
+        ]);
+        if (exact.length !== 2048) {
+            fail("read-pipeline: the test's exact request is 2048 characters (got " + exact.length + ")");
+        }
+        const ids = rows ? rows.map(row => row.id) : null;
+        if (JSON.stringify(ids) !== JSON.stringify([1, 3, 10, 12])) {
+            fail("read-pipeline: the shell side keeps the clock's well-formed requests of at most 2048 characters (got "
+                 + JSON.stringify(ids) + ")");
+        }
+        const third = rows ? rows.find(row => row.id === 3) : null;
+        if (!third || third.consumer !== hostile || JSON.stringify(Object.keys(third).sort())
+                !== JSON.stringify(["consumer", "id", "intent", "outputName", "request", "version"])) {
+            fail("read-pipeline: a row carries the consumer as sent and only the fields P1 needs (got " + JSON.stringify(third) + ")");
+        }
+        const many = [];
+        for (let i = 1; i <= 17; ++i) {
+            many.push({ type: clock, id: 100 + i, text: query("m" + i, i) });
+        }
+        const bounded = runReaderScript(script, [many.slice(0, 9), many.slice(9)]);
+        if (!bounded || bounded.length !== 16 || bounded[15].id !== 116) {
+            fail("read-pipeline: the shell side reads at most 16 widgets (got " + (bounded ? bounded.length : null) + ")");
+        }
+        // The answer: the provider checks every row again; a query of version 1 for a named
+        // output is a request, anything else with a well-formed identity a refusal, kept with its
+        // reason; a row with no well-formed identity is dropped.
+        const answer = JSON.stringify([
+            { id: 1, consumer: "c1", request: 1, version: 1, intent: "query", outputName: "Virtual-1" },
+            { id: 3, consumer: hostile, request: 3, version: 1, intent: "query", outputName: "Virtual-1" },
+            { id: 12, consumer: "c12", request: 12, version: 2, intent: "query", outputName: "Virtual-1" },
+            { id: 13, consumer: "c13", request: 13, intent: "query", outputName: "Virtual-1" },
+            { id: 14, consumer: "c14", request: 14, version: 1, intent: "prepare", outputName: "Virtual-1" },
+            { id: 15, consumer: "c15", request: 15, version: 1, intent: "query", outputName: "" },
+            { id: 16, consumer: "c16", request: 16, version: 1, intent: "query", outputName: "o".repeat(129) },
+            { id: 17, consumer: "", request: 17, version: 1, intent: "query", outputName: "Virtual-1" },
+            { id: 18, consumer: "c18", request: 0, version: 1, intent: "query", outputName: "Virtual-1" }
+        ]);
+        r.finished([answer]);
+        const requests = JSON.stringify(p.requests.map(q => [q.id, q.consumer, q.request, q.outputName]));
+        if (requests !== JSON.stringify([[1, "c1", 1, "Virtual-1"], [3, hostile, 3, "Virtual-1"]])) {
+            fail("read-pipeline: the version-1 queries for a named output are the requests (got " + requests + ")");
+        }
+        const refusals = JSON.stringify(p.refusals.map(q => [q.id, q.reason]));
+        if (refusals !== JSON.stringify([[12, "version"], [13, "version"], [14, "intent"], [15, "output"], [16, "output"]])) {
+            fail("read-pipeline: every other row with a well-formed identity is refused with its reason (got " + refusals + ")");
+        }
+        let since = Date.now();
+        // What a read that ends without an answer must keep: the last read's requests and
+        // refusals, taken once the second read has stored them.
+        const kept = () => JSON.stringify([p.requests, p.refusals]);
+        let before = "";
+        steps = [
+            // The wakes that came before the identity were its read: nothing more follows.
+            { name: "no read owed to the early wakes", until: () => Date.now() - since >= 300, run: function () {
+                if (p.shellLookup.calls !== 1 || p.reading) {
+                    fail("read-pipeline: the wakes before the identity are the identity's read (lookups "
+                         + p.shellLookup.calls + ")");
+                }
+                // A wake reads; three more during that read make one later read.
+                p.wake.activated();
+                p.wake.activated();
+                p.wake.activated();
+                p.wake.activated();
+                if (p.shellLookup.calls !== 2) {
+                    fail("read-pipeline: a wake reads, and no second read starts while one runs (lookups "
+                         + p.shellLookup.calls + ")");
+                }
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([answer]);
+            } },
+            { name: "the coalesced read", until: () => p.shellLookup.calls > 2, run: function () {
+                if (p.shellLookup.calls !== 3) {
+                    fail("read-pipeline: the wakes during a read make one later read (lookups " + p.shellLookup.calls + ")");
+                }
+                before = kept();
+                if (p.requests.length !== 2 || p.refusals.length !== 5) {
+                    fail("read-pipeline: the second read stored its requests and refusals (got " + before + ")");
+                }
+                // A shell owner that is no unique connection is not read from, and the read
+                // keeps the lists.
+                p.shellLookup.finished(["org.kde.plasmashell"]);
+                if (p.reader.calls !== 2 || p.reading) {
+                    fail("read-pipeline: a shell owner that is no unique connection is not read from");
+                }
+                if (kept() !== before) {
+                    fail("read-pipeline: a read from no unique connection keeps the requests and refusals");
+                }
+                // A failed owner lookup ends the read and keeps the lists.
+                p.wake.activated();
+                p.shellLookup.failed();
+                if (p.reading || kept() !== before) {
+                    fail("read-pipeline: a failed lookup ends the read and keeps the requests and refusals");
+                }
+            } },
+            { name: "a read after a failed lookup", until: () => !p.reading, run: function () {
+                p.wake.activated();
+                if (p.shellLookup.calls !== 5) {
+                    fail("read-pipeline: a failed lookup ends the read, and the next wake reads (lookups "
+                         + p.shellLookup.calls + ")");
+                }
+                p.shellLookup.finished([":1.9"]);
+                // A failed or malformed answer ends the read and keeps the lists.
+                p.reader.failed();
+                if (p.reading || kept() !== before) {
+                    fail("read-pipeline: a failed read ends the read and keeps the requests and refusals");
+                }
+                for (const answer of ["{not json", JSON.stringify({ rows: [] }),
+                                      JSON.stringify(Array.from({ length: 17 }, (_, i) => ({
+                                          id: i + 1, consumer: "c", request: i + 1, version: 1, intent: "query",
+                                          outputName: "Virtual-1" })))]) {
+                    p.wake.activated();
+                    p.shellLookup.finished([":1.9"]);
+                    p.reader.finished([answer]);
+                    if (p.reading || kept() !== before) {
+                        fail("read-pipeline: a malformed answer ends the read and keeps the requests and refusals ("
+                             + answer.slice(0, 20) + ")");
+                    }
+                }
+                // A retirement during a read: the answers that follow reach nothing, and the last
+                // requests and refusals stay.
+                p.wake.activated();
+                const lookups = p.shellLookup.calls;
+                const reads = p.reader.calls;
+                p.retire();
+                p.shellLookup.finished([":1.9"]);
+                p.wake.activated();
+                if (p.reading || p.reader.calls !== reads || p.shellLookup.calls !== lookups) {
+                    fail("read-pipeline: after the retirement nothing is read");
+                }
+                if (kept() !== before) {
+                    fail("read-pipeline: the retirement keeps the last requests and refusals");
+                }
+                // The shell's late answers - a read's and a failure - reach neither the lists nor
+                // the journal (the driver counts its lines).
+                p.reader.finished([JSON.stringify([])]);
+                p.reader.failed();
+                if (p.reading || kept() !== before) {
+                    fail("read-pipeline: a late answer after the retirement reaches nothing");
+                }
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
     }
 
     // The layout provider's own rules, on instances of its own (no script): nothing before

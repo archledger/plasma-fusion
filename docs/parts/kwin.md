@@ -1125,6 +1125,19 @@ Offline (laptop):
    retirement release it once; and the provider-rules run refuses it, answers a bus error, an
    owner that cannot be read or is no unique name, and retires before the answer and before
    the owner's - none makes an identity, and the driver reads each refusal from the journal once.
+   A run (`scenario: "read-pipeline"`) drives the read side on the real script: the wake
+   shortcut, named and with no key, toggles nothing; no read before the identity is ready, one
+   when it is, for the shell's owner, and none more for the wakes before it; three wakes during a
+   read make one later read; the read goes to the shell's unique connection only. The harness
+   runs the reader script itself against fake panels as the shell would - 16 of 17 widgets, a
+   request of 2048 characters kept and one of 2049 dropped, malformed JSON, out-of-range
+   consumers and requests and other applets' widgets skipped, only P1's fields copied, a hostile
+   consumer label intact - and the provider's own checks keep the version-1 queries and refuse
+   the rest with their reasons.
+   An owner that is no unique connection, a failed lookup, a failed read and three malformed
+   answers each end the read and keep the requests and refusals; after a retirement nothing is
+   read, they stay, and the shell's late answers reach neither them nor the journal. The driver
+   counts the journal's lines.
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
 bus, 1440x900). Seeds: `packages/kwin/tests/vsession/make-seed.sh STAGE_HOME SEED dark|light`
@@ -1978,6 +1991,7 @@ deliberately defers.
 | Plasma Fusion: Tile Focus Master | focus the master |
 | Plasma Fusion: Tile Focus Next | next in the cycle (master → stack → master) |
 | Plasma Fusion: Tile Focus Previous | previous in the cycle |
+| Plasma Fusion: Refresh Layout Controls | the bars ask for a read of their requests; it needs no key ("The layout provider's state") |
 
 ### Config (`kwinrc [Script-plasmafusion-placement]`)
 
@@ -2022,8 +2036,8 @@ and KWin does not is a failure only hardware shows.
 The bars' layout controls (the workspace layout control, `SPEC-workspace-layout-control.md`)
 are to learn from this script whether supported tiling is available and whether a session is
 on for their view; the script stays the only authority. `contents/ui/LayoutProvider.qml` keeps
-that state for it, and the lifetime's identity name on the session bus. Nothing is published
-yet: the request pipeline and the publication come in later steps.
+that state for it, the lifetime's identity name on the session bus, and the requests the bars
+send. Nothing is answered yet: the publication comes in a later step.
 
 - `capable` is the native verdict while online, and false while offline. The script binds the
   verdict (`nativeCapable`): the writer accepted the registration (`nativeWriter`), the memory
@@ -2055,6 +2069,23 @@ yet: the request pipeline and the publication come in later steps.
   stored, dropping a request still pending, so nothing of a torn-down context is looked up and
   a late answer reaches nothing. A name not granted, or an owner that cannot be read, is said
   once and leaves the lifetime without an identity; none of it moves the revision.
+- The requests come the probe's way too. A bar's clock (`org.plasmafusion.clockpill`) is to save
+  its request in its `layoutRequest` field (General group) and wake the provider with "Plasma
+  Fusion: Refresh Layout Controls", a shortcut with no key; no clock sends one yet. The provider
+  reads once its identity is ready - the requests saved before this lifetime are read too - and
+  once per wake, one read at a time (the wakes during a read make one more read after it): it
+  looks up the shell's owner (`GetNameOwner` of `org.kde.plasmashell`) and reads every clock's
+  request from that unique connection with one shell script call (`evaluateScript`). The script
+  reads at most 16 widgets and requests of at most 2048 characters, keeps only a consumer label
+  of 1 to 128 characters and a request number of 1 to 2147483646, copies only `consumer`,
+  `request`, `version`, `intent` and `outputName`, and carries widget data as JSON, never as
+  code. The provider checks every row again: a version-1 `query` for a named output is a request
+  (`requests`); any other row with a well-formed identity is refused before any action, with its
+  reason - `version`, `intent` or `output` (`refusals`); a row without one is dropped. A read
+  that finds no shell - no owner, or one that is no unique connection - ends quietly; one the
+  shell fails or answers malformed is said once; either keeps the last requests and refusals. A
+  read that comes back says what it found. Nothing is answered yet, and a retirement ends a read
+  in flight: the answers that come after it reach nothing.
 
 ### What it rides
 
