@@ -6,7 +6,9 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 # Workspace layout control checklist
 
 Status: plan accepted on 2026-11-17; P0 is done, and G0 passed on 2026-11-20, when the owner
-confirmed the final receipt's four decisions; P1 has not started; no production integration. Read
+confirmed the final receipt's four decisions. P1 is in progress: the placement script reads the
+writer's null provider token as a refusal (`9d7c42a`) and keeps the layout provider's state
+(`05e3631`); nothing is published to the bars yet. Read
 [plan.md](plan.md) and the accepted [specification](../../SPEC-workspace-layout-control.md).
 Existing native task files are untouched.
 Paths below are relative to the repository. Proposed new files are not claimed to exist.
