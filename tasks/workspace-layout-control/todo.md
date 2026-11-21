@@ -6,9 +6,11 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 # Workspace layout control checklist
 
 Status: plan accepted on 2026-11-17; P0 is done, and G0 passed on 2026-11-20, when the owner
-confirmed the final receipt's four decisions. P1 is in progress: the placement script reads the
-writer's null provider token as a refusal (`9d7c42a`) and keeps the layout provider's state
-(`05e3631`); nothing is published to the bars yet. Read
+confirmed the final receipt's four decisions. P1 is done but for its native recheck on the
+released fork, `v6.8.3-pf1`, which waits for a test image: the placement script's layout provider
+keeps its state, holds its identity name, reads the bars' requests, publishes their answers,
+follows their views and measures its shell calls (`9d7c42a` to `79bb8f0`), and on 2026-11-21 the
+owner amended decision 1's time-limit condition. P2 is next. Read
 [plan.md](plan.md) and the accepted [specification](../../SPEC-workspace-layout-control.md).
 Existing native task files are untouched.
 Paths below are relative to the repository. Proposed new files are not claimed to exist.
@@ -66,17 +68,45 @@ Dependencies: G0. Likely files: `placement/main.qml`, a feature-owned provider c
 `kwin-tests/offscreen/tiling-harness.qml`, `kwin-tests/offscreen/tiling_lifecycle_test.py`,
 `docs/parts/kwin.md` (at most five).
 
-- [ ] Publish capability, view-scoped mode and lifecycle/order information from the existing
+- [x] Publish capability, view-scoped mode and lifecycle/order information from the existing
       tiler; startup, shortcut, native teardown and unload produce the required state changes.
-- [ ] Preserve writer/placement/restoration behavior and avoid redundant per-frame publication.
-- [ ] Match the proven transport exactly; absent/refused native support never reports ready.
-- [ ] Meet the conditions in [g0-decisions.md](g0-decisions.md), among them: publish only for a
+      The state, its revision and lifetime (`05e3631`), the identity name (`64ec9ab`), the
+      requests read (`4eb907e`), the answers published (`f6e47c7`) and the views followed
+      (`79e4e34`); the lifecycle suite checks the revision at every toggle, untoggle and native
+      teardown, and the unload runs see the provider go offline once, before the teardown.
+- [x] Preserve writer/placement/restoration behavior and avoid redundant per-frame publication.
+      The node suites and the existing lifecycle runs pass at every slice; a widget is written
+      again only when what its frame says changes, and the lifecycle suite counts publications
+      (`f6e47c7`, `79e4e34`).
+- [x] Match the proven transport exactly; absent/refused native support never reports ready.
+      The probe's transport (`64ec9ab`, `4eb907e`, `f6e47c7`), stricter where G0's findings and the
+      reviews asked: every request version-checked, reads only from a unique shell connection. A
+      refused registration never reports capable (`9d7c42a`; shown offscreen, its text seen natively
+      only in P0), nor does the legacy lane (`05e3631`; by reading the code alone, as the offscreen
+      stand-in always has the fork's API), and a provider that is not capable answers `capable`
+      false. The absent backend's native run, on a stock-KWin image, is P7's.
+- [x] Meet the conditions in [g0-decisions.md](g0-decisions.md), among them: publish only for a
       new request or changed state, keep the read/publish pipeline bounded and serialized,
       version-check every request, keep a single publisher and keep the alias an identity-only
       lifetime fence. Shortcut updates moved here from G0 item 3.
-- [ ] Keep each publication under a time limit that P1 proposes, and measure publication length
+      P1's part is met in `9d7c42a` to `79bb8f0`. The provider's record of what each bar was told
+      starts empty in each lifetime and never comes from a saved answer. The one publisher is the
+      provider the placement script creates: KWin refuses a second load under a name already loaded
+      (the fork's `src/scripting/scripting.cpp` at `v6.8.3-pf1`), and a copy under another name or a
+      leftover probe stays decision 2's limit. The consumers' part is P2's (below), rejecting
+      retained answers and not depending on the observed output-loss placement (the receipt's
+      finding 10); a mutating request taking effect at most once is P5's.
+- [x] Keep each publication under a time limit that P1 proposes, and measure publication length
       in the lifecycle tests: the shell handles no input while it serves one (decision 1,
-      confirmed on 2026-11-20).
+      confirmed on 2026-11-20, amended on 2026-11-21).
+      The limit is 50 ms (`79bb8f0`): every read and publication is measured, and one over it is
+      said. It is watched, not guaranteed, as the shell saves the widget configuration to disk
+      inside each publication; the condition is now short in typical conditions, measured and
+      warned, with a hardware measurement in P7 ([g0-decisions.md](g0-decisions.md)).
+- [ ] Recheck the transport natively on the fork P1 targets (the receipt's finding 11). Slices 3 to
+      4d ran natively on KWin `6.8.2-3.fc44.pf5`, and slices 1 and 2 not at all; `v6.8.3-pf1` rests
+      on its source. Blocked until the owner approves a test image
+      ([DEFERRED.md](../../docs/DEFERRED.md)).
 
 Verify: fail-first rows in the real-script lifecycle suite; run the spec's `tools/build.sh kwin`,
 tiling/placement node tests and offscreen lifecycle command.
@@ -91,6 +121,16 @@ Dependencies: P1. Likely files: `clock/contents/ui/LayoutState.qml` (new),
 - [ ] Treat outcomes separately from state, including same-provider reordering and timeout/late
       confirmation; no persistent field alone can authorize an action or mode label.
 - [ ] Invalidate correctly on observed provider loss/replacement without an idle polling loop.
+- [ ] Accept what P1's provider sends (its reviews): refused frames, a null view and possibly an
+      empty activity, an answer to a new request at an unchanged revision, and a frame pushed at a
+      newer revision with no request of its own. Expect no automatic retry after a failed or
+      malformed publication, as a wake sends again, and do not depend on the observed output-loss
+      placement (the receipt's finding 10).
+- [ ] Wake the provider when a clock starts: at login the provider's first read usually comes before
+      the shell has started. Under a Kiosk policy that refuses the shell's scripting, no answer
+      comes, so fall back to unknown or unavailable on the bar's own deadline (the specification's
+      items 7 and 8, with P3). If the bars come to wake on view changes, revisit the provider's info
+      lines per read and publication and its warning per failed read.
 
 Verify: fail-first cases in existing calendar suites, on private buses as specified; include a
 retained-field bootstrap and provider-owner replacement control. No window operations.
@@ -180,6 +220,8 @@ Dependencies: P6 and source review. Likely files: the G0 scenario/seed fixtures 
       item 3; building that image needs the owner's approval ([g0-decisions.md](g0-decisions.md)).
 - [ ] Preserve evidence, screenshots, versions/OIDs and limits; no new script error/crash or
       native restoration/placement-memory regression in the tested scenarios.
+- [ ] Measure the publications' cost on real hardware, a physical disk rather than a container's
+      virtual one, on a device the owner approves then (decision 1 as amended on 2026-11-21).
 
 Verify: the spec's exact commands, the qualified scenario runner and result checks. Record
 missing tools or environments as incomplete validation, not pass. Do not use another session's

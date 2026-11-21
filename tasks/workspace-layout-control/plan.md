@@ -78,6 +78,13 @@ reproduction added, that each publication stays under a time limit which P1 prop
 lifecycle tests measure ([g0-receipt.md](g0-receipt.md), decision 1). G0 passed. For now the
 owner chose not to report upstream the QtWayland release defect that the reproduction found.
 
+On 2026-11-21 (UTC), once P1 had measured the publications' cost (`79bb8f0`), the owner amended that
+condition ([g0-decisions.md](g0-decisions.md), decision 1): the 50 ms limit P1 proposed is watched,
+not guaranteed, because each publication has the shell save the widget configuration to disk inside
+the call. The condition is now that publications stay short in typical conditions, with every read
+and publication measured and one over the limit said, and P7 is to measure the cost on real
+hardware.
+
 ## Source evidence and limits
 
 Inspected at Plasma Fusion main `44412a8901bf15c9f467fd5675795ee42fc3ffb7`:

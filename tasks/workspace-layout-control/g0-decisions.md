@@ -13,7 +13,8 @@ delegation; the owner had not seen them before. The owner's review of the final 
 (todo.md, "Checkpoint G0") is therefore the owner's first review of them: the final receipt lists
 each answer, including the changes to the G0 definition, for confirmation, and the owner can
 revise any of them. Nothing here starts P1, changes production code or clears G0. On 2026-11-20
-the owner confirmed all four, decision 1 with one added condition (below), and G0 passed.
+the owner confirmed all four, decision 1 with one added condition (below), and G0 passed. On
+2026-11-21 the owner amended that condition once P1 had measured its cost (below).
 
 Below, "the receipt", its sections and its finding numbers are the interim's (`0d3d052`); the final
 [g0-receipt.md](g0-receipt.md) numbers the interim's findings 6 and 7 as 9 and 10.
@@ -66,6 +67,24 @@ held pointer, and nothing ran on hardware. What remains is latency, so the final
 one more condition for the owner to confirm: keep each publication short, under a bound that P1
 proposes and its lifecycle tests measure (`g0-receipt.md`, decision 1). The owner confirmed this
 decision with that condition the same day, and G0 passed.
+
+Amended on 2026-11-21 (UTC), once P1 had measured the cost (`79bb8f0`; `docs/parts/kwin.md`, "What a
+call costs the shell"). P1 proposed 50 ms, and its lifecycle tests check that every read and
+publication is measured and that one over the limit is said, but the limit can be watched, not
+guaranteed: every publication has the shell save the widget configuration to disk, synced, inside
+the call - once per publication while the clock does not declare its response field, and once per
+frame when it does, as P3 must. In the test sessions, a container on a virtual disk, publications of
+16 frames had medians of 5 to 8 ms from the script's start, and 21 to 26 ms declared; undeclared, 14
+of the committed design's 18 runs also had a few calls of 52 to 332 ms from the script's start, each
+covered by a stall of the shell's main thread wherever a probe watched. The review set out three
+options, and the first was recommended, with a hardware measurement in P7: keep each publication
+short in typical conditions, measured and warned, under the 50 ms bound P1 proposed. The owner
+replied "Let proceed with your best recommendation for the next task (workflow)", and the condition
+reads so from then; P7 measures the publications' cost on real hardware, which needs the owner's
+approval then. The other two were to publish less, frames carrying only the session's view with each
+bar checking its own desktop, which turns on how the specification's rule that the placement script
+is the only authority for the view is read; or to stop and bring the save back as a specific gap, as
+the specification asks when a reliable boundary cannot be built within its scope.
 
 ## 2. The identity alias is the production lifetime fence
 
