@@ -3293,7 +3293,12 @@ Item {
                 ws.windows = [late, winB, winA, master];
                 ws.windowAdded(late);
                 ws.activeWindow = master;
-                script.staleCellMillis = 60;
+                // Short enough for the steps below to wait out, long against a process stall: in
+                // the second session the untoggle that stamps the bound and the statement that
+                // settles the window run in one turn, and a stall longer than the bound between
+                // them expired the window's entry before it settled (#210). Each step that needs
+                // the bound passed waits 1250 ms after its untoggle.
+                script.staleCellMillis = 1000;
                 tileShortcut.activated();
                 if (!inColumn(late)) {
                     fail("released: the late window is in its cell");
