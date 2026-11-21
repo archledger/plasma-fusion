@@ -720,6 +720,168 @@ waiting.deleteLater()
 watched.deleteLater()
 state.deleteLater()
 QTest.qWait(50)
+
+# The clock's wiring: main.qml's block between "BEGIN layout state" and "END layout state" runs
+# unchanged in a fixture, as the launcher's opening test runs main.qml's blocks, but for the two
+# outside objects it names, the widget's configuration (Plasmoid.configuration) and its window's
+# screen (Screen.name). The clock asks for its screen's output and saves each request before the
+# wake, as desktop scripting reads the saved configuration; the answer comes through the
+# configuration's layoutResponse; a hidden control leaves the layout state idle and withdraws the
+# saved request.
+WIRED = hashlib.md5(b"wired").hexdigest()
+UNANSWERED = "clockpill: no layout answer was taken in time"
+check(bus.registerService(PREFIX + WIRED) and bus.interface().serviceOwner("org.kde.KWin").value() == owner,
+      "the clock's wiring: KWin's name and a new lifetime's identity name are held here")
+source = (Path(__file__).resolve().parent.parent / "contents/ui/main.qml").read_text()
+BEGIN, END = "    // BEGIN layout state\n", "    // END layout state\n"
+block = source.split(BEGIN, 1)[1].split(END, 1)[0] if BEGIN in source and END in source else ""
+expect(block != "" and "Plasmoid.configuration" in block and "Screen.name" in block,
+       "the clock's wiring: main.qml marks its layout state block, which uses the configuration and the screen")
+# runDebugAction lies outside the block: its branch for the hook is checked as text.
+expect('parts[0] === "dump-layout"' in source and 'root.dumpLayout(parts.slice(1).join(":"))' in source,
+       "the clock's wiring: runDebugAction hands dump-layout:TAG to dumpLayout")
+# The configuration's start values are literals, as the real configuration's are already there when
+# the clock is created: a binding to them would change as the fixture completes.
+FIXTURE = ("import QtQuick\nItem {\n    id: root\n    property string screenName: \"Virtual-0\"\n"
+           "    signal saved(string request)\n    property var saves: []\n    property QtObject config: QtObject {\n"
+           "        property bool showLayoutControl: SHOWN\n        property string layoutRequest: REQUEST\n"
+           "        property string layoutResponse: \"\"\n        function writeConfig(): void {\n"
+           "            root.saves = root.saves.concat([layoutRequest]);\n            root.saved(layoutRequest);\n"
+           "        }\n    }\n"
+           + block.replace("Plasmoid.configuration", "root.config").replace("Screen.name", "root.screenName")
+           + "    readonly property QtObject layout: layoutState\n}\n")
+wiring_components = []
+
+
+def parsed_json(text):
+    try:
+        return json.loads(text)
+    except (TypeError, ValueError):
+        return {}
+
+
+def wired(shown=True, request=""):
+    """A fixture whose configuration starts with these values, and what it saves, recorded beside
+    the wakes (saves made as it completes are in its saves property)."""
+    component = QQmlComponent(engine)
+    wiring_components.append(component)
+    # A URL in the package's contents/ui, so that LayoutState resolves as it does for main.qml;
+    # nothing is written there.
+    component.setData(FIXTURE.replace("SHOWN", "true" if shown else "false").replace("REQUEST", json.dumps(request)).encode(),
+                      QUrl.fromLocalFile(str(Path(__file__).resolve().parent.parent / "contents/ui/LayoutWiringFixture.qml")))
+    item = component.create() if block else None
+    if item is None:
+        print("the clock's wiring: the fixture did not load: " + "; ".join(e.toString() for e in component.errors()))
+    found = []
+    if item is not None:
+        item.saved.connect(lambda text: (found.append(text), events.append(("saved", text))))
+    return item, found
+
+
+messages = []
+qInstallMessageHandler(lambda mode, context, message: messages.append(message))
+events.clear()
+wiring, saved = wired()
+expect(wiring is not None, "the clock's wiring: the block runs with the configuration and the screen supplied")
+if wiring is not None:
+    config, layout = wiring.property("config"), wiring.property("layout")
+    until(lambda: len(events) == 2)
+    request = parsed_json(saved[0]) if saved else {}
+    expect([kind for kind, _ in events] == ["saved", "wake"] and events[1][1] == WAKE
+           and request.get("intent") == "query" and request.get("outputName") == "Virtual-0"
+           and prop(config, "layoutRequest") == saved[0],
+           "the clock's wiring: the clock asks for its screen's output and saves the request before the wake (%s)" % events)
+    answer = {"version": 1, "consumer": request.get("consumer"), "request": request.get("request"), "epoch": WIRED,
+              "identityName": PREFIX + WIRED, "backendOwner": owner, "revision": 1, "status": "online",
+              "capable": True, "tiled": True, "view": dict(VIEW, outputName="Virtual-0")}
+    config.setProperty("layoutResponse", json.dumps(answer))
+    expect(until(lambda: prop(layout, "mode") == "tiled") and prop(layout, "epoch") == WIRED,
+           "the clock's wiring: the provider's answer in the configuration reaches the layout state")
+    QMetaObject.invokeMethod(wiring, "dumpLayout", Q_ARG(str, "wired"))
+    lines = [m.split("clockpill: layout dump wired ", 1)[1] for m in messages if "clockpill: layout dump wired " in m]
+    dumped = parsed_json(lines[0]) if lines else {}
+    expect(dumped == {"output": "Virtual-0", "outcome": "answered", "mode": "tiled", "epoch": WIRED, "revision": 1, "refusal": ""},
+           "the clock's wiring: the testing hook dump-layout says the layout state (%s)" % lines)
+    events.clear()
+    saved.clear()
+    config.setProperty("showLayoutControl", False)
+    expect(until(lambda: prop(layout, "outcome") == "idle") and prop(layout, "mode") == "unknown"
+           and until(lambda: saved) and not until(lambda: len(events) > 1, ms=300)
+           and [kind for kind, _ in events] == ["saved"] and saved == [""] and prop(config, "layoutRequest") == "",
+           "the clock's wiring: a hidden control leaves the layout state idle and withdraws the saved request, with one"
+           " save and no wake (%s)" % events)
+    events.clear()
+    saved.clear()
+    config.setProperty("showLayoutControl", True)
+    until(lambda: len(events) == 2)
+    again = parsed_json(saved[0]) if saved else {}
+    expect([kind for kind, _ in events] == ["saved", "wake"] and again.get("request", 0) > request.get("request", 0)
+           and again.get("outputName") == "Virtual-0" and prop(layout, "outcome") == "pending",
+           "the clock's wiring: shown again, the clock asks again (%s)" % events)
+    events.clear()
+    saved.clear()
+    wiring.setProperty("screenName", "Virtual-1")
+    until(lambda: len(events) == 2)
+    expect([kind for kind, _ in events] == ["saved", "wake"] and saved and parsed_json(saved[0]).get("outputName") == "Virtual-1",
+           "the clock's wiring: on another screen the clock asks for that output (%s)" % events)
+    layout.setProperty("deadlineMs", 300)
+    wiring.setProperty("screenName", "Virtual-2")
+    unanswered = until(lambda: prop(layout, "outcome") == "unconfirmed", ms=1500)
+    QTest.qWait(100)
+    said = [m for m in messages if UNANSWERED in m]
+    expect(unanswered and len(said) == 1 and prop(layout, "mode") == "unknown",
+           "the clock's wiring: of all its outcomes, only a request with no answer taken by its deadline is said, once (%s)"
+           % said)
+    wiring.deleteLater()
+# Started hidden: a request saved earlier is withdrawn with one save, as the fixture completes (its
+# saves property records it, before any connection could), and an empty field is left as it is;
+# neither asks or wakes.
+EARLIER = '{"version":1,"intent":"query","consumer":"earlier","request":4,"outputName":"Virtual-0"}'
+events.clear()
+hidden, _ = wired(shown=False, request=EARLIER)
+expect(hidden is not None and not until(lambda: events, ms=300) and prop(hidden, "saves") == [""]
+       and prop(hidden.property("config"), "layoutRequest") == "" and prop(hidden.property("layout"), "outcome") == "idle",
+       "the clock's wiring: started hidden, the clock withdraws the request saved earlier, with one save, and asks"
+       " nothing (%s, %s)" % (prop(hidden, "saves") if hidden is not None else None, events))
+events.clear()
+bare, _ = wired(shown=False)
+expect(bare is not None and not until(lambda: events, ms=300) and prop(bare, "saves") == [],
+       "the clock's wiring: started hidden with no request saved, the clock saves nothing (%s)" % events)
+# Started shown with a request saved earlier, as after a restart: nothing is withdrawn, and the
+# clock's own request is its one save.
+events.clear()
+shown, _ = wired(request=EARLIER)
+until(lambda: len(events) == 2)
+first_saves = prop(shown, "saves") if shown is not None else None
+expect(shown is not None and [kind for kind, _ in events] == ["saved", "wake"] and len(first_saves) == 1
+       and parsed_json(first_saves[0]).get("consumer") not in (None, "earlier"),
+       "the clock's wiring: started shown with a request saved earlier, the clock withdraws nothing and saves its own"
+       " request once (%s)" % first_saves)
+# Hidden through the settings dialog: Apply copies the page's values back in main.xml's order, the
+# visibility before the request, whose copy the page refreshed to the saved one, and then saves
+# (AppletConfiguration.qml's saveConfig()). The withdrawal must come after that write, not inside it.
+events.clear()
+applied, _ = wired()
+until(lambda: len(events) == 2)
+applied_config = applied.property("config") if applied is not None else None
+if applied_config is not None:
+    copy = prop(applied_config, "layoutRequest")
+    applied_config.setProperty("showLayoutControl", False)
+    applied_config.setProperty("layoutRequest", copy)
+    QMetaObject.invokeMethod(applied_config, "writeConfig")
+    until(lambda: prop(applied_config, "layoutRequest") == "", ms=500)
+    QTest.qWait(50)
+applied_saves = prop(applied, "saves") if applied is not None else None
+expect(applied_config is not None and prop(applied_config, "layoutRequest") == "" and applied_saves and applied_saves[-1] == "",
+       "the clock's wiring: hidden through the settings dialog's Apply, which writes the request back after the"
+       " setting, the request is still withdrawn (%s)" % applied_saves)
+others = [m for m in messages if "clockpill: layout dump " not in m and UNANSWERED not in m]
+expect(not others, "the clock's wiring: the fixtures say nothing else (%s)" % others)
+qInstallMessageHandler(None)
+for item in (hidden, bare, shown, applied):
+    if item is not None:
+        item.deleteLater()
+QTest.qWait(50)
 print(f"Layout state and calendar adapter: {checks} checks, {len(failures)} failures")
 if failures:
     raise SystemExit("layout state: " + "; ".join(failures))

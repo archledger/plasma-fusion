@@ -320,8 +320,59 @@ PlasmoidItem {
         trackSeconds: Plasmoid.configuration.showSeconds
     }
 
+    // BEGIN layout state
+    // The bar's workspace layout state (LayoutState.qml; docs/parts/shell-topbar.md, "Workspace
+    // layout state"), not shown yet: the control comes in P4. It asks for this bar's output unless
+    // the user hides the control, and then stays idle: no request and no wake. Desktop scripting
+    // reads the saved configuration, not this property map, so each request is saved before the
+    // component wakes the provider.
+    LayoutState {
+        id: layoutState
+        outputName: Plasmoid.configuration.showLayoutControl ? Screen.name : ""
+        response: Plasmoid.configuration.layoutResponse
+        onRequested: text => {
+            Plasmoid.configuration.layoutRequest = text;
+            Plasmoid.configuration.writeConfig();
+        }
+        // Said once for each request with no answer taken by its deadline: no placement script,
+        // stock KWin, a Kiosk policy that refuses the shell's scripting, or an answer whose check
+        // failed. A late answer still counts.
+        onOutcomeChanged: {
+            if (layoutState.outcome === "unconfirmed") {
+                console.info("clockpill: no layout answer was taken in time; the mode is unknown until one is");
+            }
+        }
+    }
+    // While the user hides the control, its saved request is withdrawn, at start and when they hide
+    // it: an empty field is no request to the provider, which forgets the widget at its next read,
+    // so no frame, and no save of the configuration, keeps following a bar that shows nothing.
+    // Until that read the provider may still push frames; a wake to end that at once is P4's.
+    // On a change the withdrawal waits for whatever changed the setting: the settings dialog's
+    // Apply writes the setting first and then the page's copy of the request, and saves.
+    Connections {
+        target: Plasmoid.configuration
+        function onShowLayoutControlChanged(): void {
+            Qt.callLater(root.withdrawLayoutRequest);
+        }
+        Component.onCompleted: root.withdrawLayoutRequest()
+    }
+    function withdrawLayoutRequest(): void {
+        if (!Plasmoid.configuration.showLayoutControl && Plasmoid.configuration.layoutRequest !== "") {
+            Plasmoid.configuration.layoutRequest = "";
+            Plasmoid.configuration.writeConfig();
+        }
+    }
+    // The testing hook "dump-layout:TAG" (runDebugAction) logs the layout state.
+    function dumpLayout(tag: string): void {
+        console.info("clockpill: layout dump " + tag + " " + JSON.stringify({
+            output: layoutState.outputName, outcome: layoutState.outcome, mode: layoutState.mode,
+            epoch: layoutState.epoch, revision: layoutState.revision, refusal: layoutState.refusal
+        }));
+    }
+    // END layout state
+
     // Testing hooks (config key debugAction, cleared after use): "dump-bar:TAG", "menu-refresh"
-    // (rebuild the global menu's cached full view now).
+    // (rebuild the global menu's cached full view now), "dump-calendar:TAG", "dump-layout:TAG".
     readonly property string debugAction: Plasmoid.configuration.debugAction
     onDebugActionChanged: Qt.callLater(runDebugAction)
     function runDebugAction(): void {
@@ -335,6 +386,8 @@ PlasmoidItem {
             (widthBudget.item as WidthBudget).dump(parts.slice(1).join(":"));
         } else if (parts[0] === "menu-refresh" && widthBudget.item) {
             console.info("clockpill: debug: full view rebuilt " + (widthBudget.item as WidthBudget).refreshFullView());
+        } else if (parts[0] === "dump-layout") {
+            root.dumpLayout(parts.slice(1).join(":"));
         } else if (parts[0] === "dump-calendar") {
             const view = calendarLoader.item as CalendarView;
             if (view) {

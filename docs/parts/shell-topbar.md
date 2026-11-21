@@ -61,7 +61,7 @@ No configuration is needed; the defaults are the board values.
 |---|---|---|
 | `showWorkspaces` | true | dots; hidden anyway while there is only one workspace |
 | `wheelSwitchesWorkspaces` | true | scrolling over the pill switches workspaces (wraps when KWin's navigation wraps); a page scroll still turning as the pointer passes over the pill is ignored (`FusionWheelGuard`, shared-blocks.md) |
-| `showLayoutControl` | true | the dynamic tiling control (Floating or Tiled for the current workspace), which appears only once the placement script confirms that tiling is available there; the control itself comes in P4 (`tasks/workspace-layout-control/todo.md`), and the tiling shortcut works either way. Settings: "Workspaces: Show the dynamic tiling control" |
+| `showLayoutControl` | true | the dynamic tiling control (Floating or Tiled for the current workspace), which appears only once the placement script confirms that tiling is available there; the control itself comes in P4 (`tasks/workspace-layout-control/todo.md`), and the tiling shortcut works either way. Off, the bar's layout state stays idle, with no request and no wake, and its saved request is withdrawn. Settings: "Workspaces: Show the dynamic tiling control" |
 | `showDate` | true | date before the time |
 | `dateFormat` | `auto` | `auto`: weekday, day, month in the order of the region's long date, without year and commas (en_GB "Mon 28 Sept", en_US "Mon Sep 28", de_DE "Mo. 28. Sept.", es_ES "lun 28 de sept", ja_JP "9月28日 (月)"); `custom` uses `customDateFormat` |
 | `customDateFormat` | `ddd d MMM` | QLocale format |
@@ -76,7 +76,7 @@ No configuration is needed; the defaults are the board values.
 | `menuPolicy` | `centre` | when the budget compacts the global menu: `centre` (whenever the pill cannot stay centred with the full menu, ADAPTIVE 5.1) or `overlap` (only when the bar would otherwise overlap; the pill may leave the middle) |
 | `menuSearch` | `false` | show the global menu's Search entry. Off because Plasma's applet (6.7.5 and 6.8.3) crashes when you type in it after the active app rebuilt a submenu (Chrome's History does): it keeps pointers to deleted menu items. A KDE bug ([526561](https://bugs.kde.org/show_bug.cgi?id=526561)), reproduced with a stock panel on 6.7.5 and 6.8.3; analysis and the upstream drafts in the appmenu crash record of 2026-10-02 (the maintainer's records). Arrowing right past the last menu skips the hidden entry and wraps to the first menu. The rebuilt plasma-workspace of `packaging/patches/plasma-workspace` (its README) carries the fix and names the action `appmenu-guarded`: the entry is shown there whatever the key says, and hidden again when a Fedora update replaces the rebuild. Settings: "Global menu: Show the Search entry" |
 | `menuCompacted` | false | internal: the budget compacted the global menu (and may switch it back) |
-| `debugAction` | "" | testing only: `dump-bar:TAG` logs the bar's widgets, the pill's offset and the budget step |
+| `debugAction` | "" | testing only: `dump-bar:TAG` logs the bar's widgets, the pill's offset and the budget step; `dump-layout:TAG` the bar's workspace layout state |
 | `layoutRequest` | "" | internal: the clock's query to the placement script's layout provider ([Workspace layout state](#workspace-layout-state-layoutstateqml)), which the provider reads through desktop scripting |
 | `layoutResponse` | "" | internal: the provider's answer, written through desktop scripting; a saved answer alone never counts. Declared, it makes each frame the provider writes cost the shell a save of the widget's configuration ([kwin.md](kwin.md#the-layout-providers-state), what a call costs the shell) |
 
@@ -202,11 +202,27 @@ event editor. The backend keeps pending editor calls alive when the popup loses 
 ### Workspace layout state (`LayoutState.qml`)
 
 The clock's side of the workspace layout transport, whose other side is the placement script's
-layout provider ([kwin.md](kwin.md#the-layout-providers-state)). Nothing shows it yet: the clock's
-schema declares the transport's fields (`layoutRequest` and `layoutResponse`, above), which P3 is to
-wire to the component, and the control comes in P4 (`tasks/workspace-layout-control/todo.md`). The
-component's owner passes the saved answer in (`response`) and saves each request it is asked to
-(`requested`), and may shorten the requests' deadline (`deadlineMs`).
+layout provider ([kwin.md](kwin.md#the-layout-providers-state)). Nothing shows it yet: the control
+comes in P4 (`tasks/workspace-layout-control/todo.md`). The component's owner passes the saved
+answer in (`response`), saves each request it is asked to (`requested`), and may shorten the
+requests' deadline (`deadlineMs`). The clock's `main.qml` owns it:
+
+- It asks for its window's output (`Screen.name`) unless the user hides the control
+  (`showLayoutControl` off), when the component stays idle, with no request and no wake. The
+  saved request is then withdrawn, at start and when the user hides the control: an empty
+  `layoutRequest` is no request to the provider, which forgets the widget at its next read, so no
+  frame, and no save of the configuration, keeps following a bar that shows nothing. On a change
+  the withdrawal waits for whatever changed the setting (`Qt.callLater`): the settings dialog's
+  Apply writes the setting first, then the page's copy of the request, and saves. Until the
+  provider's next read, which needs some bar's wake, it may still push frames; ending that at once
+  would need a wake the component does not make (P4).
+- It binds `response` to the configuration's `layoutResponse`, and writes each request to
+  `layoutRequest` and saves the configuration (`writeConfig()`) before the component wakes the
+  provider: desktop scripting reads the saved configuration, not the property map.
+- A request with no answer taken by its deadline is said once in the shell's log, "no layout answer
+  was taken in time; the mode is unknown until one is": no placement script, stock KWin, a Kiosk
+  policy that refuses the shell's scripting, or an answer whose check failed. A late answer still
+  counts. The testing hook `dump-layout:TAG` (`debugAction`) logs the state.
 
 - A request is a version-1 `query` for the bar's output (`outputName`, 1 to 128 characters):
   `{version, intent, consumer, request, outputName}`. The consumer is drawn fresh for each instance
@@ -291,6 +307,18 @@ changes `deadlineMs`; a failed check, or a wake that fails with kglobalaccel gon
 leaves the request to its deadline, with nothing asked again; a deadline outside 100 to 10000 ms
 gives the timer 10 s; and one that would end after the component is gone touches nothing. Its
 layout-state checks go on after a failure, so that one run shows them all.
+It runs `main.qml`'s wiring - the block between its `BEGIN layout state` and `END layout state`
+lines - unchanged in a fixture that supplies the configuration and the screen, as the launcher's
+opening test runs `main.qml`'s blocks: the request saved before the wake, the answer through
+`layoutResponse`, a hidden control leaving the state idle and withdrawing the saved request with
+one save, and shown again asking again, another screen asking for its output, the `dump-layout`
+hook, and of all the outcomes only a request with no answer taken by its deadline said, once. Three
+more fixtures start with a configuration already set: hidden with a request saved earlier (withdrawn
+with one save), hidden with none (nothing saved), and shown with one (nothing withdrawn, the clock's
+own request its one save). A fourth replays the settings dialog's Apply in one turn - the setting
+written false, the page's copy of the request written back, the configuration saved - and the
+request must still end withdrawn. `runDebugAction`, outside the block, is checked as text for its
+`dump-layout` branch, and the fixtures must log nothing but the dumps and the one unanswered line.
 
 ## Global menu (stock `org.kde.plasma.appmenu`)
 
