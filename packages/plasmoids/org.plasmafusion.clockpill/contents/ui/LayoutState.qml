@@ -10,7 +10,8 @@ import org.kde.plasma.workspace.dbus as DBus
 // on the session bus: the connection that owns org.kde.KWin must also own the answering lifetime's
 // identity name. Until such an answer comes the state is unknown. A saved answer alone is never
 // state: every instance asks as a consumer of its own, so an answer kept from an earlier one does
-// not count.
+// not count. The bus says when the answering lifetime's names leave its connection, and the bar is
+// then unknown again.
 Item {
     id: layoutState
 
@@ -52,8 +53,10 @@ Item {
         property int revision: 0
         // The lifetime (epoch, owner, identity) whose frames the current request takes.
         property var bound: null
-        // The newest well-formed frame waiting for its check on the bus.
+        // The newest well-formed frame waiting for its check on the bus, and the frame being
+        // checked while its check runs.
         property var pending: null
+        property var checking: null
         property bool verifying: false
         property bool started: false
         property bool stopped: false
@@ -175,6 +178,7 @@ Item {
         const frame = d.pending;
         d.pending = null;
         d.verifying = true;
+        d.checking = frame;
         ownerOf("org.kde.KWin", kwin => {
             if (kwin !== frame.backendOwner) {
                 verified();
@@ -202,16 +206,19 @@ Item {
     // The check is over; the frame that waited, if one did, is checked next.
     function verified(): void {
         d.verifying = false;
+        d.checking = null;
         verify();
     }
 
     // Asks the bus for the unique name of the connection that owns a name. A failed lookup ends
     // the check and confirms nothing, and a reply after the component is gone touches nothing.
+    // The signature spares the plugin an introspection round trip before each lookup.
     function ownerOf(name: string, done: var): void {
         const life = d.life;
         DBus.SessionBus.asyncCall({
             service: "org.freedesktop.DBus", path: "/org/freedesktop/DBus",
-            iface: "org.freedesktop.DBus", member: "GetNameOwner", arguments: [name]
+            iface: "org.freedesktop.DBus", member: "GetNameOwner", signature: "(s)",
+            arguments: [name]
         }, reply => {
             if (life.alive) {
                 done(String(reply.value));
@@ -253,6 +260,48 @@ Item {
         d.answer = { capable: frame.capable, view: frame.view, tiled: frame.tiled };
         d.refusal = "";
         d.outcome = "answered";
+    }
+
+    // The bound lifetime is gone, with no frame, once its identity name or KWin's changes hands -
+    // released, or handed straight to another connection - as its connection held both: the bar is
+    // unknown and asks again, and whichever provider comes next reads the request saved.
+    // A check needs one rule of its own. The lookups share this session connection with the
+    // watch, and the bus says an owner changed before it answers any lookup made after, so a change
+    // before a lookup fails it, and one after the check's answer is taken finds the lifetime bound.
+    // But KWin's owner is looked up first and the identity's last: KWin's name moving from the
+    // frame's owner between the two would let the check take a lifetime KWin no longer has, so
+    // that, too, makes the bar ask again, which retires the request the check would answer. A move
+    // the bus said just before the check began, and that reaches the bar while it runs, counts as
+    // well: asking again is always safe.
+    function nameMoved(name: string, previous: string): void {
+        const bound = d.bound !== null && (name === d.bound.identity || name === "org.kde.KWin");
+        const checked = d.checking !== null && name === "org.kde.KWin"
+            && previous === d.checking.backendOwner;
+        if (bound || checked) {
+            ask();
+        }
+    }
+
+    // Every change of a name's owner on the session bus, with both owners, so that a name handed
+    // straight on is seen as well as one released; no polling.
+    DBus.SignalWatcher {
+        enabled: !d.stopped
+        busType: DBus.BusType.Session
+        service: "org.freedesktop.DBus"
+        path: "/org/freedesktop/DBus"
+        iface: "org.freedesktop.DBus"
+        // The plugin hands strings over wrapped, so they are made strings first.
+        function dbusNameOwnerChanged(name: var, previous: var, current: var): void {
+            layoutState.nameMoved(String(name), String(previous));
+        }
+        // The bus says these to this connection about its own names and services; they say nothing
+        // of the provider's lifetime.
+        function dbusNameAcquired(name: var): void {
+        }
+        function dbusNameLost(name: var): void {
+        }
+        function dbusActivatableServicesChanged(): void {
+        }
     }
 
     onOutputNameChanged: {

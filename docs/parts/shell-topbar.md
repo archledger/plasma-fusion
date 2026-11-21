@@ -232,14 +232,31 @@ schema declares the transport's fields in P3 and the control comes in P4
   equal one is not. A frame from another lifetime makes the bar ask again, as revisions do not carry
   over between lifetimes, and so does the bound lifetime's offline frame. A new request starts
   unknown and from no revision, so its answer may come at the revision the last one had.
+- A lifetime can also go with no frame, when its script or KWin stops without one. The component
+  watches the session bus's `NameOwnerChanged` through the workspace plugin's `SignalWatcher` (the
+  same at plasma-workspace 6.7.5 and 6.8.3), with no polling. The bound lifetime's connection holds
+  its identity name and `org.kde.KWin`, so once either changes hands - released, or handed straight
+  to another connection - the bar is unknown and asks again, and whichever provider comes next reads
+  the saved request. A watch of whether a name is held, the plugin's `DBusServiceWatcher`, would
+  miss the handover: that is one change, naming both owners. The watch hears every name change on
+  the session bus, as the plugin's match names no name, and each costs the component two
+  comparisons.
+- A check needs one rule of its own. Its lookups share the session connection with the watch, and
+  the bus says an owner changed before it answers any lookup made after it, so a change before a
+  lookup fails it, and one after the check's answer is taken finds the lifetime bound. But a check
+  looks up KWin's owner first and the identity name's last. KWin's name moving from the frame's
+  owner between the two would let the check take a lifetime KWin no longer has, so a move of KWin's
+  name from the owner of the frame being checked also makes the bar ask again, which retires the
+  request the check would answer. A move said just before the check began counts as well, as
+  asking again is always safe. Each lookup gives the plugin its signature, so no introspection
+  round trip comes first.
 - The component reports `outcome` - idle, pending, answered, or refused with `refusal` its reason -
   apart from the state an answer gives: `capable`, `view`, `tiled`, `epoch` and `revision`. `mode`
   is unknown until an answer is accepted, unavailable when the provider cannot tile or KWin has no
   such output, and otherwise floating or tiled. A saved answer alone is never state: an earlier
   instance's answer names that instance's consumer.
-- Not yet, P2's next slices: a provider lost with no frame (the bus's `NameOwnerChanged`), and an
-  answer that never comes (a deadline, and the Kiosk case, where no answer can come); the same
-  deadline covers a lookup that fails and leaves the request pending.
+- Not yet, P2's last slice: an answer that never comes (a deadline, and the Kiosk case, where no
+  answer can come); the same deadline covers a lookup that fails and leaves the request pending.
 
 Tests: `tests/calendar_backend_test.py`, run as above, also checks the layout state against
 stand-ins on its private bus - `org.kde.KWin` and the lifetimes' identity names on its own
@@ -248,8 +265,13 @@ and the wake after it, the answer an earlier instance was given, a reply or a qu
 the component is gone, the malformed forms, the bus checks with KWin's name unowned or moved among
 them, revision order and the frames that wait, an output KWin does not have, a refusal, another
 lifetime, offline frames from the bound lifetime and from others, a frame checked as its request
-moves on, and going idle. Its layout-state checks go on after a failure, so that one run shows them
-all.
+moves on, and going idle. It also covers a provider lost with no frame: the bound identity name or
+KWin's name released, and KWin's name handed straight to another connection (one change, recorded),
+against names that change hands with nothing bound, or nothing of the bound lifetime, and a name
+released after the component is gone. For the check's rule, KWin's name is handed on in the same
+turn as a frame arrives - before the check's first lookup or between its two, which the test cannot
+tell apart - against a move from another owner during a check and one after it. Its layout-state
+checks go on after a failure, so that one run shows them all.
 
 ## Global menu (stock `org.kde.plasma.appmenu`)
 
