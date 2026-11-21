@@ -9,6 +9,7 @@ QT_QPA_PLATFORM=offscreen dbus-run-session -- python3 calendar_view_test.py STAG
 import os
 from pathlib import Path
 import sys
+import time
 
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 from PySide6.QtCore import Property, QDate, QDateTime, QObject, QPoint, QPointF, QRectF, QTime, QTimeZone, Qt, QUrl, Slot
@@ -92,8 +93,13 @@ root.setProperty("touch", True)
 QTest.qWait(50)
 check(all(item.height() >= 44 for item in cells), "touch day targets reach 44 pixels")
 root.setProperty("open", True)
-QTest.qWait(500)
-check(root.property("backend") is not None, "optional native calendar adapter loads when opened")
+# The adapter is an asynchronous Loader. It loads in about 30 ms, but its incubation sometimes waits:
+# a fixed half second missed it in 4 of 180 runs back to back, so wait for it, up to 10 s.
+started = time.monotonic()
+while root.property("backend") is None and time.monotonic() - started < 10:
+    QTest.qWait(10)
+waited = round((time.monotonic() - started) * 1000)
+check(root.property("backend") is not None, f"optional native calendar adapter loads when opened ({waited} ms)")
 root.setProperty("selectedTimeZones", ["America/New_York", "Europe/London", "Asia/Tokyo"])
 QTest.qWait(200)
 zones = [item for item in visual_items(root) if item.property("zoneId") is not None]
