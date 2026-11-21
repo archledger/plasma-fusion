@@ -6,11 +6,12 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 # Workspace layout control checklist
 
 Status: plan accepted on 2026-11-17; P0 is done, and G0 passed on 2026-11-20, when the owner
-confirmed the final receipt's four decisions. P1 is done but for its native recheck on the
-released fork, `v6.8.3-pf1`, which waits for a test image: the placement script's layout provider
+confirmed the final receipt's four decisions. P1 is done: the placement script's layout provider
 keeps its state, holds its identity name, reads the bars' requests, publishes their answers,
-follows their views and measures its shell calls (`9d7c42a` to `79bb8f0`), and on 2026-11-21 the
-owner amended decision 1's time-limit condition. P2 is next. Read
+follows their views and measures its shell calls (`9d7c42a` to `79bb8f0`); on 2026-11-21 the owner
+amended decision 1's time-limit condition, and the transport passed its native recheck on the
+released fork, `v6.8.3-pf1`. P2 is under way: the clock's layout state, not yet used, checks the
+provider's answers (`62993e6`). Read
 [plan.md](plan.md) and the accepted [specification](../../SPEC-workspace-layout-control.md).
 Existing native task files are untouched.
 Paths below are relative to the repository. Proposed new files are not claimed to exist.
@@ -81,8 +82,8 @@ Dependencies: G0. Likely files: `placement/main.qml`, a feature-owned provider c
 - [x] Match the proven transport exactly; absent/refused native support never reports ready.
       The probe's transport (`64ec9ab`, `4eb907e`, `f6e47c7`), stricter where G0's findings and the
       reviews asked: every request version-checked, reads only from a unique shell connection. A
-      refused registration never reports capable (`9d7c42a`; shown offscreen, its text seen natively
-      only in P0), nor does the legacy lane (`05e3631`; by reading the code alone, as the offscreen
+      refused registration never reports capable (`9d7c42a`; shown offscreen and natively in the
+      recheck), nor does the legacy lane (`05e3631`; by reading the code alone, as the offscreen
       stand-in always has the fork's API), and a provider that is not capable answers `capable`
       false. The absent backend's native run, on a stock-KWin image, is P7's.
 - [x] Meet the conditions in [g0-decisions.md](g0-decisions.md), among them: publish only for a
@@ -103,10 +104,18 @@ Dependencies: G0. Likely files: `placement/main.qml`, a feature-owned provider c
       said. It is watched, not guaranteed, as the shell saves the widget configuration to disk
       inside each publication; the condition is now short in typical conditions, measured and
       warned, with a hardware measurement in P7 ([g0-decisions.md](g0-decisions.md)).
-- [ ] Recheck the transport natively on the fork P1 targets (the receipt's finding 11). Slices 3 to
-      4d ran natively on KWin `6.8.2-3.fc44.pf5`, and slices 1 and 2 not at all; `v6.8.3-pf1` rests
-      on its source. Blocked until the owner approves a test image
-      ([DEFERRED.md](../../docs/DEFERRED.md)).
+- [x] Recheck the transport natively on the fork P1 targets (the receipt's finding 11). Slices 3 to
+      4d had run natively on KWin `6.8.2-3.fc44.pf5`, and slices 1 and 2 had no run of their own.
+      On 2026-11-21, on an owner-approved image with the fork's `6.8.3-1.fc44.pf1` (P0's image but
+      for KWin, the lint tools and their dependencies), the identity name, request read,
+      publication, views on one and two outputs and time-limit runs repeated their last `pf5` runs
+      on the same seeds, with the same checks and, lengths aside, the same provider lines but for
+      the time-limit warnings, which both images give. The placement script's refused registration
+      (slice 1's) ran natively for the first time, on both images: while a test script holds the
+      fork's provider slot, the placement script says so once, keeps its name and answers not
+      capable; freeing the slot leaves that lifetime not capable, and a reload then registers a new
+      lifetime. With the test script inert, the six checks that need the slot held fail. Slice 2's
+      state, revision and lifetime are checked in every frame, as in the later slices' `pf5` runs.
 
 Verify: fail-first rows in the real-script lifecycle suite; run the spec's `tools/build.sh kwin`,
 tiling/placement node tests and offscreen lifecycle command.
