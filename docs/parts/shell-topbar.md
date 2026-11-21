@@ -6,7 +6,7 @@ name, and the centred pill with workspace dots, date and time. The global menu b
 the stock `org.kde.plasma.appmenu` widget. Plasma 6 applets, QML only, GPL-2.0-or-later.
 
 Status: built, checked offline and in private virtual sessions on the ThinkPad, dark and light.
-Last edited 2026-09-29.
+Last edited 2026-11-21.
 
 ## Files
 
@@ -25,6 +25,7 @@ Last edited 2026-09-29.
 | `.../org.plasmafusion.clockpill/contents/ui/WorkspaceDots.qml` | dots / current bar, clicks, keys, tooltips |
 | `.../org.plasmafusion.clockpill/contents/ui/WidthBudget.qml` | the top bar's width budget (ADAPTIVE 5.1), run by the clock pill |
 | `.../org.plasmafusion.clockpill/contents/ui/CalendarView.qml` | month view of the pop-up |
+| `.../org.plasmafusion.clockpill/contents/ui/LayoutState.qml` | the bar's workspace layout state, the clock's side of the layout transport (not shown yet) |
 | `.../org.plasmafusion.clockpill/contents/ui/Chevron.qml`, `FusionText.qml` | 16 px stroke chevron, text helper |
 | `.../org.plasmafusion.clockpill/contents/code/formats.js` | locale-aware date and time formats |
 | `tools/build.d/70-topbar.sh` | checks the metadata and config XML, copies both packages to `$STAGE/.local/share/plasma/plasmoids/` |
@@ -194,6 +195,61 @@ event editor. The backend keeps pending editor calls alive when the popup loses 
   click or Enter on the date, or the widget's global shortcut; closes on focus loss.
 - Context menu: "Adjust Date and Time…" (kcm_clock), "Configure Virtual Desktops…".
 - Vertical panels are not designed for (the pill is wider than a vertical panel).
+
+### Workspace layout state (`LayoutState.qml`)
+
+The clock's side of the workspace layout transport, whose other side is the placement script's
+layout provider ([kwin.md](kwin.md#the-layout-providers-state)). Nothing shows it yet: the clock's
+schema declares the transport's fields in P3 and the control comes in P4
+(`tasks/workspace-layout-control/todo.md`), so the component's owner passes the saved answer in
+(`response`) and saves each request it is asked to (`requested`).
+
+- A request is a version-1 `query` for the bar's output (`outputName`, 1 to 128 characters):
+  `{version, intent, consumer, request, outputName}`. The consumer is drawn fresh for each instance
+  (an MD5 of a timestamp and random numbers), and requests are numbered from 1. The component asks
+  at its start and whenever the output changes - never on a view change, which the provider pushes
+  itself - and with no output it asks nothing (`outcome` idle). Each ask retires the request that
+  was out, going idle among them, so no answer to it, late or being checked, counts. Once the owner
+  has saved the request, it wakes the provider
+  (`kglobalaccel /component/kwin invokeShortcut "Plasma Fusion: Refresh Layout Controls"`), which
+  reads only when woken.
+- An answer counts only as the provider's version-1 frame for this instance's consumer and current
+  request, of at most 4096 characters: an epoch of 32 lower-case hex digits, the identity name
+  `org.plasmafusion.LayoutProvider.p` and that epoch, a backend owner that is a unique connection
+  name, an integer revision up to 2147483646, and online - with `capable`, `tiled`, which needs both
+  capability and a view, and a `view` that is null or names the requested output with a desktop of 1
+  to 128 characters and an activity of at most 128, possibly empty - or online with a refusal of 1
+  to 64 characters, or offline, with nothing capable, no view and nothing tiled. Such a frame is
+  then checked on the session bus, one at a time: the owner of `org.kde.KWin` must be the frame's
+  backend owner, and for an online frame that connection must also own the identity name. A lookup
+  that fails ends the check and confirms nothing, and nothing that comes after the component is
+  gone, a reply or a request queued just before, touches it. An offline frame comes as its lifetime
+  releases that name, so it counts only from the lifetime the request is bound to, on that
+  lifetime's connection. Of the frames that come while one is checked, only the newest of one
+  lifetime waits.
+- The first answer accepted binds the request to its lifetime. A newer revision from it is taken,
+  among them a frame the provider pushes for a view change with no request of its own; an older or
+  equal one is not. A frame from another lifetime makes the bar ask again, as revisions do not carry
+  over between lifetimes, and so does the bound lifetime's offline frame. A new request starts
+  unknown and from no revision, so its answer may come at the revision the last one had.
+- The component reports `outcome` - idle, pending, answered, or refused with `refusal` its reason -
+  apart from the state an answer gives: `capable`, `view`, `tiled`, `epoch` and `revision`. `mode`
+  is unknown until an answer is accepted, unavailable when the provider cannot tile or KWin has no
+  such output, and otherwise floating or tiled. A saved answer alone is never state: an earlier
+  instance's answer names that instance's consumer.
+- Not yet, P2's next slices: a provider lost with no frame (the bus's `NameOwnerChanged`), and an
+  answer that never comes (a deadline, and the Kiosk case, where no answer can come); the same
+  deadline covers a lookup that fails and leaves the request pending.
+
+Tests: `tests/calendar_backend_test.py`, run as above, also checks the layout state against
+stand-ins on its private bus - `org.kde.KWin` and the lifetimes' identity names on its own
+connection or a second one, and kglobalaccel's component recording the wakes. It covers the request
+and the wake after it, the answer an earlier instance was given, a reply or a queued request after
+the component is gone, the malformed forms, the bus checks with KWin's name unowned or moved among
+them, revision order and the frames that wait, an output KWin does not have, a refusal, another
+lifetime, offline frames from the bound lifetime and from others, a frame checked as its request
+moves on, and going idle. Its layout-state checks go on after a failure, so that one run shows them
+all.
 
 ## Global menu (stock `org.kde.plasma.appmenu`)
 
