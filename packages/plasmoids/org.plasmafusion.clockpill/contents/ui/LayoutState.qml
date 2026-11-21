@@ -122,6 +122,13 @@ Item {
         }
         requested(JSON.stringify({ version: 1, intent: "query", consumer: d.consumer, request: number,
                                    outputName: d.requestedOutput }));
+        wake();
+    }
+
+    // Wakes the provider, which reads only when woken: after each request, once its owner has saved
+    // it (send), and for the owner after it withdraws its saved request, so that the provider forgets
+    // the widget at once rather than at some other bar's wake.
+    function wake(): void {
         DBus.SessionBus.asyncCall({
             service: "org.kde.kglobalaccel", path: "/component/kwin",
             iface: "org.kde.kglobalaccel.Component", member: "invokeShortcut", signature: "(s)",

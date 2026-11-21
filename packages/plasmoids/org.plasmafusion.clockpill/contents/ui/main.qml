@@ -19,7 +19,8 @@ import "../code/formats.js" as Formats
 
 // Centre of the Plasma Fusion top bar (Main / MainLight boards): one pill, 24 px tall, radius
 // 12, rgba(255,255,255,.08) (light: rgba(20,24,39,.08)), padding 0 12, gap 12, holding the
-// workspace dots, the date (Manrope 13 px 700) and the time (Space Grotesk 13 px 600).
+// workspace dots, the workspace layout control (LayoutControl.qml, no board), the date (Manrope
+// 13 px 700) and the time (Space Grotesk 13 px 600).
 // A click on the date or time opens a calendar pop-up that floats below the bar like the
 // quick-settings pop-up. Scrolling over the pill switches workspaces.
 //
@@ -103,7 +104,7 @@ PlasmoidItem {
         if (level >= 7 && !tabletState.tablet && Plasmoid.configuration.showWorkspaces && desktopCount > 1) {
             saving += dotsSeen + pillPadding - 2 * dots.cellPadding;
         }
-        return saving;
+        return saving + layoutSaving(level);
     }
 
     // ---- Formats
@@ -322,13 +323,17 @@ PlasmoidItem {
 
     // BEGIN layout state
     // The bar's workspace layout state (LayoutState.qml; docs/parts/shell-topbar.md, "Workspace
-    // layout state"), not shown yet: the control comes in P4. It asks for this bar's output unless
-    // the user hides the control, and then stays idle: no request and no wake. Desktop scripting
-    // reads the saved configuration, not this property map, so each request is saved before the
-    // component wakes the provider.
+    // layout state"), which the pill's layout control shows. It asks for this bar's output while the
+    // control may show - the user's setting on, and the bar's own layout one that shows it, a
+    // horizontal panel outside tablet posture (the specification's scope; a clock on the desktop is
+    // not the top bar) - and otherwise stays idle: no request and no wake. Desktop scripting reads
+    // the saved configuration, not this property map, so each request is saved before the component
+    // wakes the provider.
+    readonly property bool layoutAllowed: inPanel && !vertical && !tabletState.tablet
+    readonly property bool layoutWanted: Plasmoid.configuration.showLayoutControl && layoutAllowed
     LayoutState {
         id: layoutState
-        outputName: Plasmoid.configuration.showLayoutControl ? Screen.name : ""
+        outputName: root.layoutWanted ? Screen.name : ""
         response: Plasmoid.configuration.layoutResponse
         onRequested: text => {
             Plasmoid.configuration.layoutRequest = text;
@@ -343,12 +348,12 @@ PlasmoidItem {
             }
         }
     }
-    // While the user hides the control, its saved request is withdrawn, at start and when they hide
-    // it: an empty field is no request to the provider, which forgets the widget at its next read,
-    // so no frame, and no save of the configuration, keeps following a bar that shows nothing.
-    // Until that read the provider may still push frames; a wake to end that at once is P4's.
-    // On a change the withdrawal waits for whatever changed the setting: the settings dialog's
-    // Apply writes the setting first and then the page's copy of the request, and saves.
+    // While the control may not show, its saved request is withdrawn - at start, when the user hides
+    // it and when the bar's layout does - and the provider woken: an empty field is no request, so
+    // the provider forgets the widget at that read, and no frame, and no save of the configuration,
+    // keeps following a bar that shows nothing. On a change the withdrawal waits for whatever made
+    // it: the settings dialog's Apply writes the setting first and then the page's copy of the
+    // request, and saves.
     Connections {
         target: Plasmoid.configuration
         function onShowLayoutControlChanged(): void {
@@ -356,11 +361,27 @@ PlasmoidItem {
         }
         Component.onCompleted: root.withdrawLayoutRequest()
     }
+    onLayoutAllowedChanged: Qt.callLater(root.withdrawLayoutRequest)
     function withdrawLayoutRequest(): void {
-        if (!Plasmoid.configuration.showLayoutControl && Plasmoid.configuration.layoutRequest !== "") {
+        if (!root.layoutWanted && Plasmoid.configuration.layoutRequest !== "") {
             Plasmoid.configuration.layoutRequest = "";
             Plasmoid.configuration.writeConfig();
+            layoutState.wake();
         }
+    }
+    // The control's place in the width budget (WidthBudget.qml): its label goes at step 4, with the
+    // short date, and the control at step 7, with the workspace dots, giving up its width and one
+    // pill padding. A control that shows no mode takes no room. At step 7 the state keeps asking:
+    // the budget counts the control's room only while it shows a mode, so idling the state there
+    // would free that room, let the budget step back and show the control again, in a loop. A bar
+    // that narrow keeps receiving frames.
+    readonly property int layoutLevel: budgetLevel >= 7 ? 2 : budgetLevel >= 4 ? 1 : 0
+    function layoutSaving(level: int): real {
+        if (!layoutControl.available) {
+            return 0;
+        }
+        return level >= 7 ? layoutControl.fullWidth + pillPadding
+             : level >= 4 ? layoutControl.fullWidth - layoutControl.compactWidth : 0;
     }
     // The testing hook "dump-layout:TAG" (runDebugAction) logs the layout state.
     function dumpLayout(tag: string): void {
@@ -372,7 +393,8 @@ PlasmoidItem {
     // END layout state
 
     // Testing hooks (config key debugAction, cleared after use): "dump-bar:TAG", "menu-refresh"
-    // (rebuild the global menu's cached full view now), "dump-calendar:TAG", "dump-layout:TAG".
+    // (rebuild the global menu's cached full view now), "dump-calendar:TAG", "dump-layout:TAG",
+    // "dump-pill:TAG".
     readonly property string debugAction: Plasmoid.configuration.debugAction
     onDebugActionChanged: Qt.callLater(runDebugAction)
     function runDebugAction(): void {
@@ -388,6 +410,8 @@ PlasmoidItem {
             console.info("clockpill: debug: full view rebuilt " + (widthBudget.item as WidthBudget).refreshFullView());
         } else if (parts[0] === "dump-layout") {
             root.dumpLayout(parts.slice(1).join(":"));
+        } else if (parts[0] === "dump-pill") {
+            root.dumpPill(parts.slice(1).join(":"));
         } else if (parts[0] === "dump-calendar") {
             const view = calendarLoader.item as CalendarView;
             if (view) {
@@ -401,6 +425,16 @@ PlasmoidItem {
                 }));
             }
         }
+    }
+    // Where the pill's parts sit in it, and the layout control's measures.
+    function dumpPill(tag: string): void {
+        const at = item => item.visible ? Math.round(item.mapToItem(pill, 0, 0).x) + "+" + Math.round(item.width) : "hidden";
+        console.info("clockpill: pill dump " + tag + " " + JSON.stringify({
+            step: budgetLevel, pill: Math.round(pill.width), dots: at(dots), control: at(layoutControl),
+            date: at(dateTip), level: layoutControl.level, mode: layoutControl.mode, calendar: popupOpen,
+            textScale: m.ts, glyph: layoutControl.glyphSize, gap: layoutControl.gap,
+            labelPx: layoutControl.metrics.font(layoutControl.px), labelWidth: layoutControl.labelWidth
+        }));
     }
     function calendarTargets(item: Item, targets: var): void {
         if (!item || !item.visible || item.opacity === 0) {
@@ -567,13 +601,33 @@ PlasmoidItem {
                 onOverviewRequested: root.showOverview()
             }
 
+            // The workspace layout control (LayoutControl.qml): after the dots, or first with one
+            // workspace (the specification's item 1), one pill padding from its neighbours; the dot
+            // cells carry 2 px of it.
+            Item {
+                width: layoutControl.visible ? root.pillPadding - (root.showDots ? dots.cellPadding : 0) : 0
+                height: 1
+            }
+
+            LayoutControl {
+                id: layoutControl
+                anchors.verticalCenter: parent.verticalCenter
+                mode: layoutState.mode
+                level: root.layoutLevel
+                metrics: m
+                color: root.textColor
+                location: Plasmoid.location
+                cellHeight: pill.height
+            }
+
             // Date and time: one button that opens the calendar. It reaches the pill's edge so
             // the whole right part is clickable. The tooltip area is the outer item: a
             // hover-enabled item on top of a MouseArea would take the hover from it.
             PlasmaCore.ToolTipArea {
                 id: dateTip
 
-                readonly property real leading: root.showDots ? root.pillPadding - dots.cellPadding : root.pillPadding
+                readonly property real leading: root.showDots && !layoutControl.visible
+                    ? root.pillPadding - dots.cellPadding : root.pillPadding
 
                 anchors.verticalCenter: parent.verticalCenter
                 width: leading + timeRow.implicitWidth + root.pillPadding

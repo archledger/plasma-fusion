@@ -25,8 +25,8 @@ Last edited 2026-11-21.
 | `.../org.plasmafusion.clockpill/contents/ui/WorkspaceDots.qml` | dots / current bar, clicks, keys, tooltips |
 | `.../org.plasmafusion.clockpill/contents/ui/WidthBudget.qml` | the top bar's width budget (ADAPTIVE 5.1), run by the clock pill |
 | `.../org.plasmafusion.clockpill/contents/ui/CalendarView.qml` | month view of the pop-up |
-| `.../org.plasmafusion.clockpill/contents/ui/LayoutState.qml` | the bar's workspace layout state, the clock's side of the layout transport (not shown yet) |
-| `.../org.plasmafusion.clockpill/contents/ui/LayoutControl.qml` | the workspace layout control, read only (not in the bar yet) |
+| `.../org.plasmafusion.clockpill/contents/ui/LayoutState.qml` | the bar's workspace layout state, the clock's side of the layout transport |
+| `.../org.plasmafusion.clockpill/contents/ui/LayoutControl.qml` | the workspace layout control in the pill, read only |
 | `.../org.plasmafusion.clockpill/contents/ui/Chevron.qml`, `FusionText.qml` | 16 px stroke chevron, text helper |
 | `.../org.plasmafusion.clockpill/contents/code/formats.js` | locale-aware date and time formats |
 | `tools/build.d/70-topbar.sh` | checks the metadata and config XML, copies both packages to `$STAGE/.local/share/plasma/plasmoids/` |
@@ -179,6 +179,7 @@ event editor. The backend keeps pending editor calls alive when the popup loses 
   dot: `org.kde.KWin /KWin setCurrentDesktop(N)`; click the current one or Enter: Overview
   (`kglobalaccel /component/kwin invokeShortcut Overview`). Keyboard: Tab to the dots, Left/Right,
   Home/End.
+- The workspace layout control between the dots and the date ("Workspace layout control" below).
 - Date Manrope 13 px `wght` 700, time Space Grotesk 13 px `wght` 600 (no SemiBold instance in the
   font; the axis gives the real 600). Missing fonts fall back to the Plasma UI font.
 - Centring (horizontal panels only; on the desktop or in a vertical panel the pill stays in its
@@ -203,20 +204,21 @@ event editor. The backend keeps pending editor calls alive when the popup loses 
 ### Workspace layout state (`LayoutState.qml`)
 
 The clock's side of the workspace layout transport, whose other side is the placement script's
-layout provider ([kwin.md](kwin.md#the-layout-providers-state)). Nothing shows it yet: the control
-comes in P4 (`tasks/workspace-layout-control/todo.md`). The component's owner passes the saved
-answer in (`response`), saves each request it is asked to (`requested`), and may shorten the
-requests' deadline (`deadlineMs`). The clock's `main.qml` owns it:
+layout provider ([kwin.md](kwin.md#the-layout-providers-state)); the pill's layout control shows
+it (below). The component's owner passes the saved answer in (`response`), saves each request it
+is asked to (`requested`), may shorten the requests' deadline (`deadlineMs`) and may wake the
+provider (`wake()`). The clock's `main.qml` owns it:
 
-- It asks for its window's output (`Screen.name`) unless the user hides the control
-  (`showLayoutControl` off), when the component stays idle, with no request and no wake. The
-  saved request is then withdrawn, at start and when the user hides the control: an empty
-  `layoutRequest` is no request to the provider, which forgets the widget at its next read, so no
-  frame, and no save of the configuration, keeps following a bar that shows nothing. On a change
-  the withdrawal waits for whatever changed the setting (`Qt.callLater`): the settings dialog's
-  Apply writes the setting first, then the page's copy of the request, and saves. Until the
-  provider's next read, which needs some bar's wake, it may still push frames; ending that at once
-  would need a wake the component does not make (P4).
+- It asks for its window's output (`Screen.name`) while the control may show: the user's setting
+  on (`showLayoutControl`), and the bar's own layout one that shows it, a horizontal panel outside
+  tablet posture (the specification's scope; a clock on the desktop is not the top bar).
+  Otherwise the component stays idle, with no request and no wake. The saved request is then
+  withdrawn - at start, when the user hides the control and when the bar's layout does - and the
+  provider woken (`wake()`): an empty `layoutRequest` is no request, so the provider forgets the
+  widget at that read, and no frame, and no save of the configuration, keeps following a bar that
+  shows nothing. On a change the withdrawal waits for whatever made it (`Qt.callLater`): the
+  settings dialog's Apply writes the setting first, then the page's copy of the request, and
+  saves.
 - It binds `response` to the configuration's `layoutResponse`, and writes each request to
   `layoutRequest` and saves the configuration (`writeConfig()`) before the component wakes the
   provider: desktop scripting reads the saved configuration, not the property map.
@@ -314,21 +316,25 @@ It runs `main.qml`'s wiring - the block between its `BEGIN layout state` and `EN
 lines - unchanged in a fixture that supplies the configuration and the screen, as the launcher's
 opening test runs `main.qml`'s blocks: the request saved before the wake, the answer through
 `layoutResponse`, a hidden control leaving the state idle and withdrawing the saved request with
-one save, and shown again asking again, another screen asking for its output, the `dump-layout`
-hook, and of all the outcomes only a request with no answer taken by its deadline said, once. Three
-more fixtures start with a configuration already set: hidden with a request saved earlier (withdrawn
-with one save), hidden with none (nothing saved), and shown with one (nothing withdrawn, the clock's
-own request its one save). A fourth replays the settings dialog's Apply in one turn - the setting
-written false, the page's copy of the request written back, the configuration saved - and the
-request must still end withdrawn. `runDebugAction`, outside the block, is checked as text for its
-`dump-layout` branch, and the fixtures must log nothing but the dumps and the one unanswered line.
+one save and then a wake, and shown again asking again, another screen asking for its output, the
+`dump-layout` hook, and of all the outcomes only a request with no answer taken by its deadline
+said, once. Three more fixtures start with a configuration already set: hidden with a request
+saved earlier (withdrawn with one save and one wake), hidden with none (nothing saved, no wake),
+and shown with one (nothing withdrawn, the clock's own request its one save). A fourth replays the
+settings dialog's Apply in one turn - the setting written false, the page's copy of the request
+written back, the configuration saved - and the request must still end withdrawn. Three start in
+tablet posture, on a vertical panel and outside a panel (nothing asked; a request saved earlier
+withdrawn with one save and one wake), and one meets tablet posture coming (idle, withdrawn, then
+woken) and going (asking again). The control's place in the width budget is checked at every step
+against a stand-in control: its level, and the width it gives up, none while it shows no mode.
+`runDebugAction`, outside the block, is checked as text for its `dump-layout` branch, and the
+fixtures must log nothing but the dumps and the one unanswered line.
 
 ### Workspace layout control (`LayoutControl.qml`)
 
 The control that shows the bar's workspace layout state, read only (P4 of
-`tasks/workspace-layout-control/todo.md`). Its place in the pill and its width budget steps come
-next in P4, and the Floating and Tiled choices in P6. Its owner passes in the state's `mode`, the
-window's metrics and the pill's text colour, and sets `level`:
+`tasks/workspace-layout-control/todo.md`); the Floating and Tiled choices come in P6. Its owner
+passes in the state's `mode`, the window's metrics and the pill's text colour, and sets `level`:
 
 - It shows only a mode an answer confirmed: tiled, a glyph of the window frame and its divider with
   the label "Tiled"; floating, the frame alone with "Floating". Unknown and unavailable show nothing
@@ -358,6 +364,16 @@ window's metrics and the pill's text colour, and sets `level`:
   the new view arrive separately, so a comparison would disagree for a moment on every switch,
   whichever came first, and hide the control. An answer that a failed or malformed publication
   leaves standing stays until a later publication reaches the bar, the limit of P2's fourth item.
+- In the pill (`main.qml`) it sits after the workspace dots, or first with one workspace (the
+  specification's item 1), one pill padding from its neighbours. The width budget turns it to its
+  glyph alone at step 4, with the short date, and hides it at step 7, with the dots, so the steps
+  keep their order (`WidthBudget.qml`): it gives up its label's room, then its width and one pill
+  padding. Where the bar's own layout hides it - tablet posture, a vertical panel, a clock outside
+  a panel - the layout state is idle, so its mode is unknown and it shows nothing. At step 7 the
+  state keeps asking: the budget counts the control's room only while it shows a mode, so idling
+  the state there would free that room, let the budget step back and show the control again, in a
+  loop. A bar that narrow keeps receiving frames. The testing hook `dump-pill:TAG` (`debugAction`)
+  logs where the pill's parts sit, the step, the control's level and mode, and its measures.
 
 Tests: `tests/calendar_view_test.py`, run on a stage as in the calendar's regression checks above,
 loads the staged control beside the shared `FusionMetrics`. It checks both modes' glyph, label,
@@ -634,7 +650,8 @@ the lead directly.
   because `translation` is still 0 when the handler turns active.
 - `Plasmoid.CanFillArea`.
 - **Width budget hooks** for TOP-2: `compactLevel` (1: the short date, 2: the time only) and `hideDots`
-  (the dots hide; Overview still switches workspaces).
+  (the dots hide; Overview still switches workspaces). Since P4 also `layoutLevel` and
+  `layoutSaving` ("Workspace layout control" above).
 - **Accent and Motion**: the open pill (accent at 35 %, 1 px edge), today's disc (`accent.fill` with its
   text colour) and the focus rings follow the user's accent; the pill's colour, the dots' width and
   colour animate with `Motion` tokens.
@@ -698,6 +715,8 @@ built by the lead directly.
   of the bar has `budgetLevel` and `budgetSaving(level)`; the stock menu's full width is measured from
   its menu model (titles in the panel font plus the `menubaritem` margins; measured exactly equal to
   the full view for Konsole, Dolphin and Kate). Nothing is laid out to be judged, so nothing flickers.
+  Since P4, step 4 also turns the workspace layout control to its glyph alone, and step 7 hides it
+  ("Workspace layout control" above).
 - **Global menu crash (Plasma 6.7.5)**: the stock appmenu crashes plasmashell when it goes from its
   compact view back to its full view after its menu changed (libplasma
   `AppletQuickItemPrivate::compactRepresentationCheck` reads the full view's size hint). Cause, in

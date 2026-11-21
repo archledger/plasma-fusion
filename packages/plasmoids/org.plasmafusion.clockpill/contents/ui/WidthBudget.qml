@@ -23,10 +23,10 @@ import org.kde.ksvg as KSvg
 //   2  phone and clipboard move into quick settings (the quicksettings widget); the system
 //      meters leave the bar
 //   3  the app name hides: the logo (tablet: the app icon) only (appname)
-//   4  the short date in the pill
+//   4  the short date in the pill, and the workspace layout control's glyph alone
 //   5  the time only
 //   6  quick settings hides the battery %
-//   7  the workspace dots hide (the overview still switches workspaces)
+//   7  the workspace dots and the layout control hide (the overview still switches workspaces)
 //
 // Tablet posture starts at step 2 (portrait or a narrow screen: step 5), TABLET 4.3.
 //

@@ -11,7 +11,7 @@ import sys
 import time
 
 from PySide6.QtCore import (Q_ARG, SLOT, ClassInfo, QCoreApplication, QDate, QDateTime, QEvent, QMetaObject,
-                            QObject, QTime, QUrl, Slot, qInstallMessageHandler)
+                            QObject, QTime, QUrl, Slot, qInstallMessageHandler, Q_RETURN_ARG, Qt)
 from PySide6.QtDBus import QDBusConnection, QDBusConnectionInterface
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlComponent, QQmlEngine
@@ -740,9 +740,22 @@ expect(block != "" and "Plasmoid.configuration" in block and "Screen.name" in bl
 # runDebugAction lies outside the block: its branch for the hook is checked as text.
 expect('parts[0] === "dump-layout"' in source and 'root.dumpLayout(parts.slice(1).join(":"))' in source,
        "the clock's wiring: runDebugAction hands dump-layout:TAG to dumpLayout")
+# So do the pill's control and the budget's saving, which a real session checks in the bar; the
+# block's parts they use are checked below.
+expect("return saving + layoutSaving(level);" in source,
+       "the clock's wiring: the pill's budgetSaving adds the layout control's saving")
+expect("                mode: layoutState.mode\n                level: root.layoutLevel\n" in source,
+       "the clock's wiring: the pill's layout control takes the state's mode and the budget's level")
+expect('parts[0] === "dump-pill"' in source and 'root.dumpPill(parts.slice(1).join(":"))' in source,
+       "the clock's wiring: runDebugAction hands dump-pill:TAG to dumpPill")
 # The configuration's start values are literals, as the real configuration's are already there when
 # the clock is created: a binding to them would change as the fixture completes.
 FIXTURE = ("import QtQuick\nItem {\n    id: root\n    property string screenName: \"Virtual-0\"\n"
+           "    property bool inPanel: INPANEL\n    property bool vertical: VERTICAL\n"
+           "    property QtObject tabletState: QtObject {\n        property bool tablet: TABLET\n    }\n"
+           "    property int budgetLevel: 0\n    property real pillPadding: 12\n"
+           "    property QtObject layoutControl: QtObject {\n        property bool available: true\n"
+           "        property real fullWidth: 80\n        property real compactWidth: 13\n    }\n"
            "    signal saved(string request)\n    property var saves: []\n    property QtObject config: QtObject {\n"
            "        property bool showLayoutControl: SHOWN\n        property string layoutRequest: REQUEST\n"
            "        property string layoutResponse: \"\"\n        function writeConfig(): void {\n"
@@ -760,14 +773,17 @@ def parsed_json(text):
         return {}
 
 
-def wired(shown=True, request=""):
-    """A fixture whose configuration starts with these values, and what it saves, recorded beside
-    the wakes (saves made as it completes are in its saves property)."""
+def wired(shown=True, request="", tablet=False, vertical=False, in_panel=True):
+    """A fixture whose configuration and bar start with these values, and what it saves, recorded
+    beside the wakes (saves made as it completes are in its saves property)."""
     component = QQmlComponent(engine)
     wiring_components.append(component)
+    literal = {True: "true", False: "false"}
+    text = (FIXTURE.replace("SHOWN", literal[shown]).replace("REQUEST", json.dumps(request))
+            .replace("TABLET", literal[tablet]).replace("VERTICAL", literal[vertical]).replace("INPANEL", literal[in_panel]))
     # A URL in the package's contents/ui, so that LayoutState resolves as it does for main.qml;
     # nothing is written there.
-    component.setData(FIXTURE.replace("SHOWN", "true" if shown else "false").replace("REQUEST", json.dumps(request)).encode(),
+    component.setData(text.encode(),
                       QUrl.fromLocalFile(str(Path(__file__).resolve().parent.parent / "contents/ui/LayoutWiringFixture.qml")))
     item = component.create() if block else None
     if item is None:
@@ -806,10 +822,11 @@ if wiring is not None:
     saved.clear()
     config.setProperty("showLayoutControl", False)
     expect(until(lambda: prop(layout, "outcome") == "idle") and prop(layout, "mode") == "unknown"
-           and until(lambda: saved) and not until(lambda: len(events) > 1, ms=300)
-           and [kind for kind, _ in events] == ["saved"] and saved == [""] and prop(config, "layoutRequest") == "",
+           and until(lambda: len(events) == 2) and not until(lambda: len(events) > 2, ms=300)
+           and [kind for kind, _ in events] == ["saved", "wake"] and events[1][1] == WAKE and saved == [""]
+           and prop(config, "layoutRequest") == "",
            "the clock's wiring: a hidden control leaves the layout state idle and withdraws the saved request, with one"
-           " save and no wake (%s)" % events)
+           " save and then a wake, so the provider forgets it at once (%s)" % events)
     events.clear()
     saved.clear()
     config.setProperty("showLayoutControl", True)
@@ -834,15 +851,17 @@ if wiring is not None:
            % said)
     wiring.deleteLater()
 # Started hidden: a request saved earlier is withdrawn with one save, as the fixture completes (its
-# saves property records it, before any connection could), and an empty field is left as it is;
-# neither asks or wakes.
+# saves property records it, before any connection could), and the provider woken once; an empty
+# field is left as it is, with no save and no wake. Neither asks.
 EARLIER = '{"version":1,"intent":"query","consumer":"earlier","request":4,"outputName":"Virtual-0"}'
 events.clear()
 hidden, _ = wired(shown=False, request=EARLIER)
-expect(hidden is not None and not until(lambda: events, ms=300) and prop(hidden, "saves") == [""]
-       and prop(hidden.property("config"), "layoutRequest") == "" and prop(hidden.property("layout"), "outcome") == "idle",
-       "the clock's wiring: started hidden, the clock withdraws the request saved earlier, with one save, and asks"
-       " nothing (%s, %s)" % (prop(hidden, "saves") if hidden is not None else None, events))
+until(lambda: events)
+expect(hidden is not None and not until(lambda: len(events) > 1, ms=300) and events == [("wake", WAKE)]
+       and prop(hidden, "saves") == [""] and prop(hidden.property("config"), "layoutRequest") == ""
+       and prop(hidden.property("layout"), "outcome") == "idle",
+       "the clock's wiring: started hidden, the clock withdraws the request saved earlier, with one save and one wake,"
+       " and asks nothing (%s, %s)" % (prop(hidden, "saves") if hidden is not None else None, events))
 events.clear()
 bare, _ = wired(shown=False)
 expect(bare is not None and not until(lambda: events, ms=300) and prop(bare, "saves") == [],
@@ -875,10 +894,86 @@ applied_saves = prop(applied, "saves") if applied is not None else None
 expect(applied_config is not None and prop(applied_config, "layoutRequest") == "" and applied_saves and applied_saves[-1] == "",
        "the clock's wiring: hidden through the settings dialog's Apply, which writes the request back after the"
        " setting, the request is still withdrawn (%s)" % applied_saves)
+# The bar's own layout shows the control only in a horizontal panel outside tablet posture. Started in
+# tablet posture, on a vertical panel or outside a panel, the clock asks nothing and withdraws a
+# request saved earlier, with one save and one wake.
+gated = []
+for name, options in (("in tablet posture", {"tablet": True}), ("on a vertical panel", {"vertical": True}),
+                      ("outside a panel", {"in_panel": False})):
+    events.clear()
+    item, _ = wired(request=EARLIER, **options)
+    gated.append(item)
+    until(lambda: events)
+    expect(item is not None and not until(lambda: len(events) > 1, ms=300) and events == [("wake", WAKE)]
+           and prop(item, "saves") == [""] and prop(item.property("layout"), "outcome") == "idle",
+           "the clock's wiring: started %s, the clock asks nothing and withdraws the request saved earlier, with one save"
+           " and one wake (%s, %s)" % (name, prop(item, "saves") if item is not None else None, events))
+# Shown, then tablet posture comes: the state goes idle and the request is withdrawn, then the
+# provider woken; tablet posture ends and the clock asks again.
+events.clear()
+posture, posture_saved = wired()
+until(lambda: len(events) == 2)
+posture_layout = posture.property("layout") if posture is not None else None
+first = parsed_json(posture_saved[0]) if posture_saved else {}
+events.clear()
+posture_saved.clear()
+if posture is not None:
+    posture.property("tabletState").setProperty("tablet", True)
+expect(posture is not None and until(lambda: prop(posture_layout, "outcome") == "idle") and until(lambda: len(events) == 2)
+       and not until(lambda: len(events) > 2, ms=300) and [kind for kind, _ in events] == ["saved", "wake"]
+       and posture_saved == [""],
+       "the clock's wiring: tablet posture coming, the clock goes idle and withdraws its request, then wakes the provider"
+       " (%s)" % events)
+events.clear()
+posture_saved.clear()
+if posture is not None:
+    posture.property("tabletState").setProperty("tablet", False)
+until(lambda: len(events) == 2)
+back = parsed_json(posture_saved[0]) if posture_saved else {}
+expect([kind for kind, _ in events] == ["saved", "wake"] and back.get("request", 0) > first.get("request", 0)
+       and prop(posture_layout, "outcome") == "pending",
+       "the clock's wiring: tablet posture over, the clock asks again (%s)" % events)
+# The control's place in the width budget: its label goes at step 4, with the short date, and the
+# control at step 7, with the dots, giving up its width and one pill padding; a control that shows
+# no mode gives up nothing.
+budget = posture
+
+
+def layout_saving(item, step):
+    """main.qml's layoutSaving(step), or None where the fixture has none."""
+    try:
+        return QMetaObject.invokeMethod(item, "layoutSaving", Qt.DirectConnection, Q_RETURN_ARG(float), Q_ARG(int, step))
+    except RuntimeError:
+        return None
+
+
+levels, savings = [], []
+events.clear()
+for step in range(8):
+    if budget is not None:
+        budget.setProperty("budgetLevel", step)
+    levels.append(prop(budget, "layoutLevel"))
+    savings.append(layout_saving(budget, step) if budget is not None else None)
+# Hidden by the budget at step 7, the control keeps its state asking: idling it would free the room
+# the budget counts, and the budget would step back and show it again, in a loop.
+expect(budget is not None and not until(lambda: events, ms=300) and prop(budget.property("layout"), "outcome") != "idle"
+       and prop(budget.property("config"), "layoutRequest") != "",
+       "the clock's wiring: at step 7, where the budget hides the control, the state keeps its request, with no save"
+       " and no wake (%s)" % events)
+expect(levels == [0, 0, 0, 0, 1, 1, 1, 2],
+       "the clock's wiring: the control shows its label to step 3, its glyph alone from step 4 and nothing from step 7"
+       " (%s)" % levels)
+expect(savings == [0, 0, 0, 0, 67, 67, 67, 92],
+       "the clock's wiring: the control gives up its label's room from step 4 and its width and one pill padding from"
+       " step 7 (%s)" % savings)
+if budget is not None:
+    budget.property("layoutControl").setProperty("available", False)
+none_saved = [layout_saving(budget, step) for step in range(8)] if budget is not None else None
+expect(none_saved == [0] * 8, "the clock's wiring: a control that shows no mode gives up nothing (%s)" % none_saved)
 others = [m for m in messages if "clockpill: layout dump " not in m and UNANSWERED not in m]
 expect(not others, "the clock's wiring: the fixtures say nothing else (%s)" % others)
 qInstallMessageHandler(None)
-for item in (hidden, bare, shown, applied):
+for item in (hidden, bare, shown, applied, posture, *gated):
     if item is not None:
         item.deleteLater()
 QTest.qWait(50)
