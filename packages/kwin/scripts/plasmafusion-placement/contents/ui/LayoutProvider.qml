@@ -84,15 +84,26 @@ QtObject {
         method: "ReleaseName"
     }
 
+    // Decision 1's time limit: the shell serves a script call on its main thread and takes no
+    // input until the call answers - a click waits for it to end (the click reproduction,
+    // g0-receipt.md) - so a read or a publication should keep the shell at most this many
+    // milliseconds: a click that comes at the worst moment then still answers well within the
+    // 100 ms at which a response stops feeling immediate. The scripts' own work is small and
+    // bounded - one script, at most 16 widgets read or written, widget data as JSON - but a
+    // publication also has the shell save its widget configuration to disk (writerScript), which
+    // the provider cannot make shorter. So the limit is watched, not guaranteed: each call's
+    // lengths are said, and one over the limit is said as such (report()).
+    readonly property int shellLimit: 50
+
     // What the bars ask for, read from the shell (the layout probe's P0 transport): a bar's
     // clock saves its request in a field of its own and wakes the provider through a shortcut
     // with no key; the provider reads every clock's request with one shell script call on the
     // shell's unique connection. The reads are bounded as the probe's - at most 16 widgets,
     // requests of at most 2048 characters, a consumer label of 1 to 128 characters and a request
     // number of 1 to 2147483646 - copy only the fields P1 needs, and carry widget data as JSON,
-    // never as code.
+    // never as code. With the rows, the script says when it started, for the call's length.
     readonly property string requestApplet: "org.plasmafusion.clockpill"
-    readonly property string readerScript: "var rows=[],seen=0;"
+    readonly property string readerScript: "var start=Date.now(),rows=[],seen=0;"
         + "panels().forEach(function(p) {"
         + "p.widgets('" + requestApplet + "').forEach(function(w) {"
         + "if(seen>=16){return;}++seen;"
@@ -104,15 +115,16 @@ QtObject {
         + "rows.push({id:w.id,consumer:q.consumer,request:q.request,version:q.version,"
         + "intent:q.intent,outputName:q.outputName});"
         + "}catch(e){} }); });"
-        + "print(JSON.stringify(rows));"
+        + "print(JSON.stringify({start:start,rows:rows}));"
     // What the last read found: the queries to answer, and the rows refused before any action,
     // each with its widget, consumer, request and reason. A failed read keeps them as they were.
     property var requests: []
     property var refusals: []
     // A read in flight, and whether a wake came meanwhile: one read at a time, and the wakes
-    // during it make one more read after it.
+    // during it make one more read after it. When its script call went out, for its length.
     property bool reading: false
     property bool again: false
+    property real readAt: 0
 
     property ShortcutHandler wake: ShortcutHandler {
         name: "Plasma Fusion: Refresh Layout Controls"
@@ -310,6 +322,7 @@ QtObject {
         }
         reader.service = owner;
         reader.arguments = [readerScript];
+        readAt = Date.now();
         reader.call();
     }
 
@@ -327,27 +340,25 @@ QtObject {
         finishRead();
     }
 
-    // The shell's answer, checked again here: at most 16 rows, each with a well-formed identity
-    // (a row without one cannot be answered and is dropped), then a version-1 query for a named
-    // output; every other row is refused before any action, with its reason.
+    // The shell's answer, checked again here: the script's start and at most 16 rows, each with a
+    // well-formed identity (a row without one cannot be answered and is dropped), then a
+    // version-1 query for a named output; every other row is refused before any action, with its
+    // reason.
     function readFinished(text: string): void {
         if (!reading) {
             return;
         }
-        let rows = null;
-        try {
-            rows = JSON.parse(text);
-        } catch (e) {
-            rows = null;
-        }
-        if (!Array.isArray(rows) || rows.length > 16) {
+        const answer = parsed(text);
+        if (answer === null || !Array.isArray(answer.rows) || answer.rows.length > 16
+                || !Number.isFinite(answer.start)) {
             console.warn("plasmafusion-placement: layout provider: the bars' requests came back malformed");
             finishRead();
             return;
         }
+        const length = callLength(readAt, answer.start);
         const accepted = [];
         const refused = [];
-        for (const row of rows) {
+        for (const row of answer.rows) {
             const checked = checkedRow(row);
             if (checked === null) {
                 continue;
@@ -380,8 +391,7 @@ QtObject {
         }
         views = resolved;
         publicationDue = true;
-        console.info("plasmafusion-placement: layout provider: read " + accepted.length + " request(s), "
-                     + refused.length + " refused");
+        report("read", "read " + accepted.length + " request(s), " + refused.length + " refused", length);
         finishRead();
     }
 
@@ -513,40 +523,95 @@ QtObject {
 
     // The writer: the frames as data - JSON text, which is JavaScript but for the two line
     // separators an engine before ES2019 does not take raw in a string, so those go escaped -
-    // matched to the clock's widgets by id. It prints how many it wrote.
+    // matched to the clock's widgets by id. It prints how many it wrote and when it started. The
+    // shell reloads each widget written once the script is done, before it answers
+    // (plasma-workspace 6.8.3, Widget::~Widget), and the first reload saves the whole widget
+    // configuration to disk, synced (libplasma's Applet::configChanged, KConfig's
+    // reparseConfiguration): one save per publication while the clock's schema does not declare
+    // the response field, and one per frame once it does, as the shell's writeConfig then saves
+    // the schema at every write (KCoreConfigSkeleton::save). A script that reloaded each widget
+    // itself would save once per widget even now - in a test session 16 frames then took a
+    // median of 20 ms instead of 10 from call to answer - so it does not.
     function writerScript(messages: var): string {
         let data = JSON.stringify(messages.map(message => ({ id: message.id, packet: message.packet })));
         for (const code of [0x2028, 0x2029]) {
             data = data.split(String.fromCharCode(code)).join("\\" + "u" + code.toString(16));
         }
-        return "var messages=" + data + ",written=0;"
+        return "var start=Date.now(),messages=" + data + ",written=0;"
             + "panels().forEach(function(p) {"
             + "p.widgets('" + requestApplet + "').forEach(function(w) {"
             + "messages.forEach(function(m) {"
             + "if(w.id===m.id){w.currentConfigGroup=['General'];w.writeConfig('" + responseField
             + "',m.packet);++written;}"
             + "}); }); });"
-            + "print(written);";
+            + "print(JSON.stringify({start:start,written:written}));";
     }
 
     // A publication came back: what it carried is what those widgets were told. It is said with
-    // how many the shell wrote - fewer, a widget had gone - and its length from call to answer,
-    // an upper bound of the time the shell took no input (decision 1).
-    function publicationFinished(written: string): void {
+    // how many the shell wrote - fewer, a widget had gone - and its length (report()). An answer
+    // without the script's start, or with a count it cannot have, confirms nothing: it changes
+    // no record, so what it carried goes out again with the next publication.
+    function publicationFinished(text: string): void {
         if (!online || !publishing) {
             return;
         }
         const done = pending;
         pending = null;
         publishing = false;
+        const answer = parsed(text);
+        if (answer === null || !Number.isInteger(answer.written) || answer.written < 0
+                || answer.written > done.messages.length || !Number.isFinite(answer.start)) {
+            console.warn("plasmafusion-placement: layout provider: the bars' layout state came back malformed");
+            continuePipeline();
+            return;
+        }
+        const length = callLength(done.at, answer.start);
         const told = Object.assign({}, sent);
         for (const message of done.messages) {
             told[message.id] = message.said;
         }
         sent = told;
-        console.info("plasmafusion-placement: layout provider: published " + done.messages.length + " frame(s), "
-                     + written + " written, in " + (Date.now() - done.at) + " ms");
+        report("publication", "published " + done.messages.length + " frame(s), " + answer.written + " written",
+               length);
         continuePipeline();
+    }
+
+    // A script's answer as the object it printed, or null for anything else.
+    function parsed(text: string): var {
+        let value = null;
+        try {
+            value = JSON.parse(text);
+        } catch (e) {
+            return null;
+        }
+        return value !== null && typeof value === "object" && !Array.isArray(value) ? value : null;
+    }
+
+    // How long a script call took: from when it went out (`at`) to its answer, an upper bound of
+    // the time the shell spent on the call, and from the script's start in the shell (`start`)
+    // to the answer. The second leaves out the time the call waited before the shell ran it and
+    // the script engine's setup before the script's first statement, and still counts the
+    // widgets' reloads after the script - the call's cost - and any delay before KWin handled the
+    // answer. KWin and the shell read the same system clock; a start outside the call means the
+    // clock moved between their readings, and there is no second length (null).
+    function callLength(at: real, start: real): var {
+        const answered = Date.now();
+        return { total: answered - at, fromStart: start >= at && start <= answered ? answered - start : null };
+    }
+
+    // A call that came back is said with its lengths, and one over the limit is said as such, by
+    // the length from its script's start when that lies within the call, else by its length from
+    // call to answer - each named, as neither is the shell's time exactly.
+    function report(what: string, line: string, length: var): void {
+        const known = length.fromStart !== null;
+        console.info("plasmafusion-placement: layout provider: " + line + ", in " + length.total + " ms"
+                     + (known ? " (" + length.fromStart + " ms from its script's start)" : ""));
+        const judged = known ? length.fromStart : length.total;
+        if (judged > shellLimit) {
+            console.warn("plasmafusion-placement: layout provider: a " + what + " took " + judged
+                         + " ms from its " + (known ? "script's start" : "call") + " to its answer, over the "
+                         + shellLimit + " ms limit");
+        }
     }
 
     // A failed publication is said once and changes no record: what it carried goes out again

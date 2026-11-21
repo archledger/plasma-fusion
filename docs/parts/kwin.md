@@ -1134,10 +1134,11 @@ Offline (laptop):
    consumers and requests and other applets' widgets skipped, only P1's fields copied, a hostile
    consumer label intact - and the provider's own checks keep the version-1 queries and refuse
    the rest with their reasons.
-   An owner that is no unique connection, a failed lookup, a failed read and three malformed
-   answers each end the read and keep the requests and refusals; after a retirement nothing is
-   read, they stay, and the shell's late answers reach neither them nor the journal. The driver
-   counts the journal's lines.
+   An owner that is no unique connection, a failed lookup, a failed read and five malformed
+   answers - not JSON, a bare list of rows, rows without the script's start or with a start that
+   is no number, 17 rows - each end the read and keep the requests and refusals; after a
+   retirement nothing is read, they stay, and the shell's late answers reach neither them nor
+   the journal. The driver counts the journal's lines.
    A run (`scenario: "publication"`) drives the publication side on the real script, with a
    second output on the session's desktop and activity. The first read's five rows - two
    requests on the session's output, one on the second output, one for an output KWin does not
@@ -1166,8 +1167,19 @@ Offline (laptop):
    outstanding publication's among them - reach nothing.
    The refused-provider run reads one request and gets an online answer that is not capable,
    and the unload rows check that the name goes last, after the offline state's revision, with
-   no frame when no request was read. The driver counts each publication's line with its frames
-   and what the shell wrote, the failed one's and the offline frames' once each. Every run's
+   no frame when no request was read. The driver counts each publication's line with its frames,
+   what the shell wrote and its length, the failed one's and the offline frames' once each, and
+   finds no call there over the time limit.
+   A run (`scenario: "time-limit"`) times the calls against decision 1's limit: a read and a
+   publication answered at once, and a read whose owner lookup took 70 ms, measured from its own
+   call; a read and a publication whose script ran from the call's start for 70 ms, each said over
+   the 50 ms limit with its length from that start; two that waited 70 ms but whose script started
+   just before the answer, not over; two whose start lies outside the call, over with their 70 ms
+   from call to answer, and a short one of those, not over; then a read answered with its rows alone
+   and publications answered with a bare count (a wake during it reads after it), a count above
+   their frames, below zero or no number, and no start - each malformed, said once and recording
+   nothing, so the next read sends the frame again - until one is confirmed, after which a read
+   sends nothing. The driver reads the lines and their order from the journal. Every run's
    setup returns the engine's one stand-in Workspace to its declared outputs and desktops,
    whatever an earlier run left (a second display, a desktop of an output's own).
 
@@ -2113,13 +2125,14 @@ and the answers it publishes to them.
   reads at most 16 widgets and requests of at most 2048 characters, keeps only a consumer label
   of 1 to 128 characters and a request number of 1 to 2147483646, copies only `consumer`,
   `request`, `version`, `intent` and `outputName`, and carries widget data as JSON, never as
-  code. The provider checks every row again: a version-1 `query` for a named output is a request
-  (`requests`); any other row with a well-formed identity is refused before any action, with its
-  reason - `version`, `intent` or `output` (`refusals`); a row without one is dropped. A read
-  that finds no shell - no owner, or one that is no unique connection - ends quietly; one the
-  shell fails or answers malformed is said once; either keeps the last requests and refusals. A
-  read that comes back says what it found. A retirement ends a read in flight: the answers that
-  come after it reach nothing.
+  code; with the rows it says when it started. The provider checks every row again: a version-1
+  `query` for a named output is a request (`requests`); any other row with a well-formed
+  identity is refused before any action, with its reason - `version`, `intent` or `output`
+  (`refusals`); a row without one is dropped. A read that finds no shell - no owner, or one that
+  is no unique connection - ends quietly; one the shell fails or answers malformed (the start
+  missing among them) is said once; either keeps the last requests and refusals. A read that
+  comes back says what it found and how long it took (below). A retirement ends a read in
+  flight: the answers that come after it reach nothing.
 - The answers go back the same way. Each request and refusal of the last read gets a frame in
   its clock's `layoutResponse` field (General group), and a publication writes all its frames
   with one `evaluateScript` call on the connection the requests came from. A frame says
@@ -2139,13 +2152,14 @@ and the answers it publishes to them.
   that finds nothing new publishes nothing (decision 1). One publication at a time, never
   during a read: a state change waits for the end of its turn and for the pipeline - the
   changes of one turn go out once, and ones that end where they began tell nothing - and the
-  wakes during a publication make one read after it. A publication that comes back is said
-  once, with its frames, how many the shell wrote and how long it took from the call to its
-  answer - an upper bound of the time the shell took no input (decision 1); a failed one is
-  said once and changes no record, so its frames go out with the next publication. The
-  retirement moves the revision, sends the offline frame (`status` offline, nothing capable or
-  tiled) to every request and refusal it kept, then releases the name; nothing that answers
-  after it reaches anything. No limit applies to a publication's length yet.
+  wakes during a publication make one read after it. The writer script prints how many frames
+  it wrote and when it started. A publication that comes back is said once, with its frames,
+  how many the shell wrote and how long it took (below); a failed one is said once and changes
+  no record, so its frames go out with the next publication, and so does one answered malformed
+  - without the start, or with a count it cannot have - which is said once too. The retirement
+  moves the revision, sends the offline frame (`status` offline, nothing capable or tiled) to
+  every request and refusal it kept, then releases the name; nothing that answers after it
+  reaches anything.
 - Each request's view is resolved when the request is read - a widget's first request, or one
   that names another output; a request renewed for the same output keeps its view - and kept
   (`views`, only for the widgets read): a frame carries the kept view, never a newer one than
@@ -2155,6 +2169,46 @@ and the answers it publishes to them.
   again, once per turn, and when one differs moves the revision: the bars whose view changed
   are told at once, at the newer revision, with no read. A change no bar's view sees moves
   nothing, and nothing is watched offline.
+- Decision 1's time limit: the shell serves a script call on its main thread and takes no input
+  until the call answers - in the G0 click reproduction a click sent meanwhile arrived when the call
+  ended - so a read or a publication should keep the shell at most 50 ms (`shellLimit`), which
+  leaves a click that comes at the worst moment well within the tenth of a second in which a
+  response still feels immediate. Each script says when it started, and each call that comes back is
+  said with two lengths: from the call to its answer, an upper bound of the shell's time on it, and
+  from the script's start to the answer. The second leaves out the time the call waited and the
+  script engine's setup before the script - together 1 to 7 ms over the 303 calls of the one-output
+  diagnostic sessions, but up to 46 ms in the two-output sessions and once 125 ms - and still counts
+  any delay before KWin handled the answer: it is the closer of the two, not a bound. A call over
+  the limit by the second, or by the first when there is no second, is also said, on a line of its
+  own, with the length it was judged by. A start outside the call means the clock moved between
+  KWin's reading and the shell's, both of the same system clock, and leaves only the first length. A
+  call the shell never answers fails at the bus's own timeout (KWin's `DBusCall`, 25 s), and the
+  pipeline goes on.
+- What a call costs the shell, and why the limit is watched rather than guaranteed: the scripts' own
+  statements are small and bounded - one script, at most 16 widgets read or written, widget data as
+  JSON; 0 to 1 ms in a test session - and a read, which writes nothing, took 0 to 3 ms from its
+  script's start. A publication also has the shell save its widget configuration to disk. The shell
+  reloads each widget written once the script is done, before it answers (plasma-workspace
+  6.8.3, `Widget::~Widget`), and a reload reparses the configuration, syncing it first when it has
+  pending changes (libplasma 6.8.3's `Applet::configChanged`, KConfig 6.32's `reparseConfiguration`,
+  through `QSaveFile`, whose `commit` syncs to disk in Qt 6.11): one save per publication while the
+  clock's schema does not declare the response field. Once it declares it - as P3 must, for
+  `Plasmoid.configuration` to carry the frames - the shell's `writeConfig` saves the schema at every
+  write (`Applet::writeConfig`, KConfig's `KCoreConfigSkeleton::save`): one save per frame. In the
+  test sessions (a container on a virtual disk), publications of 16 frames took a median of 5 to
+  8 ms from the script's start undeclared and 21 to 26 ms declared, of one frame 2 and 3 ms.
+  Undeclared, most runs also had a few calls of 52 to 332 ms, with one frame as with sixteen;
+  declared, six runs had none over 50 ms, though with sixteen bars the probe's ticks were 41 to
+  55 ms apart around about half the publications, from just before the call to, mostly, some 16 ms
+  after its answer; whether the shell was still busy or the probe - a QML `Timer`, which follows the
+  animation timer - ticked late was not isolated. In the runs with a probe in the shell, a stall of
+  its main thread covered each of the 20 long calls from its script's start to its answer, and with
+  no publication the same desktop switches gave no stall over 40 ms; what in the shell's handling
+  took that long was not isolated, as the test image has no tracer. The provider keeps the saves to
+  what the schema asks - a writer that reloaded each widget itself would save once per widget, which
+  doubled a publication's median cost - publishes only for a new request or a changed state, and
+  says each call over the limit; it cannot make the shell's saves shorter, and does not time the
+  retirement's offline frames, whose answer reaches nothing.
 
 ### What it rides
 

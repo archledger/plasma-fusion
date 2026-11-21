@@ -132,6 +132,35 @@ def run_harness(initial=None):
 
 provider_labels = {}
 
+# The layout provider's lines for a read and a publication that came back: what each found or
+# carried, then its length from call to answer and, when its script's start lies within the call,
+# its length from that start (decision 1's time limit); a call over the limit is said on a line
+# of its own, with the length it was judged by - from its script's start when there is one, else
+# from its call.
+LENGTH = r", in (\d+) ms(?: \((\d+) ms from its script's start\))?"
+READ_LINE = re.compile(r"plasmafusion-placement: layout provider: read (\d+) request\(s\), (\d+) refused" + LENGTH)
+PUBLISHED_LINE = re.compile(r"plasmafusion-placement: layout provider: published (\d+) frame\(s\), (\d+) written"
+                            + LENGTH)
+OVER_LINE = re.compile(r"plasmafusion-placement: layout provider: a (read|publication) took (\d+) ms from its"
+                       r" (script's start|call) to its answer, over the 50 ms limit")
+
+
+def call_lines(journal, pattern, marker):
+    """The journal's lines holding `marker`, parsed with `pattern`, as (found, carried or written,
+    length, length from the script's start or None); a line that does not parse, or whose length
+    from the script's start is longer than the call, is None."""
+    lines = []
+    for message in journal:
+        if marker not in message:
+            continue
+        match = pattern.fullmatch(message)
+        shell = None if not match or match.group(4) is None else int(match.group(4))
+        if not match or (shell is not None and shell > int(match.group(3))):
+            lines.append(None)
+            continue
+        lines.append((int(match.group(1)), int(match.group(2)), int(match.group(3)), shell))
+    return lines
+
 
 def check_provider(instance, name):
     """The run's layout provider (LayoutProvider.qml), as the harness recorded it: revisions
@@ -285,7 +314,8 @@ retire(late_memory, "late-memory")
 # The read side of the layout provider's pipeline on the real script: the wake shortcut, one read
 # once the identity is ready, the wakes during a read coalesced, the shell side's bounds and the
 # provider's own checks of every row, each failure (the harness checks). A failed read and each
-# of the three malformed answers are said once each; nothing throws.
+# of the five malformed answers are said once each; the two reads that came back say what they
+# found and how long they took; nothing throws.
 before = len(messages)
 read_pipeline = run_harness({"scenario": "read-pipeline"})
 for problem in list(read_pipeline.property("problems").toVariant() or []):
@@ -293,11 +323,11 @@ for problem in list(read_pipeline.property("problems").toVariant() or []):
 journal = messages[before:]
 check(sum("the bars' requests could not be read" in message for message in journal) == 1,
       "read-pipeline: a failed read is said once")
-check(sum("the bars' requests came back malformed" in message for message in journal) == 3,
+check(sum("the bars' requests came back malformed" in message for message in journal) == 5,
       "read-pipeline: each malformed answer is said once")
-reads = [message for message in journal if "layout provider: read " in message]
-check(reads == ["plasmafusion-placement: layout provider: read 2 request(s), 5 refused"] * 2,
-      "read-pipeline: each of the two reads that came back says what it found, got %s" % reads)
+reads = call_lines(journal, READ_LINE, "layout provider: read ")
+check(None not in reads and [read[:2] for read in reads] == [(2, 5)] * 2,
+      "read-pipeline: each of the two reads that came back says what it found and how long it took, got %s" % reads)
 thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
 check(not thrown, "read-pipeline: nothing threw, got %s" % thrown)
 retire(read_pipeline, "read-pipeline")
@@ -307,16 +337,15 @@ retire(read_pipeline, "read-pipeline")
 # coalesced, and the retirement's offline frame before the name's release (the harness checks).
 # Each publication that came back says once how many frames it carried, how many the shell wrote
 # and how long it took; the failed one is said once, and so are the offline frames; the thirteen
-# reads say what they found; nothing throws.
+# reads say what they found and how long they took; nothing throws.
 before = len(messages)
 publication = run_harness({"scenario": "publication"})
 for problem in list(publication.property("problems").toVariant() or []):
     failures.append(str(problem))
 journal = messages[before:]
-published = [re.fullmatch(r"plasmafusion-placement: layout provider: published (\d+) frame\(s\), (\d+) written,"
-                          r" in (\d+) ms", message) for message in journal]
-counts = [(int(match.group(1)), int(match.group(2))) for match in published if match]
-check(counts == [(5, 4), (2, 2), (2, 2), (1, 1), (1, 1), (5, 5), (2, 2), (2, 2), (1, 1), (1, 1), (2, 2), (3, 3),
+published = call_lines(journal, PUBLISHED_LINE, "layout provider: published ")
+counts = [line[:2] for line in published if line]
+check(None not in published and counts == [(5, 4), (2, 2), (2, 2), (1, 1), (1, 1), (5, 5), (2, 2), (2, 2), (1, 1), (1, 1), (2, 2), (3, 3),
                   (3, 3), (1, 1), (1, 1), (1, 1), (1, 1)],
       "publication: each publication that came back before the retirement says its frames and what the shell wrote"
       " once, got %s" % counts)
@@ -324,14 +353,84 @@ check(sum("the bars' layout state could not be published" in message for message
       "publication: the failed publication is said once")
 check(sum(message == "plasmafusion-placement: layout provider: sent 5 offline frame(s)" for message in journal) == 1,
       "publication: the offline frames are said once")
-reads = [message for message in journal if "layout provider: read " in message]
-five = "plasmafusion-placement: layout provider: read 4 request(s), 1 refused"
-four = "plasmafusion-placement: layout provider: read 3 request(s), 1 refused"
-check(reads == [five] * 3 + [four] + [five] * 6 + [four] + [five] * 2,
-      "publication: each of the thirteen reads that came back says what it found, got %s" % reads)
+reads = call_lines(journal, READ_LINE, "layout provider: read ")
+five, four = (4, 1), (3, 1)
+check(None not in reads and [read[:2] for read in reads] == [five] * 3 + [four] + [five] * 6 + [four] + [five] * 2,
+      "publication: each of the thirteen reads that came back says what it found and how long it took, got %s" % reads)
 thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
 check(not thrown, "publication: nothing threw, got %s" % thrown)
+check(not [message for message in journal if OVER_LINE.fullmatch(message)],
+      "publication: no call there is over the limit")
 retire(publication, "publication")
+
+# Decision 1's time limit on the real script, the harness setting each call's timing: a read and a
+# publication answered at once, and a read whose owner lookup took 70 ms, measured from its own
+# call; two whose script ran from the call's start for 70 ms - over the 50 ms limit by their
+# length from that start, said right after their lines - two that waited 70 ms but whose script
+# started just before the answer - not over - and two whose start lies outside the call, so their
+# 70 ms from call to answer puts them over; a short one of those is not over; then a malformed
+# read and five malformed publications - the first with a wake during it - each said once and
+# each followed by the read that sends the frame again, and the frame told at last. Nothing
+# throws.
+before = len(messages)
+time_limit = run_harness({"scenario": "time-limit"})
+for problem in list(time_limit.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+events = []
+for message in journal:
+    for kind, pattern, marker in (("read", READ_LINE, "layout provider: read "),
+                                  ("published", PUBLISHED_LINE, "layout provider: published ")):
+        if marker in message:
+            line = call_lines([message], pattern, marker)[0]
+            events.append((kind,) + (line[2:] if line else ("unparsed", message)))
+    over = OVER_LINE.fullmatch(message)
+    if over:
+        events.append(("over " + over.group(1), over.group(3), int(over.group(2))))
+    if "layout provider: a " in message and "over the 50 ms limit" in message and not over:
+        events.append(("unparsed over", message))
+    if "the bars' requests came back malformed" in message:
+        events.append(("malformed read",))
+    if "the bars' layout state came back malformed" in message:
+        events.append(("malformed state",))
+kinds = [event[0] for event in events]
+wanted = (["read", "published", "read"]
+          + ["read", "over read", "published", "over publication"]
+          + ["read", "published"]
+          + ["read", "over read", "published", "over publication"]
+          + ["read", "malformed read"]
+          + ["malformed state", "read"] * 5
+          + ["published", "read"])
+check(kinds == wanted, "time-limit: the calls' lines and the limit's, in order, got %s" % events)
+if kinds == wanted:
+    def at_once(event):
+        return event[2] is not None and event[1] < 50
+
+    def held(event, over):
+        return event[1] >= 70 and event[2] is not None and event[2] >= 70 and over[1:] == ("script's start", event[2])
+
+    def waited(event):
+        return event[1] >= 70 and event[2] is not None and event[2] <= 10
+
+    def outside(event, over):
+        return event[1] >= 70 and event[2] is None and over[1:] == ("call", event[1])
+
+    for index in (0, 1, 2, 16, 18, 20, 22, 24, 25, 26):
+        check(at_once(events[index]), "time-limit: a call answered at once, from its own call, has its length from"
+              " the script's start, under 50 ms (%s)" % (events[index],))
+    check(held(events[3], events[4]) and held(events[5], events[6]),
+          "time-limit: a call whose script ran 70 ms is over the limit by its length from that start (%s)"
+          % (events[3:7],))
+    check(waited(events[7]) and waited(events[8]),
+          "time-limit: a call that only waited 70 ms is not over the limit (%s)" % (events[7:9],))
+    check(outside(events[9], events[10]) and outside(events[11], events[12]),
+          "time-limit: a start outside the call leaves the length from call to answer to decide (%s)"
+          % (events[9:13],))
+    check(events[13][2] is None and events[13][1] < 50,
+          "time-limit: a short call whose start lies outside it is not over the limit (%s)" % (events[13],))
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "time-limit: nothing threw, got %s" % thrown)
+retire(time_limit, "time-limit")
 
 # The layout provider's own rules, without the script: what start(), setSession() and retire()
 # move and what they leave alone, and its identity name refused, denied, unread and dropped by

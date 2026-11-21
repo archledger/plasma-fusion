@@ -21,7 +21,8 @@
     (KWinScript in tiling_lifecycle_test.py). Another (scenario: "refused-provider") has the
     writer refuse the provider registration with the fork's null UUID, and one
     ("late-memory") has it answer the memory's first read with nothing; "provider-rules"
-    checks the layout provider's own rules without the script. Every run follows the
+    checks the layout provider's own rules without the script, and "time-limit" the shell's
+    time its reads and publications take, as decision 1 bounds it. Every run follows the
     script's layout provider (LayoutProvider.qml) - online, capable, the session and its view,
     one revision per change - and the driver checks that order and that no two runs share a
     lifetime label.
@@ -520,6 +521,15 @@ Item {
             }
             return;
         }
+        if (scenario === "time-limit") {
+            try {
+                runTimeLimit();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
         if (scenario === "read-pipeline") {
             try {
                 runReadPipeline();
@@ -839,6 +849,17 @@ Item {
                                               outputName: "Virtual-1" }, extra || {}));
     }
 
+    // The shell's answers as the provider's scripts print them: what the reader found or how
+    // many frames the writer wrote, and when the script started in the shell - now, unless the
+    // test gives the time.
+    function readAnswer(rows, start) {
+        return JSON.stringify({ start: start === undefined ? Date.now() : start, rows: rows });
+    }
+
+    function writeAnswer(written, start) {
+        return JSON.stringify({ start: start === undefined ? Date.now() : start, written: written });
+    }
+
     // The layout provider's writer script as plasmashell runs it: each panel lists its widgets
     // by applet id, and a widget writes its config in the group it was given. Fakes stand in
     // for them; what the script printed, and every write it made.
@@ -940,7 +961,7 @@ Item {
         const retarget = (id, request, outputName) => {
             Object.assign(current.find(row => row.id === id), { request: request, outputName: outputName });
         };
-        const now = () => JSON.stringify(current);
+        const now = () => readAnswer(current);
         const row = id => current.find(entry => entry.id === id);
         if (w.calls !== 0) {
             fail("publication: nothing is published before the read comes back (writes " + w.calls + ")");
@@ -967,12 +988,18 @@ Item {
         ]);
         const general = JSON.stringify(["General"]);
         const targets = run.writes.map(write => [write.id, write.group, write.key]);
+        let printed = null;
+        try {
+            printed = JSON.parse(run.printed);
+        } catch (e) {
+            printed = null;
+        }
         if (JSON.stringify(targets) !== JSON.stringify([[1, general, "layoutResponse"], [3, general, "layoutResponse"],
                                                        [5, general, "layoutResponse"], [12, general, "layoutResponse"],
                                                        [21, general, "layoutResponse"]])
-                || String(run.printed) !== "5") {
-            fail("publication: the clock's widgets that asked are written, each in its response field, and counted (got "
-                 + JSON.stringify(targets) + ", printed " + run.printed + ")");
+                || !printed || printed.written !== 5 || !Number.isFinite(printed.start)) {
+            fail("publication: the clock's widgets that asked are written, each in its response field, and counted, with"
+                 + " the time the script started (got " + JSON.stringify(targets) + ", printed " + run.printed + ")");
         }
         // Each frame: the version, the request it answers, the provider's lifetime, the state's
         // order and the state - the capability, the bar's view as the provider resolves it from
@@ -1020,7 +1047,7 @@ Item {
                     fail("publication: a state change waits for the outstanding publication (writes " + w.calls + ")");
                 }
                 // The shell says it wrote four of the five: the count is said with the publication.
-                w.finished([4]);
+                w.finished([writeAnswer(4)]);
                 // Then it goes out, to the widgets it changes and only those: the bars on the
                 // session's view, not the one on the other output.
                 const got = framesOf(p, 1, all);
@@ -1036,7 +1063,7 @@ Item {
                 if (p.shellLookup.calls !== 1) {
                     fail("publication: the wake waits while a publication is outstanding (lookups " + p.shellLookup.calls + ")");
                 }
-                w.finished([2]);
+                w.finished([writeAnswer(2)]);
             } },
             { name: "the wake's read", until: () => p.shellLookup.calls === 2, run: function () {
                 // The same requests and the same state: nothing is written again.
@@ -1063,13 +1090,13 @@ Item {
                     fail("publication: the untoggle goes out at the read's end, to the widgets it changes (writes " + w.calls
                          + ", got " + canonical(got) + ")");
                 }
-                w.finished([2]);
+                w.finished([writeAnswer(2)]);
                 p.wake.activated();
             } },
             { name: "a widget that left the read", until: () => p.shellLookup.calls === 4, run: function () {
                 // Widget 5 is not read (its request went): nothing to tell, and its record goes.
                 p.shellLookup.finished([":1.9"]);
-                p.reader.finished([JSON.stringify(current.filter(entry => entry.id !== 5))]);
+                p.reader.finished([readAnswer(current.filter(entry => entry.id !== 5))]);
                 if (w.calls !== 3 || p.sent[5] !== undefined || p.sent[1] === undefined) {
                     fail("publication: a widget no longer read is told nothing and forgotten (writes " + w.calls + ", record "
                          + JSON.stringify(Object.keys(p.sent)) + ")");
@@ -1085,7 +1112,7 @@ Item {
                         || canonical(got[5]) !== canonical(frameWanted(p, rows[2], { capable: true, view: null, tiled: false }))) {
                     fail("publication: a widget read again is told again, alone (writes " + w.calls + ", got " + canonical(got) + ")");
                 }
-                w.finished([1]);
+                w.finished([writeAnswer(1)]);
                 p.wake.activated();
             } },
             { name: "a new request", until: () => p.shellLookup.calls === 6, run: function () {
@@ -1113,7 +1140,7 @@ Item {
                 if (w.calls !== 6 || ids(framesOf(p, 5, all)) !== JSON.stringify(["1"])) {
                     fail("publication: what a failed publication said is written again (writes " + w.calls + ")");
                 }
-                w.finished([1]);
+                w.finished([writeAnswer(1)]);
                 p.wake.activated();
             } },
             { name: "a new shell", until: () => p.shellLookup.calls === 8, run: function () {
@@ -1123,7 +1150,7 @@ Item {
                 if (w.calls !== 7 || w.service !== ":1.10" || ids(framesOf(p, 6, all)) !== JSON.stringify(["1", "12", "21", "3", "5"])) {
                     fail("publication: a new shell is told every frame (writes " + w.calls + " to " + w.service + ")");
                 }
-                w.finished([5]);
+                w.finished([writeAnswer(5)]);
                 tileShortcut.activated();
                 since = Date.now();
             } },
@@ -1133,7 +1160,7 @@ Item {
                     fail("publication: the toggle is told to the bars on its view, not to the one on another output (writes "
                          + w.calls + ", got " + canonical(got) + ")");
                 }
-                w.finished([2]);
+                w.finished([writeAnswer(2)]);
                 // The session's output switches to another desktop (the session stays where it
                 // was), as KWin says it - a signal for that output: the bars there are told at once,
                 // at a newer revision, with no read.
@@ -1151,7 +1178,7 @@ Item {
                          + " bars there, none tiled (writes " + w.calls + ", lookups " + p.shellLookup.calls + ", revision "
                          + p.revision + " after " + atView + ", got " + canonical(got) + ")");
                 }
-                w.finished([2]);
+                w.finished([writeAnswer(2)]);
                 // Then widget 3 asks again: its answer alone - the others were told already.
                 renew(3, 4);
                 p.wake.activated();
@@ -1165,7 +1192,7 @@ Item {
                     fail("publication: after the drift a new request is answered alone, the drift told already (writes "
                          + w.calls + ", got " + canonical(got) + ")");
                 }
-                w.finished([1]);
+                w.finished([writeAnswer(1)]);
                 // A signal that changes no bar's view moves nothing.
                 atView = p.revision;
                 ws.currentDesktopChanged();
@@ -1195,7 +1222,7 @@ Item {
                     fail("publication: a read that crosses a view change answers with the view its revision tells (writes "
                          + w.calls + ", got " + canonical(got) + ")");
                 }
-                w.finished([1]);
+                w.finished([writeAnswer(1)]);
                 since = Date.now();
             } },
             { name: "the crossed change goes out", until: () => w.calls === 12 || Date.now() - since >= 300, run: function () {
@@ -1206,7 +1233,7 @@ Item {
                     fail("publication: the view change a read crossed goes out after it, at a newer revision (writes " + w.calls
                          + ", revision " + p.revision + " after " + atView + ", got " + canonical(got) + ")");
                 }
-                w.finished([2]);
+                w.finished([writeAnswer(2)]);
                 // The activity switched and the second output on a desktop of its own, in one turn:
                 // one step, one publication.
                 atView = p.revision;
@@ -1224,7 +1251,7 @@ Item {
                          + " but another activity is not tiled, the second output on its own desktop (writes " + w.calls
                          + ", revision " + p.revision + " after " + atView + ", got " + canonical(got) + ")");
                 }
-                w.finished([3]);
+                w.finished([writeAnswer(3)]);
                 // The activity back: 1 and 3 are on the session's view again.
                 atView = p.revision;
                 ws.currentActivity = "a";
@@ -1241,7 +1268,7 @@ Item {
                     fail("publication: the activity back tiles the session's view again, each bar on its own output's desktop"
                          + " (writes " + w.calls + ", got " + canonical(got) + ")");
                 }
-                w.finished([3]);
+                w.finished([writeAnswer(3)]);
                 // The second output unplugged: its bar's view is gone.
                 atView = p.revision;
                 ws.screens = [ws.activeScreen];
@@ -1254,7 +1281,7 @@ Item {
                     fail("publication: an output unplugged leaves its bar with no view, told at once (writes " + w.calls + ", got "
                          + canonical(got) + ")");
                 }
-                w.finished([1]);
+                w.finished([writeAnswer(1)]);
                 // Plugged back, on its own desktop still: told again.
                 atView = p.revision;
                 ws.screens = [ws.activeScreen, second];
@@ -1267,13 +1294,13 @@ Item {
                     fail("publication: an output plugged back gives its bar its view again (writes " + w.calls + ", got "
                          + canonical(got) + ")");
                 }
-                w.finished([1]);
+                w.finished([writeAnswer(1)]);
                 // Widget 21 leaves the read (its request went).
                 p.wake.activated();
             } },
             { name: "a widget that left the read, its output moved", until: () => p.shellLookup.calls === 11, run: function () {
                 p.shellLookup.finished([":1.10"]);
-                p.reader.finished([JSON.stringify(current.filter(entry => entry.id !== 21))]);
+                p.reader.finished([readAnswer(current.filter(entry => entry.id !== 21))]);
                 if (w.calls !== 16 || !p.views || p.views[21] !== undefined) {
                     fail("publication: a widget no longer read is told nothing, and its view is forgotten (writes " + w.calls
                          + ", views " + JSON.stringify(Object.keys(p.views || {})) + ")");
@@ -1300,7 +1327,7 @@ Item {
                     fail("publication: a widget read again is told its view as it is now, not the one it left with (writes "
                          + w.calls + ", got " + canonical(got) + ")");
                 }
-                w.finished([1]);
+                w.finished([writeAnswer(1)]);
                 // Widget 1's panel moved to the second output: its next request names it.
                 retarget(1, 4, "Virtual-2");
                 p.wake.activated();
@@ -1315,7 +1342,7 @@ Item {
                     fail("publication: a request that names another output is resolved for it (writes " + w.calls + ", got "
                          + canonical(got) + ")");
                 }
-                w.finished([1]);
+                w.finished([writeAnswer(1)]);
                 // Off and on in one turn: nothing new to tell (every view stays as it was told).
                 tileShortcut.activated();
                 tileShortcut.activated();
@@ -1394,7 +1421,7 @@ Item {
                     fail("publication: neither a change queued before the retirement nor a view change after it moves or"
                          + " publishes anything (writes " + w.calls + ", revision " + p.revision + " after " + atView + ")");
                 }
-                w.finished([4]);
+                w.finished([writeAnswer(4)]);
                 w.failed();
                 p.shellLookup.failed();
                 p.reader.finished([now()]);
@@ -1408,6 +1435,140 @@ Item {
                 ws.screens = Qt.binding(() => [ws.activeScreen]);
                 ws.outputDesktops = ({});
                 ws.currentActivity = "a";
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
+
+    // Decision 1's time limit, on the real script: a shell script call keeps the shell from its
+    // input until it answers, so each read and publication says how long it took from call to
+    // answer and from its script's start; a call over the limit is said as such, once, with the
+    // length it was judged by. A call that only waited while the shell was busy is not over it,
+    // nor a read whose owner lookup was slow; a start the call does not contain leaves the length
+    // from call to answer to decide. A publication's answer without its start, or with a count
+    // it cannot have, records nothing and lets the pipeline go on, so the frame goes out again.
+    // The driver checks the lines, the harness what moved.
+    function runTimeLimit() {
+        if (setup() === "") {
+            done = true;
+            return;
+        }
+        const p = provider;
+        const w = p.writer;
+        if (p.shellLimit !== 50) {
+            fail("time-limit: a read or publication may hold the shell 50 ms (got " + p.shellLimit + ")");
+        }
+        DBusStubs.SessionBus.answer(expectIdentityRequest("time-limit", p), [{ value: 1 }]);
+        p.identityLookup.finished([":1.42"]);
+        p.shellLookup.finished([":1.9"]);
+        const rows = [{ id: 1, consumer: "c1", request: 1, version: 1, intent: "query", outputName: "Virtual-1" }];
+        // A read and its publication, each answered at once.
+        p.reader.finished([readAnswer(rows)]);
+        if (w.calls !== 1) {
+            fail("time-limit: the read's answer goes out (writes " + w.calls + ")");
+            done = true;
+            return;
+        }
+        w.finished([writeAnswer(1)]);
+        // A read starts at once (nothing is in flight); a toggle moves the state, and its
+        // publication goes out at the end of the turn.
+        const read = () => {
+            p.wake.activated();
+            p.shellLookup.finished([":1.9"]);
+        };
+        const readFor = ms => p.reading && Date.now() - p.readAt >= ms;
+        const publishedFor = (calls, ms) => w.calls === calls && p.pending !== null
+            && Date.now() - p.pending.at >= ms;
+        const tiled = index => {
+            const got = framesOf(p, index, [1]);
+            return got[1] ? got[1].tiled : null;
+        };
+        // A read whose owner lookup takes 70 ms: its length starts with its own call, which goes
+        // out once the owner is known.
+        p.wake.activated();
+        let since = Date.now();
+        steps = [
+            { name: "a read whose owner lookup took 70 ms", until: () => Date.now() - since >= 70, run: function () {
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([readAnswer(rows)]);
+                read();
+            } },
+            // The read's script ran from the moment the call went out: 70 ms of the shell's time.
+            { name: "a read that held the shell", until: () => readFor(70), run: function () {
+                p.reader.finished([readAnswer(rows, p.readAt)]);
+                tileShortcut.activated();
+            } },
+            { name: "a publication that held the shell", until: () => publishedFor(2, 70), run: function () {
+                w.finished([writeAnswer(1, p.pending.at)]);
+                read();
+            } },
+            // The scripts started just before they answered: the calls waited while the shell was
+            // busy, and that time was not spent on them.
+            { name: "a read that waited", until: () => readFor(70), run: function () {
+                p.reader.finished([readAnswer(rows, Date.now() - 1)]);
+                tileShortcut.activated();
+            } },
+            { name: "a publication that waited", until: () => publishedFor(3, 70), run: function () {
+                w.finished([writeAnswer(1, Date.now() - 1)]);
+                read();
+            } },
+            // A start before the call went out, or after its answer: the clocks disagree, and the
+            // length from call to answer decides.
+            { name: "a read whose start is not in the call", until: () => readFor(70), run: function () {
+                p.reader.finished([readAnswer(rows, p.readAt - 1000)]);
+                tileShortcut.activated();
+            } },
+            { name: "a publication whose start is not in the call", until: () => publishedFor(4, 70), run: function () {
+                w.finished([writeAnswer(1, Date.now() + 1000)]);
+                // A short call with such a start stays under the limit.
+                read();
+                p.reader.finished([readAnswer(rows, p.readAt - 1000)]);
+                // The rows alone, without the script's start, are a malformed answer: nothing read.
+                read();
+                p.reader.finished([JSON.stringify(rows)]);
+                if (w.calls !== 4 || p.reading) {
+                    fail("time-limit: a read whose frame was told publishes nothing (writes " + w.calls + ")");
+                }
+                // The session ends; its publication goes out at the end of the turn.
+                tileShortcut.activated();
+            } },
+            // An answer that is a bare count records nothing, and the pipeline goes on: the wake
+            // that came during it reads after it, and that read sends the frame again.
+            { name: "a malformed answer with a wake during it", until: () => w.calls === 5, run: function () {
+                if (tiled(4) !== false) {
+                    fail("time-limit: the session's end goes out (tiled " + tiled(4) + ")");
+                }
+                p.wake.activated();
+                w.finished(["1"]);
+            } },
+            { name: "the wake's read after it", until: () => p.reading, run: function () {
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([readAnswer(rows)]);
+                // Answers that count more frames than they carried, fewer than none or something
+                // that is no number, or that leave out the start, record nothing either.
+                const malformed = [writeAnswer(2), writeAnswer(-1), JSON.stringify({ start: Date.now(), written: "1" }),
+                                   JSON.stringify({ written: 1 })];
+                for (let i = 0; i < malformed.length; ++i) {
+                    if (w.calls !== 6 + i || tiled(5 + i) !== false) {
+                        fail("time-limit: the session's end goes out again after each malformed answer (writes " + w.calls
+                             + ", tiled " + tiled(5 + i) + ")");
+                    }
+                    w.finished([malformed[i]]);
+                    read();
+                    p.reader.finished([readAnswer(rows)]);
+                }
+                // Told at last, and recorded: the next read sends nothing.
+                if (w.calls !== 10 || tiled(9) !== false) {
+                    fail("time-limit: the session's end goes out once more (writes " + w.calls + ")");
+                }
+                w.finished([writeAnswer(1)]);
+                read();
+                p.reader.finished([readAnswer(rows)]);
+                if (w.calls !== 10 || p.publishing || p.reading) {
+                    fail("time-limit: a frame the shell confirmed is not sent again (writes " + w.calls + ")");
+                }
+                p.retire();
             } }
         ];
         stepSince = Date.now();
@@ -1466,7 +1627,7 @@ Item {
         const pad = "x".repeat(2048 - wide.length + "Virtual-1".length);
         const exact = query("c-wide", 7, { outputName: pad });
         const hostile = "q\"'\\\n</s>${x}";
-        const rows = runReaderScript(script, [
+        const read = runReaderScript(script, [
             [{ type: clock, id: 1, text: query("c1", 1) },
              { type: "org.kde.plasma.digitalclock", id: 2, text: query("c2", 2) },
              { type: clock, id: 3, text: query(hostile, 3, { title: "not copied", token: "not copied" }) },
@@ -1480,6 +1641,11 @@ Item {
              { type: clock, id: 11, text: exact + " " }],
             [{ type: clock, id: 12, text: query("c12", 12, { version: 2 }) }]
         ]);
+        // With what it found, the script says when it started.
+        if (!read || !Number.isFinite(read.start)) {
+            fail("read-pipeline: the shell side says when its script started (got " + JSON.stringify(read) + ")");
+        }
+        const rows = read ? read.rows : null;
         if (exact.length !== 2048) {
             fail("read-pipeline: the test's exact request is 2048 characters (got " + exact.length + ")");
         }
@@ -1497,14 +1663,15 @@ Item {
         for (let i = 1; i <= 17; ++i) {
             many.push({ type: clock, id: 100 + i, text: query("m" + i, i) });
         }
-        const bounded = runReaderScript(script, [many.slice(0, 9), many.slice(9)]);
+        const boundedRead = runReaderScript(script, [many.slice(0, 9), many.slice(9)]);
+        const bounded = boundedRead ? boundedRead.rows : null;
         if (!bounded || bounded.length !== 16 || bounded[15].id !== 116) {
             fail("read-pipeline: the shell side reads at most 16 widgets (got " + (bounded ? bounded.length : null) + ")");
         }
         // The answer: the provider checks every row again; a query of version 1 for a named
         // output is a request, anything else with a well-formed identity a refusal, kept with its
         // reason; a row with no well-formed identity is dropped.
-        const answer = JSON.stringify([
+        const answerRows = [
             { id: 1, consumer: "c1", request: 1, version: 1, intent: "query", outputName: "Virtual-1" },
             { id: 3, consumer: hostile, request: 3, version: 1, intent: "query", outputName: "Virtual-1" },
             { id: 12, consumer: "c12", request: 12, version: 2, intent: "query", outputName: "Virtual-1" },
@@ -1514,14 +1681,15 @@ Item {
             { id: 16, consumer: "c16", request: 16, version: 1, intent: "query", outputName: "o".repeat(129) },
             { id: 17, consumer: "", request: 17, version: 1, intent: "query", outputName: "Virtual-1" },
             { id: 18, consumer: "c18", request: 0, version: 1, intent: "query", outputName: "Virtual-1" }
-        ]);
-        r.finished([answer]);
+        ];
+        const answer = () => readAnswer(answerRows);
+        r.finished([answer()]);
         // The read's answers go out at once (the publication run checks them); answered here, so
         // the pipeline goes on.
         if (p.writer.calls !== 1) {
             fail("read-pipeline: the read's answers go out once (writes " + p.writer.calls + ")");
         }
-        p.writer.finished([7]);
+        p.writer.finished([writeAnswer(7)]);
         const requests = JSON.stringify(p.requests.map(q => [q.id, q.consumer, q.request, q.outputName]));
         if (requests !== JSON.stringify([[1, "c1", 1, "Virtual-1"], [3, hostile, 3, "Virtual-1"]])) {
             fail("read-pipeline: the version-1 queries for a named output are the requests (got " + requests + ")");
@@ -1552,7 +1720,7 @@ Item {
                          + p.shellLookup.calls + ")");
                 }
                 p.shellLookup.finished([":1.9"]);
-                p.reader.finished([answer]);
+                p.reader.finished([answer()]);
             } },
             { name: "the coalesced read", until: () => p.shellLookup.calls > 2, run: function () {
                 if (p.shellLookup.calls !== 3) {
@@ -1585,21 +1753,23 @@ Item {
                          + p.shellLookup.calls + ")");
                 }
                 p.shellLookup.finished([":1.9"]);
-                // A failed or malformed answer ends the read and keeps the lists.
+                // A failed or malformed answer ends the read and keeps the lists: not JSON, the rows
+                // without the script's start, a start that is no number, more than 16 rows.
                 p.reader.failed();
                 if (p.reading || kept() !== before) {
                     fail("read-pipeline: a failed read ends the read and keeps the requests and refusals");
                 }
-                for (const answer of ["{not json", JSON.stringify({ rows: [] }),
-                                      JSON.stringify(Array.from({ length: 17 }, (_, i) => ({
-                                          id: i + 1, consumer: "c", request: i + 1, version: 1, intent: "query",
-                                          outputName: "Virtual-1" })))]) {
+                for (const malformed of ["{not json", JSON.stringify([]), JSON.stringify({ rows: [] }),
+                                         JSON.stringify({ start: "now", rows: [] }),
+                                         readAnswer(Array.from({ length: 17 }, (_, i) => ({
+                                             id: i + 1, consumer: "c", request: i + 1, version: 1, intent: "query",
+                                             outputName: "Virtual-1" })))]) {
                     p.wake.activated();
                     p.shellLookup.finished([":1.9"]);
-                    p.reader.finished([answer]);
+                    p.reader.finished([malformed]);
                     if (p.reading || kept() !== before) {
                         fail("read-pipeline: a malformed answer ends the read and keeps the requests and refusals ("
-                             + answer.slice(0, 20) + ")");
+                             + malformed.slice(0, 20) + ")");
                     }
                 }
                 // A retirement during a read: the answers that follow reach nothing, and the last
@@ -1618,7 +1788,7 @@ Item {
                 }
                 // The shell's late answers - a read's and a failure - reach neither the lists nor
                 // the journal (the driver counts its lines).
-                p.reader.finished([JSON.stringify([])]);
+                p.reader.finished([readAnswer([])]);
                 p.reader.failed();
                 if (p.reading || kept() !== before) {
                     fail("read-pipeline: a late answer after the retirement reaches nothing");
@@ -1891,7 +2061,7 @@ Item {
                 provider.identityLookup.finished([":1.42"]);
                 provider.shellLookup.finished([":1.9"]);
                 const asked = { id: 1, consumer: "c1", request: 1, version: 1, intent: "query", outputName: "Virtual-1" };
-                provider.reader.finished([JSON.stringify([asked])]);
+                provider.reader.finished([readAnswer([asked])]);
                 const told = framesOf(provider, 0, [1]);
                 const unsupported = frameWanted(provider, asked, {
                     capable: false, view: { desktopId: "11", activityId: "a", outputName: "Virtual-1" }, tiled: false });
