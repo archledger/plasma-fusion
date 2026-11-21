@@ -16,8 +16,11 @@ request a deadline (`62993e6` to `ddf4533`). P3 is done: the clock's settings ga
 visibility choice and the two transport fields, each page refreshing what it does not edit
 (`e111375`), and the clock asks for its output's layout state, saving each request before the
 wake and withdrawing it while the control is hidden, which ran natively through a shell restart
-and under a Kiosk policy (`bec99ba`). P4 is next. Read [plan.md](plan.md) and the accepted
-[specification](../../SPEC-workspace-layout-control.md).
+and under a Kiosk policy (`bec99ba`). P4 is done: the clock shows its view's layout mode, Floating
+or Tiled, read-only in the pill after the workspace dots, its glyph alone or nothing as the width
+budget asks, and nothing until an answer confirms a mode or while the bar's own layout hides it
+(`995d8e7` and `c15f561`). The read-only checkpoint is next, with the owner's review. Read
+[plan.md](plan.md) and the accepted [specification](../../SPEC-workspace-layout-control.md).
 Existing native task files are untouched.
 Paths below are relative to the repository. Proposed new files are not claimed to exist.
 
@@ -250,7 +253,7 @@ Dependencies: P2–P3. Likely files: `clock/contents/ui/main.qml`,
 `clock/contents/ui/LayoutControl.qml` (new), `clock/contents/ui/WidthBudget.qml`,
 `clock/tests/calendar_view_test.py`, `docs/parts/shell-topbar.md` (five).
 
-- [ ] Display only confirmed view-scoped state; keep actions disabled until P5–P6 qualify them.
+- [x] Display only confirmed view-scoped state; keep actions disabled until P5–P6 qualify them.
       The specification's item 7 pending state is the layout state's outcome pending; once
       unconfirmed, past its deadline, the bar shows no control that looks as if it works (item 8;
       [shell-topbar.md](../../docs/parts/shell-topbar.md#workspace-layout-state-layoutstateqml)). An
@@ -259,9 +262,33 @@ Dependencies: P2–P3. Likely files: `clock/contents/ui/main.qml`,
       compare that view with its own turns on how the specification's rule that the placement script
       is the only authority for the view is read (decision 1's amendment,
       [g0-decisions.md](g0-decisions.md)).
-- [ ] Preserve dots/calendar/wheel behavior and existing width-budget order; derive measured
+      The control, `clock/contents/ui/LayoutControl.qml`, shows a mode only while the layout state's
+      mode is tiled or floating; unknown, a pending query among them, and unavailable show nothing,
+      so a state unconfirmed past its deadline shows no control at all. It offers no action: it is
+      static text with no keyboard focus, and a click on it opens neither the calendar nor Overview
+      (`995d8e7`; in a real session in p4/bar-proof). P2's pending mapping is restated for P4: the
+      read-only bar asks at its start, when the output it asks for changes, which is also how the
+      control returns once it may show again, and when its provider's lifetime changes or ends; each
+      time nothing is confirmed for it yet, so it shows nothing while a query is pending. The
+      specification's item 7 pending state follows an explicit request, P6's, where the outcome
+      pending is the mapping's case. The view is not compared: the placement script is the only
+      authority for it, and on a desktop switch the bar's own desktop and the provider's frame
+      arrive separately, so a comparison would hide the control for a moment each time. A stale
+      answer after a failed publication stays P2's documented limit, which P7's matrix can inject
+      (p4/control-proof).
+- [x] Preserve dots/calendar/wheel behavior and existing width-budget order; derive measured
       label/compact/hidden savings using existing design tokens.
-- [ ] Cover one desktop, narrow bars, dark/light, RTL, large text and tablet/vertical hiding.
+      The control sits in the pill after the workspace dots, or first with one workspace, one pill
+      padding from its neighbours, with the boards' values: the LiveChips 14 px glyph and 6 px gap,
+      stroke 1.8, and Manrope 13 px 600 in the pill's text colour (`995d8e7`, `c15f561`). In a real
+      session a click on the date still opens the calendar, the current dot still asks for Overview
+      and a wheel over the date or the control still switches workspaces. The width budget keeps its
+      order: the label goes at step 4 with the short date and the control at step 7 with the dots;
+      `layoutSaving(level)` gives up the label's measured room, then the control's width and one
+      pill padding, and `budgetSaving` adds it. On screens from 800 to 380 px wide the steps 0, 2,
+      4, 5 and 7 came with the matching levels, and the budget's predicted widths were exact across
+      the control's steps (p4/bar-proof).
+- [x] Cover one desktop, narrow bars, dark/light, RTL, large text and tablet/vertical hiding.
       Wherever the bar's own layout hides the control, whatever the answer (the plan names tablet
       posture and vertical panels; whether a clock on the desktop is another is P4's to decide),
       leave the layout state idle and withdraw the saved request, as the user's choice does (P3),
@@ -269,14 +296,47 @@ Dependencies: P2–P3. Likely files: `clock/contents/ui/main.qml`,
       only at its next read, which waits for some bar's wake; to stop it at once, wake it after a
       withdrawal, which needs the component to wake without a request (`LayoutState.qml`, among
       P6's files rather than P4's).
+      In real sessions on the owner-approved image: one workspace (no dots, the control first),
+      narrow bars, the dark and light themes, right to left as `plasmashell -reverse` mirrors it,
+      with English text (the pill mirrored, the label against its glyph), large text at a scale of
+      1.6, and tablet posture, which hides the control, leaves the state idle, withdraws the request
+      and wakes the provider (p4/bar-proof). A vertical panel is covered offscreen only. A clock
+      outside a panel is not the top bar, so it is gated the same way (P4's decision). The
+      withdrawal happens at start while the control may not show, when the user hides it and when
+      the bar's layout does, and then wakes the provider through the component's new `wake()`, which
+      its request path uses too (`c15f561`). One exception: at the width budget's step 7 the hidden
+      control keeps the state asking, since idling it there would free the room the budget counts
+      and let it show the control again, in a loop; a bar that narrow keeps receiving frames, as the
+      part page says and a check with its mutant guards.
 
 Verify: fail-first real-component assertions in the existing calendar view suite; build topbar.
 Review isolated screenshots before enabling actions; offscreen renders are not live-mode proof.
+Done on 2026-11-21: slice 1's control checks failed first in the existing calendar view suite, 28 of
+28 against their parent, and slice 2's in the backend suite, 14 at 162 checks; every planted mutant
+was caught, 29 and 37, and `tools/build.sh topbar` passed on each committed tree (the proofs
+p4/control-proof and p4/bar-proof). Beyond the five files, slice 2 changed
+`clock/contents/ui/LayoutState.qml` for the wake, as the third item foresaw, and put the clock's
+checks in `clock/tests/calendar_backend_test.py`, beside P3's; slice 1 first made the view suite
+wait for the calendar adapter (`8c47df8`). The isolated screenshots are in p4/bar-proof's `shots/`,
+for the checkpoint below. Not run: a vertical panel and a clock outside a panel in a session, a
+right-to-left language's text in a session, hover tooltips, the keyboard, which reaches the control
+only with P6's menu, and several bars, which are P7's.
 
 ## Checkpoint: read-only state path
 
 - [ ] The actual provider/consumer path reports correct current-view state without mutations.
 - [ ] Owner reviews the state contract and visual states before explicit-request integration.
+
+Ready for the owner's review on 2026-11-21. The state contract is the part page's layout state and
+layout control sections; the visual states are the screenshots in p4/bar-proof's `shots/`: Floating,
+Tiled, tablet posture, the light theme, large text, right to left, one workspace, the glyph alone at
+steps 4 and 5 and nothing at step 7. To judge: the Floating glyph alone can read as an empty
+checkbox, the two glyphs differing by one line about 1 px wide; the label keeps its room until step
+4, after the global menu and the app name; each new query hides the control until its answer, so the
+pill's width changes twice and, near a step boundary, the budget can step down and back; a bar at
+step 7 keeps receiving frames; the view is not compared; and in a left-to-right layout the spare
+width after "Tiled" sits before the date. For the first item: p3/wiring-proof and p4/bar-proof show
+it on one bar; several bars and outputs are P7's.
 
 ## P5: Handle explicit, prepared mode requests in the provider
 
