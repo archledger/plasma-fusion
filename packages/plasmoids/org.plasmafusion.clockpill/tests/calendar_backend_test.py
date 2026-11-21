@@ -8,6 +8,7 @@ from pathlib import Path
 import hashlib
 import json
 import sys
+import time
 
 from PySide6.QtCore import (Q_ARG, SLOT, ClassInfo, QCoreApplication, QDate, QDateTime, QEvent, QMetaObject,
                             QObject, QTime, QUrl, Slot, qInstallMessageHandler)
@@ -480,24 +481,30 @@ def bind(epoch):
 
 
 def lose(why, action):
-    """Act on the bus while the bar is bound: it must become unknown and ask again, once."""
+    """Act on the bus while the bar is bound: it must become unknown and ask again, once. The waits
+    run whatever came before, so that a failing run leaves the bus settled for the next step."""
     events.clear()
     was_bound = prop(watched, "outcome") == "answered"
     action()
-    expect(was_bound and until(lambda: len(events) == 2) and not until(lambda: len(events) > 2, ms=300)
-           and [kind for kind, _ in events] == ["request", "wake"] and prop(watched, "outcome") == "pending"
-           and prop(watched, "mode") == "unknown" and prop(watched, "epoch") == "" and prop(watched, "revision") == 0,
+    asked = until(lambda: len(events) == 2)
+    quiet = not until(lambda: len(events) > 2, ms=300)
+    expect(was_bound and asked and quiet and [kind for kind, _ in events] == ["request", "wake"]
+           and prop(watched, "outcome") == "pending" and prop(watched, "mode") == "unknown"
+           and prop(watched, "epoch") == "" and prop(watched, "revision") == 0,
            "layout state: " + why + " makes the bar unknown and ask again")
 
 
 def unchanged(why, epoch, action):
-    """Act on the bus while the bar is bound to `epoch` (pending when empty): nothing may change."""
+    """Act on the bus while the bar is bound to `epoch` (pending when empty): nothing may change.
+    The wait runs whatever came before, as in lose()."""
     events.clear()
     outcome = "answered" if epoch else "pending"
     was = prop(watched, "outcome") == outcome and prop(watched, "epoch") == epoch
     action()
-    expect(was and not until(lambda: events or prop(watched, "outcome") != outcome, ms=500)
-           and prop(watched, "epoch") == epoch, "layout state: " + why + " changes nothing")
+    quiet = not until(lambda: events or prop(watched, "outcome") != outcome, ms=500)
+    if not quiet:
+        QTest.qWait(500)
+    expect(was and quiet and prop(watched, "epoch") == epoch, "layout state: " + why + " changes nothing")
 
 
 def hand_over():
@@ -542,15 +549,17 @@ check(bus.unregisterService("org.kde.KWin")
                                           REPLACE.AllowReplacement).value() == REGISTERED
       and second.registerService(PREFIX + E9), "layout state: KWin's name is held here, to be handed on,"
       " and another identity name on the second connection")
-# Those two changes arrive first, so that the handover is the only one recorded below.
-check(until(lambda: changes == [(owner, ""), ("", owner)]),
+# Those two changes arrive first, so that the handover is the only one recorded below. The bus sends
+# changes in order, so once these two are the last recorded, nothing older is still on its way.
+check(until(lambda: changes[-2:] == [(owner, ""), ("", owner)]),
       "layout state: KWin's name released and held here again, recorded (%s)" % changes)
 events.clear()
 mark = len(watched_log["history"])
 deliver(watched, frame(watched_log, 1, epoch=E7))
 hand_over()
-expect(until(lambda: len(events) == 2) and not until(lambda: len(events) > 2, ms=300)
-       and [kind for kind, _ in events] == ["request", "wake"] and prop(watched, "outcome") == "pending"
+asked_again = until(lambda: len(events) == 2)
+quiet = not until(lambda: len(events) > 2, ms=300)
+expect(asked_again and quiet and [kind for kind, _ in events] == ["request", "wake"] and prop(watched, "outcome") == "pending"
        and prop(watched, "epoch") == "" and not [h for h in watched_log["history"][mark:] if h[2] == "answered"],
        "layout state: KWin's name handed on from the owner of the frame being checked makes the bar ask again,"
        " and the check takes nothing")
@@ -559,17 +568,20 @@ check(second.unregisterService("org.kde.KWin") and bus.registerService("org.kde.
       "layout state: KWin's name is held here again")
 # Those changes arrive before the next frame is checked: the first comes from the second connection,
 # which that frame names as its owner, and would otherwise reach the bar during its check.
-check(until(lambda: changes == [(stranger, ""), ("", owner)]),
+check(until(lambda: changes[-2:] == [(stranger, ""), ("", owner)]),
       "layout state: KWin's name released by the second connection and held here again, recorded (%s)" % changes)
 
 
 def mid_check(why, epoch, backend, action):
-    """Deliver a frame for the current request and act in the same turn, while it is checked."""
+    """Deliver a frame for the current request and act in the same turn, while it is checked. The
+    wait settles the bus whatever the outcome, as in unchanged()."""
     events.clear()
     deliver(watched, frame(watched_log, 1, epoch=epoch, backend=backend))
     action()
-    expect(not until(lambda: events or prop(watched, "outcome") != "pending", ms=500)
-           and prop(watched, "epoch") == "", "layout state: " + why + " changes nothing")
+    quiet = not until(lambda: events or prop(watched, "outcome") != "pending", ms=500)
+    if not quiet:
+        QTest.qWait(500)
+    expect(quiet and prop(watched, "epoch") == "", "layout state: " + why + " changes nothing")
 
 
 mid_check("KWin's name released, during the check, by another connection than the frame's owner", E9, stranger,
@@ -593,6 +605,118 @@ qInstallMessageHandler(None)
 expect(left_bound and len(left_log["requests"]) == 1 and not [w for w in warnings if "Error" in w],
        "layout state: the bound lifetime's name released after the component is gone touches nothing of it (%s)"
        % warnings)
+
+# An answer that never comes. Each request has its own deadline (P0's receipt, item 9): past it with
+# no answer the outcome is unconfirmed and the mode unknown, as under a Kiosk policy that refuses the
+# shell's scripting or with no provider at all, and the request stays out - a late answer still
+# counts - with nothing asked again. A new request starts its own deadline, an answer or going idle
+# ends the wait, a check that fails leaves the request to it, and a request keeps the deadline it was
+# made with. Each wait is timed from just before the step that asks to the outcome's own signal,
+# with 150 ms of slack for the timer's resolution, as a loaded machine only makes a timer later.
+DEADLINE = 600
+asked_at, outcomes = [], []
+created_at = time.monotonic()
+waiting, waiting_log = create(outputName="Virtual-0", deadlineMs=DEADLINE)
+waiting.requested.connect(lambda text: asked_at.append(time.monotonic()))
+waiting.outcomeChanged.connect(lambda: outcomes.append((prop(waiting, "outcome"), time.monotonic())))
+
+
+def timer_of(item):
+    """The component's deadline timer, read from outside to check the interval it was given."""
+    found = [child for child in item.findChildren(QObject) if child.inherits("QQmlTimer")]
+    return found[0] if len(found) == 1 else None
+
+
+def ask_waiting(output):
+    """Ask again through an output change; the time just before it, once the request is out."""
+    start, count = time.monotonic(), len(asked_at)
+    waiting.setProperty("outputName", output)
+    return start if until(lambda: len(asked_at) == count + 1) else None
+
+
+def unconfirmed_after(start, deadline=DEADLINE):
+    """Whether the outcome turned unconfirmed, and no sooner than a deadline after `start`."""
+    if start is None or not until(lambda: prop(waiting, "outcome") == "unconfirmed", ms=deadline * 5):
+        return False
+    when = [moment for outcome, moment in outcomes if outcome == "unconfirmed"][-1]
+    return when - start >= (deadline - 150) / 1000
+
+
+events.clear()
+first = created_at if until(lambda: len(asked_at) == 1) else None
+timer = timer_of(waiting)
+expect(timer is not None and timer.property("interval") == DEADLINE and unconfirmed_after(first)
+       and prop(waiting, "mode") == "unknown" and prop(waiting, "epoch") == ""
+       and not until(lambda: len(waiting_log["requests"]) > 1, ms=300)
+       and [kind for kind, _ in events] == ["request", "wake"],
+       "layout state: a request with no answer is unconfirmed at its deadline, its mode unknown, and nothing is"
+       " asked again")
+deliver(waiting, frame(waiting_log, 1))
+expect(until(lambda: prop(waiting, "outcome") == "answered") and prop(waiting, "mode") == "floating",
+       "layout state: a late answer to the unconfirmed request still counts")
+ask_waiting("Virtual-1")
+deliver(waiting, frame(waiting_log, 1))
+expect(until(lambda: prop(waiting, "outcome") == "answered")
+       and not until(lambda: prop(waiting, "outcome") != "answered", ms=DEADLINE + 300),
+       "layout state: an answer before the deadline keeps the bar answered past it")
+ask_waiting("Virtual-2")
+QTest.qWait(DEADLINE // 2)
+replacing = ask_waiting("Virtual-0")
+expect(prop(waiting, "outcome") == "pending" and unconfirmed_after(replacing),
+       "layout state: a new request starts its own deadline, and the one it replaced ends no sooner")
+failing = ask_waiting("Virtual-1")
+deliver(waiting, frame(waiting_log, 1, epoch=E3))
+expect(unconfirmed_after(failing) and prop(waiting, "epoch") == "" and len(asked_at) == 5,
+       "layout state: a check that fails - an identity name nobody holds - leaves the request to its deadline,"
+       " and nothing is asked again")
+changed = ask_waiting("Virtual-0")
+QTest.qWait(DEADLINE // 3)
+waiting.setProperty("deadlineMs", 5000)
+# Within unconfirmed_after()'s wait of five deadlines, so a wait restarted at 5 s would not end in it.
+expect(unconfirmed_after(changed),
+       "layout state: a request keeps the deadline it was made with when the owner changes it")
+ask_waiting("Virtual-2")
+expect(timer is not None and timer.property("interval") == 5000,
+       "layout state: the owner's new deadline applies from the next request")
+waiting.setProperty("deadlineMs", DEADLINE)
+ask_waiting("Virtual-1")
+waiting.setProperty("outputName", "")
+expect(prop(waiting, "outcome") == "idle"
+       and not until(lambda: prop(waiting, "outcome") != "idle" or len(asked_at) > 8, ms=DEADLINE + 300),
+       "layout state: going idle ends the wait: the bar stays idle past the deadline")
+warnings = []
+qInstallMessageHandler(lambda mode, context, message: warnings.append(message))
+check(bus.unregisterService("org.kde.kglobalaccel"), "layout state: kglobalaccel's stand-in leaves the bus")
+failed_wake = unconfirmed_after(ask_waiting("Virtual-0"))
+check(bus.registerService("org.kde.kglobalaccel"), "layout state: kglobalaccel's stand-in is on the bus again")
+qInstallMessageHandler(None)
+expect(failed_wake and len(asked_at) == 9
+       and [w for w in warnings if "the wake failed" in w and "ServiceUnknown" in w],
+       "layout state: a wake that fails is said, the request still ends unconfirmed at its deadline, and"
+       " nothing is asked again (%s)" % warnings)
+intervals = []
+for value in (50, 99, 100, 10001, 20000):
+    strict, strict_log = create(outputName="Virtual-0", deadlineMs=value)
+    until(lambda: strict_log["requests"])
+    strict_timer = timer_of(strict)
+    intervals.append(strict_timer.property("interval") if strict_timer is not None else None)
+    strict.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+expect(intervals == [10000, 10000, 100, 10000, 10000],
+       "layout state: 100 ms is a deadline, and one outside 100 to 10000 ms gives the 10 s one (%s)" % intervals)
+warnings = []
+qInstallMessageHandler(lambda mode, context, message: warnings.append(message))
+going, going_log = create(outputName="Virtual-0", deadlineMs=DEADLINE // 2)
+gone = []
+going.destroyed.connect(lambda: gone.append(True))
+until(lambda: going_log["requests"])
+going.deleteLater()
+QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+QTest.qWait(DEADLINE)
+qInstallMessageHandler(None)
+expect(gone and not [w for w in warnings if "Error" in w],
+       "layout state: a deadline that would end after the component is gone touches nothing of it (%s)" % warnings)
+waiting.deleteLater()
 watched.deleteLater()
 state.deleteLater()
 QTest.qWait(50)

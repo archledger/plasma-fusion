@@ -202,7 +202,8 @@ The clock's side of the workspace layout transport, whose other side is the plac
 layout provider ([kwin.md](kwin.md#the-layout-providers-state)). Nothing shows it yet: the clock's
 schema declares the transport's fields in P3 and the control comes in P4
 (`tasks/workspace-layout-control/todo.md`), so the component's owner passes the saved answer in
-(`response`) and saves each request it is asked to (`requested`).
+(`response`) and saves each request it is asked to (`requested`), and may shorten the requests'
+deadline (`deadlineMs`).
 
 - A request is a version-1 `query` for the bar's output (`outputName`, 1 to 128 characters):
   `{version, intent, consumer, request, outputName}`. The consumer is drawn fresh for each instance
@@ -250,13 +251,22 @@ schema declares the transport's fields in P3 and the control comes in P4
   request the check would answer. A move said just before the check began counts as well, as
   asking again is always safe. Each lookup gives the plugin its signature, so no introspection
   round trip comes first.
-- The component reports `outcome` - idle, pending, answered, or refused with `refusal` its reason -
-  apart from the state an answer gives: `capable`, `view`, `tiled`, `epoch` and `revision`. `mode`
-  is unknown until an answer is accepted, unavailable when the provider cannot tile or KWin has no
-  such output, and otherwise floating or tiled. A saved answer alone is never state: an earlier
-  instance's answer names that instance's consumer.
-- Not yet, P2's last slice: an answer that never comes (a deadline, and the Kiosk case, where no
-  answer can come); the same deadline covers a lookup that fails and leaves the request pending.
+- The component reports `outcome` - idle, pending, unconfirmed, answered, or refused with `refusal`
+  its reason - apart from the state an answer gives: `capable`, `view`, `tiled`, `epoch` and
+  `revision`. `mode` is unknown until an answer is accepted, unavailable when the provider cannot
+  tile or KWin has no such output, and otherwise floating or tiled. A saved answer alone is never
+  state: an earlier instance's answer names that instance's consumer.
+- Each request has a deadline, `deadlineMs`: 100 to 10000 ms, and 10000 for any other value,
+  which starts as the request is made. A request keeps the deadline it was made with, and a change
+  applies from the next request. Past it with no answer, the outcome is unconfirmed and the mode
+  stays unknown, but the request stays out: nothing is cancelled, renumbered or asked again, and a
+  late answer still counts, as in P0's transport (`tasks/workspace-layout-control/g0-receipt.md`,
+  item 9). That covers an answer that does not come - a Kiosk policy that refuses the shell's
+  scripting, no placement script, stock KWin, a wake that fails - and a check whose lookup fails,
+  which leaves the request pending. A new request starts its own deadline, so the one it replaces
+  cannot end it, and an answer or going idle ends the wait. For P4: the pending state of the
+  specification's item 7 is the outcome pending, and once unconfirmed the bar shows no control that
+  looks as if it works (item 8), as nothing has been said of its view.
 
 Tests: `tests/calendar_backend_test.py`, run as above, also checks the layout state against
 stand-ins on its private bus - `org.kde.KWin` and the lifetimes' identity names on its own
@@ -270,8 +280,14 @@ KWin's name released, and KWin's name handed straight to another connection (one
 against names that change hands with nothing bound, or nothing of the bound lifetime, and a name
 released after the component is gone. For the check's rule, KWin's name is handed on in the same
 turn as a frame arrives - before the check's first lookup or between its two, which the test cannot
-tell apart - against a move from another owner during a check and one after it. Its layout-state
-checks go on after a failure, so that one run shows them all.
+tell apart - against a move from another owner during a check and one after it. The deadline is
+checked with a short one, timed from just before the step that asks: a request with no answer ends
+unconfirmed, with nothing asked again; a late answer counts; an answer before the deadline, or going
+idle, ends the wait; a new request gets a full deadline of its own, and keeps it when the owner
+changes `deadlineMs`; a failed check, or a wake that fails with kglobalaccel gone from the bus,
+leaves the request to its deadline, with nothing asked again; a deadline outside 100 to 10000 ms
+gives the timer 10 s; and one that would end after the component is gone touches nothing. Its
+layout-state checks go on after a failure, so that one run shows them all.
 
 ## Global menu (stock `org.kde.plasma.appmenu`)
 

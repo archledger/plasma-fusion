@@ -19,9 +19,13 @@ Item {
     property string outputName: ""
     // The saved answer: the clock's layoutResponse field once its schema declares one.
     property string response: ""
+    // How long a request waits for its answer, in ms: 100 to 10000, and 10000 for anything else.
+    // A request keeps the deadline it was made with; a change applies from the next request.
+    property int deadlineMs: 10000
 
-    // The current request's outcome - idle (no output to ask for), pending, answered or refused -
-    // kept apart from the state an answer gives.
+    // The current request's outcome - idle (no output to ask for), pending, unconfirmed (past its
+    // deadline with no answer, and still out), answered or refused - kept apart from the state an
+    // answer gives.
     readonly property string outcome: d.outcome
     readonly property bool capable: d.answer !== null && d.answer.capable
     readonly property var view: d.answer !== null ? d.answer.view : null
@@ -44,6 +48,8 @@ Item {
         readonly property string consumer: Qt.md5(Date.now() + ":" + Math.random() + ":" + Math.random())
         readonly property string identityPrefix: "org.plasmafusion.LayoutProvider.p"
         readonly property string wakeShortcut: "Plasma Fusion: Refresh Layout Controls"
+        readonly property int deadlineInterval: layoutState.deadlineMs >= 100
+            && layoutState.deadlineMs <= 10000 ? layoutState.deadlineMs : 10000
         property int request: 0
         property string requestedOutput: ""
         property string outcome: "idle"
@@ -67,8 +73,10 @@ Item {
 
     // A new request for the bar's output: the state is unknown at once, until its answer comes.
     // Each call retires the request that was out, even with nothing to ask for, so that no answer
-    // to it - a late one, or one being checked - counts.
+    // to it - a late one, or one being checked - counts. Its deadline goes with it, and the new
+    // request's starts here, so the old one's cannot end the new request's wait.
     function ask(): void {
+        deadline.stop();
         d.answer = null;
         d.refusal = "";
         d.revision = 0;
@@ -95,6 +103,8 @@ Item {
         d.request += 1;
         d.requestedOutput = outputName;
         d.outcome = "pending";
+        deadline.interval = d.deadlineInterval;
+        deadline.start();
         const number = d.request;
         const life = d.life;
         // Leave whatever asked - a configuration change among them - before saving the request;
@@ -114,10 +124,27 @@ Item {
                                    outputName: d.requestedOutput }));
         DBus.SessionBus.asyncCall({
             service: "org.kde.kglobalaccel", path: "/component/kwin",
-            iface: "org.kde.kglobalaccel.Component", member: "invokeShortcut",
+            iface: "org.kde.kglobalaccel.Component", member: "invokeShortcut", signature: "(s)",
             arguments: [d.wakeShortcut]
         }, () => {}, reply => console.warn("plasmafusion-clockpill: layout state: the wake failed:",
                                            reply.error.name));
+    }
+
+    // The current request's wait for its answer (P0's receipt, item 9). When it ends with the
+    // request still pending, the outcome is unconfirmed, and the request stays out: a late answer
+    // counts, and nothing is cancelled, renumbered or asked again. Under a Kiosk policy that
+    // refuses the shell's scripting, or with no provider at all, no answer comes, so the bar ends
+    // unconfirmed and its mode unknown.
+    // ask() stops the wait before it starts the next request's, and a QML Timer stopped or
+    // restarted before its trigger is delivered does not deliver it (QQmlTimer::event, Qt 6.11), so
+    // an earlier request's wait cannot end a later one's.
+    Timer {
+        id: deadline
+        onTriggered: {
+            if (d.outcome === "pending") {
+                d.outcome = "unconfirmed";
+            }
+        }
     }
 
     // The response as a frame answering the current request, or null for anything else: the
