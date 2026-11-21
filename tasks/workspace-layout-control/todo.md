@@ -19,8 +19,9 @@ wake and withdrawing it while the control is hidden, which ran natively through 
 and under a Kiosk policy (`bec99ba`). P4 is done: the clock shows its view's layout mode, Floating
 or Tiled, read-only in the pill after the workspace dots, its glyph alone or nothing as the width
 budget asks, and nothing until an answer confirms a mode or while the bar's own layout hides it
-(`995d8e7` and `c15f561`). The read-only checkpoint is next, with the owner's review. Read
-[plan.md](plan.md) and the accepted [specification](../../SPEC-workspace-layout-control.md).
+(`995d8e7` and `c15f561`). The owner passed the read-only checkpoint on 2026-11-21, and P5 is
+next. Read [plan.md](plan.md) and the accepted
+[specification](../../SPEC-workspace-layout-control.md).
 Existing native task files are untouched.
 Paths below are relative to the repository. Proposed new files are not claimed to exist.
 
@@ -324,8 +325,8 @@ only with P6's menu, and several bars, which are P7's.
 
 ## Checkpoint: read-only state path
 
-- [ ] The actual provider/consumer path reports correct current-view state without mutations.
-- [ ] Owner reviews the state contract and visual states before explicit-request integration.
+- [x] The actual provider/consumer path reports correct current-view state without mutations.
+- [x] Owner reviews the state contract and visual states before explicit-request integration.
 
 Ready for the owner's review on 2026-11-21. The state contract is the part page's layout state and
 layout control sections; the visual states are the screenshots in p4/bar-proof's `shots/`: Floating,
@@ -337,6 +338,11 @@ pill's width changes twice and, near a step boundary, the budget can step down a
 step 7 keeps receiving frames; the view is not compared; and in a left-to-right layout the spare
 width after "Tiled" sits before the date. For the first item: p3/wiring-proof and p4/bar-proof show
 it on one bar; several bars and outputs are P7's.
+
+Passed on 2026-11-21: asked whether to treat the checkpoint as passed, waived or still open, the
+owner answered "Passed", the option stating that the state contract and the screenshots had been
+reviewed. The first item rests on one bar, as the note above says; several bars and outputs stay
+P7's.
 
 ## P5: Handle explicit, prepared mode requests in the provider
 
