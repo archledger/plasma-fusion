@@ -61,6 +61,7 @@ No configuration is needed; the defaults are the board values.
 |---|---|---|
 | `showWorkspaces` | true | dots; hidden anyway while there is only one workspace |
 | `wheelSwitchesWorkspaces` | true | scrolling over the pill switches workspaces (wraps when KWin's navigation wraps); a page scroll still turning as the pointer passes over the pill is ignored (`FusionWheelGuard`, shared-blocks.md) |
+| `showLayoutControl` | true | the dynamic tiling control (Floating or Tiled for the current workspace), which appears only once the placement script confirms that tiling is available there; the control itself comes in P4 (`tasks/workspace-layout-control/todo.md`), and the tiling shortcut works either way. Settings: "Workspaces: Show the dynamic tiling control" |
 | `showDate` | true | date before the time |
 | `dateFormat` | `auto` | `auto`: weekday, day, month in the order of the region's long date, without year and commas (en_GB "Mon 28 Sept", en_US "Mon Sep 28", de_DE "Mo. 28. Sept.", es_ES "lun 28 de sept", ja_JP "9月28日 (月)"); `custom` uses `customDateFormat` |
 | `customDateFormat` | `ddd d MMM` | QLocale format |
@@ -76,6 +77,8 @@ No configuration is needed; the defaults are the board values.
 | `menuSearch` | `false` | show the global menu's Search entry. Off because Plasma's applet (6.7.5 and 6.8.3) crashes when you type in it after the active app rebuilt a submenu (Chrome's History does): it keeps pointers to deleted menu items. A KDE bug ([526561](https://bugs.kde.org/show_bug.cgi?id=526561)), reproduced with a stock panel on 6.7.5 and 6.8.3; analysis and the upstream drafts in the appmenu crash record of 2026-10-02 (the maintainer's records). Arrowing right past the last menu skips the hidden entry and wraps to the first menu. The rebuilt plasma-workspace of `packaging/patches/plasma-workspace` (its README) carries the fix and names the action `appmenu-guarded`: the entry is shown there whatever the key says, and hidden again when a Fedora update replaces the rebuild. Settings: "Global menu: Show the Search entry" |
 | `menuCompacted` | false | internal: the budget compacted the global menu (and may switch it back) |
 | `debugAction` | "" | testing only: `dump-bar:TAG` logs the bar's widgets, the pill's offset and the budget step |
+| `layoutRequest` | "" | internal: the clock's query to the placement script's layout provider ([Workspace layout state](#workspace-layout-state-layoutstateqml)), which the provider reads through desktop scripting |
+| `layoutResponse` | "" | internal: the provider's answer, written through desktop scripting; a saved answer alone never counts. Declared, it makes each frame the provider writes cost the shell a save of the widget's configuration ([kwin.md](kwin.md#the-layout-providers-state), what a call costs the shell) |
 
 Formats follow the region settings (`LC_TIME` / KDE Region & Language). The time zone is the
 system one.
@@ -200,10 +203,10 @@ event editor. The backend keeps pending editor calls alive when the popup loses 
 
 The clock's side of the workspace layout transport, whose other side is the placement script's
 layout provider ([kwin.md](kwin.md#the-layout-providers-state)). Nothing shows it yet: the clock's
-schema declares the transport's fields in P3 and the control comes in P4
-(`tasks/workspace-layout-control/todo.md`), so the component's owner passes the saved answer in
-(`response`) and saves each request it is asked to (`requested`), and may shorten the requests'
-deadline (`deadlineMs`).
+schema declares the transport's fields (`layoutRequest` and `layoutResponse`, above), which P3 is to
+wire to the component, and the control comes in P4 (`tasks/workspace-layout-control/todo.md`). The
+component's owner passes the saved answer in (`response`) and saves each request it is asked to
+(`requested`), and may shorten the requests' deadline (`deadlineMs`).
 
 - A request is a version-1 `query` for the bar's output (`outputName`, 1 to 128 characters):
   `{version, intent, consumer, request, outputName}`. The consumer is drawn fresh for each instance
@@ -348,6 +351,22 @@ The layout places it right after the app name with its defaults (`compactView=fa
   scripting while General was open survived Apply there. The Kirigami notice "Created graphical
   object was not placed in the graphics scene" stays (see Remains). The calendar providers' own
   pages (KDE's) are not checked.
+- Settings pages and the layout control's keys (P3): `tests/calendar_config_test.py` opens and
+  applies each of the three pages as the dialog does at plasma-desktop v6.7.5 and v6.8.3 alike:
+  `open()` passes every key of the configuration as `cfg_<key>`, KConfig's map listing each default
+  as `<key>Default` (KConfig 6.32, `KConfigPropertyMap`), and Apply calls the page's `saveConfig()`,
+  then copies back every `cfg_` property the page declares. A stand-in for `org.kde.plasma.plasmoid`
+  hands the pages the configuration. Each page takes all 20 keys and defaults and writes nothing as
+  it opens; while it is open the clock's request, the provider's answer and, where the page does not
+  edit it, `showLayoutControl` change, and Apply leaves each as it now is. On the General page the
+  checkbox shows the saved choice, Apply writes the user's, and with the workspace dots off it stays
+  enabled and shown. It runs as the specification's command (`QT_QPA_PLATFORM=offscreen
+  dbus-run-session --config-file=packages/kwin/tests/offscreen/session-bus.conf -- python3
+  packages/plasmoids/org.plasmafusion.clockpill/tests/calendar_config_test.py`), the Calendar page's
+  provider checks after these. A field written while a page is open, as `menuCompacted` already
+  can be, leaves the dialog's change check (`isConfigurationChanged()`) seeing a difference once
+  anything on the page changes, so Apply can stay enabled after an edit is undone; Apply then
+  writes the values as they are.
 - `test/hovertest.py`: a hover-enabled MouseArea loses hover to a ToolTipArea child on top; both
   widgets therefore put the tooltip area outside the mouse areas (proven Plasma pattern).
 - ThinkPad virtual sessions (prefix `tb-`, 1440 x 900, private HOME and D-Bus; scenarios in
