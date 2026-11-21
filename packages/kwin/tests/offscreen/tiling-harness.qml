@@ -508,6 +508,17 @@ Item {
             property var requestedGeometry: null
             signal maximizedAboutToChange(int mode)
             signal maximizedChanged()
+            // The window's process and its kind, as the fork's Window has them (window.h at
+            // v6.8.3-pf1: pid, appletPopup, dock, desktopWindow): the layout provider counts a
+            // shell surface only by the shell's PID and one of the three kinds (P5).
+            property int pid: 0
+            property bool appletPopup: false
+            property bool dock: false
+            property bool desktopWindow: false
+            // Out of the taskbar or the window switcher, as the fork's Window notifies them
+            // (skipTaskbarChanged, skipSwitcherChanged): an app that leaves either is no target.
+            property bool skipTaskbar: false
+            property bool skipSwitcher: false
         }
     }
 
@@ -533,6 +544,15 @@ Item {
         if (scenario === "read-pipeline") {
             try {
                 runReadPipeline();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
+        if (scenario === "prepare") {
+            try {
+                runPrepare();
             } catch (e) {
                 fail("harness threw: " + e);
                 done = true;
@@ -769,7 +789,9 @@ Item {
         return provider ? { revision: provider.revision, online: provider.online, capable: provider.capable,
                             active: provider.active, desktopId: provider.desktopId,
                             activityId: provider.activityId, outputName: provider.outputName,
-                            views: JSON.stringify(provider.views === undefined ? null : provider.views) } : null;
+                            views: JSON.stringify(provider.views === undefined ? null : provider.views),
+                            preparations: JSON.stringify(provider.preparations === undefined ? null
+                                                         : provider.preparations) } : null;
     }
 
     // The provider moved `moves` revisions since the state `before` and now reads `fields`.
@@ -1668,6 +1690,41 @@ Item {
         if (!bounded || bounded.length !== 16 || bounded[15].id !== 116) {
             fail("read-pipeline: the shell side reads at most 16 widgets (got " + (bounded ? bounded.length : null) + ")");
         }
+        // With its rows the shell side says which widgets it saw (P5): the clock's only, and that
+        // the 17th went unread, so the inventory is not complete.
+        if (!read || JSON.stringify(read.widgets) !== JSON.stringify([1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+                || JSON.stringify(read.empty) !== "[]" || read.truncated !== false) {
+            fail("read-pipeline: the shell side lists every clock widget it saw, none empty, the inventory complete (got "
+                 + JSON.stringify(read ? [read.widgets, read.empty, read.truncated] : null) + ")");
+        }
+        if (!boundedRead || !Array.isArray(boundedRead.widgets) || boundedRead.widgets.length !== 16
+                || boundedRead.widgets[15] !== 116 || boundedRead.truncated !== true) {
+            fail("read-pipeline: past 16 widgets the inventory says it is not complete (got "
+                 + JSON.stringify(boundedRead ? [boundedRead.widgets, boundedRead.truncated] : null) + ")");
+        }
+        // A withdrawn request (an empty field) is listed as such; an unreadable one only as seen. A
+        // prepare carries its frozen context - the epoch, and the view as its two scalars - and
+        // nothing else.
+        const prepareText = JSON.stringify({ consumer: "c21", request: 21, version: 1, intent: "prepare",
+                                             outputName: "Virtual-1", epoch: "e1", title: "not copied",
+                                             view: { desktopId: "11", activityId: "a", token: "not copied" } });
+        const inventoryRead = runReaderScript(script, [[{ type: clock, id: 20, text: "" },
+                                                        { type: "org.kde.plasma.digitalclock", id: 22, text: "" },
+                                                        { type: clock, id: 21, text: prepareText },
+                                                        { type: clock, id: 23, text: "{not json" }]]);
+        if (!inventoryRead || JSON.stringify(inventoryRead.widgets) !== JSON.stringify([20, 21, 23])
+                || JSON.stringify(inventoryRead.empty) !== JSON.stringify([20]) || inventoryRead.truncated !== false) {
+            fail("read-pipeline: the inventory lists the clock's widgets and the empty field (got "
+                 + JSON.stringify(inventoryRead) + ")");
+        }
+        const prepareRow = inventoryRead ? inventoryRead.rows.find(row => row.id === 21) : null;
+        if (!prepareRow || JSON.stringify(Object.keys(prepareRow).sort())
+                !== JSON.stringify(["consumer", "epoch", "id", "intent", "outputName", "request", "version", "view"])
+                || JSON.stringify(Object.keys(prepareRow.view || {}).sort()) !== JSON.stringify(["activityId", "desktopId"])
+                || prepareRow.epoch !== "e1" || prepareRow.view.desktopId !== "11" || prepareRow.view.activityId !== "a") {
+            fail("read-pipeline: a prepare's row carries its epoch and view's two scalars, nothing else (got "
+                 + JSON.stringify(prepareRow) + ")");
+        }
         // The answer: the provider checks every row again; a query of version 1 for a named
         // output is a request, anything else with a well-formed identity a refusal, kept with its
         // reason; a row with no well-formed identity is dropped.
@@ -1695,7 +1752,8 @@ Item {
             fail("read-pipeline: the version-1 queries for a named output are the requests (got " + requests + ")");
         }
         const refusals = JSON.stringify(p.refusals.map(q => [q.id, q.reason]));
-        if (refusals !== JSON.stringify([[12, "version"], [13, "version"], [14, "intent"], [15, "output"], [16, "output"]])) {
+        // Row 14, a prepare without the frozen context a prepare must name (P5), is malformed.
+        if (refusals !== JSON.stringify([[12, "version"], [13, "version"], [14, "malformed"], [15, "output"], [16, "output"]])) {
             fail("read-pipeline: every other row with a well-formed identity is refused with its reason (got " + refusals + ")");
         }
         let since = Date.now();
@@ -1754,16 +1812,20 @@ Item {
                 }
                 p.shellLookup.finished([":1.9"]);
                 // A failed or malformed answer ends the read and keeps the lists: not JSON, the rows
-                // without the script's start, a start that is no number, more than 16 rows.
+                // without the script's start, a start that is no number, more than 16 rows, and an
+                // inventory (P5) with no rows or with rows that are no list.
                 p.reader.failed();
                 if (p.reading || kept() !== before) {
                     fail("read-pipeline: a failed read ends the read and keeps the requests and refusals");
                 }
+                const inventory = { widgets: [1], empty: [], truncated: false };
                 for (const malformed of ["{not json", JSON.stringify([]), JSON.stringify({ rows: [] }),
                                          JSON.stringify({ start: "now", rows: [] }),
                                          readAnswer(Array.from({ length: 17 }, (_, i) => ({
                                              id: i + 1, consumer: "c", request: i + 1, version: 1, intent: "query",
-                                             outputName: "Virtual-1" })))]) {
+                                             outputName: "Virtual-1" }))),
+                                         JSON.stringify(Object.assign({ start: Date.now() }, inventory)),
+                                         JSON.stringify(Object.assign({ start: Date.now(), rows: "x" }, inventory))]) {
                     p.wake.activated();
                     p.shellLookup.finished([":1.9"]);
                     p.reader.finished([malformed]);
@@ -1933,6 +1995,653 @@ Item {
         }
         early.destroy();
         done = true;
+    }
+
+    // P5's prepared target, on a provider of its own: the shell's PID looked up beside the read; a
+    // prepare decided once per request identity against the bar's frozen context, the one slot and
+    // a verified shell applet popup holding focus; its target the app the popup was opened from, or
+    // none with a reason; the preparation's frames, and their end by focus, the target, the view or
+    // the shell, with a revision step; the slot freed by its holder's next request, a withdrawal or
+    // its widget gone in a complete inventory, never by an incomplete read; a saved prepare refused
+    // by a later lifetime; a set and an unknown intent refused before any action; a query's frames
+    // as they were, and the offline frames with nothing of an intent.
+    function runPrepare() {
+        const base = "file://" + packagesRoot + "/scripts/plasmafusion-placement/contents/ui/";
+        const component = Qt.createComponent(base + "LayoutProvider.qml");
+        if (component.status !== Component.Ready) {
+            fail("prepare: LayoutProvider.qml did not load: " + component.errorString());
+            done = true;
+            return;
+        }
+        setupView();
+        const ws = KWinStubs.Workspace;
+        const output = ws.activeScreen;
+        const second = { name: "Virtual-2", geometry: Qt.rect(1440, 0, 1440, 900), devicePixelRatio: 1 };
+        ws.screens = [output, second];
+        const otherDesktop = { id: 12 };
+        ws.desktops = [firstDesktop, otherDesktop];
+        let shellPid = 900;
+        const app = master;
+        const editor = winA;
+        app.pid = 500;
+        editor.pid = 501;
+        const surface = (id, over, on) => {
+            const w = mk(Object.assign({ internalId: id, normalWindow: false, pid: shellPid }, over));
+            w.output = on || output;
+            w.desktops = [firstDesktop];
+            return w;
+        };
+        const popup = surface("popup", { appletPopup: true });
+        const otherPopup = surface("popup-2", { appletPopup: true });
+        const dock = surface("dock", { dock: true });
+        const foreign = surface("foreign", { appletPopup: true, pid: 777 });
+        const awayPopup = surface("popup-away", { appletPopup: true }, second);
+        // A window of the shell's that is none of the three kinds (a dialog of its own, say) is no
+        // shell surface; the desktop's surface is one, as the panel is.
+        const dialog = surface("dialog", {});
+        const desktopSurface = surface("desktop", { desktopWindow: true });
+        // A popup whose process the compositor could not tell (PID 0), as no PID known is 0 too.
+        const zeroPopup = surface("popup-zero", { appletPopup: true, pid: 0 });
+        // An eligible app on the other output.
+        const away = mk({ internalId: "away", resourceClass: "org.fusion.away", desktopFileName: "org.fusion.away.desktop",
+                          frameGeometry: Qt.rect(1500, 80, 600, 400), pid: 502 });
+        away.output = second;
+        away.desktops = [firstDesktop];
+        const focus = w => {
+            ws.activeWindow = w;
+            ws.windowActivated(w);
+        };
+        const p = component.createObject(harness);
+        p.nativeCapable = true;
+        p.start();
+        follow(p);
+        DBusStubs.SessionBus.answer(expectIdentityRequest("prepare", p), [{ value: 1 }]);
+        p.identityLookup.finished([":1.42"]);
+        const view = { desktopId: "11", activityId: "a", outputName: "Virtual-1" };
+        const ask = (id, consumer, request, intent, extra) => Object.assign({
+            id: id, consumer: consumer, request: request, version: 1, intent: intent, outputName: "Virtual-1" }, extra || {});
+        const prep = (id, consumer, request, extra) => ask(id, consumer, request, "prepare", Object.assign({
+            epoch: p.label, view: { desktopId: "11", activityId: "a" } }, extra || {}));
+        const handle = (shell, serial) => p.label + ":" + shell + ":" + serial;
+        const ready = (h, target, reason) => target ? { intent: "prepare", result: "done", handle: h, target: true }
+            : { intent: "prepare", result: "done", handle: h, target: false, reason: reason };
+        const refused = reason => ({ intent: "prepare", result: "refused", reason: reason });
+        // A publication outstanding is answered first, so that a wake reads at once.
+        const settle = () => {
+            if (p.publishing) {
+                p.writer.finished([writeAnswer(1)]);
+            }
+        };
+        // The frames the publications since call `from` carried, by widget, the last answered.
+        const framesSince = from => {
+            const frames = {};
+            for (let i = from; i < p.writer.callLog.length; ++i) {
+                Object.assign(frames, framesOf(p, i, [1, 2, 5, 6, 7, 8]));
+            }
+            settle();
+            return frames;
+        };
+        // A read of the rows the clocks hold, with the inventory the shell side reports (each row's
+        // widget, complete) unless one is given (null: none); the frames it published.
+        // The identity's arrival starts the first read itself; a wake during a read would owe one
+        // more read, which nothing here answers, so a read in flight is not woken again.
+        let owner = ":1.9";
+        // From the target's own changes on, widget 5's next prepare: its request and handle serial
+        // counted on, so a case added there renumbers nothing after it.
+        let request = 0;
+        let serial = 0;
+        const read = (rows, inventory) => {
+            settle();
+            const from = p.writer.callLog.length;
+            if (!p.reading) {
+                p.wake.activated();
+            }
+            p.shellLookup.finished([owner]);
+            const inv = inventory === undefined ? { widgets: rows.map(r => r.id), empty: [], truncated: false } : inventory;
+            p.reader.finished([JSON.stringify(Object.assign({ start: Date.now(), rows: rows }, inv || {}))]);
+            return framesSince(from);
+        };
+        // A widget's completion as the last read decided it, and the slot's holder.
+        const decided = (what, id, wanted) => {
+            const row = p.requests.find(r => r.id === id);
+            const got = row ? canonical(row.completion) : "no request";
+            if (got !== canonical(wanted)) {
+                fail("prepare: " + what + " (got " + got + ", not " + canonical(wanted) + ")");
+            }
+        };
+        const prepareAgain = (what, target, reason) => {
+            read([prep(6, "c6", 3), prep(5, "c5", request)]);
+            decided(what, 5, ready(handle(2, serial), target, reason));
+            request += 1;
+            serial += 1;
+        };
+        const holds = (what, id, target) => {
+            const s = p.slot;
+            if (id === null ? s !== null : (!s || s.id !== id || s.window !== target)) {
+                fail("prepare: " + what + " (the slot " + (s ? "is widget " + s.id + "'s, target "
+                     + (s.window ? s.window.internalId : null) : "is free") + ")");
+            }
+        };
+        const frameIs = (what, frames, id, completion, prepared) => {
+            const f = frames[id];
+            if (!f || canonical(f.completion) !== canonical(completion) || canonical(f.prepared) !== canonical(prepared)) {
+                fail("prepare: " + what + " (got " + canonical(f) + ")");
+            }
+        };
+        // ---- before the shell's PID is known: a prepare refused, a query's frame as it was ----
+        // With no PID and no read yet, nothing is the shell's, a window of PID 0 neither: it
+        // clears the remembered app as any other window does.
+        focus(app);
+        focus(zeroPopup);
+        if (p.lastEligible !== null) {
+            fail("prepare: with no PID known a window of PID 0 is not the shell's");
+        }
+        focus(app);
+        focus(popup);
+        let frames = read([ask(2, "c2", 1, "query"), prep(1, "c1", 1)]);
+        if (JSON.stringify(p.shellPidLookup.callLog) !== JSON.stringify([[":1.9"]])
+                || p.shellPidLookup.method !== "GetConnectionUnixProcessID" || p.shellPidLookup.service !== "org.freedesktop.DBus"
+                || p.reader.calls !== 1) {
+            fail("prepare: the shell's PID is asked of the bus for the connection read from, beside the read (got "
+                 + JSON.stringify(p.shellPidLookup.callLog) + ", reads " + p.reader.calls + ")");
+        }
+        frameIs("a prepare read before the shell's PID is known is refused", frames, 1, refused("unavailable"), null);
+        if (canonical(frames[2]) !== canonical(frameWanted(p, { consumer: "c2", request: 1 },
+                                                           { capable: true, view: view, tiled: false }))) {
+            fail("prepare: a query's frame carries the state and nothing of an intent (got " + canonical(frames[2]) + ")");
+        }
+        // A prepare's frozen context, checked at each bound before any action: an epoch of 1 to 64
+        // characters, a view whose desktop id has 1 to 128 and whose activity id at most 128 (one
+        // may be empty); anything else, a missing view too, is malformed. Widget 40 sits on the
+        // bounds and is taken: refused for its epoch, which is not this lifetime's.
+        const longest = (c, n) => c.repeat(n);
+        read([ask(2, "c2", 1, "query"), prep(1, "c1", 1),
+              prep(30, "c30", 1, { epoch: "" }), prep(31, "c31", 1, { epoch: longest("e", 65) }),
+              prep(32, "c32", 1, { epoch: 7 }), prep(33, "c33", 1, { view: null }), prep(34, "c34", 1, { view: "11" }),
+              prep(35, "c35", 1, { view: { desktopId: "", activityId: "a" } }),
+              prep(36, "c36", 1, { view: { desktopId: longest("d", 129), activityId: "a" } }),
+              prep(37, "c37", 1, { view: { desktopId: 11, activityId: "a" } }),
+              prep(38, "c38", 1, { view: { desktopId: "11", activityId: longest("a", 129) } }),
+              prep(39, "c39", 1, { view: { desktopId: "11" } }), prep(41, "c41", 1, { view: undefined }),
+              prep(40, "c40", 1, { epoch: longest("e", 64), view: { desktopId: longest("d", 128), activityId: "" } })]);
+        if (JSON.stringify(p.refusals.map(r => [r.id, r.reason]))
+                !== JSON.stringify([30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41].map(id => [id, "malformed"]))) {
+            fail("prepare: a prepare without its frozen context is malformed, at each bound (got "
+                 + JSON.stringify(p.refusals.map(r => [r.id, r.reason])) + ")");
+        }
+        decided("a prepare on the bounds is taken, and refused for its epoch", 40, refused("stale-context"));
+        p.shellPidLookup.finished([shellPid]);
+        if (p.shellPid !== 900 || p.shellSerial !== 1) {
+            fail("prepare: the shell's PID is kept with the first shell serial (got " + p.shellPid + ", " + p.shellSerial + ")");
+        }
+        // An incapable provider prepares nothing, the shell's PID known or not.
+        p.nativeCapable = false;
+        read([ask(2, "c2", 1, "query"), prep(1, "c1", 1), prep(3, "c3", 1)]);
+        decided("an incapable provider refuses a prepare", 3, refused("unavailable"));
+        p.nativeCapable = true;
+        // ---- the bar's popup, opened from the app: ready, the app its target ----
+        // Activated while no PID was known, the popup made no handoff; from the app again it does.
+        focus(app);
+        focus(popup);
+        frames = read([ask(2, "c2", 1, "query"), prep(1, "c1", 2)]);
+        frameIs("a prepare from a popup opened from the app is ready with the app as its target", frames, 1,
+                ready(handle(1, 1), true), { handle: handle(1, 1), ready: true });
+        holds("the slot holds the app for widget 1", 1, app);
+        if (p.slot && p.slot.focusSurface !== popup) {
+            fail("prepare: the slot keeps the popup that held focus");
+        }
+        focus(popup);
+        holds("the popup activated again is no change of focus", 1, app);
+        // ---- once per request identity ----
+        const writes = p.writer.calls;
+        read([ask(2, "c2", 1, "query"), prep(1, "c1", 2)]);
+        if (p.slotSerial !== 1 || p.writer.calls !== writes) {
+            fail("prepare: a prepare read again is not prepared again and tells nothing new (serial " + p.slotSerial
+                 + ", writes " + (p.writer.calls - writes) + ")");
+        }
+        read([ask(2, "c2", 1, "query"), prep(1, "c1", 2, { view: { desktopId: "11", activityId: "b" } })]);
+        decided("the same request with another payload is refused", 1, { intent: "prepare", result: "refused",
+                                                                          reason: "conflicting-request" });
+        holds("a conflicting payload leaves the preparation of its identity", 1, app);
+        read([ask(2, "c2", 1, "query"), prep(1, "c1", 1)]);
+        decided("a lower request number is refused", 1, refused("stale-request"));
+        holds("another request of the holder frees the slot", null);
+        if (p.preparations[1] !== undefined) {
+            fail("prepare: the holder's next request ends its preparation (got " + JSON.stringify(p.preparations[1]) + ")");
+        }
+        // ---- one slot: busy, decided once ----
+        read([prep(1, "c1", 3)]);
+        decided("the holder prepares again", 1, ready(handle(1, 2), true));
+        read([prep(1, "c1", 3), prep(5, "c5", 1)]);
+        decided("another widget's prepare while the slot is held is busy", 5, refused("busy"));
+        read([ask(1, "c1", 4, "query"), prep(5, "c5", 1)]);
+        holds("the holder's query frees the slot", null);
+        decided("a busy prepare stays refused once the slot is free", 5, refused("busy"));
+        read([ask(1, "c1", 4, "query"), prep(5, "c5", 2)]);
+        decided("a new request then prepares", 5, ready(handle(1, 3), true));
+        // A new consumer on a widget replaces its record: its first request is handled, here busy,
+        // however low its number.
+        read([prep(5, "c5", 2), prep(1, "c1b", 1)]);
+        decided("a new consumer's request is handled afresh", 1, refused("busy"));
+        // The refusals' order while widget 5 holds the slot: an incapable provider is unavailable
+        // before it is busy, and busy comes before a focus the provider did not see move (the
+        // active window changed with no activation, so the slot stays).
+        p.nativeCapable = false;
+        read([prep(5, "c5", 2), prep(10, "c10", 1)]);
+        decided("unavailable comes before busy", 10, refused("unavailable"));
+        p.nativeCapable = true;
+        ws.activeWindow = editor;
+        read([prep(5, "c5", 2), prep(11, "c11", 1)]);
+        decided("busy comes before an unconfirmed focus", 11, refused("busy"));
+        ws.activeWindow = popup;
+        holds("the refusals leave the holder's slot", 5, app);
+        // ---- the bar's frozen context ----
+        read([prep(5, "c5", 3, { epoch: "0".repeat(32) })]);
+        decided("another lifetime's epoch is stale", 5, refused("stale-context"));
+        read([prep(5, "c5", 4, { view: { desktopId: "12", activityId: "a" } })]);
+        decided("a view that is not the output's now is stale", 5, refused("stale-context"));
+        read([prep(5, "c5", 5, { outputName: "Gone-1" })]);
+        decided("an output KWin does not have is stale", 5, refused("stale-context"));
+        read([prep(5, "c5", 5, { outputName: "Gone-1" }), prep(4, "c4", 1, { view: { desktopId: "11", activityId: "b" } })]);
+        decided("an activity that is not the current one is stale", 4, refused("stale-context"));
+        // ---- the focus a prepare needs: a verified shell applet popup on the bar's output ----
+        focus(app);
+        read([prep(5, "c5", 6)]);
+        decided("an app holding focus is no popup", 5, refused("popup-focus-unconfirmed"));
+        focus(foreign);
+        read([prep(5, "c5", 7)]);
+        decided("a popup of another process is not the shell's", 5, refused("popup-focus-unconfirmed"));
+        focus(awayPopup);
+        read([prep(5, "c5", 8)]);
+        decided("the shell's popup on another output is not the bar's", 5, refused("popup-focus-unconfirmed"));
+        // A popup KWin holds active whose activation the provider did not see (it came online with
+        // the popup open, say) is not confirmed either.
+        focus(app);
+        ws.activeWindow = popup;
+        read([prep(5, "c5", 8), prep(9, "c9", 1)]);
+        decided("a popup whose activation went unseen is unconfirmed", 9, refused("popup-focus-unconfirmed"));
+        focus(dock);
+        read([prep(5, "c5", 8), prep(9, "c9", 2)]);
+        decided("the shell's panel holding focus is no popup", 9, refused("popup-focus-unconfirmed"));
+        // ---- no target: nothing remembered, or focus from elsewhere; never another window ----
+        focus(foreign);
+        focus(popup);
+        read([prep(5, "c5", 9)]);
+        decided("with no app remembered the preparation has no target", 5, ready(handle(1, 4), false, "no-target"));
+        holds("a preparation without a target holds the slot for Floating", 5, null);
+        focus(app);
+        focus(otherPopup);
+        focus(popup);
+        read([prep(5, "c5", 10)]);
+        decided("a popup reached from another popup hands nothing off", 5, ready(handle(1, 5), false, "focus-changed"));
+        focus(away);
+        focus(popup);
+        read([prep(5, "c5", 11)]);
+        decided("an app on another output is no target for this bar", 5, ready(handle(1, 6), false, "no-target"));
+        // ---- keyboard entry: the panel first, then the popup ----
+        focus(app);
+        focus(dock);
+        focus(popup);
+        read([prep(5, "c5", 12)]);
+        decided("a popup opened from the panel while the app is remembered hands the app off", 5, ready(handle(1, 7), true));
+        holds("keyboard entry targets the remembered app", 5, app);
+        // ---- refused before any action: a set (P5's next slice) and an unknown intent ----
+        read([prep(5, "c5", 12), ask(7, "c7", 1, "set", { mode: "tiled", handle: handle(1, 7) }), ask(8, "c8", 1, "toggle")]);
+        if (JSON.stringify(p.refusals.map(r => [r.id, r.reason])) !== JSON.stringify([[7, "intent"], [8, "intent"]])) {
+            fail("prepare: a set and an unknown intent are refused before any action (got "
+                 + JSON.stringify(p.refusals.map(r => [r.id, r.reason])) + ")");
+        }
+        holds("refusals leave the slot", 5, app);
+        // ---- the completion across a newer state ----
+        settle();
+        let from = p.writer.callLog.length;
+        let before = p.revision;
+        p.setSession(true, "11", "a", "Virtual-1");
+        steps = [
+            { name: "the session's state published", until: () => p.writer.callLog.length > from, run: function () {
+                frames = framesSince(from);
+                frameIs("a newer state frame carries the completion and the preparation", frames, 5,
+                        ready(handle(1, 7), true), { handle: handle(1, 7), ready: true });
+                if (!frames[5] || frames[5].tiled !== true || frames[5].revision !== before + 1) {
+                    fail("prepare: the newer frame says the session tiles the view (got " + canonical(frames[5]) + ")");
+                }
+                p.setSession(false, "", "", "");
+                // ---- the end of a preparation: a focus change, told with a revision step ----
+                settle();
+                from = p.writer.callLog.length;
+                before = p.revision;
+                focus(editor);
+                holds("a focus change ends the preparation", null);
+            } },
+            { name: "the focus change's publication", until: () => p.writer.callLog.length > from, run: function () {
+                frames = framesSince(from);
+                frameIs("the holder is told its preparation ended, its completion kept", frames, 5,
+                        ready(handle(1, 7), true), { handle: handle(1, 7), ready: false, reason: "focus-changed" });
+                if (p.revision !== before + 1) {
+                    fail("prepare: the preparation's end moves the revision once (moved " + (p.revision - before) + ")");
+                }
+                // ---- the target's departure ----
+                focus(app);
+                focus(popup);
+                read([prep(5, "c5", 13)]);
+                decided("the holder prepares again", 5, ready(handle(1, 8), true));
+                from = p.writer.callLog.length;
+                app.desktops = [otherDesktop];
+                holds("the target leaving the view ends the preparation", null);
+            } },
+            { name: "the departure's publication", until: () => p.writer.callLog.length > from, run: function () {
+                frames = framesSince(from);
+                frameIs("the holder is told its target left", frames, 5, ready(handle(1, 8), true),
+                        { handle: handle(1, 8), ready: false, reason: "target-departed" });
+                app.desktops = [firstDesktop];
+                // ---- the view's change ----
+                focus(app);
+                focus(popup);
+                read([prep(5, "c5", 14)]);
+                decided("the holder prepares again", 5, ready(handle(1, 9), true));
+                from = p.writer.callLog.length;
+                ws.currentDesktop = otherDesktop;
+            } },
+            { name: "the view's change", until: () => p.slot === null && p.writer.callLog.length > from, run: function () {
+                frames = framesSince(from);
+                frameIs("the holder is told its view changed", frames, 5, ready(handle(1, 9), true),
+                        { handle: handle(1, 9), ready: false, reason: "view-changed" });
+                if (!frames[5] || canonical(frames[5].view) !== canonical({ desktopId: "12", activityId: "a", outputName: "Virtual-1" })) {
+                    fail("prepare: the frame names the bar's new view (got " + canonical(frames[5]) + ")");
+                }
+                from = p.writer.callLog.length;
+                ws.currentDesktop = firstDesktop;
+            } },
+            { name: "the view back", until: () => p.views[5] && p.views[5].view && p.views[5].view.desktopId === "11",
+              run: function () {
+                settle();
+                // ---- the shared-popup trade-off: another popup from the same app passes, the next
+                // focus change frees the slot ----
+                focus(app);
+                focus(otherPopup);
+                read([prep(5, "c5", 15)]);
+                decided("a prepare handled while another popup from the app holds focus is prepared", 5,
+                        ready(handle(1, 10), true));
+                focus(popup);
+                holds("the next focus change frees the slot", null);
+                // ---- incomplete reads keep the slot; a withdrawal and a departure free it ----
+                focus(app);
+                focus(popup);
+                read([prep(6, "c6", 1)]);
+                decided("widget 6 prepares", 6, ready(handle(1, 11), true));
+                read([ask(2, "c2", 1, "query")], null);
+                holds("a read without an inventory proves no widget gone", 6, app);
+                read([ask(2, "c2", 1, "query")], { widgets: [2], empty: [], truncated: true });
+                holds("an incomplete inventory proves no widget gone", 6, app);
+                settle();
+                if (!p.reading) {
+                    p.wake.activated();
+                }
+                p.shellLookup.finished([owner]);
+                p.reader.failed();
+                holds("a failed read proves no widget gone", 6, app);
+                read([ask(2, "c2", 1, "query")], { widgets: [2], empty: [6], truncated: false });
+                holds("an inventory naming as empty a widget it did not list proves nothing", 6, app);
+                read([ask(2, "c2", 1, "query")], { widgets: [9], empty: [], truncated: false });
+                holds("an inventory that does not list a row's widget proves nothing", 6, app);
+                read([ask(2, "c2", 1, "query")], { widgets: [2], empty: [2], truncated: false });
+                holds("an inventory that lists a row's widget as empty proves nothing", 6, app);
+                read([ask(2, "c2", 1, "query"), ask(2, "c2", 1, "query")], { widgets: [2], empty: [], truncated: false });
+                holds("an answer with a row twice proves nothing", 6, app);
+                read([ask(2, "c2", 1, "query")], { widgets: [2, 6], empty: [6], truncated: false });
+                holds("a withdrawn request frees the slot", null);
+                frames = read([ask(2, "c2", 1, "query"), prep(6, "c6", 1)]);
+                frameIs("a withdrawn request read again keeps its completion, its preparation over", frames, 6,
+                        ready(handle(1, 11), true), null);
+                holds("a withdrawn request read again prepares nothing", null);
+                read([prep(6, "c6", 2)]);
+                decided("widget 6 prepares again", 6, ready(handle(1, 12), true));
+                const beforeGone = p.revision;
+                read([ask(2, "c2", 1, "query")], { widgets: [2], empty: [], truncated: false });
+                holds("a widget gone from a complete inventory frees the slot", null);
+                if (p.records[6] !== undefined || p.preparations[6] !== undefined || p.revision !== beforeGone) {
+                    fail("prepare: a complete inventory drops the record and preparation of a widget it did not see, a"
+                         + " holder no bar can read with no revision step (revision " + beforeGone + " to " + p.revision + ")");
+                }
+                // ---- a new shell connection: the slot goes; its PID first, then the next serial ----
+                read([prep(6, "c6", 3)]);
+                decided("widget 6 prepares under the first shell", 6, ready(handle(1, 13), true));
+                owner = ":1.10";
+                read([prep(6, "c6", 3), prep(5, "c5", 16)]);
+                holds("a new shell connection ends the preparation", null);
+                if (p.lastEligible !== null || p.handoff !== null) {
+                    fail("prepare: a new shell connection forgets the app and the handoff remembered under the old one");
+                }
+                if (!p.preparations[6] || p.preparations[6].ready !== false || p.preparations[6].reason !== "shell-replaced") {
+                    fail("prepare: the holder is told the shell was replaced (got " + JSON.stringify(p.preparations[6]) + ")");
+                }
+                decided("a prepare before the new shell's PID is known is refused", 5, refused("unavailable"));
+                if (JSON.stringify(p.shellPidLookup.callLog[p.shellPidLookup.callLog.length - 1]) !== JSON.stringify([":1.10"])) {
+                    fail("prepare: the new shell's PID is asked for (got " + JSON.stringify(p.shellPidLookup.callLog) + ")");
+                }
+                // The shell moves again before the bus answers: the answer for the connection no
+                // longer read from is not kept, and the next read asks for the new one.
+                owner = ":1.11";
+                read([prep(6, "c6", 3), prep(5, "c5", 16)]);
+                const asked = p.shellPidLookup.callLog.length;
+                p.shellPidLookup.finished([901]);
+                if (p.shellPid !== 0 || p.shellPidOwner !== "" || p.shellSerial !== 1) {
+                    fail("prepare: a PID answered for a connection no longer read from is not kept (got "
+                         + p.shellPid + " for " + JSON.stringify(p.shellPidOwner) + ", serial " + p.shellSerial + ")");
+                }
+                read([prep(6, "c6", 3), prep(5, "c5", 16)]);
+                if (p.shellPidLookup.callLog.length !== asked + 1
+                        || JSON.stringify(p.shellPidLookup.callLog[asked]) !== JSON.stringify([":1.11"])) {
+                    fail("prepare: the next read asks for the new connection's PID (got "
+                         + JSON.stringify(p.shellPidLookup.callLog.slice(asked)) + ")");
+                }
+                shellPid = 901;
+                for (const w of [popup, otherPopup, dock, awayPopup, dialog, desktopSurface]) {
+                    w.pid = shellPid;
+                }
+                p.shellPidLookup.finished([shellPid]);
+                focus(app);
+                focus(popup);
+                read([prep(6, "c6", 3), prep(5, "c5", 17)]);
+                decided("the new shell's popup prepares, its handle naming the second shell", 5, ready(handle(2, 14), true));
+                // ---- the target's own changes, each ending the preparation: it leaves the view, turns
+                // into no eligible app as KWin notifies it, or closes ----
+                const changes = [
+                    ["moves to the other output", w => { w.output = second; }, w => { w.output = output; }],
+                    ["leaves the activity", w => { w.activities = ["b"]; }, w => { w.activities = []; }],
+                    ["is minimized", w => { w.minimized = true; }, w => { w.minimized = false; }],
+                    ["goes fullscreen", w => { w.fullScreen = true; }, w => { w.fullScreen = false; }],
+                    ["is maximized", w => { w.maximizeMode = 3; w.maximizedChanged(); },
+                     w => { w.maximizeMode = 0; w.maximizedChanged(); }],
+                    ["is tiled", w => { w.tile = { some: "tile" }; }, w => { w.tile = null; }],
+                    ["leaves the taskbar", w => { w.skipTaskbar = true; }, w => { w.skipTaskbar = false; }],
+                    ["leaves the window switcher", w => { w.skipSwitcher = true; }, w => { w.skipSwitcher = false; }],
+                    ["turns modal", w => { w.modal = true; }, w => { w.modal = false; }],
+                    ["closes", w => { w.deleted = true; ws.windowRemoved(w); }, w => { w.deleted = false; }]
+                ];
+                request = 18;
+                serial = 15;
+                for (const [what, change, undo] of changes) {
+                    focus(app);
+                    focus(popup);
+                    prepareAgain("the holder prepares again", true);
+                    change(app);
+                    if (p.slot !== null || !p.preparations[5] || p.preparations[5].reason !== "target-departed") {
+                        fail("prepare: the target " + what + " and the preparation ends (got "
+                             + JSON.stringify(p.preparations[5]) + ")");
+                    }
+                    undo(app);
+                }
+                // ---- the popup holding focus closes before KWin activates another window: the
+                // preparation's focus is gone ----
+                focus(app);
+                focus(popup);
+                prepareAgain("the holder prepares again", true);
+                popup.deleted = true;
+                ws.windowRemoved(popup);
+                if (p.slot !== null || !p.preparations[5] || p.preparations[5].reason !== "focus-changed") {
+                    fail("prepare: the popup holding focus closing ends the preparation (got "
+                         + JSON.stringify(p.preparations[5]) + ")");
+                }
+                popup.deleted = false;
+                // ---- the handoff checked again when the prepare comes: an app minimized, or gone
+                // from the view, after its popup opened is no target; a dialog of the shell's
+                // clears the remembered app; from another popup, with the app on another output,
+                // there is none for the app's output, not for the focus ----
+                focus(app);
+                focus(popup);
+                app.minimized = true;
+                prepareAgain("an app minimized after its popup opened is no target", false, "no-target");
+                app.minimized = false;
+                focus(app);
+                focus(popup);
+                app.desktops = [otherDesktop];
+                prepareAgain("an app gone from the view after its popup opened is no target", false, "no-target");
+                app.desktops = [firstDesktop];
+                focus(app);
+                focus(dialog);
+                focus(popup);
+                prepareAgain("a dialog of the shell's clears the remembered app", false, "no-target");
+                focus(away);
+                focus(otherPopup);
+                focus(popup);
+                prepareAgain("from another popup, the app on another output, there is no target", false, "no-target");
+                // ---- the holder's next request ends its preparation however it is answered: a set,
+                // refused before any action, and a query reusing the prepare's number; neither is a
+                // change any bar is told of ----
+                focus(app);
+                focus(popup);
+                const held = handle(2, serial);
+                prepareAgain("the holder prepares again", true);
+                let revisionBefore = p.revision;
+                frames = read([prep(6, "c6", 3), ask(5, "c5", request, "set", { mode: "tiled", handle: held })]);
+                request += 1;
+                if (p.slot !== null || p.preparations[5] !== undefined || p.revision !== revisionBefore || !frames[5]
+                        || frames[5].refused !== "intent" || frames[5].completion !== undefined
+                        || frames[5].prepared !== undefined) {
+                    fail("prepare: the holder's set, refused, frees the slot and ends its preparation, with no revision"
+                         + " step (got " + canonical(frames[5]) + ", revision " + revisionBefore + " to " + p.revision + ")");
+                }
+                focus(app);
+                focus(popup);
+                prepareAgain("the holder prepares again", true);
+                revisionBefore = p.revision;
+                frames = read([prep(6, "c6", 3), ask(5, "c5", request - 1, "query")]);
+                if (p.slot !== null || p.preparations[5] !== undefined || p.revision !== revisionBefore
+                        || canonical(frames[5]) !== canonical(frameWanted(p, { consumer: "c5", request: request - 1 },
+                                                                         { capable: true, view: view, tiled: false }))) {
+                    fail("prepare: a query reusing the holder's number frees the slot and is answered as a query (got "
+                         + canonical(frames[5]) + ")");
+                }
+                focus(app);
+                focus(desktopSurface);
+                focus(popup);
+                prepareAgain("a popup opened from the desktop while the app is remembered hands the app off", true);
+                // ---- the output replaced by one of the same name (unplugged and back in one turn):
+                // the preparation's output is gone, and its view with it ----
+                settle();
+                ws.screens = [Object.assign({}, output), second];
+            } },
+            { name: "the output's replacement", until: () => p.slot === null, run: function () {
+                if (!p.preparations[5] || p.preparations[5].ready !== false || p.preparations[5].reason !== "view-changed") {
+                    fail("prepare: an output replaced by one of the same name ends the preparation (got "
+                         + JSON.stringify(p.preparations[5]) + ")");
+                }
+                ws.screens = [output, second];
+            } },
+            { name: "the output back", run: function () {
+                settle();
+                // ---- the activity switched: the preparation's view is no longer the output's ----
+                focus(app);
+                focus(popup);
+                prepareAgain("the holder prepares again", true);
+                ws.currentActivity = "b";
+            } },
+            { name: "the activity switched", until: () => p.slot === null, run: function () {
+                if (!p.preparations[5] || p.preparations[5].ready !== false || p.preparations[5].reason !== "view-changed") {
+                    fail("prepare: an activity switch ends the preparation (got " + JSON.stringify(p.preparations[5]) + ")");
+                }
+                ws.currentActivity = "a";
+            } },
+            { name: "the activity back", until: () => p.views[5] && p.views[5].view && p.views[5].view.activityId === "a",
+              run: function () {
+                settle();
+                // ---- the serials refuse rather than wrap ----
+                p.slotSerial = 2147483646;
+                focus(app);
+                focus(popup);
+                const exhausted = request;
+                read([prep(6, "c6", 3), prep(5, "c5", exhausted)]);
+                decided("an exhausted slot serial refuses", 5, refused("unavailable"));
+                holds("an exhausted slot serial takes no slot", null);
+                p.shellSerial = 2147483646;
+                owner = ":1.12";
+                read([prep(6, "c6", 3), prep(5, "c5", exhausted)]);
+                p.shellPidLookup.finished([shellPid]);
+                if (p.shellPid !== 0 || p.shellSerial !== 2147483646) {
+                    fail("prepare: an exhausted shell serial takes no PID (got " + p.shellPid + ", serial "
+                         + p.shellSerial + ")");
+                }
+                read([prep(6, "c6", 3), prep(5, "c5", exhausted + 1)]);
+                decided("with no shell serial left no prepare is taken", 5, refused("unavailable"));
+                // ---- a later lifetime refuses the saved prepare ----
+                const later = component.createObject(harness);
+                later.nativeCapable = true;
+                later.start();
+                DBusStubs.SessionBus.answer(expectIdentityRequest("prepare (a later lifetime)", later), [{ value: 1 }]);
+                later.identityLookup.finished([":1.43"]);
+                later.shellLookup.finished([":1.12"]);
+                focus(app);
+                focus(popup);
+                // Its first read is answered before the bus tells it the shell's PID: the saved prepare
+                // is stale for its epoch whatever else holds.
+                later.reader.finished([JSON.stringify({ start: Date.now(), rows: [prep(5, "c5", exhausted + 1)], widgets: [5],
+                                                        empty: [], truncated: false })]);
+                const saved = later.requests.find(r => r.id === 5);
+                if (!saved || canonical(saved.completion) !== canonical(refused("stale-context")) || later.slot !== null) {
+                    fail("prepare: a later lifetime refuses a prepare saved under an earlier one (got "
+                         + (saved ? canonical(saved.completion) : "no request") + ")");
+                }
+                later.shellPidLookup.finished([shellPid]);
+                // Under its own epoch it prepares, from the popup activated once it read the shell;
+                // retired holding the slot, it keeps nothing prepared.
+                if (later.publishing) {
+                    later.writer.finished([writeAnswer(1)]);
+                }
+                focus(app);
+                focus(popup);
+                later.wake.activated();
+                later.shellLookup.finished([":1.12"]);
+                later.reader.finished([JSON.stringify({ start: Date.now(), rows: [prep(5, "c5", exhausted + 2, { epoch: later.label })],
+                                                        widgets: [5], empty: [], truncated: false })]);
+                const fresh = later.requests.find(r => r.id === 5);
+                if (!fresh || canonical(fresh.completion) !== canonical(ready(later.label + ":1:1", true))
+                        || !later.slot || later.slot.window !== app) {
+                    fail("prepare: a later lifetime prepares under its own epoch (got "
+                         + (fresh ? canonical(fresh.completion) : "no request") + ")");
+                }
+                later.retire();
+                if (later.slot !== null) {
+                    fail("prepare: a lifetime retired holding the slot keeps nothing prepared");
+                }
+                later.destroy();
+                // ---- the retirement: the offline frames carry nothing of an intent ----
+                settle();
+                from = p.writer.callLog.length;
+                p.retire();
+                const offline = framesOf(p, from, [5, 6]);
+                for (const id of [5, 6]) {
+                    const f = offline[id];
+                    if (!f || f.status !== "offline" || f.completion !== undefined || f.prepared !== undefined
+                            || f.capable !== false || f.view !== null || f.tiled !== false) {
+                        fail("prepare: the offline frame for widget " + id + " says the lifetime ended and nothing of an"
+                             + " intent (got " + canonical(f) + ")");
+                    }
+                }
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
     }
 
     // The writer has no answer for the memory's first read, as at load time before its snapshot

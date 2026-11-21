@@ -6,6 +6,7 @@
 import QtQml
 import org.kde.kwin
 import org.kde.plasma.workspace.dbus as DBus
+import "Tiling.js" as Tiling
 
 // What the placement script tells the bars' layout controls about tiling: whether supported
 // tiling is available, whether a session is on and the view it tiles, in an order a reader can
@@ -13,7 +14,9 @@ import org.kde.plasma.workspace.dbus as DBus
 // `nativeCapable` to its native verdict and hands the session in where the tiler starts or ends
 // one (main.qml, tiler.reportSession). This object keeps that state, its revision, a lifetime
 // label and the lifetime's identity name on the session bus, reads the bars' requests and
-// answers them; it is never given the native token.
+// answers them; it is never given the native token. A bar's menu prepares its action first (P5):
+// the provider keeps the app the menu was opened from and the bar's view, inside KWin, in its one
+// prepared slot, and the bar names that preparation by a handle.
 //
 // Read the state on revisionChanged: a change sets the fields first and moves the revision
 // last, once.
@@ -31,8 +34,8 @@ QtObject {
     // no state carries a capability that changed after its revision.
     property bool capable: false
     // The state's order: 1 at start(), then one step for each change of what a reader is told -
-    // capability, the session or its view, a bar's own view (views), going offline - and none
-    // otherwise.
+    // capability, the session or its view, a bar's own view (views), the end of a holder's
+    // preparation, going offline - and none otherwise.
     property int revision: 0
     // The session, and the view it tiles as a bar names one.
     property bool active: false
@@ -100,22 +103,31 @@ QtObject {
     // with no key; the provider reads every clock's request with one shell script call on the
     // shell's unique connection. The reads are bounded as the probe's - at most 16 widgets,
     // requests of at most 2048 characters, a consumer label of 1 to 128 characters and a request
-    // number of 1 to 2147483646 - copy only the fields P1 needs, and carry widget data as JSON,
-    // never as code. With the rows, the script says when it started, for the call's length.
+    // number of 1 to 2147483646 - copy only the fields the intents need (the epoch and the view's
+    // two ids, which a prepare names), and carry widget data as JSON, never as code. With the
+    // rows, the script says when it started, for the call's length, and which widgets it saw:
+    // their ids, those whose request field is empty (a withdrawn request), and whether there were
+    // more than it reads. A widget is gone, or its request withdrawn, only by such a complete
+    // inventory; an unreadable request proves neither (the layout probe's rule, testing.md).
     readonly property string requestApplet: "org.plasmafusion.clockpill"
-    readonly property string readerScript: "var start=Date.now(),rows=[],seen=0;"
+    readonly property string readerScript: "var start=Date.now(),rows=[],widgets=[],empty=[],"
+        + "truncated=false;"
         + "panels().forEach(function(p) {"
         + "p.widgets('" + requestApplet + "').forEach(function(w) {"
-        + "if(seen>=16){return;}++seen;"
+        + "if(widgets.length>=16){truncated=true;return;}widgets.push(w.id);"
         + "w.currentConfigGroup=['General'];try {var text=w.readConfig('layoutRequest','');"
+        + "if(text===''){empty.push(w.id);return;}"
         + "if(text.length>2048)return;"
         + "var q=JSON.parse(text);"
         + "if(typeof q.consumer!=='string'||!q.consumer.length||q.consumer.length>128"
         + "||!Number.isInteger(q.request)||q.request<=0||q.request>2147483646)return;"
+        + "var v=q.view;"
         + "rows.push({id:w.id,consumer:q.consumer,request:q.request,version:q.version,"
-        + "intent:q.intent,outputName:q.outputName});"
+        + "intent:q.intent,outputName:q.outputName,epoch:q.epoch,"
+        + "view:v!==null&&typeof v==='object'?{desktopId:v.desktopId,activityId:v.activityId}:v});"
         + "}catch(e){} }); });"
-        + "print(JSON.stringify({start:start,rows:rows}));"
+        + "print(JSON.stringify({start:start,rows:rows,widgets:widgets,empty:empty,"
+        + "truncated:truncated}));"
     // What the last read found: the queries to answer, and the rows refused before any action,
     // each with its widget, consumer, request and reason. A failed read keeps them as they were.
     property var requests: []
@@ -125,6 +137,93 @@ QtObject {
     property bool reading: false
     property bool again: false
     property real readAt: 0
+
+    // The shell's process as the bus tells it for the connection read from: a shell surface
+    // counts only with this PID, never by a class or app id (the layout probe's rule,
+    // testing.md). Looked up once per shell connection, beside that connection's first read;
+    // `pidFor` is the connection a lookup in flight is for. Each connection with a PID gets the
+    // next shell serial, which a handle names.
+    property int shellPid: 0
+    property string shellPidOwner: ""
+    property string pidFor: ""
+    property int shellSerial: 0
+    // Focus as KWin activates windows: the window that has it, the last eligible app (a shell
+    // surface keeps it, any other window clears it), and the handoff the last focus change made,
+    // if it was a shell applet popup opened straight from that app, or from a shell dock or
+    // desktop surface on its output while the app was remembered: the app a bar's menu was opened
+    // from. With no handoff, `missed` says why: no app to hand off, or focus that came from
+    // elsewhere. Every change of focus replaces both, so a handoff is always the latest.
+    property var lastFocused: null
+    property var lastEligible: null
+    property var handoff: null
+    property string missed: "no-target"
+    // The one prepared slot - the widget and request that hold it, its handle, the captured view
+    // and target and the focus surface, all native references kept here - and the serial of its
+    // handles, monotonic for the lifetime. Per widget, the last intent handled (its consumer,
+    // request, payload and completion, decided once), and the preparation its frames carry.
+    property var slot: null
+    property int slotSerial: 0
+    property var records: ({})
+    property var preparations: ({})
+
+    property DBusCall shellPidLookup: DBusCall {
+        service: "org.freedesktop.DBus"
+        path: "/org/freedesktop/DBus"
+        dbusInterface: "org.freedesktop.DBus"
+        method: "GetConnectionUnixProcessID"
+        onFinished: value => provider.shellPidFound(Number(value[0]))
+        onFailed: provider.shellPidFound(0)
+    }
+
+    property Connections focusWatch: Connections {
+        target: Workspace
+        enabled: provider.online
+        function onWindowActivated(window) {
+            provider.activated(window);
+        }
+        function onWindowRemoved(window) {
+            provider.revalidate();
+        }
+    }
+    // The prepared target's own changes, as KWin notifies them: a desktop, activity or output it
+    // leaves, or a state that makes it no eligible app - minimized, fullscreen, maximized, tiled,
+    // out of the taskbar or the window switcher, modal - end the preparation. KWin notifies no
+    // change of moveable or resizeable, and a mapped window seldom turns transient, which no
+    // offline case can make happen (the stand-in windows cannot declare `transient`): those are
+    // found by the slot's next check.
+    property Connections targetWatch: Connections {
+        target: provider.slot && provider.slot.window ? provider.slot.window : null
+        function onDesktopsChanged() {
+            provider.revalidate();
+        }
+        function onActivitiesChanged() {
+            provider.revalidate();
+        }
+        function onOutputChanged() {
+            provider.revalidate();
+        }
+        function onMinimizedChanged() {
+            provider.revalidate();
+        }
+        function onFullScreenChanged() {
+            provider.revalidate();
+        }
+        function onMaximizedChanged() {
+            provider.revalidate();
+        }
+        function onTileChanged() {
+            provider.revalidate();
+        }
+        function onSkipTaskbarChanged() {
+            provider.revalidate();
+        }
+        function onSkipSwitcherChanged() {
+            provider.revalidate();
+        }
+        function onModalChanged() {
+            provider.revalidate();
+        }
+    }
 
     property ShortcutHandler wake: ShortcutHandler {
         name: "Plasma Fusion: Refresh Layout Controls"
@@ -320,6 +419,50 @@ QtObject {
             finishRead();
             return;
         }
+        if (owner !== shellPidOwner) {
+            // Another shell connection: its surfaces are not the old one's, so the slot made under
+            // the old one goes and the remembered app with it.
+            if (shellPidOwner !== "") {
+                if (slot) {
+                    invalidate("shell-replaced");
+                }
+                lastEligible = null;
+                handoff = null;
+                missed = "no-target";
+                shellPid = 0;
+                shellPidOwner = "";
+            }
+            // Its PID is looked up beside the read, never before it: the queries do not wait for
+            // the bus. A prepare read before the PID is known is refused, not held; the first read
+            // on a connection comes as the shell or the provider starts, and a menu sends a new
+            // prepare on its next input.
+            if (pidFor === "") {
+                pidFor = owner;
+                shellPidLookup.arguments = [owner];
+                shellPidLookup.call();
+            }
+        }
+        readFrom(owner);
+    }
+
+    // The shell's PID for the connection asked about, or 0 when the bus could not tell. It counts
+    // only while that connection is still the one read from; otherwise, or on a failure, the next
+    // read asks again. With no PID no surface is the shell's, and every prepare is refused.
+    function shellPidFound(pid: real): void {
+        if (!online || pidFor === "") {
+            return;
+        }
+        const owner = pidFor;
+        pidFor = "";
+        if (Number.isInteger(pid) && pid > 0 && owner === reader.service
+                && shellSerial < 2147483646) {
+            shellPid = pid;
+            shellPidOwner = owner;
+            shellSerial += 1;
+        }
+    }
+
+    function readFrom(owner: string): void {
         reader.service = owner;
         reader.arguments = [readerScript];
         readAt = Date.now();
@@ -340,17 +483,21 @@ QtObject {
         finishRead();
     }
 
-    // The shell's answer, checked again here: the script's start and at most 16 rows, each with a
-    // well-formed identity (a row without one cannot be answered and is dropped), then a
-    // version-1 query for a named output; every other row is refused before any action, with its
-    // reason.
+    // The shell's answer, checked again here: the script's start and at most 16 rows - bounded
+    // before anything walks them - with an inventory consistent with the rows if there is one,
+    // else the whole answer is malformed; then each row with a well-formed identity (a row without
+    // one cannot be answered and is dropped) is a request if it is a version-1 query or prepare for
+    // a named output, a prepare with its frozen context; every other row is refused before any
+    // action, with its reason.
     function readFinished(text: string): void {
         if (!reading) {
             return;
         }
         const answer = parsed(text);
-        if (answer === null || !Array.isArray(answer.rows) || answer.rows.length > 16
-                || !Number.isFinite(answer.start)) {
+        const rows = answer !== null && Array.isArray(answer.rows) && answer.rows.length <= 16
+            ? answer.rows : null;
+        const inventory = rows !== null ? inventoryOf(answer) : false;
+        if (rows === null || !Number.isFinite(answer.start) || inventory === false) {
             console.warn("plasmafusion-placement: layout provider: the bars' requests came back malformed");
             finishRead();
             return;
@@ -390,9 +537,247 @@ QtObject {
                 : { outputName: row.outputName, view: viewOf(row.outputName) };
         }
         views = resolved;
+        settleIntents(accepted, refused, inventory);
         publicationDue = true;
         report("read", "read " + accepted.length + " request(s), " + refused.length + " refused", length);
         finishRead();
+    }
+
+    // The widgets a read saw, from its answer: null for an answer without an inventory (then no
+    // widget is known gone), false for a malformed or inconsistent one - a row twice, or a row of
+    // a widget it does not list or lists as empty, as the layout probe refused - else the ids,
+    // those with an empty request field and whether the inventory is complete (no more widgets
+    // than the reader reads).
+    function inventoryOf(answer: var): var {
+        if (answer.widgets === undefined && answer.empty === undefined
+                && answer.truncated === undefined) {
+            return null;
+        }
+        const ids = answer.rows.map(row => row !== null && typeof row === "object" ? row.id : null);
+        if (!Array.isArray(answer.widgets) || answer.widgets.length > 16
+                || !answer.widgets.every(id => Number.isInteger(id))
+                || !Array.isArray(answer.empty)
+                || !answer.empty.every(id => answer.widgets.indexOf(id) >= 0)
+                || typeof answer.truncated !== "boolean"
+                || ids.some((id, index) => ids.indexOf(id) !== index)
+                || ids.some(id => answer.widgets.indexOf(id) < 0)
+                || ids.some(id => answer.empty.indexOf(id) >= 0)) {
+            return false;
+        }
+        return { widgets: answer.widgets, empty: answer.empty, complete: !answer.truncated };
+    }
+
+    // What a read means for the intents. A preparation, its slot and its frames, lasts until its
+    // holder's next request: another request - refused or not, and a query reusing the prepare's
+    // number too - or a withdrawal (an empty field); a complete inventory without the holder's
+    // widget ends the slot as `consumer-retired`, told to no bar, since none is there to read it,
+    // so it moves no revision. Such an inventory also drops the records of the widgets it did not
+    // see, and nothing else does. Then each prepare is decided once per request identity: the
+    // same identity and payload read again gets the completion recorded for it, the same identity
+    // with another payload or a lower request number is refused, and a new one is handled.
+    function settleIntents(accepted: var, refused: var, inventory: var): void {
+        const same = (held, row) => row.intent === "prepare" && held.consumer === row.consumer
+            && held.request === row.request;
+        for (const row of accepted.concat(refused)) {
+            if (slot && slot.id === row.id && !same(slot, row)) {
+                slot = null;
+            }
+            const prep = preparations[row.id];
+            if (prep && !same(prep, row)) {
+                delete preparations[row.id];
+            }
+        }
+        if (inventory !== null) {
+            for (const id of inventory.empty) {
+                delete preparations[id];
+                if (slot && slot.id === id) {
+                    slot = null;
+                }
+            }
+        }
+        if (inventory !== null && inventory.complete) {
+            for (const id of Object.keys(records)) {
+                if (inventory.widgets.indexOf(Number(id)) < 0) {
+                    delete records[id];
+                    delete preparations[id];
+                }
+            }
+            // The holder has a record (its prepare made one), so its preparation went just now.
+            if (slot && inventory.widgets.indexOf(slot.id) < 0) {
+                invalidate("consumer-retired");
+            }
+        }
+        for (const row of accepted) {
+            if (row.intent !== "prepare") {
+                continue;
+            }
+            const payload = JSON.stringify([row.intent, row.outputName, row.epoch,
+                                            row.view.desktopId, row.view.activityId]);
+            const record = records[row.id];
+            if (record && record.consumer === row.consumer && row.request <= record.request) {
+                row.completion = row.request < record.request
+                    ? refusal(row.intent, "stale-request")
+                    : record.payload === payload ? record.completion
+                    : refusal(row.intent, "conflicting-request");
+                continue;
+            }
+            const completion = prepare(row);
+            row.completion = completion;
+            records[row.id] = { consumer: row.consumer, request: row.request, payload: payload,
+                                completion: completion };
+            console.info("plasmafusion-placement: layout provider: a prepare "
+                + (completion.result !== "done" ? "was refused, " + completion.reason
+                   : completion.target ? "is ready with its target"
+                   : "is ready, " + completion.reason));
+        }
+    }
+
+    function refusal(intent: string, reason: string): var {
+        return { intent: intent, result: "refused", reason: reason };
+    }
+
+    // A prepare handled for the first time. Refused, before any capture and in this order, when
+    // the bar's frozen context is not this lifetime's or its output's view now (so a prepare saved
+    // under another lifetime is stale whatever else holds), when the provider cannot prepare (no
+    // capability, or no PID for the shell connection read from), when another widget holds the
+    // slot, or when no verified shell applet popup on the bar's output holds focus. Otherwise the
+    // slot is taken for the view, with a handle, and with the app the popup was opened from as its
+    // target when that app is eligible and on the view; never another window.
+    function prepare(row: var): var {
+        const outputs = Workspace.screens.filter(output => String(output.name) === row.outputName);
+        const view = viewOf(row.outputName);
+        if (row.epoch !== label || outputs.length !== 1 || view === null
+                || view.desktopId !== row.view.desktopId
+                || view.activityId !== row.view.activityId) {
+            return refusal("prepare", "stale-context");
+        }
+        if (!capable || shellPid <= 0 || shellPidOwner !== replyOwner) {
+            return refusal("prepare", "unavailable");
+        }
+        if (slot && slot.id !== row.id) {
+            return refusal("prepare", "busy");
+        }
+        const output = outputs[0];
+        const active = Workspace.activeWindow;
+        if (!shellOwnsFocus(active, output) || active.appletPopup !== true
+                || lastFocused !== active) {
+            return refusal("prepare", "popup-focus-unconfirmed");
+        }
+        if (slotSerial >= 2147483646) {
+            return refusal("prepare", "unavailable");
+        }
+        const desktop = Workspace.currentDesktopForScreen(output);
+        const activity = String(Workspace.currentActivity);
+        let target = null;
+        let reason = missed;
+        if (handoff && handoff.popup === active) {
+            if (Tiling.eligibleForMaster(handoff.window)
+                    && Tiling.onWorkspace(handoff.window, desktop, activity, output)) {
+                target = handoff.window;
+            } else {
+                reason = "no-target";
+            }
+        }
+        slotSerial += 1;
+        const handle = label + ":" + shellSerial + ":" + slotSerial;
+        slot = { id: row.id, consumer: row.consumer, request: row.request, handle: handle,
+                 owner: replyOwner, outputName: row.outputName, output: output, desktop: desktop,
+                 activity: activity, window: target, focusSurface: active,
+                 view: { desktopId: view.desktopId, activityId: view.activityId } };
+        preparations[row.id] = { consumer: row.consumer, request: row.request, handle: handle,
+                                 ready: true, reason: "" };
+        const completion = { intent: "prepare", result: "done", handle: handle,
+                             target: target !== null };
+        if (target === null) {
+            completion.reason = reason;
+        }
+        return completion;
+    }
+
+    // A window counts as the shell's only with the shell's verified PID, on the output meant, as
+    // an applet popup, dock or desktop window that is not a normal window (the layout probe's
+    // rule); a class or app id would prove nothing.
+    function shellOwnsFocus(window: var, output: var): bool {
+        return !!output && Tiling.alive(window) && shellPid > 0 && shellPidOwner === replyOwner
+            && window.pid === shellPid && window.output === output && !window.normalWindow
+            && (window.appletPopup === true || window.dock === true
+                || window.desktopWindow === true);
+    }
+
+    // A focus change: what the new window means for the app a menu can be opened from, the
+    // handoff it makes or why it makes none, and the end of a preparation made before it. The
+    // same window activated again is no change unless it is neither an app nor the shell's.
+    function activated(window: var): void {
+        const previous = lastFocused;
+        const candidate = lastEligible;
+        const output = Tiling.alive(window) ? window.output : null;
+        const eligible = Tiling.eligibleForMaster(window);
+        const shell = shellOwnsFocus(window, output);
+        lastFocused = window;
+        if (window === previous && (eligible || shell)) {
+            return;
+        }
+        let next = null;
+        let why = "focus-changed";
+        if (shell && window.appletPopup === true) {
+            if (!Tiling.eligibleForMaster(candidate) || candidate.output !== output) {
+                why = "no-target";
+            } else if (previous === candidate
+                       || (shellOwnsFocus(previous, output)
+                           && (previous.dock === true || previous.desktopWindow === true))) {
+                next = { popup: window, window: candidate, output: output };
+            }
+        }
+        handoff = next;
+        missed = next ? "" : why;
+        if (eligible) {
+            lastEligible = window;
+        } else if (!shell) {
+            lastEligible = null;
+        }
+        if (slot) {
+            invalidate("focus-changed");
+        }
+    }
+
+    // The slot checked again on an event that may end it: a window gone, a change of a desktop,
+    // the activity or the outputs, or the target's own change.
+    function revalidate(): void {
+        if (!online || !slot) {
+            return;
+        }
+        const s = slot;
+        const view = viewOf(s.outputName);
+        let reason = "";
+        if (s.owner !== replyOwner || shellPidOwner !== s.owner) {
+            reason = "shell-replaced";
+        } else if (Workspace.screens.indexOf(s.output) < 0 || view === null
+                   || view.desktopId !== s.view.desktopId
+                   || view.activityId !== s.view.activityId) {
+            reason = "view-changed";
+        } else if (s.window !== null
+                   && (!Tiling.eligibleForMaster(s.window)
+                       || !Tiling.onWorkspace(s.window, s.desktop, s.activity, s.output))) {
+            reason = "target-departed";
+        } else if (!Tiling.alive(s.focusSurface) || Workspace.activeWindow !== s.focusSurface) {
+            reason = "focus-changed";
+        }
+        if (reason !== "") {
+            invalidate(reason);
+        }
+    }
+
+    // The slot ends with a reason, which its holder's frames carry, not ready, until the holder's
+    // next request; what the holder is told changed, so the revision moves.
+    function invalidate(reason: string): void {
+        const s = slot;
+        slot = null;
+        const prep = preparations[s.id];
+        if (prep && prep.handle === s.handle) {
+            preparations[s.id] = Object.assign({}, prep, { ready: false, reason: reason });
+            revision += 1;
+        }
+        console.info("plasmafusion-placement: layout provider: a preparation ended, " + reason);
     }
 
     function checkedRow(row) {
@@ -405,13 +790,28 @@ QtObject {
         if (row.version !== 1) {
             return Object.assign(identity, { reason: "version" });
         }
-        if (row.intent !== "query") {
+        if (row.intent !== "query" && row.intent !== "prepare") {
             return Object.assign(identity, { reason: "intent" });
         }
         if (typeof row.outputName !== "string" || row.outputName.length < 1 || row.outputName.length > 128) {
             return Object.assign(identity, { reason: "output" });
         }
-        return Object.assign(identity, { outputName: row.outputName });
+        if (row.intent === "query") {
+            return Object.assign(identity, { intent: "query", outputName: row.outputName });
+        }
+        // A prepare names the frozen context the bar holds: the lifetime and the view of its
+        // answer.
+        const view = row.view;
+        if (typeof row.epoch !== "string" || row.epoch.length < 1 || row.epoch.length > 64
+                || view === null || typeof view !== "object"
+                || typeof view.desktopId !== "string" || view.desktopId.length < 1
+                || view.desktopId.length > 128
+                || typeof view.activityId !== "string" || view.activityId.length > 128) {
+            return Object.assign(identity, { reason: "malformed" });
+        }
+        return Object.assign(identity, {
+            intent: "prepare", outputName: row.outputName, epoch: row.epoch,
+            view: { desktopId: view.desktopId, activityId: view.activityId } });
     }
 
     function finishRead(): void {
@@ -475,6 +875,17 @@ QtObject {
         frame.view = view;
         frame.tiled = active && view !== null && view.desktopId === desktopId
             && view.activityId === activityId && view.outputName === outputName;
+        // An intent's frames add its completion, decided once, and while its preparation lasts
+        // that preparation's handle and validity; a query's frames stay as they were.
+        if (row.completion !== undefined) {
+            frame.completion = row.completion;
+        }
+        const prep = preparations[row.id];
+        if (prep && row.intent === "prepare" && prep.consumer === row.consumer
+                && prep.request === row.request) {
+            frame.prepared = prep.ready ? { handle: prep.handle, ready: true }
+                : { handle: prep.handle, ready: false, reason: prep.reason };
+        }
         return frame;
     }
 
@@ -499,6 +910,7 @@ QtObject {
             views = now;
             revision += 1;
         }
+        revalidate();
     }
 
     // A bar's view as KWin has it now: the output of that name, its current desktop and the
@@ -651,6 +1063,12 @@ QtObject {
         publishing = false;
         publicationDue = false;
         pending = null;
+        // Nothing prepared outlives the lifetime: its handles name this label, which no later
+        // provider has.
+        slot = null;
+        handoff = null;
+        lastEligible = null;
+        lastFocused = null;
         if (registration) {
             const request = registration;
             registration = null;

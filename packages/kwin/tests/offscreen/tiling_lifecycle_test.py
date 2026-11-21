@@ -314,7 +314,7 @@ retire(late_memory, "late-memory")
 # The read side of the layout provider's pipeline on the real script: the wake shortcut, one read
 # once the identity is ready, the wakes during a read coalesced, the shell side's bounds and the
 # provider's own checks of every row, each failure (the harness checks). A failed read and each
-# of the five malformed answers are said once each; the two reads that came back say what they
+# of the seven malformed answers are said once each; the two reads that came back say what they
 # found and how long they took; nothing throws.
 before = len(messages)
 read_pipeline = run_harness({"scenario": "read-pipeline"})
@@ -323,7 +323,7 @@ for problem in list(read_pipeline.property("problems").toVariant() or []):
 journal = messages[before:]
 check(sum("the bars' requests could not be read" in message for message in journal) == 1,
       "read-pipeline: a failed read is said once")
-check(sum("the bars' requests came back malformed" in message for message in journal) == 5,
+check(sum("the bars' requests came back malformed" in message for message in journal) == 7,
       "read-pipeline: each malformed answer is said once")
 reads = call_lines(journal, READ_LINE, "layout provider: read ")
 check(None not in reads and [read[:2] for read in reads] == [(2, 5)] * 2,
@@ -448,6 +448,33 @@ check(sum("the identity name's owner could not be read" in message for message i
 thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
 check(not thrown, "provider-rules: nothing threw, got %s" % thrown)
 retire(provider_rules, "provider-rules")
+
+# P5's prepared target on a provider of its own (the harness checks each decision, frame and end):
+# its revisions each a change of what a bar is told, each fresh decision said once - 34 ready and
+# 20 refused, the later lifetime's refusal and its own prepare among them - and each end of a
+# preparation said with its reason, a holder's widget gone among them; a read again or a
+# conflicting payload decides nothing new and says nothing, and a malformed prepare is a refusal
+# of the read's, not a decision.
+before = len(messages)
+prepare_run = run_harness({"scenario": "prepare"})
+for problem in list(prepare_run.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+ready_lines = sum("layout provider: a prepare is ready" in message for message in journal)
+refused_lines = sum("layout provider: a prepare was refused" in message for message in journal)
+check(ready_lines == 34 and refused_lines == 20,
+      "prepare: each fresh decision is said once, 34 ready and 20 refused, got %s and %s" % (ready_lines, refused_lines))
+ends = {}
+for message in journal:
+    if "layout provider: a preparation ended, " in message:
+        reason = message.split("a preparation ended, ", 1)[1].strip().strip('"')
+        ends[reason] = ends.get(reason, 0) + 1
+check(ends == {"focus-changed": 11, "target-departed": 11, "view-changed": 3, "shell-replaced": 1,
+              "consumer-retired": 1},
+      "prepare: each preparation's end is said with its reason, got %s" % ends)
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "prepare: nothing threw, got %s" % thrown)
+retire(prepare_run, "prepare")
 
 # A third run: the master a native teardown released without restoring it (a removed desktop, a
 # second window of its app, a move of the master). The harness asserts the geometry, the settle
