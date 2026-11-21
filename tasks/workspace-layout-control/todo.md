@@ -10,10 +10,14 @@ confirmed the final receipt's four decisions. P1 is done: the placement script's
 keeps its state, holds its identity name, reads the bars' requests, publishes their answers,
 follows their views and measures its shell calls (`9d7c42a` to `79bb8f0`); on 2026-11-21 the owner
 amended decision 1's time-limit condition, and the transport passed its native recheck on the
-released fork, `v6.8.3-pf1`. P2 is done: the clock's layout state, not yet used, takes only its
-current provider's answers to its own requests, notices a provider lost with no frame and gives
-each request a deadline (`62993e6` to `ddf4533`). P3 is next. Read
-[plan.md](plan.md) and the accepted [specification](../../SPEC-workspace-layout-control.md).
+released fork, `v6.8.3-pf1`. P2 is done: the clock's layout state takes only its current
+provider's answers to its own requests, notices a provider lost with no frame and gives each
+request a deadline (`62993e6` to `ddf4533`). P3 is done: the clock's settings gain the control's
+visibility choice and the two transport fields, each page refreshing what it does not edit
+(`e111375`), and the clock asks for its output's layout state, saving each request before the
+wake and withdrawing it while the control is hidden, which ran natively through a shell restart
+and under a Kiosk policy (`bec99ba`). P4 is next. Read [plan.md](plan.md) and the accepted
+[specification](../../SPEC-workspace-layout-control.md).
 Existing native task files are untouched.
 Paths below are relative to the repository. Proposed new files are not claimed to exist.
 
@@ -187,10 +191,22 @@ Dependencies: P2. Files: `clock/contents/config/main.xml`, the three existing
 `clock/contents/ui/Config{General,Calendar,TimeZones}.qml` pages, and
 `clock/tests/calendar_config_test.py` (five).
 
-- [ ] Add the user visibility choice and only the private fields the G0 contract needs.
-- [ ] Preserve every page's complete key/default declarations and refresh keys it does not edit.
-- [ ] Opening/applying any configuration page cannot replay a request or replace fresher state.
-- [ ] Take P2's hand-offs. Add the clock's `requested` handler, which saves each request before the
+- [x] Add the user visibility choice and only the private fields the G0 contract needs.
+      `showLayoutControl` (Bool, default true), with General's checkbox "Show the dynamic tiling
+      control", independent of the workspace dots, and the two fields the provider reads and
+      writes, `layoutRequest` and `layoutResponse` (String, empty), all in General and nothing
+      else (`e111375`).
+- [x] Preserve every page's complete key/default declarations and refresh keys it does not edit.
+      Each of the three pages declares every key and its default, which the build's page check
+      enforces, and refreshes in `saveConfig()` each key it has no control for; of the new keys,
+      General refreshes the two fields, Calendar and Time zones all three (`e111375`).
+- [x] Opening/applying any configuration page cannot replay a request or replace fresher state.
+      No page writes as it opens. On each, Apply replays no earlier request and replaces no answer
+      written while the page was open, and on Calendar and Time zones it undoes no visibility
+      choice made meanwhile; the dialog's `open()` and Apply are emulated from plasma-desktop's
+      code at v6.7.5 and v6.8.3 (`e111375`). Hiding the control through Apply still withdraws the
+      request, although Apply writes the choice before the page's copy of the request (`bec99ba`).
+- [x] Take P2's hand-offs. Add the clock's `requested` handler, which saves each request before the
       wake, and its `response` binding, with the save per frame that declaring the field costs
       (decision 1's amendment); the component's owner, `clock/contents/ui/main.qml`, is not yet
       among the files above. Then run the plan's matrix row "Cold start or shell restart with old
@@ -199,9 +215,34 @@ Dependencies: P2. Files: `clock/contents/config/main.xml`, the three existing
       shell's scripting, or with system-immutable widgets, the provider's reads fail, and the clock
       must still end unconfirmed at its deadline, as P2's fifth item shows offscreen for the
       component (the specification's items 7 and 8).
+      The clock writes each request to `layoutRequest` and saves it before the wake, binds the
+      component's `response` to `layoutResponse` and asks for its own output; while the control is
+      hidden it asks nothing and withdraws its saved request, so that from the provider's next read
+      no frame, and no save, follows it (`bec99ba`). In a real session on the owner-approved image
+      with the fork's `6.8.3-1.fc44.pf1`, P1's recheck image, after a shell restart with the old
+      answer saved the clock was unknown and asked afresh as another consumer; with no provider it
+      was unconfirmed at its deadline, and a new provider lifetime's late answer then counted. The
+      wake's call with `(s)` failed nowhere. In the three native runs each publication, the answer's
+      field declared, took 2 to 38 ms from its script's start to its answer (4 to 39 ms from its
+      call), in a container; its cost on real hardware is P7's to measure. Under the Kiosk policy,
+      desktop scripting was refused, the provider's reads failed and the clock ended unconfirmed at
+      its deadline, said once in the shell's log (p3/wiring-proof). System-immutable widgets are
+      refused by the same call ("Widgets are locked", plasma-workspace v6.8.3
+      `shell/shellcorona.cpp:1995-1997`), so the clock's side is the same; that case was not run
+      natively.
 
 Verify: fail-first configuration regressions, `tools/build.sh topbar` key checks and the spec's
 calendar configuration command. Test visibility and private-field changes while a page is open.
+Done on 2026-11-21: each slice's suite failed first against its parent, on a private bus (slice 1:
+13 failures, and 8 with the new schema but the parent's pages, where the page check found 18
+missing declarations; slice 2: 7), and `tools/build.sh topbar` with its key checks and the spec's
+calendar configuration command passed on each committed tree (the proofs p3/settings-proof and
+p3/wiring-proof). The changes while a page is open are slice 1's Apply cases above. Beyond the
+five files, both slices updated `docs/parts/shell-topbar.md`, as a behaviour change must
+(AGENTS.md), and slice 2 wired the component into `clock/contents/ui/main.qml`, which P4 lists,
+with its cases in `clock/tests/calendar_backend_test.py`. Not run: the real settings dialog, whose
+`open()` and Apply are emulated (P7, below), and the withdrawal at start in a session, shown
+offscreen only.
 
 ## P4: Show a read-only mode control
 
@@ -221,6 +262,13 @@ Dependencies: P2–P3. Likely files: `clock/contents/ui/main.qml`,
 - [ ] Preserve dots/calendar/wheel behavior and existing width-budget order; derive measured
       label/compact/hidden savings using existing design tokens.
 - [ ] Cover one desktop, narrow bars, dark/light, RTL, large text and tablet/vertical hiding.
+      Wherever the bar's own layout hides the control, whatever the answer (the plan names tablet
+      posture and vertical panels; whether a clock on the desktop is another is P4's to decide),
+      leave the layout state idle and withdraw the saved request, as the user's choice does (P3),
+      so that no frame and no save follow a bar showing nothing. A withdrawal stops the provider
+      only at its next read, which waits for some bar's wake; to stop it at once, wake it after a
+      withdrawal, which needs the component to wake without a request (`LayoutState.qml`, among
+      P6's files rather than P4's).
 
 Verify: fail-first real-component assertions in the existing calendar view suite; build topbar.
 Review isolated screenshots before enabling actions; offscreen renders are not live-mode proof.
@@ -278,6 +326,8 @@ Dependencies: P6 and source review. Likely files: the G0 scenario/seed fixtures 
       environment; retain red/green and mutation evidence where applicable.
 - [ ] Run the real shell/fork acceptance matrix in independently named isolated sessions,
       including two bars/views, reload/restart, keyboard focus, refusal and late confirmation.
+      Include the settings dialog itself: hiding the control through its Apply, and Apply on each
+      page while a frame arrives, which P3 emulated from the dialog's code.
 - [ ] Include fair arbitration across bars and a mixed shell/KWin replacement matrix, which
       testing.md listed as G0 work, and an absent backend on a stock-KWin image, moved from G0
       item 3; building that image needs the owner's approval ([g0-decisions.md](g0-decisions.md)).
