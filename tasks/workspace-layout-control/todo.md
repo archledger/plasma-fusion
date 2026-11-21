@@ -10,8 +10,9 @@ confirmed the final receipt's four decisions. P1 is done: the placement script's
 keeps its state, holds its identity name, reads the bars' requests, publishes their answers,
 follows their views and measures its shell calls (`9d7c42a` to `79bb8f0`); on 2026-11-21 the owner
 amended decision 1's time-limit condition, and the transport passed its native recheck on the
-released fork, `v6.8.3-pf1`. P2 is under way: the clock's layout state, not yet used, checks the
-provider's answers (`62993e6`). Read
+released fork, `v6.8.3-pf1`. P2 is done: the clock's layout state, not yet used, takes only its
+current provider's answers to its own requests, notices a provider lost with no frame and gives
+each request a deadline (`62993e6` to `ddf4533`). P3 is next. Read
 [plan.md](plan.md) and the accepted [specification](../../SPEC-workspace-layout-control.md).
 Existing native task files are untouched.
 Paths below are relative to the repository. Proposed new files are not claimed to exist.
@@ -126,23 +127,59 @@ Dependencies: P1. Likely files: `clock/contents/ui/LayoutState.qml` (new),
 `clock/tests/calendar_backend_test.py`, `clock/tests/calendar_view_test.py`,
 `docs/parts/shell-topbar.md` (at most four).
 
-- [ ] Start unknown; accept only the current consumer/provider/view and non-regressing state.
-- [ ] Treat outcomes separately from state, including same-provider reordering and timeout/late
+- [x] Start unknown; accept only the current consumer/provider/view and non-regressing state.
+      Each instance starts unknown, asks as a consumer of its own and takes only the provider's
+      version-1 frame for its current request and output, checked on the session bus; the first
+      answer binds the request to its lifetime, and only that lifetime's newer revisions follow
+      (`62993e6`).
+- [x] Treat outcomes separately from state, including same-provider reordering and timeout/late
       confirmation; no persistent field alone can authorize an action or mode label.
-- [ ] Invalidate correctly on observed provider loss/replacement without an idle polling loop.
-- [ ] Accept what P1's provider sends (its reviews): refused frames, a null view and possibly an
+      `outcome` (idle, pending, answered or refused) is kept apart from the state. Frames are
+      checked one at a time, only the newest of one lifetime waiting, and none at or below the
+      revision last taken counts; the answer an earlier instance was given never counts, so a saved
+      field alone gives no mode (`62993e6`). Past its deadline a pending request is unconfirmed,
+      and a late answer still counts (`ddf4533`).
+- [x] Invalidate correctly on observed provider loss/replacement without an idle polling loop.
+      Another lifetime's answer and the bound lifetime's offline frame make the bar unknown and
+      ask again (`62993e6`). A lifetime lost with no frame is seen with no polling: the bar watches
+      the session bus's `NameOwnerChanged` through the workspace plugin's `SignalWatcher`, and the
+      bound identity name or KWin's name changing hands, released or handed straight on, or KWin's
+      name moving from the owner of a frame being checked, makes it ask again (`ffe39ac`).
+- [x] Accept what P1's provider sends (its reviews): refused frames, a null view and possibly an
       empty activity, an answer to a new request at an unchanged revision, and a frame pushed at a
       newer revision with no request of its own. Expect no automatic retry after a failed or
       malformed publication, as a wake sends again, and do not depend on the observed output-loss
       placement (the receipt's finding 10).
-- [ ] Wake the provider when a clock starts: at login the provider's first read usually comes before
+      All five are taken (`62993e6`). A publication that fails or is malformed leaves a pending
+      request to its deadline: the bar asks only at its start, on an output change and on the
+      lifetime changes above, never as a retry, and a late answer still counts (`ddf4533`). An
+      answered bar keeps that answer, its state and the view it names, until a later publication
+      reaches it, which may wait for the provider's next read and so for a wake
+      (`docs/parts/kwin.md`, the publication and time-limit runs); P4 takes that case. The bar asks
+      for its own output by name, again whenever that changes, and an output KWin does not have is
+      unavailable, so it assumes nothing of where output loss moves the panel (`62993e6`).
+- [x] Wake the provider when a clock starts: at login the provider's first read usually comes before
       the shell has started. Under a Kiosk policy that refuses the shell's scripting, no answer
       comes, so fall back to unknown or unavailable on the bar's own deadline (the specification's
       items 7 and 8, with P3). If the bars come to wake on view changes, revisit the provider's info
       lines per read and publication and its warning per failed read.
+      The bar wakes the provider after each request, once its owner has saved it (`62993e6`). When
+      no answer comes, under such a Kiosk policy, with no placement script or stock KWin, or after a
+      failed wake, the request is unconfirmed at the bar's own deadline and its mode stays unknown
+      (`ddf4533`; offscreen, as no answer at all and as a failed wake). The same fallback in the
+      clock, once it carries the fields, is P3's (below). The bars wake only for requests of their
+      own, never on a desktop or activity switch, which the provider pushes, so its info lines and
+      warning need no revisit.
 
 Verify: fail-first cases in existing calendar suites, on private buses as specified; include a
 retained-field bootstrap and provider-owner replacement control. No window operations.
+Done on 2026-11-21: each slice's suite failed first against its parent, on a private bus (the proofs
+p2/layout-state-proof, p2/lost-provider-proof and p2/deadline-proof). The retained-field bootstrap
+is `62993e6`'s. The owner-replacement controls are `62993e6`'s, where no offline frame of the bound
+lifetime counts from KWin's new owner (since `ffe39ac`, KWin's name leaving unbinds the bar first,
+so the case now checks the lifetime it was bound to), and `ffe39ac`'s, where KWin's name handed
+straight on makes the bar ask again. No case operates a window. Nothing ran natively, as nothing
+uses the component yet; that starts in P3 (below).
 
 ## P3: Add clock configuration without stale writes
 
@@ -153,6 +190,15 @@ Dependencies: P2. Files: `clock/contents/config/main.xml`, the three existing
 - [ ] Add the user visibility choice and only the private fields the G0 contract needs.
 - [ ] Preserve every page's complete key/default declarations and refresh keys it does not edit.
 - [ ] Opening/applying any configuration page cannot replay a request or replace fresher state.
+- [ ] Take P2's hand-offs. Add the clock's `requested` handler, which saves each request before the
+      wake, and its `response` binding, with the save per frame that declaring the field costs
+      (decision 1's amendment); the component's owner, `clock/contents/ui/main.qml`, is not yet
+      among the files above. Then run the plan's matrix row "Cold start or shell restart with old
+      saved fields" in a real session: unknown until a fresh exchange. That run is also the wake's
+      first native call with its explicit signature, `(s)`. Under a Kiosk policy that refuses the
+      shell's scripting, or with system-immutable widgets, the provider's reads fail, and the clock
+      must still end unconfirmed at its deadline, as P2's fifth item shows offscreen for the
+      component (the specification's items 7 and 8).
 
 Verify: fail-first configuration regressions, `tools/build.sh topbar` key checks and the spec's
 calendar configuration command. Test visibility and private-field changes while a page is open.
@@ -164,6 +210,14 @@ Dependencies: P2–P3. Likely files: `clock/contents/ui/main.qml`,
 `clock/tests/calendar_view_test.py`, `docs/parts/shell-topbar.md` (five).
 
 - [ ] Display only confirmed view-scoped state; keep actions disabled until P5–P6 qualify them.
+      The specification's item 7 pending state is the layout state's outcome pending; once
+      unconfirmed, past its deadline, the bar shows no control that looks as if it works (item 8;
+      [shell-topbar.md](../../docs/parts/shell-topbar.md#workspace-layout-state-layoutstateqml)). An
+      answer can also outlive a failed or malformed publication: its state and the view it names
+      stand until a later publication reaches the bar (P2's fourth item). Whether the bar may
+      compare that view with its own turns on how the specification's rule that the placement script
+      is the only authority for the view is read (decision 1's amendment,
+      [g0-decisions.md](g0-decisions.md)).
 - [ ] Preserve dots/calendar/wheel behavior and existing width-budget order; derive measured
       label/compact/hidden savings using existing design tokens.
 - [ ] Cover one desktop, narrow bars, dark/light, RTL, large text and tablet/vertical hiding.
