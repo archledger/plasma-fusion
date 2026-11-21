@@ -26,6 +26,7 @@ Last edited 2026-11-21.
 | `.../org.plasmafusion.clockpill/contents/ui/WidthBudget.qml` | the top bar's width budget (ADAPTIVE 5.1), run by the clock pill |
 | `.../org.plasmafusion.clockpill/contents/ui/CalendarView.qml` | month view of the pop-up |
 | `.../org.plasmafusion.clockpill/contents/ui/LayoutState.qml` | the bar's workspace layout state, the clock's side of the layout transport (not shown yet) |
+| `.../org.plasmafusion.clockpill/contents/ui/LayoutControl.qml` | the workspace layout control, read only (not in the bar yet) |
 | `.../org.plasmafusion.clockpill/contents/ui/Chevron.qml`, `FusionText.qml` | 16 px stroke chevron, text helper |
 | `.../org.plasmafusion.clockpill/contents/code/formats.js` | locale-aware date and time formats |
 | `tools/build.d/70-topbar.sh` | checks the metadata and config XML, copies both packages to `$STAGE/.local/share/plasma/plasmoids/` |
@@ -283,9 +284,11 @@ requests' deadline (`deadlineMs`). The clock's `main.qml` owns it:
   item 9). That covers an answer that does not come - a Kiosk policy that refuses the shell's
   scripting, no placement script, stock KWin, a wake that fails - and a check whose lookup fails,
   which leaves the request pending. A new request starts its own deadline, so the one it replaces
-  cannot end it, and an answer or going idle ends the wait. For P4: the pending state of the
-  specification's item 7 is the outcome pending, and once unconfirmed the bar shows no control that
-  looks as if it works (item 8), as nothing has been said of its view.
+  cannot end it, and an answer or going idle ends the wait. The read-only control below shows
+  nothing while a query is pending, as the mode it showed no longer applies and nothing is confirmed
+  yet; the pending state of the specification's item 7 follows an explicit request, P6's. Once
+  unconfirmed the bar shows no control that looks as if it works (item 8), as nothing has been said
+  of its view.
 
 Tests: `tests/calendar_backend_test.py`, run as above, also checks the layout state against
 stand-ins on its private bus - `org.kde.KWin` and the lifetimes' identity names on its own
@@ -319,6 +322,51 @@ own request its one save). A fourth replays the settings dialog's Apply in one t
 written false, the page's copy of the request written back, the configuration saved - and the
 request must still end withdrawn. `runDebugAction`, outside the block, is checked as text for its
 `dump-layout` branch, and the fixtures must log nothing but the dumps and the one unanswered line.
+
+### Workspace layout control (`LayoutControl.qml`)
+
+The control that shows the bar's workspace layout state, read only (P4 of
+`tasks/workspace-layout-control/todo.md`). Its place in the pill and its width budget steps come
+next in P4, and the Floating and Tiled choices in P6. Its owner passes in the state's `mode`, the
+window's metrics and the pill's text colour, and sets `level`:
+
+- It shows only a mode an answer confirmed: tiled, a glyph of the window frame and its divider with
+  the label "Tiled"; floating, the frame alone with "Floating". Unknown and unavailable show nothing
+  and take no room, at every level. A query pending, past its deadline or refused, a provider that
+  cannot tile and an output KWin does not have look alike, as nothing that looks as if it worked
+  may appear without the placement script's word (the specification's items 7 and 8).
+- `level` 0 shows the glyph and its label, 1 the glyph alone, whose accessible name still says the
+  mode, and 2 nothing. For the width budget, `fullWidth` and `compactWidth` are the widths at 0 and
+  1 whatever the mode and level, and `available` says whether a mode shows. The label's box is as
+  wide as the wider of the two labels, so a change of mode never changes the pill's width, as with
+  the time's box.
+- No board draws it, and its values are the boards': the glyph 14 px (the LiveChips board's glyph
+  size) on the 24-unit grid of the boards' line glyphs, stroked 1.8 with round caps and joins as the
+  shell boards' line icons; 6 px to the label (a LiveChips chip's own gap after its glyph); the
+  label in Manrope 13 px 600 (the pill's text size, and the weight of the TabletSnap board's
+  window-card rows); glyph and label in the pill's text colour. The glyphs are the Icons board's
+  Snap symbol without its last stroke. Text goes through the metrics' `font()` and sizes through
+  `px()`, so large text scales them. The label's alignment is set, so that a mirrored layout keeps
+  it against its glyph: one left unset follows the text's own direction. The presentation awaits the
+  owner's review of the screenshots at the read-only checkpoint.
+- It offers no action yet. It takes no keyboard focus and no click, and a wheel turned over it
+  reaches the pill, which switches workspaces. Its accessible role is static text, named "Dynamic
+  tiling: Tiled" or "Dynamic tiling: Floating"; its tooltip and accessible description say whether
+  the dynamic tiler arranges the workspace's windows. It draws without animation.
+- It does not compare an answer's view with the bar's own. The placement script is the only
+  authority for the view, and on a desktop switch the bar's own desktop and the provider's frame for
+  the new view arrive separately, so a comparison would disagree for a moment on every switch,
+  whichever came first, and hide the control. An answer that a failed or malformed publication
+  leaves standing stays until a later publication reaches the bar, the limit of P2's fourth item.
+
+Tests: `tests/calendar_view_test.py`, run on a stage as in the calendar's regression checks above,
+loads the staged control beside the shared `FusionMetrics`. It checks both modes' glyph, label,
+accessible name and tooltip; unknown and unavailable showing nothing and taking no room; the
+compact and hidden levels; the width, which a change of mode keeps; sizes and text through the
+metrics, and the label not in the display family; the colour; the layout as drawn in either
+direction - the gap between glyph and label, the label's box, the two filling the control, and the
+label's alignment toward its glyph; a wheel and a click reaching what is behind it; and nothing
+taking focus. Its control checks go on after a failure, so that one run shows them all.
 
 ## Global menu (stock `org.kde.plasma.appmenu`)
 
