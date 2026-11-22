@@ -425,7 +425,7 @@ class PipelineRun:
     def build(self, *, wakes=6, overlap=False, unfinished=False, idle_burst=False,
               uncoalesced=False, unsettled=False, double=False, stale_consumers=False,
               concurrent=False, lost=False, late_pre_burst=False, failed_publication=False,
-              unrecognized=False) -> None:
+              unrecognized=False, swapped=False) -> None:
         self.cycle()
         for boot in BOOTS:
             self.settle(boot)
@@ -457,6 +457,11 @@ class PipelineRun:
                 break
             if late_pre_burst:
                 self.accept(boot, late[boot])
+                continue
+            if swapped:
+                # Each consumer accepts the other's frame, for the same request number.
+                other = BOOTS[1] if boot == BOOTS[0] else BOOTS[0]
+                self.accept(boot, self.frame(other, self.request[other]))
                 continue
             if unsettled:
                 self.request[boot] += 1
@@ -511,6 +516,10 @@ class PipelineCheckerTests(unittest.TestCase):
 
     def test_consumers_not_on_their_current_request_fail(self):
         self.assert_rejected("did not settle online", unsettled=True)
+
+    def test_consumers_settled_on_each_others_frames_fail(self):
+        # Both are on request 1, so only the frame's consumer tells the two exchanges apart.
+        self.assert_rejected("did not settle online", swapped=True)
 
     def test_wake_never_followed_by_a_read_fails(self):
         # Coalesced, not lost: every wake-up must be followed by a read.

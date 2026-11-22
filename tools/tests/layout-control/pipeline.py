@@ -99,9 +99,9 @@ def replay(lines: list, burst_start: int) -> dict:
 
 
 def settled_consumers(shell: list, published: dict) -> list:
-    """Each consumer's last state is online, on its current request, from a frame the provider
-    published after the burst mark: above every revision published before it, and no higher than
-    any revision published at all."""
+    """Each consumer's last state is online, on its current request, from a frame for it that the
+    provider published after the burst mark: above every revision published before it, and no
+    higher than any revision published at all."""
     latest = {}
     for _, row in events(shell, "observation"):
         require(isinstance(row, dict) and isinstance(row.get("boot"), str),
@@ -111,7 +111,7 @@ def settled_consumers(shell: list, published: dict) -> list:
     for boot, row in sorted(latest.items()):
         packet = row.get("packet")
         require(row.get("phase") == "online" and isinstance(packet, dict)
-                and packet.get("request") == row.get("request")
+                and packet.get("consumer") == boot and packet.get("request") == row.get("request")
                 and packet.get("status") == "online" and type(packet.get("revision")) is int
                 and published["before"] < packet["revision"] <= published["total"],
                 f"consumer {boot} did not settle online on its current request with a frame"
