@@ -19,8 +19,12 @@ wake and withdrawing it while the control is hidden, which ran natively through 
 and under a Kiosk policy (`bec99ba`). P4 is done: the clock shows its view's layout mode, Floating
 or Tiled, read-only in the pill after the workspace dots, its glyph alone or nothing as the width
 budget asks, and nothing until an answer confirms a mode or while the bar's own layout hides it
-(`995d8e7` and `c15f561`). The owner passed the read-only checkpoint on 2026-11-21, and P5 is
-next. Read [plan.md](plan.md) and the accepted
+(`995d8e7` and `c15f561`). The owner passed the read-only checkpoint on 2026-11-21. P5 is done: the
+placement script's layout provider prepares a bar's action on the app its menu was opened from and
+applies a set, Tiled or Floating, through that preparation and the tiler's own start and teardown,
+each request decided once and its completion told in the bar's frames (`cb27199`, `7d70287`), and
+both ran in real sessions (`1d1536a`); #210's fix came first (`403941b`). P6 is next. Read
+[plan.md](plan.md) and the accepted
 [specification](../../SPEC-workspace-layout-control.md).
 Existing native task files are untouched.
 Paths below are relative to the repository. Proposed new files are not claimed to exist.
@@ -350,18 +354,76 @@ Dependencies: P1, P4 and the read-only state checkpoint above. Likely files: `pl
 P1 provider component/helper, `kwin-tests/offscreen/tiling-harness.qml`,
 `kwin-tests/offscreen/tiling_lifecycle_test.py`, `docs/parts/kwin.md` (five).
 
-- [ ] Prepare/validate the intended application and view without selecting a panel or arbitrary
+- [x] Prepare/validate the intended application and view without selecting a panel or arbitrary
       window; invalidate after an ordinary app focus change, departure, close or lost view.
-- [ ] Make desired-mode requests idempotent, serialize competing mutations and distinguish
+      The provider prepares a bar's action in its one slot, for the bar's view and the app a shell
+      applet popup was opened from, straight or from the shell's dock or desktop surface on that
+      output while the app was remembered, as it follows KWin's activations (`cb27199`). A window
+      counts as the shell's only with the PID the bus gives for the shell's connection, as an applet
+      popup, dock or desktop window that is not a normal window, so no panel and no other window is
+      taken; with no eligible app the prepare is done with no target, and a set Tiled through it is
+      refused `no-target` unless its view is already tiled, which re-selecting leaves as it is. A
+      later focus change or the popup's close, the target leaving the view, turning into no eligible
+      app as KWin notifies it, or closing, the view's change and a new shell connection end the
+      preparation, and its holder is told so at a newer revision; a change KWin does not notify, as
+      of moveable or resizeable, is found by the slot's next check, at the latest when the set is
+      handled ([kwin.md](../../docs/parts/kwin.md#the-layout-providers-state)). In real sessions the
+      clock's calendar is such a popup, opened with the pointer or the keyboard, and a prepare from
+      it took the app it was opened from, never the bar (`1d1536a`; p5/slice3-proof).
+- [x] Make desired-mode requests idempotent, serialize competing mutations and distinguish
       pending, refused, busy and unconfirmed outcomes without blind mutation retries.
-- [ ] Preserve cross-view teardown-on-refusal semantics, manual precedence, float restoration
+      A set acts only through the preparation its handle names, and each request is decided once:
+      read again it gets its recorded completion and nothing is done again, another payload is
+      refused `conflicting-request` and an older number `stale-request` (`cb27199`, `7d70287`). One
+      mutation runs at a time, the shortcut's included: a set while a start is retried is refused
+      `busy`, and a press of the shortcut cancels a set's retry, which is refused `cancelled`. A
+      request's frames carry no completion while its start is retried, pending, then `done` or
+      `refused` with the reason; with no answer by the bar's deadline the bar holds the mode
+      unconfirmed, which is the bar's to show (P2's layout state, P6's menu). Nothing is retried
+      blindly: the provider never repeats a set, and the tiler tries a start again only after an
+      admission refused as busy or ineligible, at most eight times 50 ms apart, a set's tries each
+      first checking the target, the captured view's existence, the lifetime and the shell
+      (`7d70287`). In real sessions a set read again was not applied again (p5/slice3-proof).
+- [x] Preserve cross-view teardown-on-refusal semantics, manual precedence, float restoration
       and placement memory; Floating on another view leaves its active session alone.
-- [ ] Prove mutating completion acknowledgements and timeouts, which testing.md listed as G0
+      The tiler applies a set through the shortcut's own start and teardown: Tiled on another view
+      ends the session there first, and a refused start leaves it ended, reported, not rolled back;
+      Floating ends the session only on the prepared view, so Floating on another view leaves that
+      session alone, a case of the lifecycle suite's set run; the tiler's manual precedence and
+      placement memory are unchanged, and the suite's runs for them pass unchanged (`7d70287`). In
+      real sessions the floats came back after a transfer between two outputs; after one away from a
+      desktop not shown, the old stack window kept the stack cell's size, as after the shortcut's
+      own transfer, a behaviour older than P5 reported as #212 (p5/slice3-proof).
+- [x] Prove mutating completion acknowledgements and timeouts, which testing.md listed as G0
       work ([g0-decisions.md](g0-decisions.md)); P0 shows only that a completion survives newer
       state frames.
+      A set's completion is decided at once or when its retried start ends, and every later frame
+      for the request carries it; one decided after its read moves the revision, so it is told in a
+      frame of its own even when nothing else changed, and one a failed publication did not deliver
+      goes out with the next (`7d70287`; planted mutants of the record and of the revision step
+      caught). The time limit P5 proves is the tiler's: a retried start ends within its eight tries,
+      refused `admission-refused` at the last (the lifecycle suite's set run). A call the shell
+      never answers fails at KWin's documented bus timeout, 25 s, which no P5 case drives, and the
+      bar's own deadline, past which its mode is unconfirmed, is P2's. The retirement ends the
+      lifetime before any later outcome, so none follows the offline frames. In real sessions each
+      set's completion came in the bar's frames, every set decided at once, so the retry window ran
+      offline only (p5/slice3-proof).
 
 Verify: fail-first lifecycle cases and relevant pure-rule tests; mutate key guards to prove the
 new cases fail without them. Re-run the focused KWin build and tiling/placement/lifecycle suites.
+Done on 2026-11-22: #210's fix came first, with the checkpoint (`53bbb3d`, `403941b`;
+p5/start-proof). Slice 1's lifecycle cases failed first against their parent with 9 FAIL lines (its
+node cases pin rules the parent already had) and slice 2's with 74; the planted mutants expected
+caught were all caught, 104 of 112 and 146 of 156, the others shown equivalent with their reasons;
+`tools/build.sh kwin`, the node suites, the lifecycle suite and five stability runs passed on each
+committed tree (p5/slice1-proof, p5/slice2-proof), and the kwin build and the lifecycle suite on
+slice 3's, whose one code change is a comment. Beyond the five files, #210's fix changed
+`docs/DEFERRED.md`, slice 1 `kwin-tests/tiling.test.js` for the rules the provider leans on, and
+slice 2 the test stand-in `kwin-tests/offscreen/stubs/org/kde/kwin/Workspace.qml`, for the
+activities a retry checks. Slice 3 ran both slices in real sessions on the owner-approved image and
+corrected the part page's account of a retry, with the provider's matching comment (`1d1536a`;
+p5/slice3-proof). Not run natively: a retried start, which no set there needed; the real menu (P6);
+two controls on one output and `busy` between bars (P7); hardware timing and XWayland apps.
 
 ## P6: Enable explicit user actions
 
