@@ -615,7 +615,7 @@ expect(left_bound and len(left_log["requests"]) == 1 and not [w for w in warning
 # ends the wait, a check that fails leaves the request to it, and a request keeps the deadline it was
 # made with. Each wait is timed from just before the step that asks to the outcome's own signal,
 # with 150 ms of slack for the timer's resolution, as a loaded machine only makes a timer later.
-DEADLINE = 600
+DEADLINE = 1000
 asked_at, outcomes = [], []
 created_at = time.monotonic()
 waiting, waiting_log = create(outputName="Virtual-0", deadlineMs=DEADLINE)
