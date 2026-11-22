@@ -1119,8 +1119,9 @@ Offline (laptop):
    (`scenario: "late-memory"`) has the writer answer the memory's first read with nothing
    (incapable until the read retry finds the memory) and one (`scenario: "provider-rules"`)
    checks the provider's own rules without the script. Its identity name is checked against a
-   stand-in `org.kde.plasma.workspace.dbus` (`tests/offscreen/stubs/`, found before the system
-   module, so nothing reaches a bus): every run asks for it once, without queueing; the
+   stand-in `org.kde.plasma.workspace.dbus` (`tests/offscreen/lifecycle-stubs/`, on this suite's
+   import path alone and found before the system module, so nothing reaches a bus; any other
+   offscreen suite gets the system module): every run asks for it once, without queueing; the
    default run grants it and sees the owner read only then; the unload runs see the
    retirement release it once; and the provider-rules run refuses it, answers a bus error, an
    owner that cannot be read or is no unique name, and retires before the answer and before

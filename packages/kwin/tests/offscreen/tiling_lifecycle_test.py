@@ -103,6 +103,10 @@ qInstallMessageHandler(keep_message)
 app = QGuiApplication(sys.argv[:1])
 engine = QQmlEngine()
 engine.addImportPath(os.path.join(here, "stubs"))
+# The stand-in bus module is this suite's alone: in the shared stubs/ it would hide the system
+# org.kde.plasma.workspace.dbus from the other offscreen suites: the snap script and switcher they
+# load use more of it (their copies of FusionTablet) than the stand-in has.
+engine.addImportPath(os.path.join(here, "lifecycle-stubs"))
 # Keep every context QObject referenced for the engine's lifetime: a temporary would be
 # garbage-collected by Python while QML still resolves through it (a dangling pointer).
 i18n = I18n()
