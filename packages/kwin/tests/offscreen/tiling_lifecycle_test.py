@@ -317,9 +317,11 @@ retire(late_memory, "late-memory")
 
 # The read side of the layout provider's pipeline on the real script: the wake shortcut, one read
 # once the identity is ready, the wakes during a read coalesced, the shell side's bounds and the
-# provider's own checks of every row, each failure (the harness checks). A failed read and each
-# of the seven malformed answers are said once each; the two reads that came back say what they
-# found and how long they took; nothing throws.
+# provider's own checks of every row, each failure, and the limit on an answer's length (the
+# harness checks). A failed read and each of the eight malformed answers - one of them a
+# well-formed answer one character over the limit - are said once each; the three reads that came
+# back - one of them exactly the limit long - say what they found and how long they took; nothing
+# throws.
 before = len(messages)
 read_pipeline = run_harness({"scenario": "read-pipeline"})
 for problem in list(read_pipeline.property("problems").toVariant() or []):
@@ -327,11 +329,11 @@ for problem in list(read_pipeline.property("problems").toVariant() or []):
 journal = messages[before:]
 check(sum("the bars' requests could not be read" in message for message in journal) == 1,
       "read-pipeline: a failed read is said once")
-check(sum("the bars' requests came back malformed" in message for message in journal) == 7,
+check(sum("the bars' requests came back malformed" in message for message in journal) == 8,
       "read-pipeline: each malformed answer is said once")
 reads = call_lines(journal, READ_LINE, "layout provider: read ")
-check(None not in reads and [read[:2] for read in reads] == [(2, 5)] * 2,
-      "read-pipeline: each of the two reads that came back says what it found and how long it took, got %s" % reads)
+check(None not in reads and [read[:2] for read in reads] == [(2, 5)] * 3,
+      "read-pipeline: each of the three reads that came back says what it found and how long it took, got %s" % reads)
 thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
 check(not thrown, "read-pipeline: nothing threw, got %s" % thrown)
 retire(read_pipeline, "read-pipeline")
@@ -397,8 +399,9 @@ retire(unconfirmed_run, "unconfirmed")
 # each followed by the read that sends the frame again, one the shell wrote none of, which the
 # next read sends again too, and the frame told at last; then a session's start whose publication
 # failed, and one answered malformed, each followed by the session's end, which goes out though
-# its frame says what the shell confirmed last (answered a step after it went out, not at once).
-# Nothing throws.
+# its frame says what the shell confirmed last (answered a step after it went out, not at once);
+# then a publication whose answer is longer than the limit, malformed, and the read that sends
+# its frame again. Nothing throws.
 before = len(messages)
 time_limit = run_harness({"scenario": "time-limit"})
 for problem in list(time_limit.property("problems").toVariant() or []):
@@ -429,7 +432,8 @@ wanted = (["read", "published", "read"]
           + ["read", "malformed read"]
           + ["malformed state", "read"] * 5
           + ["published", "read", "published", "read"]
-          + ["published", "malformed state", "published"])
+          + ["published", "malformed state", "published"]
+          + ["malformed state", "read", "published"])
 check(kinds == wanted, "time-limit: the calls' lines and the limit's, in order, got %s" % events)
 if kinds == wanted:
     def at_once(event):
@@ -446,7 +450,7 @@ if kinds == wanted:
     def outside(event, over):
         return event[1] >= 70 and event[2] is None and over[1:] == ("call", event[1])
 
-    for index in (0, 1, 2, 16, 18, 20, 22, 24, 25, 26, 27, 28):
+    for index in (0, 1, 2, 16, 18, 20, 22, 24, 25, 26, 27, 28, 33, 34):
         check(at_once(events[index]), "time-limit: a call answered at once, from its own call, has its length from"
               " the script's start, under 50 ms (%s)" % (events[index],))
     check(held(events[3], events[4]) and held(events[5], events[6]),

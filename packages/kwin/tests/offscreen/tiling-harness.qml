@@ -878,8 +878,9 @@ Item {
 
     // The layout provider's reader script as plasmashell runs it: `panels()` and `print()` are
     // the shell's, each panel lists its widgets by applet id, and a widget reads its saved
-    // config. Fakes stand in for them; the script's printed answer, parsed.
-    function runReaderScript(script, panelWidgets) {
+    // config. Fakes stand in for them; the script's printed answer, parsed, or as printed with
+    // `raw`.
+    function runReaderScript(script, panelWidgets, raw) {
         let printed = null;
         const panelsFake = () => panelWidgets.map(widgets => ({
             widgets: type => widgets.filter(w => w.type === type).map(w => ({
@@ -891,7 +892,7 @@ Item {
             }))
         }));
         (new Function("panels", "print", script))(panelsFake, text => { printed = text; });
-        return printed === null ? null : JSON.parse(printed);
+        return printed === null ? null : raw ? printed : JSON.parse(printed);
     }
 
     function query(consumer, request, extra) {
@@ -1567,12 +1568,12 @@ Item {
     // answer and from its script's start; a call over the limit is said as such, once, with the
     // length it was judged by. A call that only waited while the shell was busy is not over it,
     // nor a read whose owner lookup was slow; a start the call does not contain leaves the length
-    // from call to answer to decide. A publication's answer without its start, or with a count
-    // it cannot have, confirms nothing and lets the pipeline go on, so the frame goes out again,
-    // and so does one with fewer frames written than it carried. A failed or malformed
-    // publication may have been written all the same, so what it carried goes out again even
-    // when the state has come back to what was last confirmed. The driver checks the lines, the
-    // harness what moved.
+    // from call to answer to decide. A publication's answer without its start, with a count it
+    // cannot have or longer than any the writer prints, confirms nothing and lets the pipeline go
+    // on, so the frame goes out again, and so does one with fewer frames written than it carried.
+    // A failed or malformed publication may have been written all the same, so what it carried
+    // goes out again even when the state has come back to what was last confirmed. The driver
+    // checks the lines, the harness what moved.
     function runTimeLimit() {
         if (setup() === "") {
             done = true;
@@ -1743,6 +1744,20 @@ Item {
                          + " (writes " + w.calls + ", tiled " + tiled(14) + ")");
                 }
                 w.finished([writeAnswer(1)]);
+                tileShortcut.activated();
+            } },
+            // An answer longer than any the writer prints (answerLimit) is malformed before it is
+            // parsed, though it is a count with its start under the padding JSON allows: it
+            // confirms nothing, and the next read sends the frame again.
+            { name: "an answer over the limit", until: () => w.calls === 16, run: function () {
+                w.finished([writeAnswer(1) + " ".repeat(262144)]);
+                read();
+                p.reader.finished([readAnswer(rows)]);
+                if (w.calls !== 17 || tiled(16) !== true) {
+                    fail("time-limit: an answer over the limit confirms nothing, and the next read sends the frame again"
+                         + " (writes " + w.calls + ", tiled " + tiled(16) + ")");
+                }
+                w.finished([writeAnswer(1)]);
                 p.retire();
             } }
         ];
@@ -1754,7 +1769,8 @@ Item {
     // shortcut with no key; one read once the identity is ready and for each later wake, the
     // wakes during a read coalesced into one later read; the shell's owner looked up first and
     // the requests read from it; the shell side bounded and copying only what P1 needs, the
-    // provider checking every row again with its version, intent and output.
+    // provider checking every row again with its version, intent and output; an answer longer
+    // than any the scripts print malformed before it is parsed, the reader's longest within it.
     function runReadPipeline() {
         if (setup() === "") {
             done = true;
@@ -1887,6 +1903,22 @@ Item {
                 || setRow.mode !== "tiled" || setRow.handle !== "e1:1:1") {
             fail("read-pipeline: a set's row carries its mode and handle, nothing else (got " + JSON.stringify(setRow) + ")");
         }
+        // The longest answer a script call may return (answerLimit), sized from the reader's own:
+        // 16 requests of 2048 characters, each a list of 1e20s under a field the reader copies as
+        // it is (`mode`), which JSON.stringify prints as 21 digits each - far longer than the
+        // requests it was read from, and still within the limit.
+        const limit = 262144;
+        const opener = "{\"consumer\":\"c\",\"request\":1,\"mode\":[";
+        const tens = Array.from({ length: 402 }, () => "1e20").join(",");
+        const longest = opener + tens + "]" + " ".repeat(2048 - opener.length - tens.length - 2) + "}";
+        const widest = runReaderScript(script, [Array.from({ length: 16 }, (_, i) => ({ type: clock, id: 201 + i,
+                                                                                         text: longest }))], true);
+        if (p.answerLimit !== limit || longest.length !== 2048 || widest === null || JSON.parse(widest).rows.length !== 16
+                || widest.length <= 16 * 2048 || widest.length > p.answerLimit) {
+            fail("read-pipeline: the reader's longest answer, longer than its requests, fits the limit of " + limit
+                 + " on an answer (got " + (widest ? widest.length : null) + " for requests of " + longest.length
+                 + ", limit " + p.answerLimit + ")");
+        }
         // The answer: the provider checks every row again; a query of version 1 for a named
         // output is a request, anything else with a well-formed identity a refusal, kept with its
         // reason; a row with no well-formed identity is dropped.
@@ -1974,20 +2006,34 @@ Item {
                 }
                 p.shellLookup.finished([":1.9"]);
                 // A failed or malformed answer ends the read and keeps the lists: not JSON, the rows
-                // without the script's start, a start that is no number, more than 16 rows, and an
-                // inventory (P5) with no rows or with rows that are no list.
+                // without the script's start, a start that is no number, more than 16 rows, an
+                // inventory (P5) with no rows or with rows that are no list, and a well-formed
+                // answer with a new request one character over the limit.
                 p.reader.failed();
                 if (p.reading || kept() !== before) {
                     fail("read-pipeline: a failed read ends the read and keeps the requests and refusals");
                 }
+                // An answer of exactly the limit is read as any other: the last answer, padded with
+                // the whitespace JSON allows.
+                const padTo = (text, length) => text + " ".repeat(length - text.length);
+                const listed = p.requests;
+                p.wake.activated();
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([padTo(answer(), limit)]);
+                if (p.reading || kept() !== before || p.requests === listed) {
+                    fail("read-pipeline: an answer of exactly the limit is read as any other");
+                }
                 const inventory = { widgets: [1], empty: [], truncated: false };
+                const newRequest = { id: 19, consumer: "c19", request: 19, version: 1, intent: "query",
+                                     outputName: "Virtual-1" };
                 for (const malformed of ["{not json", JSON.stringify([]), JSON.stringify({ rows: [] }),
                                          JSON.stringify({ start: "now", rows: [] }),
                                          readAnswer(Array.from({ length: 17 }, (_, i) => ({
                                              id: i + 1, consumer: "c", request: i + 1, version: 1, intent: "query",
                                              outputName: "Virtual-1" }))),
                                          JSON.stringify(Object.assign({ start: Date.now() }, inventory)),
-                                         JSON.stringify(Object.assign({ start: Date.now(), rows: "x" }, inventory))]) {
+                                         JSON.stringify(Object.assign({ start: Date.now(), rows: "x" }, inventory)),
+                                         padTo(readAnswer(answerRows.concat([newRequest])), limit + 1)]) {
                     p.wake.activated();
                     p.shellLookup.finished([":1.9"]);
                     p.reader.finished([malformed]);

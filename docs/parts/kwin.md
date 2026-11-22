@@ -1137,11 +1137,15 @@ Offline (laptop):
    intact, and an inventory of the clock's widgets with the empty fields, incomplete past 16 - and
    the provider's own checks keep the version-1 queries and refuse the rest with their reasons, a
    prepare without its frozen context as `malformed`.
-   An owner that is no unique connection, a failed lookup, a failed read and seven malformed
+   An owner that is no unique connection, a failed lookup, a failed read and eight malformed
    answers - not JSON, a bare list of rows, rows without the script's start or with a start that
-   is no number, 17 rows, an inventory with no rows or with rows that are no list - each end the
-   read and keep the requests and refusals; after a retirement nothing is read, they stay, and the
-   shell's late answers reach neither them nor the journal. The driver counts the journal's lines.
+   is no number, 17 rows, an inventory with no rows or with rows that are no list, and a
+   well-formed answer with a new request one character longer than `answerLimit` - each end the
+   read and keep the requests and refusals, while an answer exactly that long is read as any
+   other, and the reader's longest answer found (16 requests of 2048 characters, each a list of
+   `1e20`s, which it prints as 21 digits each: about 142,400 characters) fits the limit; after a
+   retirement nothing is read, they stay, and the shell's late answers reach neither them nor the
+   journal. The driver counts the journal's lines.
    A run (`scenario: "publication"`) drives the publication side on the real script, with a
    second output on the session's desktop and activity. The first read's five rows - two
    requests on the session's output, one on the second output, one for an output KWin does not
@@ -1254,8 +1258,9 @@ Offline (laptop):
    nothing, so the next read sends the frame again - and one the shell wrote none of (0 written),
    sent again too, until one is confirmed, after which a read sends nothing; then a session
    started and ended twice, its start's publication failed once and answered malformed once:
-   each end goes out, though its frame says what the shell confirmed last. The driver reads the
-   lines and their order from the journal. Every run's
+   each end goes out, though its frame says what the shell confirmed last; then an answer longer
+   than `answerLimit` - a count and its start, padded - malformed too, after which the next read
+   sends the frame again. The driver reads the lines and their order from the journal. Every run's
    setup returns the engine's one stand-in Workspace to its declared outputs and desktops,
    whatever an earlier run left (a second display, a desktop of an output's own).
 
@@ -2229,9 +2234,12 @@ and the answers it publishes to them.
   owner, or one that is no unique connection - ends quietly; one the shell fails or answers
   malformed (the start missing, or an inventory that is no list of at most 16 widgets naming only
   those as empty, or rows that name a widget twice, one it does not list or one it lists as empty,
-  among them) is said once; either keeps the last requests and refusals. A read that comes back says
-  what it found and how long it took (below). A retirement ends a read in flight: the answers that
-  come after it reach nothing.
+  among them) is said once; either keeps the last requests and refusals. An answer longer than
+  any the scripts print (`answerLimit`, 262144 UTF-16 code units) is malformed too, and is not
+  parsed at all: the reader's longest is under 200,000 - at most 16 rows copied from requests of
+  at most 2048 characters, which JSON.stringify prints again at most six times as long - and the
+  writer's is two numbers. A read that comes back says what it found and how long it took
+  (below). A retirement ends a read in flight: the answers that come after it reach nothing.
 - The answers go back the same way. Each request and refusal of the last read gets a frame in
   its clock's `layoutResponse` field (General group), and a publication writes all its frames
   with one `evaluateScript` call on the connection the requests came from. A frame says
@@ -2256,13 +2264,13 @@ and the answers it publishes to them.
   comes back is said once, with its frames, how many the shell wrote and how long it took
   (below), and confirms its frames only with a count of all it carried: fewer - a widget not
   found, and the answer does not say which - confirms none. Neither does a failed one, said
-  once, nor one answered malformed - without the start, or with a count it cannot have - said
-  once too: the shell may have written their frames all the same (a script that failed after
-  its writes, a call answered past the bus's timeout), so each widget a publication did not
-  confirm is written again with the next one, whatever its frame says then, and a state that
-  came back to what was last confirmed is told too. The retirement moves the revision, sends
-  the offline frame (`status` offline, nothing capable or tiled) to every request and refusal
-  it kept, then releases the name; nothing that answers after it reaches anything.
+  once, nor one answered malformed - without the start, with a count it cannot have, or longer
+  than `answerLimit` - said once too: the shell may have written their frames all the same (a
+  script that failed after its writes, a call answered past the bus's timeout), so each widget a
+  publication did not confirm is written again with the next one, whatever its frame says then,
+  and a state that came back to what was last confirmed is told too. The retirement moves the
+  revision, sends the offline frame (`status` offline, nothing capable or tiled) to every request
+  and refusal it kept, then releases the name; nothing that answers after it reaches anything.
 - Each request's view is resolved when the request is read - a widget's first request, or one
   that names another output; a request renewed for the same output keeps its view - and kept
   (`views`, only for the widgets read): a frame carries the kept view, never a newer one than

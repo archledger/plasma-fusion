@@ -131,6 +131,16 @@ QtObject {
         + "}catch(e){} }); });"
         + "print(JSON.stringify({start:start,rows:rows,widgets:widgets,empty:empty,"
         + "truncated:truncated}));"
+    // The longest answer a script call can return, in UTF-16 code units as `text.length` counts
+    // them: anything longer is no answer the scripts print, so it is malformed before JSON.parse
+    // spends KWin's time on it (parsed()). The reader's answer is the longest: at most 16 rows,
+    // each copied from a request of at most 2048 characters - every field as it is but the
+    // consumer and the request number - and printed again by JSON.stringify at most six times as
+    // long (1e20 prints as 21 digits; no character as more than six), with its widget's id, beside
+    // at most 16 ids, the start and the flag: under 200000 characters, and about 142600 for the
+    // longest found (16 requests of 1e20s, ten-digit widget ids). The writer's answer is two
+    // numbers.
+    readonly property int answerLimit: 262144
     // What the last read found: the queries to answer, and the rows refused before any action,
     // each with its widget, consumer, request and reason. A failed read keeps them as they were.
     property var requests: []
@@ -1170,8 +1180,12 @@ QtObject {
         continuePipeline();
     }
 
-    // A script's answer as the object it printed, or null for anything else.
+    // A script's answer as the object it printed, or null for anything else: one longer than any
+    // answer the scripts print (answerLimit) is not parsed at all.
     function parsed(text: string): var {
+        if (text.length > answerLimit) {
+            return null;
+        }
         let value = null;
         try {
             value = JSON.parse(text);
