@@ -269,9 +269,9 @@ QtObject {
     readonly property string responseField: "layoutResponse"
     // The connection the last read came from: its answers go there.
     property string replyOwner: ""
-    // What each widget was last told there, without the revision: a widget whose frame would say
-    // the same is not written again (decision 1: publish only for a new request or a changed
-    // state). The connection it was told on; another is told everything.
+    // What each widget was last told there, as the shell confirmed it, without the revision: a
+    // widget whose frame would say the same is not written again (decision 1: publish only for a
+    // new request or a changed state). The connection it was told on; another is told everything.
     property var sent: ({})
     property string sentOwner: ""
     // Each request's view as the state tells it, by widget: the output it names and that output's
@@ -1109,10 +1109,11 @@ QtObject {
             + "print(JSON.stringify({start:start,written:written}));";
     }
 
-    // A publication came back: what it carried is what those widgets were told. It is said with
-    // how many the shell wrote - fewer, a widget had gone - and its length (report()). An answer
-    // without the script's start, or with a count it cannot have, confirms nothing: it changes
-    // no record, so what it carried goes out again with the next publication.
+    // A publication came back: what it carried is what those widgets were told once the shell
+    // says it wrote all of it. It is said with how many the shell wrote and its length
+    // (report()). Fewer - a widget was not found, and the answer does not say which - or an
+    // answer without the script's start or with a count it cannot have confirms none of it,
+    // though the shell may have written its frames: what it carried is unconfirmed.
     function publicationFinished(text: string): void {
         if (!online || !publishing) {
             return;
@@ -1124,15 +1125,22 @@ QtObject {
         if (answer === null || !Number.isInteger(answer.written) || answer.written < 0
                 || answer.written > done.messages.length || !Number.isFinite(answer.start)) {
             console.warn("plasmafusion-placement: layout provider: the bars' layout state came back malformed");
+            unconfirmed(done.messages);
             continuePipeline();
             return;
         }
         const length = callLength(done.at, answer.start);
-        const told = Object.assign({}, sent);
-        for (const message of done.messages) {
-            told[message.id] = message.said;
+        // Fewer written than carried: the answer does not say which widget was missed, so none of
+        // the frames counts as told.
+        if (answer.written < done.messages.length) {
+            unconfirmed(done.messages);
+        } else {
+            const told = Object.assign({}, sent);
+            for (const message of done.messages) {
+                told[message.id] = message.said;
+            }
+            sent = told;
         }
-        sent = told;
         report("publication", "published " + done.messages.length + " frame(s), " + answer.written + " written",
                length);
         continuePipeline();
@@ -1176,16 +1184,31 @@ QtObject {
         }
     }
 
-    // A failed publication is said once and changes no record: what it carried goes out again
-    // with the next publication.
+    // A failed publication is said once, and what it carried is unconfirmed: a failed call does
+    // not show that the shell wrote nothing.
     function publicationFailed(): void {
         if (!online || !publishing) {
             return;
         }
+        const done = pending;
         pending = null;
         publishing = false;
         console.warn("plasmafusion-placement: layout provider: the bars' layout state could not be published");
+        unconfirmed(done.messages);
         continuePipeline();
+    }
+
+    // What a publication carried that the shell did not confirm is no longer taken as told, so
+    // those widgets' frames go out with the next publication whatever they say then; the other
+    // widgets' records stay. The shell may have written them all the same - a script that failed
+    // after its writes, a call it ran or answered past the bus's timeout - and a state that came
+    // back to what was last confirmed would otherwise not be told again.
+    function unconfirmed(messages: var): void {
+        const kept = Object.assign({}, sent);
+        for (const message of messages) {
+            delete kept[message.id];
+        }
+        sent = kept;
     }
 
     // The script is going: offline, with no capability or session left to report, the bars

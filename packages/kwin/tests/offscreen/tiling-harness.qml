@@ -541,6 +541,15 @@ Item {
             }
             return;
         }
+        if (scenario === "unconfirmed") {
+            try {
+                runUnconfirmed();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
         if (scenario === "read-pipeline") {
             try {
                 runReadPipeline();
@@ -955,9 +964,10 @@ Item {
     // script call on the connection the requests came from; a frame says whether a session tiles
     // the bar's own view - its output, that output's current desktop, the current activity - and
     // no other; a widget is written again only when what its frame says changes - a new request,
-    // a state change, its view, a new shell, or its return to the read - and never during a read
-    // or another publication, the wakes and state changes meanwhile waiting and coalescing; a
-    // failed publication changes no record and lets the pipeline go on; the retirement sends the
+    // a state change, its view, a new shell, or its return to the read - or when the shell did not
+    // confirm its last frame, and never during a read or another publication, the wakes and state
+    // changes meanwhile waiting and coalescing; a publication the shell wrote short, or a failed
+    // one, confirms none of its frames and lets the pipeline go on; the retirement sends the
     // offline frame to every request and refusal it kept, then releases the name.
     function runPublication() {
         if (setup() === "") {
@@ -1083,16 +1093,23 @@ Item {
                 if (w.calls !== 1) {
                     fail("publication: a state change waits for the outstanding publication (writes " + w.calls + ")");
                 }
-                // The shell says it wrote four of the five: the count is said with the publication.
+                // The shell says it wrote four of the five: the count is said with the publication,
+                // and as the answer does not say which widget was not found, none of the five is
+                // confirmed.
                 w.finished([writeAnswer(4)]);
-                // Then it goes out, to the widgets it changes and only those: the bars on the
-                // session's view, not the one on the other output.
+                // Then the session goes out, once the publication answered, to all five: the bars
+                // on the session's view tiled, the one on the other output not.
                 const got = framesOf(p, 1, all);
-                if (w.calls !== 2 || !sessionTold(got)
+                if (w.calls !== 2 || ids(got) !== JSON.stringify(["1", "12", "21", "3", "5"])
                         || canonical(got[1]) !== canonical(frameWanted(p, rows[0], { capable: true, view: view, tiled: true }))
-                        || canonical(got[3]) !== canonical(frameWanted(p, rows[1], { capable: true, view: view, tiled: true }))) {
-                    fail("publication: a session on the bars' view is told to the widgets it changes, once the publication"
-                         + " answered, and to no bar on another output (writes " + w.calls + ", got " + canonical(got) + ")");
+                        || canonical(got[3]) !== canonical(frameWanted(p, rows[1], { capable: true, view: view, tiled: true }))
+                        || canonical(got[5]) !== canonical(frameWanted(p, rows[2], { capable: true, view: null, tiled: false }))
+                        || canonical(got[12]) !== canonical(frameWanted(p, rows[3], { refused: "version" }))
+                        || canonical(got[21]) !== canonical(frameWanted(p, rows[4], { capable: true, view: secondView,
+                                                                                     tiled: false }))) {
+                    fail("publication: a publication the shell wrote four of five of confirms none, so the session goes to"
+                         + " all five once it answered, tiled only on the session's view (writes " + w.calls + ", got "
+                         + canonical(got) + ")");
                 }
                 since = Date.now();
             } },
@@ -1100,7 +1117,7 @@ Item {
                 if (p.shellLookup.calls !== 1) {
                     fail("publication: the wake waits while a publication is outstanding (lookups " + p.shellLookup.calls + ")");
                 }
-                w.finished([writeAnswer(2)]);
+                w.finished([writeAnswer(5)]);
             } },
             { name: "the wake's read", until: () => p.shellLookup.calls === 2, run: function () {
                 // The same requests and the same state: nothing is written again.
@@ -1163,8 +1180,9 @@ Item {
                     fail("publication: a new request is answered alone, with the state as it stands (writes " + w.calls
                          + ", got " + canonical(got) + ")");
                 }
-                // A wake during it, then the publication fails: the failure changes no record and the
-                // pipeline goes on - the wake's read follows, and writes the frame again.
+                // A wake during it, then the publication fails: what it carried is no longer taken
+                // as told, and the pipeline goes on - the wake's read follows, and writes the frame
+                // again.
                 p.wake.activated();
                 w.failed();
                 if (p.publishing) {
@@ -1478,14 +1496,79 @@ Item {
         stepper.start();
     }
 
+    // A publication the shell did not confirm, carrying two bars, on the real script: both bars
+    // are on the session's view, the session's start goes out to both and fails, and the
+    // session's end - which brings each bar's frame back to what the shell confirmed last - goes
+    // out to both, as the failed publication confirmed neither (unconfirmed() forgets every
+    // widget a publication carried, not only one). The driver checks the lines.
+    function runUnconfirmed() {
+        if (setup() === "") {
+            done = true;
+            return;
+        }
+        const p = provider;
+        const w = p.writer;
+        DBusStubs.SessionBus.answer(expectIdentityRequest("unconfirmed", p), [{ value: 1 }]);
+        p.identityLookup.finished([":1.42"]);
+        p.shellLookup.finished([":1.9"]);
+        const rows = [{ id: 1, consumer: "c1", request: 1, version: 1, intent: "query", outputName: "Virtual-1" },
+                      { id: 3, consumer: "c3", request: 3, version: 1, intent: "query", outputName: "Virtual-1" }];
+        // The frames the writer's call `index` carries, by widget, or null unless it carries both.
+        const both = index => {
+            const got = framesOf(p, index, [1, 3]);
+            return JSON.stringify(Object.keys(got).sort()) === JSON.stringify(["1", "3"]) ? got : null;
+        };
+        p.reader.finished([readAnswer(rows)]);
+        const first = both(0);
+        if (w.calls !== 1 || !first || first[1].tiled !== false || first[3].tiled !== false) {
+            fail("unconfirmed: the read's answers go out to both bars, untiled (writes " + w.calls + ")");
+            done = true;
+            return;
+        }
+        // Both frames confirmed; a session starts, and its publication goes out at the end of
+        // the turn.
+        w.finished([writeAnswer(2)]);
+        tileShortcut.activated();
+        let since = Date.now();
+        steps = [
+            { name: "the session's start, to both bars", until: () => w.calls === 2, run: function () {
+                const got = both(1);
+                if (!got || got[1].tiled !== true || got[3].tiled !== true) {
+                    fail("unconfirmed: the session's start goes out to both bars (got " + canonical(framesOf(p, 1, [1, 3]))
+                         + ")");
+                }
+                // The publication fails, and the session ends at once.
+                w.failed();
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "the session's end to both bars", until: () => w.calls === 3 || Date.now() - since >= 300,
+              run: function () {
+                const got = both(2);
+                if (w.calls !== 3 || !got || got[1].tiled !== false || got[3].tiled !== false) {
+                    fail("unconfirmed: the session's end goes out to both bars the failed publication carried, though each"
+                         + " frame says what the shell confirmed last (writes " + w.calls + ", got "
+                         + canonical(framesOf(p, 2, [1, 3])) + ")");
+                }
+                w.finished([writeAnswer(2)]);
+                p.retire();
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
+
     // Decision 1's time limit, on the real script: a shell script call keeps the shell from its
     // input until it answers, so each read and publication says how long it took from call to
     // answer and from its script's start; a call over the limit is said as such, once, with the
     // length it was judged by. A call that only waited while the shell was busy is not over it,
     // nor a read whose owner lookup was slow; a start the call does not contain leaves the length
     // from call to answer to decide. A publication's answer without its start, or with a count
-    // it cannot have, records nothing and lets the pipeline go on, so the frame goes out again.
-    // The driver checks the lines, the harness what moved.
+    // it cannot have, confirms nothing and lets the pipeline go on, so the frame goes out again,
+    // and so does one with fewer frames written than it carried. A failed or malformed
+    // publication may have been written all the same, so what it carried goes out again even
+    // when the state has come back to what was last confirmed. The driver checks the lines, the
+    // harness what moved.
     function runTimeLimit() {
         if (setup() === "") {
             done = true;
@@ -1570,7 +1653,7 @@ Item {
                 // The session ends; its publication goes out at the end of the turn.
                 tileShortcut.activated();
             } },
-            // An answer that is a bare count records nothing, and the pipeline goes on: the wake
+            // An answer that is a bare count confirms nothing, and the pipeline goes on: the wake
             // that came during it reads after it, and that read sends the frame again.
             { name: "a malformed answer with a wake during it", until: () => w.calls === 5, run: function () {
                 if (tiled(4) !== false) {
@@ -1583,7 +1666,7 @@ Item {
                 p.shellLookup.finished([":1.9"]);
                 p.reader.finished([readAnswer(rows)]);
                 // Answers that count more frames than they carried, fewer than none or something
-                // that is no number, or that leave out the start, record nothing either.
+                // that is no number, or that leave out the start, confirm nothing either.
                 const malformed = [writeAnswer(2), writeAnswer(-1), JSON.stringify({ start: Date.now(), written: "1" }),
                                    JSON.stringify({ written: 1 })];
                 for (let i = 0; i < malformed.length; ++i) {
@@ -1595,16 +1678,63 @@ Item {
                     read();
                     p.reader.finished([readAnswer(rows)]);
                 }
-                // Told at last, and recorded: the next read sends nothing.
                 if (w.calls !== 10 || tiled(9) !== false) {
                     fail("time-limit: the session's end goes out once more (writes " + w.calls + ")");
                 }
+                // The shell found none of the publication's widgets (0 written): its frame is not
+                // confirmed, and the next read sends it again.
+                w.finished([writeAnswer(0)]);
+                read();
+                p.reader.finished([readAnswer(rows)]);
+                if (w.calls !== 11 || tiled(10) !== false) {
+                    fail("time-limit: a frame the shell did not write goes out again with the next read (writes " + w.calls
+                         + ", tiled " + tiled(10) + ")");
+                }
+                // Told at last, and confirmed: the next read sends nothing.
                 w.finished([writeAnswer(1)]);
                 read();
                 p.reader.finished([readAnswer(rows)]);
-                if (w.calls !== 10 || p.publishing || p.reading) {
+                if (w.calls !== 11 || p.publishing || p.reading) {
                     fail("time-limit: a frame the shell confirmed is not sent again (writes " + w.calls + ")");
                 }
+                // A session starts; its publication goes out at the end of the turn.
+                tileShortcut.activated();
+            } },
+            // A publication the shell did not confirm - failed, or answered malformed - may have
+            // been written all the same: what it carried is no longer taken as told, so the
+            // session's end goes out though its frame says what the shell confirmed last.
+            { name: "a failed publication of a session's start", until: () => w.calls === 12, run: function () {
+                if (tiled(11) !== true) {
+                    fail("time-limit: the session's start goes out (tiled " + tiled(11) + ")");
+                }
+                w.failed();
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "the session's end after a failed publication", until: () => w.calls === 13 || Date.now() - since >= 300,
+              run: function () {
+                if (w.calls !== 13 || tiled(12) !== false) {
+                    fail("time-limit: the session's end goes out after its start's publication failed (writes " + w.calls
+                         + ", tiled " + tiled(12) + ")");
+                }
+                w.finished([writeAnswer(1)]);
+                tileShortcut.activated();
+            } },
+            { name: "a malformed answer for a session's start", until: () => w.calls === 14, run: function () {
+                if (tiled(13) !== true) {
+                    fail("time-limit: the session's start goes out again (tiled " + tiled(13) + ")");
+                }
+                w.finished(["1"]);
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "the session's end after a malformed answer", until: () => w.calls === 15 || Date.now() - since >= 300,
+              run: function () {
+                if (w.calls !== 15 || tiled(14) !== false) {
+                    fail("time-limit: the session's end goes out after its start's publication was answered malformed"
+                         + " (writes " + w.calls + ", tiled " + tiled(14) + ")");
+                }
+                w.finished([writeAnswer(1)]);
                 p.retire();
             } }
         ];
@@ -2078,10 +2208,11 @@ Item {
         const setTo = (id, consumer, request, mode, handle, extra) => ask(id, consumer, request, "set",
             Object.assign({ mode: mode, handle: handle }, extra || {}));
         // Answering a publication can start the next one at once (a completion or a view change
-        // made one due meanwhile), so they are answered until none is in flight.
+        // made one due meanwhile), so they are answered until none is in flight, each with every
+        // frame it carried written: a shorter count would confirm none of them.
         const settle = () => {
             for (let i = 0; i < 8 && p.publishing; ++i) {
-                p.writer.finished([writeAnswer(1)]);
+                p.writer.finished([writeAnswer(p.pending.messages.length)]);
             }
         };
         const framesSince = from => {
@@ -2551,10 +2682,11 @@ Item {
         const ready = (h, target, reason) => target ? { intent: "prepare", result: "done", handle: h, target: true }
             : { intent: "prepare", result: "done", handle: h, target: false, reason: reason };
         const refused = reason => ({ intent: "prepare", result: "refused", reason: reason });
-        // A publication outstanding is answered first, so that a wake reads at once.
+        // A publication outstanding is answered first, so that a wake reads at once, with every
+        // frame it carried written: a shorter count would confirm none of them.
         const settle = () => {
             if (p.publishing) {
-                p.writer.finished([writeAnswer(1)]);
+                p.writer.finished([writeAnswer(p.pending.messages.length)]);
             }
         };
         // The frames the publications since call `from` carried, by widget, the last answered.
@@ -3151,7 +3283,7 @@ Item {
                 // Under its own epoch it prepares, from the popup activated once it read the shell;
                 // retired holding the slot, it keeps nothing prepared.
                 if (later.publishing) {
-                    later.writer.finished([writeAnswer(1)]);
+                    later.writer.finished([writeAnswer(later.pending.messages.length)]);
                 }
                 focus(app);
                 focus(popup);

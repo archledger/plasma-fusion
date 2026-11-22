@@ -337,8 +337,9 @@ check(not thrown, "read-pipeline: nothing threw, got %s" % thrown)
 retire(read_pipeline, "read-pipeline")
 
 # The publication side of the pipeline on the real script: the frames, each bar's own view and its
-# changes, where and when they go, what is not written again, a failure, a new shell, the changes
-# coalesced, and the retirement's offline frame before the name's release (the harness checks).
+# changes, where and when they go, what is not written again, a short count and a failure (each
+# confirming none of its frames), a new shell, the changes coalesced, and the retirement's offline
+# frame before the name's release (the harness checks).
 # Each publication that came back says once how many frames it carried, how many the shell wrote
 # and how long it took; the failed one is said once, and so are the offline frames; the thirteen
 # reads say what they found and how long they took; nothing throws.
@@ -349,7 +350,7 @@ for problem in list(publication.property("problems").toVariant() or []):
 journal = messages[before:]
 published = call_lines(journal, PUBLISHED_LINE, "layout provider: published ")
 counts = [line[:2] for line in published if line]
-check(None not in published and counts == [(5, 4), (2, 2), (2, 2), (1, 1), (1, 1), (5, 5), (2, 2), (2, 2), (1, 1), (1, 1), (2, 2), (3, 3),
+check(None not in published and counts == [(5, 4), (5, 5), (2, 2), (1, 1), (1, 1), (5, 5), (2, 2), (2, 2), (1, 1), (1, 1), (2, 2), (3, 3),
                   (3, 3), (1, 1), (1, 1), (1, 1), (1, 1)],
       "publication: each publication that came back before the retirement says its frames and what the shell wrote"
       " once, got %s" % counts)
@@ -367,6 +368,24 @@ check(not [message for message in journal if OVER_LINE.fullmatch(message)],
       "publication: no call there is over the limit")
 retire(publication, "publication")
 
+# Two bars on the session's view, whose session's start went out in a publication that failed:
+# the session's end, which brings each bar's frame back to what the shell confirmed last, goes
+# out to both (the harness checks). The two publications that came back say their two frames
+# each, the failed one is said once, and nothing throws.
+before = len(messages)
+unconfirmed_run = run_harness({"scenario": "unconfirmed"})
+for problem in list(unconfirmed_run.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+published = call_lines(journal, PUBLISHED_LINE, "layout provider: published ")
+check(None not in published and [line[:2] for line in published] == [(2, 2), (2, 2)],
+      "unconfirmed: each publication that came back says its frames and what the shell wrote, got %s" % published)
+check(sum("the bars' layout state could not be published" in message for message in journal) == 1,
+      "unconfirmed: the failed publication is said once")
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "unconfirmed: nothing threw, got %s" % thrown)
+retire(unconfirmed_run, "unconfirmed")
+
 # Decision 1's time limit on the real script, the harness setting each call's timing: a read and a
 # publication answered at once, and a read whose owner lookup took 70 ms, measured from its own
 # call; two whose script ran from the call's start for 70 ms - over the 50 ms limit by their
@@ -374,8 +393,11 @@ retire(publication, "publication")
 # started just before the answer - not over - and two whose start lies outside the call, so their
 # 70 ms from call to answer puts them over; a short one of those is not over; then a malformed
 # read and five malformed publications - the first with a wake during it - each said once and
-# each followed by the read that sends the frame again, and the frame told at last. Nothing
-# throws.
+# each followed by the read that sends the frame again, one the shell wrote none of, which the
+# next read sends again too, and the frame told at last; then a session's start whose publication
+# failed, and one answered malformed, each followed by the session's end, which goes out though
+# its frame says what the shell confirmed last (answered a step after it went out, not at once).
+# Nothing throws.
 before = len(messages)
 time_limit = run_harness({"scenario": "time-limit"})
 for problem in list(time_limit.property("problems").toVariant() or []):
@@ -404,7 +426,8 @@ wanted = (["read", "published", "read"]
           + ["read", "over read", "published", "over publication"]
           + ["read", "malformed read"]
           + ["malformed state", "read"] * 5
-          + ["published", "read"])
+          + ["published", "read", "published", "read"]
+          + ["published", "malformed state", "published"])
 check(kinds == wanted, "time-limit: the calls' lines and the limit's, in order, got %s" % events)
 if kinds == wanted:
     def at_once(event):
@@ -419,7 +442,7 @@ if kinds == wanted:
     def outside(event, over):
         return event[1] >= 70 and event[2] is None and over[1:] == ("call", event[1])
 
-    for index in (0, 1, 2, 16, 18, 20, 22, 24, 25, 26):
+    for index in (0, 1, 2, 16, 18, 20, 22, 24, 25, 26, 27, 28):
         check(at_once(events[index]), "time-limit: a call answered at once, from its own call, has its length from"
               " the script's start, under 50 ms (%s)" % (events[index],))
     check(held(events[3], events[4]) and held(events[5], events[6]),

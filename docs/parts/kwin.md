@@ -1148,12 +1148,14 @@ Offline (laptop):
    have, one refused - get one call on the read's connection, whose script, run against fake
    panels as the shell would, writes each clock widget's response field (General group) with
    exactly the frame wanted, a hostile consumer label intact and no raw line separator in the
-   code. A wake and a state change during that publication wait for it; the toggle then goes to
-   the two widgets on the session's view and never to the one on the second output; a read with
-   nothing new writes nothing; an untoggle during a read goes out at the read's end; a widget no
-   longer read is forgotten and, read again, told again alone; a new request is answered alone,
-   at the same revision; a failed publication lets the wake during it read and writes its frame
-   again; another shell is told everything. With the session on, each view change - as KWin
+   code. A wake and a state change during that publication wait for it; its answer that the
+   shell wrote four of the five confirms none, so the toggle then goes to all five, tiling only
+   the two on the session's view; a read with nothing new writes nothing; an untoggle during a
+   read goes out at the read's end; a widget no longer read is forgotten and, read again, told
+   again alone; a new request is answered alone, at the same revision; a failed publication
+   lets the wake during it read and writes its frame again; another shell is told everything,
+   and a toggle then goes to the two widgets on the session's view and never to the one on the
+   second output. With the session on, each view change - as KWin
    signals it, with no read - goes out at once, at a newer revision, to the bars it changes: the
    session's output on another desktop (no bar there tiled; a request after it is answered
    alone), the desktop back while a read is out (the read, back in the same turn, answers with
@@ -1173,6 +1175,9 @@ Offline (laptop):
    no frame when no request was read. The driver counts each publication's line with its frames,
    what the shell wrote and its length, the failed one's and the offline frames' once each, and
    finds no call there over the time limit.
+   A run (`scenario: "unconfirmed"`) has two bars on the session's view: the session's start goes
+   out to both and fails, and the session's end, which brings each bar's frame back to what the
+   shell confirmed last, goes out to both, as the failed publication confirmed neither.
    A run (`scenario: "prepare"`) drives P5's prepared target on a provider of its own, the shell's
    popups, panel, desktop and a dialog of its own, a foreign popup and one of PID 0 as fake
    windows with the fork's kinds and PIDs. Before the shell's PID is known a PID-0 popup is not
@@ -1235,9 +1240,12 @@ Offline (laptop):
    just before the answer, not over; two whose start lies outside the call, over with their 70 ms
    from call to answer, and a short one of those, not over; then a read answered with its rows alone
    and publications answered with a bare count (a wake during it reads after it), a count above
-   their frames, below zero or no number, and no start - each malformed, said once and recording
-   nothing, so the next read sends the frame again - until one is confirmed, after which a read
-   sends nothing. The driver reads the lines and their order from the journal. Every run's
+   their frames, below zero or no number, and no start - each malformed, said once and confirming
+   nothing, so the next read sends the frame again - and one the shell wrote none of (0 written),
+   sent again too, until one is confirmed, after which a read sends nothing; then a session
+   started and ended twice, its start's publication failed once and answered malformed once:
+   each end goes out, though its frame says what the shell confirmed last. The driver reads the
+   lines and their order from the journal. Every run's
    setup returns the engine's one stand-in Workspace to its declared outputs and desktops,
    whatever an earlier run left (a second display, a desktop of an output's own).
 
@@ -2226,19 +2234,23 @@ and the answers it publishes to them.
   engine does not take raw in a string escaped. A provider that is not capable answers all the
   same, with `capable` false: the bars learn it from the authority rather than from a deadline,
   for one frame per new request. A widget is written again only when what its frame says
-  changes - a new request, a state change, its view, another shell connection - or when it
-  comes back to the read after leaving it (the record keeps only the widgets read), so a read
-  that finds nothing new publishes nothing (decision 1). One publication at a time, never
-  during a read: a state change waits for the end of its turn and for the pipeline - the
-  changes of one turn go out once, and ones that end where they began tell nothing - and the
-  wakes during a publication make one read after it. The writer script prints how many frames
-  it wrote and when it started. A publication that comes back is said once, with its frames,
-  how many the shell wrote and how long it took (below); a failed one is said once and changes
-  no record, so its frames go out with the next publication, and so does one answered malformed
-  - without the start, or with a count it cannot have - which is said once too. The retirement
-  moves the revision, sends the offline frame (`status` offline, nothing capable or tiled) to
-  every request and refusal it kept, then releases the name; nothing that answers after it
-  reaches anything.
+  changes - a new request, a state change, its view, another shell connection - when it comes
+  back to the read after leaving it (the record keeps only the widgets read) or when the shell
+  did not confirm its last frame (below), so a read that finds nothing new publishes only those
+  (decision 1). One publication at a time, never during a read: a state change waits for the
+  end of its turn and for the pipeline - the changes of one turn go out once, and ones that end
+  where they began tell nothing - and the wakes during a publication make one read after it.
+  The writer script prints how many frames it wrote and when it started. A publication that
+  comes back is said once, with its frames, how many the shell wrote and how long it took
+  (below), and confirms its frames only with a count of all it carried: fewer - a widget not
+  found, and the answer does not say which - confirms none. Neither does a failed one, said
+  once, nor one answered malformed - without the start, or with a count it cannot have - said
+  once too: the shell may have written their frames all the same (a script that failed after
+  its writes, a call answered past the bus's timeout), so each widget a publication did not
+  confirm is written again with the next one, whatever its frame says then, and a state that
+  came back to what was last confirmed is told too. The retirement moves the revision, sends
+  the offline frame (`status` offline, nothing capable or tiled) to every request and refusal
+  it kept, then releases the name; nothing that answers after it reaches anything.
 - Each request's view is resolved when the request is read - a widget's first request, or one
   that names another output; a request renewed for the same output keeps its view - and kept
   (`views`, only for the widgets read): a frame carries the kept view, never a newer one than
@@ -2387,9 +2399,9 @@ and the answers it publishes to them.
   no publication the same desktop switches gave no stall over 40 ms; what in the shell's handling
   took that long was not isolated, as the test image has no tracer. The provider keeps the saves to
   what the schema asks - a writer that reloaded each widget itself would save once per widget, which
-  doubled a publication's median cost - publishes only for a new request or a changed state, and
-  says each call over the limit; it cannot make the shell's saves shorter, and does not time the
-  retirement's offline frames, whose answer reaches nothing.
+  doubled a publication's median cost - publishes only for a new request, a changed state or a
+  frame the shell did not confirm, and says each call over the limit; it cannot make the shell's
+  saves shorter, and does not time the retirement's offline frames, whose answer reaches nothing.
 
 ### What it rides
 
