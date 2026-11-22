@@ -41,7 +41,15 @@ for ((wake = 0; wake < pipeline_wakes; ++wake)); do
     "Plasma Fusion: Layout Probe Wake" >/dev/null &
   pipeline_pids+=("$!")
 done
-wait "${pipeline_pids[@]}"
+# wait with several PIDs returns only the last one's status, so wait for each client in turn.
+pipeline_failed=0
+for pipeline_pid in "${pipeline_pids[@]}"; do
+  wait "$pipeline_pid" || pipeline_failed=$((pipeline_failed + 1))
+done
+((pipeline_failed == 0)) || {
+  echo "FAIL: $pipeline_failed of $pipeline_wakes wake-up dispatches failed" >&2
+  return 1
+}
 pipeline_wait settled
 
 # The checker recomputes the settled record from the raw logs before it writes the receipt.

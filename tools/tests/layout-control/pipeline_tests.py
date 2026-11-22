@@ -588,8 +588,11 @@ class PipelineScenarioTests(unittest.TestCase):
     def test_burst_is_marked_parallel_and_waited_for(self):
         scenario = (HERE / "pipeline_scenario.sh").read_text()
         # Wait only for the burst's own clients: the sourced shell also owns the session.
-        order = ['pipeline_mark burst', '"$OUT/pipeline-burst.json"', "invokeShortcut", "&",
-                 'pipeline_pids+=("$!")', 'wait "${pipeline_pids[@]}"', "pipeline_wait settled",
+        # The wake command itself ends in the background operator, uncommented.
+        order = ['pipeline_mark burst', '"$OUT/pipeline-burst.json"', "invokeShortcut",
+                 '"Plasma Fusion: Layout Probe Wake" >/dev/null &\n',
+                 'pipeline_pids+=("$!")', 'for pipeline_pid in "${pipeline_pids[@]}"; do',
+                 'wait "$pipeline_pid"', "pipeline_failed + 1", "pipeline_wait settled",
                  '"$pipeline_helper" receipt "$OUT"']
         cursor = 0
         for item in order:
@@ -601,3 +604,18 @@ class PipelineScenarioTests(unittest.TestCase):
         for requirement in ("/var/tmp/pfv-layout-control-*", "PF_LAYOUT_PRIVATE_CONTAINER",
                             "/run/.containerenv"):
             self.assertIn(requirement, guard)
+
+    def test_a_failed_wake_up_dispatch_stops_the_burst(self):
+        # The burst's own text, in bash under errexit: the first client fails, the rest succeed.
+        # wait with several PIDs would report only the last one, and polling would then start.
+        scenario = (HERE / "pipeline_scenario.sh").read_text()
+        burst = scenario.split("pipeline_pids=()\n", 1)[1].split("pipeline_wait settled\n", 1)[0]
+        script = ("set -euo pipefail\n"
+                  "qdbus() { [[ $wake != 0 ]]; }\n"
+                  f"burst() {{\npipeline_pids=()\n{burst}}}\n"
+                  "pipeline_wakes=24\nburst\necho polling\n")
+        result = subprocess.run(["/usr/bin/bash", "-c", script], env={"PATH": "/usr/bin:/bin"},
+                                capture_output=True, text=True, timeout=30, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("polling", result.stdout)
+        self.assertIn("FAIL: 1 of 24 wake-up dispatches failed", result.stderr)

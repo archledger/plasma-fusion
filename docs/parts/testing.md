@@ -619,7 +619,8 @@ python3 tools/tests/layout-control/prepare_seed.py \
 
 After the first online exchange and its identity checks, `pipeline_scenario.sh` writes an
 exclusive mark and the number of wake-ups it fires, then sends 24 wake-ups concurrently and waits
-only for those clients. `pipeline.py` replays every pipeline event of the run up to the settled
+only for those clients, each in turn, stopping there with a FAIL line unless all of them
+succeeded. `pipeline.py` replays every pipeline event of the run up to the settled
 step: no read may start while a read or publication is outstanding, at most one publication may
 be outstanding, and every wake-up must be followed by a read, so coalesced wake-ups are told
 apart from lost ones. Every wake-up of the burst must arrive, at least one must meet a busy
