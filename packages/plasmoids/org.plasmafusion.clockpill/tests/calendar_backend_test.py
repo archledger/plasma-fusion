@@ -655,11 +655,16 @@ expect(timer is not None and timer.property("interval") == DEADLINE and unconfir
 deliver(waiting, frame(waiting_log, 1))
 expect(until(lambda: prop(waiting, "outcome") == "answered") and prop(waiting, "mode") == "floating",
        "layout state: a late answer to the unconfirmed request still counts")
+timely = len(outcomes)
 ask_waiting("Virtual-1")
 deliver(waiting, frame(waiting_log, 1))
+# Answered before its deadline and never unconfirmed first: an answer taken after the deadline would
+# pass the wait below as well, and the late-answer case above is that one.
 expect(until(lambda: prop(waiting, "outcome") == "answered")
-       and not until(lambda: prop(waiting, "outcome") != "answered", ms=DEADLINE + 300),
-       "layout state: an answer before the deadline keeps the bar answered past it")
+       and not until(lambda: prop(waiting, "outcome") != "answered", ms=DEADLINE + 300)
+       and [outcome for outcome, _ in outcomes[timely:]] == ["pending", "answered"],
+       "layout state: an answer before the deadline keeps the bar answered past it (%s)"
+       % [outcome for outcome, _ in outcomes[timely:]])
 ask_waiting("Virtual-2")
 QTest.qWait(DEADLINE // 2)
 replacing = ask_waiting("Virtual-0")
