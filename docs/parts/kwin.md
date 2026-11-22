@@ -1897,7 +1897,11 @@ deliberately defers.
 - **Native teardown**: the facade forwards `treeChanged`; a change with no live tree is
   session-end — the stack floats restore, the session clears. This covers master close,
   output removal, desktop removal, provider retirement, key conflict, a manual quick-tile or
-  move of the master, and output transfer — every native path at once, for free. The
+  move of the master, and output transfer — every native path at once, for free. Adding,
+  removing or rescaling an output ends the session, whichever output it is on: KWin then
+  re-checks the position of every window (`Workspace::rearrange()`, whenever any output's
+  area changes), and that releases the master (#211; the order seen in a native run, the path
+  read in the fork's code). The
   controller keeps a tree whose window has left it; the facade ends that tree, which is what
   turns a release of the master into this signal. A release that is not the explicit restore
   (a removed desktop or output, a second window of the master's app, a move of the master,

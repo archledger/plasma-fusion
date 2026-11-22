@@ -22,9 +22,13 @@ paths and everything only a compositor can prove.
   record carried onto the remaining screen; its record is settled. No corrective geometry
   loop (each window moves at most twice: KWin's evacuation, then the return); no kwinrc tile
   tree is written; a later toggle on the master is admitted.
-- Variant: remove the other output. The session ends too (KWin replays the placements it
-  tracks for the new layout, which moves the master); the master is back on its floating
-  frame A, its record is settled and a later toggle on it is admitted.
+- Variant: remove the other output. The session ends too: removing an output changes the
+  outputs' areas, and KWin then re-checks every window's position (`Workspace::rearrange()`),
+  which releases the master (#211). The master is back on its floating frame A, its record is
+  settled and a later toggle on it is admitted. When the output came back 2 s after the teardown,
+  two stack windows moved back onto their old cells for a moment, and the tiler, within its five
+  seconds for a late answer to a cell (`staleCellMillis`), returned them to their floats; when it
+  came back 8 s after, they stayed on their cells (open: #214).
 
 ### 1b. Desktop removal while tiling
 - Toggle the tiler on; remove the desktop the session lives on
