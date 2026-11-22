@@ -413,8 +413,10 @@ for message in journal:
     for kind, pattern, marker in (("read", READ_LINE, "layout provider: read "),
                                   ("published", PUBLISHED_LINE, "layout provider: published ")):
         if marker in message:
+            # A line that does not parse is an event of its own kind, as an over line is below:
+            # the order check then fails with it, and the length checks never read its text.
             line = call_lines([message], pattern, marker)[0]
-            events.append((kind,) + (line[2:] if line else ("unparsed", message)))
+            events.append(((kind,) + line[2:]) if line else ("unparsed " + kind, message))
     over = OVER_LINE.fullmatch(message)
     if over:
         events.append(("over " + over.group(1), over.group(3), int(over.group(2))))
