@@ -2413,27 +2413,44 @@ and the answers it publishes to them.
   statements are small and bounded - one script, at most 16 widgets read or written, widget data as
   JSON; 0 to 1 ms in a test session - and a read, which writes nothing, took 0 to 3 ms from its
   script's start. A publication also has the shell save its widget configuration to disk. The shell
-  reloads each widget written once the script is done, before it answers (plasma-workspace
-  6.8.3, `Widget::~Widget`), and a reload reparses the configuration, syncing it first when it has
-  pending changes (libplasma 6.8.3's `Applet::configChanged`, KConfig 6.32's `reparseConfiguration`,
-  through `QSaveFile`, whose `commit` syncs to disk in Qt 6.11): one save per publication while the
-  clock's schema does not declare the response field. Once it declares it - as P3 must, for
+  reloads each widget written once the script is done, before it answers (plasma-workspace 6.8.3,
+  `Widget::~Widget`), and a reload reparses the configuration, syncing it first when it has pending
+  changes (libplasma 6.8.3's `Applet::configChanged`, KConfig 6.32's `reparseConfiguration`, through
+  `QSaveFile`, whose `commit` syncs to disk in Qt 6.11): one save per publication while the clock's
+  schema does not declare the response field. Once it declares it - as P3 must, for
   `Plasmoid.configuration` to carry the frames - the shell's `writeConfig` saves the schema at every
-  write (`Applet::writeConfig`, KConfig's `KCoreConfigSkeleton::save`): one save per frame. In the
-  test sessions (a container on a virtual disk), publications of 16 frames took a median of 5 to
-  8 ms from the script's start undeclared and 21 to 26 ms declared, of one frame 2 and 3 ms.
-  Undeclared, most runs also had a few calls of 52 to 332 ms, with one frame as with sixteen;
-  declared, six runs had none over 50 ms, though with sixteen bars the probe's ticks were 41 to
-  55 ms apart around about half the publications, from just before the call to, mostly, some 16 ms
-  after its answer; whether the shell was still busy or the probe - a QML `Timer`, which follows the
-  animation timer - ticked late was not isolated. In the runs with a probe in the shell, a stall of
-  its main thread covered each of the 20 long calls from its script's start to its answer, and with
-  no publication the same desktop switches gave no stall over 40 ms; what in the shell's handling
-  took that long was not isolated, as the test image has no tracer. The provider keeps the saves to
-  what the schema asks - a writer that reloaded each widget itself would save once per widget, which
-  doubled a publication's median cost - publishes only for a new request, a changed state or a
-  frame the shell did not confirm, and says each call over the limit; it cannot make the shell's
-  saves shorter, and does not time the retirement's offline frames, whose answer reaches nothing.
+  write (`Applet::writeConfig`, KConfig's `KCoreConfigSkeleton::save`): one save per frame. In P1's
+  test sessions - containers whose storage is podman's overlay on ext4 on an NVMe SSD (as read on
+  2026-11-22; that it was the same during P1's runs is an inference), with pills not yet wired to
+  the provider - publications of 16 frames took a median of 5 to 8 ms from the script's start
+  undeclared and 21 to 26 ms declared, of one frame 2 and 3 ms. Undeclared, most runs also had a few
+  calls of 52 to 332 ms, with one frame as with sixteen; declared, six runs had none over 50 ms. On
+  real hardware (P7, 2026-11-22: a ThinkPad X13 Yoga Gen 4, Core i5-1335U, WD SN740 NVMe under btrfs
+  with zstd compression; KWin 6.8.3-1.fc44.pf1, plasma-workspace 6.8.3, Qt 6.11.2), in private
+  sessions of the provider and clock as committed at 56f7359, 20 desktop switches a run, an idle
+  machine met the reading accepted for decision 1 - every one-frame publication and the median of
+  sixteen frames under the limit: the 180 timed publications of 16 frames took a median of 34 ms
+  from the script's start (p95 43 ms, the longest 60 ms, 3 over 50 ms), and the 120 timed of one
+  frame a median of 5 ms (the longest 16 ms; with the 6 at start-up, all 126 under the limit), about
+  2 ms a frame, where a save of the 14 KB configuration file on its own - written, synced and
+  renamed - took a median of 0.5 ms. Load takes that margin away: with one busy loop per logical CPU
+  every publication of 16 frames was over the limit, at a median of 240 ms, and those of one frame
+  took at most 40 ms; the four publications of 16 frames that met a 256 MiB copy synced to the same
+  disk took 162 to 187 ms. With a probe in the shell - a QML `Timer`, which follows the animation
+  timer - a stall of its main thread covered each of the containers' 20 long undeclared calls from
+  its script's start to its answer; declared, with sixteen bars, the probe's ticks were 41 to 55 ms
+  apart around about half the publications, from just before the call; and on the device they were
+  42 to 67 ms apart around nearly every idle publication of 16 frames, from its script's start to
+  its answer. In the declared runs and on the device the gaps mostly ended some 16 ms after the
+  answer, so whether the shell was still busy then or the probe ticked late was not isolated. With
+  no publication the same desktop switches gave no gap over 40 ms, nor did one frame on the device,
+  and KWin's own probe there saw none over 40 ms. What in the shell's handling takes that long was
+  not isolated: the test image has no tracer, and none ran in the device's sessions. The provider
+  keeps the saves to what the schema asks - a writer that reloaded each widget itself would save
+  once per widget, which doubled a publication's median cost - publishes only for a new request, a
+  changed state or a frame the shell did not confirm, and says each call over the limit; it cannot
+  make the shell's saves shorter, and does not time the retirement's offline frames, whose answer
+  reaches nothing.
 
 ### What it rides
 

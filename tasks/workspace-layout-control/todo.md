@@ -461,8 +461,18 @@ Dependencies: P6 and source review. Likely files: the G0 scenario/seed fixtures 
       item 3; building that image needs the owner's approval ([g0-decisions.md](g0-decisions.md)).
 - [ ] Preserve evidence, screenshots, versions/OIDs and limits; no new script error/crash or
       native restoration/placement-memory regression in the tested scenarios.
-- [ ] Measure the publications' cost on real hardware, a physical disk rather than a container's
+- [x] Measure the publications' cost on real hardware, a physical disk rather than a container's
       virtual one, on a device the owner approves then (decision 1 as amended on 2026-11-21).
+      The containers' storage turned out to be podman's overlay on ext4 on an NVMe SSD (read
+      2026-11-22; by inference the same during P1's runs), not a virtual disk. On 2026-11-22, on the
+      ThinkPad X13 Yoga Gen 4 the owner approved (all runs; the reading accepted beforehand), in
+      private sessions of 56f7359's provider and clock: every idle one-frame publication under 50 ms
+      from its script's start (the longest 16 ms of 126), and the idle 16-frame median 34 ms (p95 43
+      ms, 3 of 180 over), so decision 1's reading holds. Under CPU load every 16-frame publication
+      went over the limit, and under disk load those that met a synced copy did
+      (`docs/parts/kwin.md`, the cost bullet). Proof: 2026-11-22-p7-hardware-cost. Not run: the
+      container baseline and the save timing on archhost; the short confirmation on the final P7
+      tree remains.
 
 Verify: the spec's exact commands, the qualified scenario runner and result checks. Record
 missing tools or environments as incomplete validation, not pass. Do not use another session's
