@@ -65,6 +65,10 @@ Item {
     property var steps: []
     property int stepIndex: 0
     property var problems: []
+    // The time-limit run's calls that waited (runTimeLimit): how long each one's answer took to
+    // hand in, from the start the step gave its script to the provider's return - the most its
+    // length from that start can be, however long the process stalled in between.
+    property var waits: []
     property var facadeCalls: []
     // The facade's read-only calls, apart: the runs' exact facadeCalls lists stay as they are.
     property var readCalls: []
@@ -1626,11 +1630,15 @@ Item {
             // The scripts started just before they answered: the calls waited while the shell was
             // busy, and that time was not spent on them.
             { name: "a read that waited", until: () => readFor(70), run: function () {
-                p.reader.finished([readAnswer(rows, Date.now() - 1)]);
+                const start = Date.now() - 1;
+                p.reader.finished([readAnswer(rows, start)]);
+                harness.waits = harness.waits.concat([Date.now() - start]);
                 tileShortcut.activated();
             } },
             { name: "a publication that waited", until: () => publishedFor(3, 70), run: function () {
-                w.finished([writeAnswer(1, Date.now() - 1)]);
+                const start = Date.now() - 1;
+                w.finished([writeAnswer(1, start)]);
+                harness.waits = harness.waits.concat([Date.now() - start]);
                 read();
             } },
             // A start before the call went out, or after its answer: the clocks disagree, and the

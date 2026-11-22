@@ -1244,7 +1244,10 @@ Offline (laptop):
    publication answered at once, and a read whose owner lookup took 70 ms, measured from its own
    call; a read and a publication whose script ran from the call's start for 70 ms, each said over
    the 50 ms limit with its length from that start; two that waited 70 ms but whose script started
-   just before the answer, not over; two whose start lies outside the call, over with their 70 ms
+   just before the answer, not over, each length from that start no longer than the time the
+   harness took to hand the answer in (so a length from the call cannot pass it, and a stall of
+   the test process fails the run only past the 50 ms limit, by the provider's own over-limit
+   line); two whose start lies outside the call, over with their 70 ms
    from call to answer, and a short one of those, not over; then a read answered with its rows alone
    and publications answered with a bare count (a wake during it reads after it), a count above
    their frames, below zero or no number, and no start - each malformed, said once and confirming
