@@ -626,9 +626,7 @@ QtObject {
             if (row.intent === "query") {
                 continue;
             }
-            const payload = JSON.stringify(row.intent === "prepare"
-                ? [row.intent, row.outputName, row.epoch, row.view.desktopId, row.view.activityId]
-                : [row.intent, row.outputName, row.mode, row.handle]);
+            const payload = payloadOf(row);
             const record = records[row.id];
             if (record && record.consumer === row.consumer && row.request <= record.request) {
                 row.completion = row.request < record.request
@@ -659,6 +657,14 @@ QtObject {
 
     function refusal(intent: string, reason: string): var {
         return { intent: intent, result: "refused", reason: reason };
+    }
+
+    // What a prepare or set asks beside its identity, as its record keeps it: the same identity
+    // read again with the same payload is the same request.
+    function payloadOf(row: var): string {
+        return JSON.stringify(row.intent === "prepare"
+            ? [row.intent, row.outputName, row.epoch, row.view.desktopId, row.view.activityId]
+            : [row.intent, row.outputName, row.mode, row.handle]);
     }
 
     // A prepare handled for the first time. Refused, before any capture and in this order, when
@@ -759,7 +765,10 @@ QtObject {
         }
         const s = slot;
         slot = null;
-        const identity = { id: row.id, consumer: row.consumer, request: row.request };
+        // The set's payload goes with its identity: its outcome reaches this set alone, never
+        // another request under the same number (setDecided).
+        const identity = { id: row.id, consumer: row.consumer, request: row.request,
+                           payload: payloadOf(row) };
         let deciding = true;
         let decided = undefined;
         let answered = false;
@@ -808,19 +817,23 @@ QtObject {
         return decided;
     }
 
-    // A set's outcome that came after its read: kept for its identity, carried by its request's
-    // frames while that request is the widget's, and told at a newer revision; a request no
-    // longer read is told nothing.
+    // A set's outcome that came after its read: kept in the record of its identity and payload,
+    // carried by its request's frames while the widget's request is that set read again as it
+    // was, and told at a newer revision. A request no longer read is told nothing, and neither is
+    // another payload under its identity - refused conflicting-request, or handled afresh once
+    // another consumer replaced the record - nor a query reusing its number, whose frames stay as
+    // they were.
     function setDecided(identity: var, completion: var): void {
         const record = records[identity.id];
         if (record && record.consumer === identity.consumer
-                && record.request === identity.request) {
+                && record.request === identity.request && record.payload === identity.payload) {
             record.completion = completion;
         }
         console.info("plasmafusion-placement: layout provider: a set "
             + (completion.result === "done" ? "is done" : "was refused, " + completion.reason));
         const row = requests.find(r => r.id === identity.id && r.consumer === identity.consumer
-                                  && r.request === identity.request);
+                                  && r.request === identity.request && r.intent === "set"
+                                  && payloadOf(r) === identity.payload);
         if (row) {
             row.completion = completion;
             revision += 1;

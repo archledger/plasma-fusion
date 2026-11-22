@@ -2163,6 +2163,9 @@ Item {
     // starts nothing and another widget's set is busy. A desktop switch of the user's inside a
     // retry window: the start takes the captured view and the switch stands. The shortcut
     // cancelling a set's retry; a retry whose target was minimized; an admission refused for good.
+    // A retried set's outcome, which reaches that set read again as it was and nothing else under
+    // its identity: neither another payload - refused, or handled afresh once another consumer
+    // replaced the record - nor a query reusing its number.
     function runSet() {
         if (setup() === "") {
             done = true;
@@ -2606,6 +2609,73 @@ Item {
                 facade.admitAnswers = [];
                 if (p.active) {
                     fail("set: no retry refused for its view or shell started anything");
+                }
+                // ---- a retried set's outcome reaches that set read again as it was, and nothing
+                // else under its identity: another payload keeps its refusal ----
+                p.shellPidLookup.finished([shellPid]);
+                h = prepareFrom(5, "c5", 35, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 36, "tiled", h)]);
+                pending("a retried set has no completion yet", 5);
+                read([setTo(5, "c5", 36, "tiled", "0".repeat(32) + ":9:9")]);
+                decided("another handle under a retried set's identity is refused", 5, refusedSet("conflicting-request"));
+                from = p.writer.callLog.length;
+            } },
+            { name: "a retried set's outcome beside another payload", until: () => p.active && p.writer.callLog.length > from,
+              run: function () {
+                frames = framesSince(from);
+                decided("a retried set's outcome leaves another payload under its identity refused", 5,
+                        refusedSet("conflicting-request"));
+                if (!frames[5] || canonical(frames[5].completion) !== canonical(refusedSet("conflicting-request"))
+                        || canonical(p.records[5].completion) !== canonical(doneSet) || facade.owned !== master) {
+                    fail("set: the retried set is done and recorded so, and the other payload's frames keep its refusal (got "
+                         + canonical(frames[5]) + ", record " + canonical(p.records[5]) + ")");
+                }
+                // ---- nor does it reach a query reusing its number ----
+                h = prepareFrom(5, "c5", 37, master, popup);
+                read([setTo(5, "c5", 38, "floating", h)]);
+                decided("Floating ends the session", 5, doneSet);
+                h = prepareFrom(5, "c5", 39, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 40, "tiled", h)]);
+                pending("a retried set has no completion yet", 5);
+                read([ask(5, "c5", 40, "query")]);
+                from = p.writer.callLog.length;
+            } },
+            { name: "a retried set's outcome beside a query", until: () => p.active && p.writer.callLog.length > from,
+              run: function () {
+                frames = framesSince(from);
+                if (completionOf(5) !== undefined || !frames[5] || frames[5].completion !== undefined
+                        || frames[5].tiled !== true || canonical(p.records[5].completion) !== canonical(doneSet)) {
+                    fail("set: a query reusing a retried set's number is answered as a query, the set's outcome in its"
+                         + " record (got " + canonical(completionOf(5)) + ", frame " + canonical(frames[5]) + ")");
+                }
+                // ---- nor a set of its identity handled afresh, once another consumer replaced the
+                // record ----
+                h = prepareFrom(5, "c5", 41, master, popup);
+                read([setTo(5, "c5", 42, "floating", h)]);
+                decided("Floating ends the session", 5, doneSet);
+                h = prepareFrom(5, "c5", 43, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 44, "tiled", h)]);
+                pending("a retried set has no completion yet", 5);
+                read([setTo(5, "c5b", 1, "tiled", "0".repeat(32) + ":8:8")]);
+                read([setTo(5, "c5", 44, "tiled", "0".repeat(32) + ":9:9")]);
+                decided("a set handled afresh under a replaced record names no slot", 5, refusedSet("stale-context"));
+            } },
+            { name: "a retried set's outcome beside a replaced record", until: () => p.active, run: function () {
+                if (facade.owned !== master) {
+                    fail("set: the retried set started the session with its app");
+                }
+                read([setTo(5, "c5", 44, "tiled", "0".repeat(32) + ":9:9")]);
+                decided("a set handled afresh under its identity keeps its own answer once the retried set is decided", 5,
+                        refusedSet("stale-context"));
+                // The session ends, as the run found it.
+                h = prepareFrom(5, "c5", 45, master, popup);
+                read([setTo(5, "c5", 46, "floating", h)]);
+                decided("Floating ends the session", 5, doneSet);
+                if (p.active) {
+                    fail("set: the last Floating ends the session");
                 }
             } }
         ];

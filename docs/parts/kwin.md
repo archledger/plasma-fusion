@@ -1231,8 +1231,11 @@ Offline (laptop):
    target was minimized (`target-departed`, told with a frame of its own, as no state changed),
    whose desktop or activity was removed or whose output was unplugged (`view-changed`) and that
    came after a new shell connection (`shell-replaced`); and an admission refused after its retries
-   (`admission-refused`). The driver checks that each retried set is said under way once and decided
-   once later.
+   (`admission-refused`). A retried set's outcome reaches that set read again as it was and nothing
+   else under its identity: another handle read meanwhile stays `conflicting-request`, a query
+   reusing its number gets no completion, and a set of its identity handled afresh, once another
+   consumer replaced the record, keeps its `stale-context`. The driver checks that each retried set
+   is said under way once and decided once later.
    A run (`scenario: "time-limit"`) times the calls against decision 1's limit: a read and a
    publication answered at once, and a read whose owner lookup took 70 ms, measured from its own
    call; a read and a publication whose script ran from the call's start for 70 ms, each said over
@@ -2323,9 +2326,13 @@ and the answers it publishes to them.
   session ended. A tiler that throws refuses the set `unavailable`, unless it had already answered
   it, and the read goes on. The completion is the tiler's outcome - `done`, or refused
   `not-eligible`, `tree-refused`, `admission-refused` or `unavailable` - decided at once or, when
-  the admission is retried, once the retry ends: until then the frames carry none, a re-read does
-  nothing, and the decision comes at a newer revision, and every later frame for the request carries
-  it. Each retry checks again only what its start needs - the target, the captured view's existence
+  the admission is retried, once the retry ends: until then the frames carry none and a re-read does
+  nothing. The decision is then recorded for that set and comes, at a newer revision, to the frames
+  of that set read again as it was, and every later frame for it carries it; another payload under
+  its identity keeps its own answer (refused `conflicting-request`, or the one it got when handled
+  afresh once another consumer replaced the record), and a query reusing its number is answered as a
+  query, with no completion.
+  Each retry checks again only what its start needs - the target, the captured view's existence
   (its output, desktop and activity), the lifetime and the shell. It does not check the focus, which
   the transfer moves itself (the old master's restore activates the old master on the way, then the
   prepared app is focused), or which view is current: the set lays out the view it captured, as the
