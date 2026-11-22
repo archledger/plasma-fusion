@@ -729,9 +729,10 @@ QtObject {
     // intent), with which the slot ends. Otherwise the set consumes the slot and the tiler
     // applies the mode with the slot's native references and decides the completion: returned
     // here when it decides at once, else undefined and told when its retried start ends. Each
-    // retry re-checks only what the set itself does not move - the target, the captured view's
-    // existence (its output, desktop and activity), the lifetime and the shell - not the focus
-    // or which view is current, as the transfer moves both.
+    // retry re-checks only what its start needs - the target, the captured view's existence (its
+    // output, desktop and activity), the lifetime and the shell - not the focus, which the
+    // transfer moves itself, or which view is current: the start lays out the view it captured,
+    // and a switch the user makes meanwhile stands.
     function applySet(row: var): var {
         if (!slot || slot.id !== row.id || slot.consumer !== row.consumer
                 || slot.handle !== row.handle || slot.outputName !== row.outputName) {

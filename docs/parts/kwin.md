@@ -2308,13 +2308,43 @@ and the answers it publishes to them.
   `not-eligible`, `tree-refused`, `admission-refused` or `unavailable` - decided at once or, when
   the admission is retried, once the retry ends: until then the frames carry none, a re-read does
   nothing, and the decision comes at a newer revision, and every later frame for the request carries
-  it. Each retry checks again only what the set does not move itself - the target, the captured
-  view's existence (its output, desktop and activity), the lifetime and the shell - not the focus or
-  which view is current, since the transfer moves both (under KWin's default activation policy the
-  old master's restore makes the old desktop current again); it is refused with what failed, and
-  `cancelled` when the shortcut is pressed meanwhile. A completion a failed publication did not
-  deliver goes out with the next one, and the retirement ends the lifetime before any later outcome,
-  so none follows it.
+  it. Each retry checks again only what its start needs - the target, the captured view's existence
+  (its output, desktop and activity), the lifetime and the shell. It does not check the focus, which
+  the transfer moves itself (the old master's restore activates the old master on the way, then the
+  prepared app is focused), or which view is current: the set lays out the view it captured, as the
+  shortcut does, and a switch the user makes during the retries stands. A retry that fails its
+  checks refuses the set with what failed, and a press of the shortcut meanwhile refuses it
+  `cancelled`. A completion a failed publication did not deliver goes out with the next one, and the
+  retirement ends the lifetime before any later outcome, so none follows it.
+- In a real session (P5 slice 3, 2026-11-22): fresh containers of the test image
+  `localhost/pf-layout-probe:f44-pf1-20261121` (KWin 6.8.3-1.fc44.pf1, plasma-workspace 6.8.3,
+  Qt 6.11.2), the desktop installed from slice 2's stage, and a scenario in the place of P6's menu.
+  It hid the clock's control, so the clock withdrew its request and stayed idle; saved `query`,
+  `prepare` and `set` requests in the clock's `layoutRequest` field through the shell's scripting;
+  woke the provider with its shortcut; and judged the frames in `layoutResponse` against KWin's own
+  state. The clock's calendar is the surface a prepare needs: in KWin's window list an applet popup
+  of the shell's process (the PID the bus gives for the shell's connection), not a normal window, on
+  the bar's output, opened with the pointer or, with the clock alone in the only bar and its
+  workspace dots hidden, with Space once Meta+Alt+P had given the bar focus. A prepare from it took
+  the app it was opened from, straight or through the bar's dock surface, and the popup kept focus
+  and the preparation held through the request's save and the publication, each a reload of the
+  clock's configuration. A set Tiled made the app the master and gave it focus, which closed the
+  calendar. From the tiled master, which is no eligible app, a prepare had no target, re-selecting
+  Tiled changed nothing and Floating ended the session; the set read again was not applied again;
+  with no app a set Tiled was refused `no-target`. A set's transfer, from a session on another
+  desktop of the same output and from one on the other output, was decided at once - its start took
+  the first admission - and left focus on the prepared app. On the way the old master's restore
+  activated the old master, and under KWin's default activation policy (`SwitchToOtherDesktop`) the
+  current desktop did not change: a KWin script recording activations and desktop changes, and
+  KWin's `currentChanged` signal on the bus, recorded no change of it, each having recorded the
+  user's own desktop switch first in the runs between two desktops. After the transfer away from a
+  desktop not shown, the old stack window kept the stack cell's size at its old position, as after
+  the shortcut's own transfer, which ends the session through the same `untoggle()` (#212). On
+  slice 1's provider and tiler, which refuse a set `intent`, the main variant failed each of its
+  four sets and each check that needed one to have acted, and passed the rest, the set read again
+  among them. Not shown here: a retried start (its checks, `busy` during it, `cancelled`), as every
+  set here was decided at once; the real menu's focus order (P6); two controls on one output; `busy`
+  between two bars; hardware timing; and XWayland apps.
 - Decision 1's time limit: the shell serves a script call on its main thread and takes no input
   until the call answers - in the G0 click reproduction a click sent meanwhile arrived when the call
   ended - so a read or a publication should keep the shell at most 50 ms (`shellLimit`), which
