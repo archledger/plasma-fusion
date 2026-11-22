@@ -7,10 +7,11 @@ session bus."""
 from pathlib import Path
 import hashlib
 import json
+import re
 import sys
 import time
 
-from PySide6.QtCore import (Q_ARG, SLOT, ClassInfo, QCoreApplication, QDate, QDateTime, QEvent, QMetaObject,
+from PySide6.QtCore import (Q_ARG, SLOT, ClassInfo, QCoreApplication, QDate, QDateTime, QEvent, QLocale, QMetaObject,
                             QObject, QTime, QUrl, Slot, qInstallMessageHandler, Q_RETURN_ARG, Qt)
 from PySide6.QtDBus import QDBusConnection, QDBusConnectionInterface
 from PySide6.QtGui import QGuiApplication
@@ -970,6 +971,32 @@ if budget is not None:
     budget.property("layoutControl").setProperty("available", False)
 none_saved = [layout_saving(budget, step) for step in range(8)] if budget is not None else None
 expect(none_saved == [0] * 8, "the clock's wiring: a control that shows no mode gives up nothing (%s)" % none_saved)
+# The pill's short date at the width budget's step 4: main.qml's shortDateText binding, as main.qml
+# has it, in a fixture beside it, for each region on 21 November 2026. The year goes with the
+# separator that joined it to the day or the month ("11/21", not "11/21/" or "/11/21"); a dot
+# right after a number stays where the region writes one (de_DE "21.11.", ko_KR "11. 21.").
+binding = re.search(r"\n    readonly property string shortDateText: (.*?)\n    (?=\S)", source, re.S)
+expect(binding is not None and "clock.dateTime" in binding.group(1) and "Qt.locale()" in binding.group(1),
+       "the clock's wiring: main.qml's short date is one binding on the clock's time and the region")
+SHORT_DATES = {"en_US": "M/d", "en_GB": "dd/MM", "fr_FR": "dd/MM", "es_ES": "d/M", "ja_JP": "MM/dd",
+               "ar_EG": "d\u200f/M", "de_DE": "dd.MM.", "ko_KR": "M. d."}
+for region, wanted in SHORT_DATES.items():
+    got = None
+    if binding is not None:
+        expression = (binding.group(1).replace("Qt.locale()", "Qt.locale(%s)" % json.dumps(region))
+                      .replace("clock.dateTime", "new Date(2026, 10, 21)"))
+        date_component = QQmlComponent(engine)
+        wiring_components.append(date_component)
+        date_component.setData(('import QtQuick\nimport "../code/formats.js" as Formats\nQtObject {\n'
+                                "    readonly property string text: %s\n}\n" % expression).encode(),
+                               QUrl.fromLocalFile(str(Path(__file__).resolve().parent.parent / "contents/ui/ShortDateFixture.qml")))
+        date_fixture = date_component.create()
+        if date_fixture is None:
+            print("the clock's wiring: the short date fixture did not load: "
+                  + "; ".join(e.toString() for e in date_component.errors()))
+        got = date_fixture.property("text") if date_fixture is not None else None
+    expected = QLocale(region).toString(QDate(2026, 11, 21), wanted)
+    expect(got == expected, "the clock's wiring: at step 4 the date in %s reads %r (%r)" % (region, expected, got))
 others = [m for m in messages if "clockpill: layout dump " not in m and UNANSWERED not in m]
 expect(not others, "the clock's wiring: the fixtures say nothing else (%s)" % others)
 qInstallMessageHandler(None)

@@ -330,7 +330,9 @@ withdrawn with one save and one wake), and one meets tablet posture coming (idle
 woken) and going (asking again). The control's place in the width budget is checked at every step
 against a stand-in control: its level, and the width it gives up, none while it shows no mode.
 `runDebugAction`, outside the block, is checked as text for its `dump-layout` branch, and the
-fixtures must log nothing but the dumps and the one unanswered line.
+fixtures must log nothing but the dumps and the one unanswered line. The pill's short date at the
+width budget's step 4 runs through `main.qml`'s own binding in eight regions: the day and the
+month in the region's order, without the year and what joined it to them.
 
 ### Workspace layout control (`LayoutControl.qml`)
 
@@ -660,7 +662,11 @@ the lead directly.
 - `Plasmoid.CanFillArea`.
 - **Width budget hooks** for TOP-2: `compactLevel` (1: the short date, 2: the time only) and `hideDots`
   (the dots hide; Overview still switches workspaces). Since P4 also `layoutLevel` and
-  `layoutSaving` ("Workspace layout control" above).
+  `layoutSaving` ("Workspace layout control" above). The short date is the region's short date
+  without the year and what joined it to the day or the month (en_US "11/21", en_GB "21/11"), but
+  a dot right after either stays (de_DE "21.11.", ko_KR "11. 21."), also where the region writes
+  none (ru_RU "21.11."): the short format does not tell the two apart. A custom date format sets
+  only the full date.
 - **Accent and Motion**: the open pill (accent at 35 %, 1 px edge), today's disc (`accent.fill` with its
   text colour) and the focus rings follow the user's accent; the pill's colour, the dots' width and
   colour animate with `Motion` tokens.

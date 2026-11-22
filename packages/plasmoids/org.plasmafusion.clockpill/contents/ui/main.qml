@@ -78,7 +78,7 @@ PlasmoidItem {
     // The width the pill gives up at a budget step, against step 0 (WidthBudget.qml).
     readonly property string fullDateText: Qt.locale().toString(clock.dateTime, root.dateFormat)
     readonly property string shortDateText: Qt.locale().toString(clock.dateTime,
-        Formats.shortDateFormat(Qt.locale(), Qt.locale().dateFormat(Locale.ShortFormat)))
+        Formats.numericDateFormat(Qt.locale().dateFormat(Locale.ShortFormat)))
     TextMetrics {
         id: fullDateMetrics
         font: dateLabel.font
