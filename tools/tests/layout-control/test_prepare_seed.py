@@ -219,6 +219,30 @@ class SeedTests(unittest.TestCase):
             (self.output / ".config/kwinrc").read_bytes()
         ).hexdigest())
 
+    def test_seed_manifest_hashes_the_rules_the_seed_holds(self):
+        preparer = importlib.import_module(
+            f"{__package__}.prepare_seed" if __package__ else "prepare_seed")
+        copy = preparer.shutil.copyfile
+
+        def copy_then_rebuild(source, destination):
+            copy(source, destination)
+            # A stage build replaces the rules right after the seed copied them. Only the
+            # staged rules: no other source may be overwritten.
+            if Path(source).resolve() == self.rules.resolve():
+                Path(source).write_text("// rebuilt staged tiling rules\n")
+            return destination
+
+        with (mock.patch.object(preparer.shutil, "copyfile", side_effect=copy_then_rebuild),
+              mock.patch.object(preparer.Path, "cwd", return_value=self.root)):
+            preparer.prepare(self.stage.resolve(), self.output)
+        seeded = (self.output / ".local/share/kwin/scripts/plasmafusion-layout-probe"
+                  / "contents/ui/Tiling.js")
+        inputs = json.loads((self.output / "probe-inputs.json").read_text())
+        # The rebuild happened, so the copy and the staged file now differ.
+        self.assertEqual(self.rules.read_text(), "// rebuilt staged tiling rules\n")
+        self.assertEqual(seeded.read_text(), "// exact staged tiling rules\n")
+        self.assertEqual(inputs["Tiling.js"], hashlib.sha256(seeded.read_bytes()).hexdigest())
+
     def test_loss_scope_does_not_accept_the_first_slice_receipt(self):
         self.result_files()
         result = self.run_check("--scope", "silent-retirement")
@@ -288,6 +312,14 @@ class SeedTests(unittest.TestCase):
         result = self.run_seed("--query-timeout-ms", "200", "--reply-delay-ms", "100")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("reply delay must exceed", result.stderr)
+        self.assertFalse(self.output.exists())
+
+    def test_the_two_transport_faults_are_separate_seeds(self):
+        # The scenario runs the delayed-reply case and returns before the silent-retirement case.
+        result = self.run_seed("--drop-retirement-frame", "--query-timeout-ms", "200",
+                               "--reply-delay-ms", "2000")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("separate seeds", result.stderr)
         self.assertFalse(self.output.exists())
 
     def test_seed_manifest_covers_the_client_deadline_schema(self):

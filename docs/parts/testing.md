@@ -210,8 +210,9 @@ python3 tools/tests/layout-control/prepare_seed.py \
 ```
 
 The private query deadline defaults to 10000 ms and accepts 100–10000 ms. Reply delay defaults
-to zero; the fault accepts up to 3000 ms and must exceed the chosen deadline. The seed hashes
-both the provider configuration and client schema. Intervals follow
+to zero; the fault accepts up to 3000 ms and must exceed the chosen deadline. It cannot be
+combined with `--drop-retirement-frame`: the scenario runs only one of the two cases. The seed
+hashes both the provider configuration and client schema. Intervals follow
 [Qt's one-shot Timer](https://doc.qt.io/qt-6/qml-qtqml-timer.html), not a real-time guarantee.
 Timers are dynamically created with an explicit owner and captured request/destination; see
 [Component.createObject](https://doc.qt.io/qt-6/qml-qtqml-component.html#createObject-method).

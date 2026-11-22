@@ -64,6 +64,9 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         raise ValueError("reply delay must be between 0 and 3000 ms")
     if reply_delay_ms and reply_delay_ms <= query_timeout_ms:
         raise ValueError("reply delay must exceed the query deadline for this fault")
+    if reply_delay_ms and drop_retirement_frame:
+        # The bridge runs the delayed-reply case and returns before the silent-retirement case.
+        raise ValueError("the delayed-reply and dropped-retirement faults are separate seeds")
     if mixed_lifetime_probe and view_loss_probe:
         raise ValueError("mixed-lifetime and view-loss scenarios are separate private cases")
     if two_bar_probe and (completion_probe or mixed_lifetime_probe or view_loss_probe
@@ -186,9 +189,11 @@ def prepare(stage: Path, output: Path, *, drop_retirement_frame: bool = False,
         "\n[Desktops]\nNumber=2\nRows=1\n"
     )
     (private_config / "pfv-env").write_text("PF_LAYOUT_PRIVATE_CONTAINER=1\n")
+    # The seed's own copy of the rules: the staged file may be rebuilt after it was copied.
+    seeded_rules = (script / "contents/ui/Tiling.js").read_bytes()
     inputs = {
         name: hashlib.sha256(data).hexdigest() for name, data in fixtures.items()
-    } | {"Tiling.js": hashlib.sha256(rules.read_bytes()).hexdigest(),
+    } | {"Tiling.js": hashlib.sha256(seeded_rules).hexdigest(),
          "kwinrc": hashlib.sha256((private_config / "kwinrc").read_bytes()).hexdigest(),
          "pfv-env": hashlib.sha256((private_config / "pfv-env").read_bytes()).hexdigest(),
          "main.xml": hashlib.sha256((config / "main.xml").read_bytes()).hexdigest()}
