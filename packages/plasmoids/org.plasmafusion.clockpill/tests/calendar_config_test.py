@@ -158,10 +158,9 @@ for name, edits in PAGES.items():
     saved = snapshot(config)
     component, page = open_page(name, config)
     if page is None:
-        errors = "; ".join(e.toString() for e in component.errors())
-        missing = "is not installed" in errors
-        print(("SKIP " if missing else "FAIL ") + "%s cannot load: %s" % (name, errors))
-        failures += 0 if missing else 1
+        # The settings dialog opens each of these pages, so one that cannot load fails: a module it
+        # imports missing here or misspelled in it alike (Qt says "is not installed" for both).
+        check(False, "%s loads (%s)" % (name, "; ".join(e.toString() for e in component.errors())))
         continue
     absent = [key for key in KEYS if page.metaObject().indexOfProperty("cfg_" + key) < 0]
     check(not absent, "%s takes every key and default the dialog passes (absent: %s)" % (name, absent))
@@ -229,6 +228,8 @@ def delegates(root):
 component = QQmlComponent(engine, QUrl.fromLocalFile(str(PAGE)))
 page = component.create()
 if page is None:
+    # Only another page, named by PF_CALENDAR_CONFIG_PAGE, can stop here with a module missing:
+    # the default page has failed the loop above already.
     print("cannot load the page: " + "; ".join(e.toString() for e in component.errors()))
     sys.exit(0 if not failures and any("is not installed" in e.toString() for e in component.errors()) else 1)
 app.processEvents()

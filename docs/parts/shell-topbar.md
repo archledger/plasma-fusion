@@ -460,7 +460,8 @@ The layout places it right after the app name with its defaults (`compactView=fa
   provider checks after these. A field written while a page is open, as `menuCompacted` already
   can be, leaves the dialog's change check (`isConfigurationChanged()`) seeing a difference once
   anything on the page changes, so Apply can stay enabled after an edit is undone; Apply then
-  writes the values as they are.
+  writes the values as they are. A page that cannot load fails the run, as the dialog opens each
+  of them: a module it imports missing or misspelled alike.
 - `test/hovertest.py`: a hover-enabled MouseArea loses hover to a ToolTipArea child on top; both
   widgets therefore put the tooltip area outside the mouse areas (proven Plasma pattern).
 - ThinkPad virtual sessions (prefix `tb-`, 1440 x 900, private HOME and D-Bus; scenarios in
