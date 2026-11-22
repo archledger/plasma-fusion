@@ -772,8 +772,9 @@ must answer the other bar's refused request, before any context change since the
 other bar must accept a frame from that publication or a later one. The refused request must never
 be answered ready again. This provider repeats the stored `busy` outcome then, and a prepare it
 does not handle afresh is only re-validated, never prepared, so only the new explicit request is
-accepted, with `pf.focus.beta`. `two-bar-result.json` is written only after every step record is
-recomputed from the raw logs, and this scope also requires the independent cleanup evidence.
+accepted, with `pf.focus.beta`, in a frame carrying that bar's own view. `two-bar-result.json` is
+written only after every step record is recomputed from the raw logs, and this scope also requires
+the independent cleanup evidence.
 
 Three changed providers each made the same scenario fail at the step meant to catch them. One that
 lets the other bar's prepare take the held slot failed at the competing request, which was not

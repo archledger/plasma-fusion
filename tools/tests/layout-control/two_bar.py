@@ -235,8 +235,14 @@ def evaluate(directory: Path, name: str, end: dict | None) -> dict:
     # request gets only an answer that cannot decide it.
     require(recovery["completion"]["accepted"] and verdict["targetClass"] == "pf.focus.beta",
             "expected the other bar's new preparation to be accepted with pf.focus.beta")
-    require(accepted_with(observed, other, recovery, start["shellLines"]),
-            "the other bar never accepted a frame carrying its new completion")
+    frames = accepted_with(observed, other, recovery, start["shellLines"])
+    require(frames, "the other bar never accepted a frame carrying its new completion")
+    # check_views skips frames without a view, and earlier frames meet its count: the recovery
+    # itself must carry the other bar's view.
+    require(any(isinstance(packet.get("targetContext"), dict)
+                and packet["targetContext"].get("outputName") == outputs["other"]
+                for packet in frames),
+            "the other bar's new completion was not accepted with its own view")
     return {"other": summary(recovery), "end": stop}
 
 

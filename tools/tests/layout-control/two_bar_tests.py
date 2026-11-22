@@ -258,7 +258,7 @@ class TwoBarRun(CompletionRun):
               retired_missed=False, retired_request=False, holder_again=False,
               wrong_class=False, wrong_output=False, recovery_missed=False, drift=False,
               mismatch=False, busy_missed=False, unpublished=False, silent_read=False,
-              unread=False, stale_read=False) -> None:
+              unread=False, stale_read=False, viewless_recovery=False) -> None:
         # The other bar's query when the case begins: its first request, or its second after a
         # refresh. Its preparations follow that number.
         first = 2 if refresh else 1
@@ -353,11 +353,11 @@ class TwoBarRun(CompletionRun):
         self.context()
         self.publish(*((held,) if holder_again else ()), busy)
         self.mark("explicit")
-        recovered = self.on(dict(prepare(OTHER, first + 2, ready=True, token=EPOCH + ":2",
-                                         completion=accepted(first + 2, EPOCH + ":2")),
-                                 **{"class": "pf.focus.alpha" if wrong_class
-                                    else "pf.focus.beta"}),
-                            "Virtual-0" if wrong_output else None)
+        recovered = dict(prepare(OTHER, first + 2, ready=True, token=EPOCH + ":2",
+                                 completion=accepted(first + 2, EPOCH + ":2")),
+                         **{"class": "pf.focus.alpha" if wrong_class else "pf.focus.beta"})
+        if not viewless_recovery:
+            recovered = self.on(recovered, "Virtual-0" if wrong_output else None)
         self.publish(dict(recovered, missed=recovery_missed))
         self.step("explicit")
 
@@ -422,6 +422,10 @@ class TwoBarCheckerTests(unittest.TestCase):
 
     def test_the_explicit_recovery_must_report_its_own_bars_view(self):
         self.assert_rejected("another bar's view", wrong_output=True)
+
+    def test_the_explicit_recovery_must_carry_its_own_bars_view(self):
+        # check_views skips a frame without a view, and the other bar's earlier frames had one.
+        self.assert_rejected("accepted with its own view", viewless_recovery=True)
 
     def test_a_second_provider_start_fails(self):
         self.assert_rejected("one provider lifetime", second_start=True)
