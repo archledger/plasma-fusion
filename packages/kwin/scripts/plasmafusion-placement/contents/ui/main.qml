@@ -1285,8 +1285,8 @@ Item {
                 return;
             }
             // A set's retry (P5) first checks what its start needs still holds - its target, its
-            // view's existence, the provider's lifetime and shell - and is refused with what
-            // failed.
+            // view's existence, the provider's lifetime and the shell connection the set came
+            // from - and is refused with what failed.
             const check = pending.invoked.check;
             const trouble = typeof check === "function" ? check() : "";
             if (trouble !== "") {

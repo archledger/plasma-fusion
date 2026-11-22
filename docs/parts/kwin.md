@@ -2338,13 +2338,16 @@ and the answers it publishes to them.
   afresh once another consumer replaced the record), and a query reusing its number is answered as a
   query, with no completion.
   Each retry checks again only what its start needs - the target, the captured view's existence
-  (its output, desktop and activity), the lifetime and the shell. It does not check the focus, which
-  the transfer moves itself (the old master's restore activates the old master on the way, then the
-  prepared app is focused), or which view is current: the set lays out the view it captured, as the
-  shortcut does, and a switch the user makes during the retries stands. A retry that fails its
-  checks refuses the set with what failed, and a press of the shortcut meanwhile refuses it
-  `cancelled`. A completion a failed publication did not deliver goes out with the next one, and the
-  retirement ends the lifetime before any later outcome, so none follows it.
+  (its output, desktop and activity), the lifetime and the shell connection the set came from, as
+  the reads know it: another one read since refuses it `shell-replaced`, while a shell gone with
+  none read yet does not, as the start uses nothing of the shell and the next shell's bars ask
+  afresh. It does not check the focus, which the transfer moves itself (the old master's restore
+  activates the old master on the way, then the prepared app is focused), or which view is
+  current: the set lays out the view it captured, as the shortcut does, and a switch the user
+  makes during the retries stands. A retry that fails its checks refuses the set with what failed,
+  and a press of the shortcut meanwhile refuses it `cancelled`. A completion a failed publication
+  did not deliver goes out with the next one, and the retirement ends the lifetime before any
+  later outcome, so none follows it.
 - In a real session (P5 slice 3, 2026-11-22): fresh containers of the test image
   `localhost/pf-layout-probe:f44-pf1-20261121` (KWin 6.8.3-1.fc44.pf1, plasma-workspace 6.8.3,
   Qt 6.11.2), the desktop installed from slice 2's stage, and a scenario in the place of P6's menu.

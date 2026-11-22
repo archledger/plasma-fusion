@@ -745,9 +745,11 @@ QtObject {
     // applies the mode with the slot's native references and decides the completion: returned
     // here when it decides at once, else undefined and told when its retried start ends. Each
     // retry re-checks only what its start needs - the target, the captured view's existence (its
-    // output, desktop and activity), the lifetime and the shell - not the focus, which the
-    // transfer moves itself, or which view is current: the start lays out the view it captured,
-    // and a switch the user makes meanwhile stands.
+    // output, desktop and activity), the lifetime and the shell connection the set came from, as
+    // the reads know it - not the focus, which the transfer moves itself, or which view is
+    // current: the start lays out the view it captured, and a switch the user makes meanwhile
+    // stands. A shell gone with no other connection read yet does not stop it: the start uses
+    // nothing of the shell, and the next shell's bars ask afresh.
     function applySet(row: var): var {
         if (!slot || slot.id !== row.id || slot.consumer !== row.consumer
                 || slot.handle !== row.handle || slot.outputName !== row.outputName) {
