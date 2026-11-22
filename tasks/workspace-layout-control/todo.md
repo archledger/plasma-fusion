@@ -430,20 +430,42 @@ two controls on one output and `busy` between bars (P7); hardware timing and XWa
 Dependencies: P4–P5. Likely files: `clock/contents/ui/{LayoutControl,LayoutState,main}.qml`,
 `clock/tests/calendar_view_test.py`, `docs/parts/shell-topbar.md` (five).
 
-- [ ] Floating/Tiled choices send explicit intent for the captured view and show bounded pending
+- [x] Floating/Tiled choices send explicit intent for the captured view and show bounded pending
       feedback; repeated selection is not a toggle, and a failed send is not confirmed state.
-- [ ] Support pointer and keyboard entry after panel focus, menu arrows/Return/Space/Escape,
+- [x] Support pointer and keyboard entry after panel focus, menu arrows/Return/Space/Escape,
       visible focus and accessible names without underlying calendar/workspace activation.
-- [ ] Preserve existing bindings; keep unsupported/unconfirmed profiles safely unavailable.
+- [x] Preserve existing bindings; keep unsupported/unconfirmed profiles safely unavailable.
 
 Verify: real-component fail-first calendar view cases plus relevant calendar/config regressions.
 Review dark/light, compact and keyboard states against the existing boards/tokens.
 
+Results: slices 1 to 4. The backend suite gains a case for each outcome of the action's table
+(571 checks, 0 failures; 195 fail against the previous component, all new). The view suite gains
+36 interactive-control and 36 menu checks (123 checks, 0 failures; 71 fail against the previous
+control and the absent menu, all new). 21 planted mutants of the menu and control guards are all
+caught by named cases. The wiring's cases run in the backend suite's fixture (10 fail against the
+previous `main.qml`). A private session on the approved image (KWin 6.8.3-1.fc44.pf1, Qt 6.11.2)
+passes 18 checks: the provider answers, the click opens the menu, Escape closes it and the panel
+leaves keyboard navigation, both keyboard openings show the confirmed row's ring, the menu opens
+over the calendar with the prepare's no-target and the blocked Tiled row, the wheel still switches
+workspaces, the first open's first frame came 22 ms after the request, and the status line sits
+under the rows in a top bar. The image has no screen reader, so the announcement's naming was not
+checked there; an Escape between a choice and its read (T25) and a set from the menu were not
+produced, as the session had no app window to tile. The dark/light, compact and keyboard states
+are in the session's screenshots for the D14 review.
+
 ## Checkpoint: read-only path and explicit intent
 
-- [ ] Review P1–P6's source and tests, with no unresolved native-contract or state-ordering gap.
-- [ ] The read-only state path works end to end before action enablement.
+- [x] Review P1–P6's source and tests, with no unresolved native-contract or state-ordering gap.
+- [x] The read-only state path works end to end before action enablement.
 - [ ] The plan's full acceptance matrix is mapped to automated or named isolated-session cases.
+
+Results: the source review covered the action's state machine (`LayoutState.qml`'s `open()`,
+`input()`, `choose()`, `close()`, `prepare()`, `sendSet()`, `moveAction()` and `settle()`), the
+control's gate and focus, the menu's rows and focus, and the wiring's close paths, against the
+design's table and the part pages; no unresolved native-contract or state-ordering gap was found.
+The read-only path is P4's, checked end to end in the backend and view suites and in the session.
+The acceptance matrix is P7's.
 
 ## P7: Qualify the complete feature
 
