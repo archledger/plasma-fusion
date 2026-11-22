@@ -118,9 +118,10 @@ function lifetime() {
                    competingProvider:{role:'competitor'}};
     const methods = (function(){with(probe){return {FUNCTIONS};}})();
     Object.assign(probe, methods);
-    probe.registerNative();
+    const returned = probe.registerNative();
     return {epoch:probe.epoch, capable:probe.capable, refusal:probe.refusal,
-            competingProviderRejected:probe.competingProviderRejected, retained:retained(probe)};
+            competingProviderRejected:probe.competingProviderRejected, retained:retained(probe),
+            returned:typeof returned};
 }
 const results = [lifetime(), lifetime()];
 process.stdout.write(JSON.stringify({results, logs, registered, tokens}));
@@ -179,6 +180,8 @@ process.stdout.write(JSON.stringify({results, logs, registered, tokens}));
         self.assertEqual(len(out["tokens"]), 2)
         for token in out["tokens"]:
             self.assertNotIn(token.strip("{}"), visible)
+        # Declared void: it returns nothing, so no caller can receive the token from it.
+        self.assertEqual([row["returned"] for row in out["results"]], ["undefined"] * 2)
 
     def test_component_completion_uses_the_tested_registration(self):
         source = (HERE / "provider.qml").read_text()
