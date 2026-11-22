@@ -47,10 +47,23 @@ FocusScope {
     readonly property bool showingToday: selectedDate.getFullYear() === now.getFullYear()
         && selectedDate.getMonth() === now.getMonth() && selectedDate.getDate() === now.getDate()
     readonly property var backend: calendarLoader.item
+    // A call the adapter made to the calendar application keeps it loaded after the pop-up closes,
+    // so that the reply still reaches it. The adapter's busy state is copied here when it changes,
+    // not bound: the adapter unloads while `active` is being written, which changes the loader's
+    // item, and a binding on that path that read the item would be notified again during its own
+    // write, which Qt reports as a binding loop. The path starts with the pop-up closing, or with a
+    // call ending after the close.
+    property bool backendBusy: false
+    Connections {
+        target: calendarLoader.item
+        function onBusyChanged(): void {
+            view.backendBusy = calendarLoader.item.busy;
+        }
+    }
     Loader {
         id: calendarLoader
         asynchronous: true
-        active: view.open || (item !== null && item.busy)
+        active: view.open || view.backendBusy
         source: "CalendarBackend.qml"
     }
     Binding { target: calendarLoader.item; property: "displayedDate"; value: view.shown; when: calendarLoader.item !== null }

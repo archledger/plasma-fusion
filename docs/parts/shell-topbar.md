@@ -126,7 +126,9 @@ QT_QPA_PLATFORM=offscreen dbus-run-session --config-file=packages/kwin/tests/off
 Native adapter checks cover week start, missing providers, year rollover and leap day; view checks
 cover click/keyboard selection and touch targets. Real PIM integration was verified in an isolated
 Fedora VM with synthetic timed/all-day/recurring events, provider/resource settings and the native
-event editor. The backend keeps pending editor calls alive when the popup loses focus.
+event editor. The backend keeps pending editor calls alive when the popup loses focus. The view
+checks also cover the adapter's lifetime: it unloads when the popup closes, stays loaded while a
+call it made is running, and unloads with no binding loop.
 
 ### `org.plasmafusion.appname`
 

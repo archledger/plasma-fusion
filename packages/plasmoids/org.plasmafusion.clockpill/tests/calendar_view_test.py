@@ -14,7 +14,8 @@ import sys
 import time
 
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
-from PySide6.QtCore import Property, QDate, QDateTime, QObject, QPoint, QPointF, QRectF, QTime, QTimeZone, Qt, QUrl, Slot
+from PySide6.QtCore import (Property, QDate, QDateTime, QObject, QPoint, QPointF, QRectF, QTime, QTimeZone, Qt, QUrl, Slot,
+                            qInstallMessageHandler)
 from PySide6.QtGui import QColor, QFontMetricsF, QGuiApplication, QWheelEvent
 from PySide6.QtQml import QQmlComponent, QQmlExpression, qmlContext
 from PySide6.QtQuick import QQuickItem, QQuickView
@@ -113,6 +114,39 @@ for item in zones:
     got = item.property("currentTime")
     check(got.date() == expected.date() and got.time().hour() == expected.time().hour(),
           f"native {zone} clock respects offset, DST and date boundary")
+# Closed, the adapter unloads, and quietly: no binding whose write leads to the write of the
+# loader's `active` reads the loader's item (otherwise Qt logs a binding loop). A calendar call
+# still running keeps the adapter loaded after the close, until the call ends, so that its reply
+# still reaches it. Every message is still printed.
+messages = []
+
+
+def keep_message(mode, context, message):
+    messages.append(message)
+    print(message, file=sys.stderr)
+
+
+qInstallMessageHandler(keep_message)
+try:
+    root.setProperty("open", False)
+    QTest.qWait(50)
+    check(root.property("backend") is None, "closed, the calendar adapter unloads")
+    root.setProperty("open", True)
+    started = time.monotonic()
+    while root.property("backend") is None and time.monotonic() - started < 10:
+        QTest.qWait(10)
+    check(root.property("backend") is not None, "opened again, the calendar adapter loads again")
+    root.property("backend").setProperty("busy", True)
+    root.setProperty("open", False)
+    QTest.qWait(50)
+    check(root.property("backend") is not None, "a calendar call still running keeps the adapter loaded after the close")
+    root.property("backend").setProperty("busy", False)
+    QTest.qWait(50)
+finally:
+    qInstallMessageHandler(None)
+check(root.property("backend") is None, "the call over, the adapter unloads")
+loops = [message for message in messages if "Binding loop" in message]
+check(not loops, "the adapter unloads with no binding loop (%s)" % loops)
 print(f"Calendar view: {checks} checks, 0 failures")
 
 # The layout control (contents/ui/LayoutControl.qml, P4): the bar's tiling mode, read only. Each
