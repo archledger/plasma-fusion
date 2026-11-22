@@ -571,7 +571,8 @@ check recomputes every step and audits the run up to its last step: three initia
 reporting refused, refused and accepted, each with the fork's null-output `createTile` refusal
 (`-1`); the occupier registered before the first and released between the second and third;
 three distinct labels with identity names derived from them; capable state only in the accepted
-lifetime; and one backend connection. It writes `refused-backend-result.json` only after that
+lifetime; no consumer reporting a lifetime after it has reported a later one, also between the
+steps' windows; and one backend connection. It writes `refused-backend-result.json` only after that
 check. This scope also requires the independent cleanup evidence.
 
 Three events can end a consumer's binding to the previous lifetime, and they race: its own

@@ -285,8 +285,16 @@ def audit(directory: Path, saved: dict) -> None:
     require(len(set(labels)) == 3, "a provider lifetime reused a provider label")
     boots = saved["refused-1"]["boots"]
     accepted_from = load(directory, "refused-mark-reload-2.json")["shellLines"]
+    # Between the steps' windows too: once a consumer has reported a later lifetime, it never
+    # reports an earlier one. Unknown labels fail the checks below and those of the frames.
+    reached = dict.fromkeys(boots, 0)
     for index, row in ev.shell("observation", everything=True):
         require(row.get("boot") in boots, "an unexpected consumer reported state")
+        if row.get("epoch") in labels:
+            lifetime = labels.index(row["epoch"])
+            require(lifetime >= reached[row["boot"]],
+                    "a consumer returned to a provider lifetime it had left")
+            reached[row["boot"]] = lifetime
         packet = row.get("packet")
         capable_state = row.get("phase") == "online" or (
             isinstance(packet, dict) and packet.get("capable") is True)

@@ -403,7 +403,7 @@ class RefusedRun:
     def build(self, *, epochs=(E1, E2, E3), refused_online=False, release_early=False,
               first_capable=False, alias=ALIAS, retire="invalidate", returned=False,
               stale_request=False, capable_after_release=False, capable_frame=False,
-              late_previous=None) -> None:
+              late_previous=None, left_between=False) -> None:
         first, second, third = epochs
         self.backend("layout-occupier: registered true")
         self.mark("start")
@@ -433,6 +433,10 @@ class RefusedRun:
                 self.request[boot] -= 1
             self.deliver(boot, second, False, alias=alias)
         self.step("refused-2")
+        if left_between:
+            # Settled on the second lifetime, a frame of the first is accepted before the release
+            # mark, where no step's window reads it.
+            self.deliver(BOOTS[0], first, False)
         self.mark("release")
         if not release_early:
             self.backend("layout-occupier: released true")
@@ -523,6 +527,9 @@ class RefusedCheckerTests(unittest.TestCase):
 
     def test_consumer_returning_to_the_previous_label_fails(self):
         self.assert_rejected("returned to the previous provider", returned=True)
+
+    def test_consumer_returning_to_a_retired_lifetime_between_steps_fails(self):
+        self.assert_rejected("returned to a provider lifetime it had left", left_between=True)
 
     def test_settling_without_a_fresh_query_fails(self):
         self.assert_rejected("without a fresh query", stale_request=True)
