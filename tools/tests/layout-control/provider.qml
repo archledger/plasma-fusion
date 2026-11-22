@@ -799,7 +799,11 @@ Item {
             if (!Number.isInteger(pid) || pid <= 0) {
                 probe.shellPid = 0;
                 probe.shellPidOwner = "";
+                // This read's own failure must not schedule the next read; a wake-up that came
+                // during it still does.
+                const woken = probe.again;
                 probe.targetViewChanged("shell-pid");
+                probe.again = woken;
                 probe.reconcileTargetConsumers(null);
                 probe.finishRead();
                 return;
@@ -815,7 +819,9 @@ Item {
         onFailed: {
             probe.shellPid = 0;
             probe.shellPidOwner = "";
+            const woken = probe.again;
             probe.targetViewChanged("shell-lookup");
+            probe.again = woken;
             probe.reconcileTargetConsumers(null);
             probe.finishRead();
         }

@@ -203,6 +203,52 @@ emit(logs.filter(line => /read (started|finished)|publication (online|writes)/.t
                                    "layout-probe: read finished",
                                    "layout-probe: publication writes 2"])
 
+    def run_target_lookup(self, action: str) -> dict:
+        """The pipeline with target mode's shell PID lookup and its context handlers."""
+        names = FUNCTIONS + ("targetViewChanged", "advanceTargetContext", "invalidateTarget",
+                             "reconcileTargetConsumers", "traceFocus", "traceView")
+        functions = ",".join(f"{name}:{qml_handler(name, 'provider.qml')}" for name in names)
+        script = (HARNESS.replace("DELAY", "0").replace("FUNCTIONS", functions)
+                  .replace("OWNER_FINISHED", signal_handler("id: ownerLookup\n", "onFinished"))
+                  .replace("READER_FINISHED", signal_handler("id: reader\n", "onFinished"))
+                  .replace("WRITER_FINISHED", signal_handler("id: writer\n", "onFinished"))
+                  .replace("WRITER_FAILED", signal_handler("id: writer\n", "onFailed", ""))
+                  .replace("TIMER_TRIGGERED", signal_handler("id: delayed\n", "onTriggered",
+                                                             "delayed")))
+        # The focus and view traces return at once with their probes off: no Workspace needed.
+        script += ("Object.assign(probe, {targetProbe: true, focusProbe: false,"
+                   " viewLossProbe: false, targetGeneration: 0, targetHandoff: null,"
+                   " preparedTarget: null, preparationFailure: '', lastEligibleWindow: null,"
+                   " targetConsumers: [], targetInventoryComplete: false, shellPid: 0,"
+                   " shellPidOwner: ''});\n"
+                   "const shellIdentityLookup = {arguments: [], call: () => calls.push('pid')};\n"
+                   "const pidFinished = "
+                   + signal_handler("id: shellIdentityLookup\n", "onFinished") + ";\n"
+                   "const pidFailed = "
+                   + signal_handler("id: shellIdentityLookup\n", "onFailed", "") + ";\n")
+        result = subprocess.run(["node", "-"], input=script + action, capture_output=True,
+                                text=True, timeout=10, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_a_failed_shell_pid_lookup_does_not_schedule_another_read(self):
+        # The failure still advances the context; only the next wake-up or event reads again.
+        for failure in ("pidFailed()", "pidFinished([0])"):
+            with self.subTest(failure=failure):
+                out = self.run_target_lookup(
+                    f"probe.scan(); ownerFinished([':1.5']); {failure}; drain();"
+                    " emit({owners: count('owner'), reading: probe.reading,"
+                    " generation: probe.targetGeneration});")
+                self.assertEqual(out, {"owners": 1, "reading": False, "generation": 1})
+
+    def test_a_wake_during_a_failed_shell_pid_lookup_keeps_its_read(self):
+        for failure in ("pidFailed()", "pidFinished([0])"):
+            with self.subTest(failure=failure):
+                out = self.run_target_lookup(
+                    f"probe.scan(); ownerFinished([':1.5']); probe.scan(); {failure}; drain();"
+                    " emit({owners: count('owner'), reading: probe.reading});")
+                self.assertEqual(out, {"owners": 2, "reading": True})
+
 
 class DefaultReaderBoundTests(unittest.TestCase):
     def snapshot(self, texts: list) -> list:

@@ -594,7 +594,9 @@ The read/publish pipeline is serialized in every mode. The provider starts a rea
 read or publication is outstanding; a wake-up during either sets one pending flag, so several
 wake-ups coalesce into one later read. The writer's completion or failure resumes the pipeline,
 and a delayed publication (the query-timeout fault) that falls due during a read waits for that
-read. Every mode's reader visits at most 16 widgets of at most 2048 characters each and accepts
+read. In target mode a failed shell PID lookup invalidates the context without scheduling another
+read; the next wake-up or context event reads again. Every mode's reader visits at most 16 widgets
+of at most 2048 characters each and accepts
 only a well-formed consumer and request; target mode applied these bounds before. The provider
 logs `read started`, `read finished`, each publication it sends and each completion, so a native
 run can replay the pipeline. Two limits remain. Retirement at teardown sends its offline frame at
