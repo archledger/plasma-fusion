@@ -25,7 +25,7 @@ Last edited 2026-11-21.
 | `.../org.plasmafusion.clockpill/contents/ui/WorkspaceDots.qml` | dots / current bar, clicks, keys, tooltips |
 | `.../org.plasmafusion.clockpill/contents/ui/WidthBudget.qml` | the top bar's width budget (ADAPTIVE 5.1), run by the clock pill |
 | `.../org.plasmafusion.clockpill/contents/ui/CalendarView.qml` | month view of the pop-up |
-| `.../org.plasmafusion.clockpill/contents/ui/LayoutState.qml` | the bar's workspace layout state, the clock's side of the layout transport |
+| `.../org.plasmafusion.clockpill/contents/ui/LayoutState.qml` | the bar's workspace layout state, the clock's side of the layout transport, and the layout menu's action |
 | `.../org.plasmafusion.clockpill/contents/ui/LayoutControl.qml` | the workspace layout control in the pill, read only |
 | `.../org.plasmafusion.clockpill/contents/ui/Chevron.qml`, `FusionText.qml` | 16 px stroke chevron, text helper |
 | `.../org.plasmafusion.clockpill/contents/code/formats.js` | locale-aware date and time formats |
@@ -230,7 +230,8 @@ provider (`wake()`). The clock's `main.qml` owns it:
   counts. The testing hook `dump-layout:TAG` (`debugAction`) logs the state.
 
 - A request is a version-1 `query` for the bar's output (`outputName`, 1 to 128 characters):
-  `{version, intent, consumer, request, outputName}`. The consumer is drawn fresh for each instance
+  `{version, intent, consumer, request, outputName}`, or one of the layout action's intents, a
+  `prepare` or a `set` ("The layout action" below). The consumer is drawn fresh for each instance
   (an MD5 of a timestamp and random numbers), and requests are numbered from 1. The component asks
   at its start and whenever the output changes - never on a view change, which the provider pushes
   itself - and with no output it asks nothing (`outcome` idle). Each ask retires the request that
@@ -254,9 +255,12 @@ provider (`wake()`). The clock's `main.qml` owns it:
   lifetime waits.
 - The first answer accepted binds the request to its lifetime. A newer revision from it is taken,
   among them a frame the provider pushes for a view change with no request of its own; an older or
-  equal one is not. A frame from another lifetime makes the bar ask again, as revisions do not carry
-  over between lifetimes, and so does the bound lifetime's offline frame. A new request starts
-  unknown and from no revision, so its answer may come at the revision the last one had.
+  equal one is not, but for an intent's first frame, which may come at the revision shown ("The
+  layout action" below). A frame from another lifetime makes the bar ask again, as revisions do not
+  carry over between lifetimes, and so does the bound lifetime's offline frame. A new query starts
+  unknown and from no revision, so its answer may come at the revision the last one had. That holds
+  for queries only: an intent keeps the answer held until its own first frame or its deadline
+  ("The layout action" below).
 - A lifetime can also go with no frame, when its script or KWin stops without one. The component
   watches the session bus's `NameOwnerChanged` through the workspace plugin's `SignalWatcher` (the
   same at plasma-workspace 6.7.5 and 6.8.3), with no polling. The bound lifetime's connection holds
@@ -277,13 +281,14 @@ provider (`wake()`). The clock's `main.qml` owns it:
   round trip comes first.
 - The component reports `outcome` - idle, pending, unconfirmed, answered, or refused with `refusal`
   its reason - apart from the state an answer gives: `capable`, `view`, `tiled`, `epoch` and
-  `revision`. `mode` is unknown until an answer is accepted, unavailable when the provider cannot
-  tile or KWin has no such output, and otherwise floating or tiled. A saved answer alone is never
+  `revision`. `mode` follows the answer held: unknown until an answer is accepted, unavailable when
+  the provider cannot tile or KWin has no such output, and otherwise floating or tiled. For a query
+  it agrees with `outcome`, as a query drops the answer it replaces. A saved answer alone is never
   state: an earlier instance's answer names that instance's consumer.
 - Each request has a deadline, `deadlineMs`: 100 to 10000 ms, and 10000 for any other value,
   which starts as the request is made. A request keeps the deadline it was made with, and a change
   applies from the next request. Past it with no answer, the outcome is unconfirmed and the mode
-  stays unknown, but the request stays out: nothing is cancelled, renumbered or asked again, and a
+  is unknown, but the request stays out: nothing is cancelled, renumbered or asked again, and a
   late answer still counts, as in P0's transport (`tasks/workspace-layout-control/g0-receipt.md`,
   item 9). That covers an answer that does not come - a Kiosk policy that refuses the shell's
   scripting, no placement script, stock KWin, a wake that fails - and a check whose lookup fails,
@@ -334,6 +339,238 @@ width it gives up, none while it shows no mode.
 fixtures must log nothing but the dumps and the one unanswered line. The pill's short date at the
 width budget's step 4 runs through `main.qml`'s own binding in eight regions: the day and the
 month in the region's order, without the year and what joined it to them.
+
+### The layout action (`LayoutState.qml`)
+
+The layout menu's Floating and Tiled choices (P6 of `tasks/workspace-layout-control/todo.md`)
+reach the provider's prepared target and desired mode
+([kwin.md](kwin.md#the-layout-providers-state)) through the layout state, which makes every
+decision. The menu and the pill's interactive control, which come in P6's later slices, forward the
+user's input to it and bind to the action's state; until then nothing calls it, and the bar sends
+queries only.
+
+- `open()` freezes the action's context from the answer the bar holds - its lifetime (`epoch`), its
+  `view` (`desktopId`, `activityId`) and the output - and sends nothing, so a menu opened and closed
+  again holds nothing of the provider's. It returns false and changes nothing unless the action is
+  idle with actions available: while a set is awaited, the control's activation is ignored.
+  `input()` is the menu's first counted input, a navigation or choosing key or a press on a row: it
+  sends the prepare, which takes the provider's one prepared slot - one for all the bars, so that
+  while one holds it a prepare from any other is refused `busy` - and an open menu alone never holds
+  it. `choose(mode)` is the user's choice, `tiled` or `floating`: queued with a prepare while
+  nothing is prepared, sent as a set once prepared. Re-selecting the mode shown sends a set too,
+  which the provider makes a no-op: the authority decides, not a mode that may lag it.
+  `close(dismissed)` says the menu closed, `dismissed` when the user closed it (Escape, or a press
+  on the control).
+- `actionsAvailable` holds while a mode shows, tiled or floating, and the answering lifetime has not
+  refused the intents (below). `actionOpen` holds from `open()` until the action ends; the menu
+  shows only then. `actionState` is `idle` (no action, or one that ended with nothing awaited),
+  `open` (nothing in flight: the next input prepares), `preparing` (the prepare is out with no
+  frame), `prepared` (the prepare is done and its newest frame says ready), `setting` (the set is
+  out, the menu still open) or `awaiting` (the action has ended, its set awaited before its
+  deadline). `actionChoice` is the choice queued or sent, kept until the next request so that an
+  outcome shown after it is worded for its mode; `actionPending` holds while a choice is queued or
+  a set is out. `actionHandle` and `actionTarget` are the done prepare's handle and whether it found
+  an app to tile, held only while prepared. `tiledBlocked` holds while prepared with no target on a
+  floating view; on a tiled view Tiled needs none. `actionReason` is what the menu's status line or
+  the pill presents, or empty: a provider's reason, or the bar's own `unconfirmed` (no answer by the
+  deadline), `interrupted` (the menu closed by itself before its set was read) and `malformed` (a
+  frame without the intent's fields).
+- `actionOutcome(reason, mode)` is emitted whenever a row of the table below presents a reason,
+  with the mode it concerns (`actionChoice` at that moment, empty for none), and with an empty
+  reason when a done set clears a notice. It comes after every other change of its event, so that
+  a handler sees the action as the row leaves it; the clock's handler will be the only one to
+  announce it.
+- Callers. Each input, frame or deadline decides first and then changes each property at most
+  once - the action's properties, `mode` and `outcome` among them - so that a binding never sees a
+  value the event does not leave; no property passes through one. Which property changes first is
+  not settled, though: inside the change handler of one property the others may not have followed
+  yet, so a handler acts on the property whose change it handles, or on `actionOutcome()`, which
+  comes last and may read them all. A handler that runs inside the layout state's own change - the
+  menu's hide, as `actionOpen` or `actionsAvailable` turns false, or the control's, as the mode
+  stops showing - only calls `close(false)`. That call always meets an ended action and changes
+  nothing: every event ends the action before the mode or the actions go (a frame whose mode leaves
+  nothing to act on, a refusal, a deadline, asking again), and records how the menu closed before
+  `actionOpen` changes.
+- The intents carry exactly the keys the provider's reader copies: a prepare
+  `{version, intent, consumer, request, outputName, epoch, view: {desktopId, activityId}}`, a set
+  `{version, intent, consumer, request, outputName, mode, handle}`. They share the queries'
+  numbering, deadline and save-then-wake path, and each clears the frame waiting for its check.
+- An intent keeps the answer the bar holds, so the mode stays on screen while it is out, until its
+  first frame is taken - which may come at the revision shown, as a done prepare moves none, but
+  not below it, and is taken once, as every later frame needs a newer revision - or until its
+  deadline. Past the deadline with no frame the mode is unknown and the control hides, as for a
+  query: an intent the provider never read would otherwise keep a view's mode past a desktop switch
+  or a press of the shortcut. The request stays out, and a late frame from the bound lifetime shows
+  the mode again. The deadline belongs to the request, not to the action: it drops the kept mode
+  whether the action is still waiting, has ended, or has been opened again meanwhile. `outcome`
+  keeps its meaning for every request - pending until its first frame, answered or refused then,
+  unconfirmed past its deadline with no frame - while `mode` follows the answer held.
+- Which frames count. Every frame of the current request gives the mode. Its completion and
+  preparation count only on the action's own request while the action waits for them (preparing,
+  prepared, setting and awaiting: only the action's requests lead there, and any other request ends
+  the action first), and for a set's first completion after its deadline, in idle or in the action
+  that sent the set: an action opened after the deadline takes it for the mode only. A completion
+  counts once, from the first frame that carries one: every later frame of the request carries it
+  again, and each desktop switch publishes the request anew. The one later field that counts is a
+  prepared action's `prepared.ready`. On the action's own request the intent's fields must be as
+  the provider adds them: a prepare's completion naming the prepare, `result` `done` or `refused`
+  with a reason of 1 to 64 characters, a done prepare's handle of at most 128 characters beginning
+  with the frame's epoch and a colon, a boolean `target` with a reason when false, and on a done
+  prepare's frame `prepared` with that handle, a boolean `ready` and a reason when not ready (on a
+  refused prepare's frame, which the provider gives none, a `prepared` is only checked for that
+  form); a set's frames carry a completion naming the set only once it is decided, and never
+  `prepared`.
+- Refused intents. An own frame refused at frame level while the action waits for it (preparing,
+  setting, awaiting) ends the action with that reason, and the bar asks again with a query, which
+  starts unknown as every query does. `intent`, `version` and `malformed` leave the lifetime without
+  actions until another lifetime answers: such a provider would refuse every further choice the same
+  way, and a control that kept offering them would look as if it worked. An own frame without the
+  intent's fields does the same and presents `malformed`: dropping it would leave the bar to the
+  deadline whenever that provider answers so, and taking it as not ready would fail every further
+  choice. `output` leaves the actions available, as the query is refused the same way. So a provider
+  older than P5 costs one failed try before the control turns read-only. Once the action has ended,
+  a frame refused at frame level for its intent - still the current request - asks again in the same
+  way and marks the lifetime for the same reasons, but presents nothing, and an action opened since
+  then ends, as nothing is left to act on (T16a). So does such a frame for an open action's own
+  intent after its decision, so that the bar asks again rather than leave the mode unknown; P5 never
+  sends one, as it refuses a request at frame level from the request's content alone, and so from
+  its first frame on. In prepared, and for an open action's own set still undecided past its
+  deadline, such a frame gives the mode only, and the action ends through T34 with no reason
+  presented and no query. Each lifetime left without actions is said once in the shell's log, naming
+  the side that failed: "the provider refused the bar's prepare (or set) at frame level with" the
+  reason, or "the provider sent a frame for the bar's prepare (or set) that lacked the intent's
+  fields", then "the layout actions are off for its lifetime" and its epoch. No intent goes to a
+  lifetime so marked, so nothing repeats the line.
+- The frame's mode comes first: a frame whose mode leaves nothing to act on ends the action (T34)
+  before its completion counts, so no set goes out on a frame that hides the control, and a set
+  already out is then awaited, its completion in that frame included. That end is no close by the
+  user, whatever an earlier action's close was.
+
+The table: q is the queued choice; an own frame is a frame of the request the action sent last,
+while it is the current request. "Ready" means the newest accepted frame of the prepare says
+`prepared.ready: true`, and a sendable q is Floating, or Tiled with a target or on a tiled view.
+"Presents" sets `actionReason` and emits `actionOutcome()` with it; a row that presents nothing
+clears `actionReason` only when it changes the state, and every request sent clears it. A next
+state of `idle` or `awaiting` ends the action (`actionOpen` false): every end drops q and records
+how the menu closed, once, before the change is notified - the change hides the menu, whose hide
+calls `close(false)` at once, possibly from inside the call or the frame that ended the action, and
+that call must meet the ended action. Only `close(true)` records the user's close; afterwards only
+T22 changes the record, and the move from `awaiting` to `idle` keeps it.
+
+| # | In | Event | Next | Sends | Presents |
+|---|---|---|---|---|---|
+| T1 | idle | `open()`, actions available | open | nothing | nothing; `open()` is true |
+| T2 | any other, or idle without actions | `open()` | unchanged | nothing | nothing; `open()` is false |
+| T3 | open | `input()` | preparing | prepare | nothing |
+| T4 | open | `choose(m)` | preparing, q = m | prepare | nothing |
+| T5 | open | an accepted frame of the current request names a view other than the frozen one: the frame that moved the action into open included, the newest accepted frame on entering open through T31, and the frames T35 and T35a take | idle | nothing | nothing |
+| T6 | preparing | `choose(m)` with no q | preparing, q = m | nothing | nothing |
+| T7 | preparing | own frame: done and ready, q sendable | setting | set (q) | nothing |
+| T8 | preparing | own frame: done and ready, no q | prepared | nothing | the prepare's reason, when Tiled is blocked |
+| T9 | preparing | own frame: done and ready, q Tiled, Tiled blocked | prepared, q dropped | nothing | the prepare's reason |
+| T10 | preparing | own frame: done, not ready, `focus-changed` or `target-departed` | open, q dropped | nothing | nothing |
+| T11 | preparing, prepared | own frame: not ready, `view-changed` or `shell-replaced` | idle | nothing | nothing |
+| T12 | preparing | own frame: refused `busy`, `unavailable`, `conflicting-request` or `stale-request` | open, q dropped | nothing | the reason |
+| T12a | preparing | own frame: refused for a reason not in T12, T13 or T14 | open, q dropped | nothing | the reason |
+| T13 | preparing | own frame: refused `popup-focus-unconfirmed` | open, q dropped | nothing | nothing |
+| T14 | preparing | own frame: refused `stale-context` | idle | nothing | the reason |
+| T15 | preparing, prepared, setting, awaiting | own frame without the intent's fields as the provider adds them | idle; no actions for the lifetime | query | `malformed` |
+| T16 | preparing, setting, awaiting | own frame refused at frame level | idle; `intent`, `version`, `malformed` as T15, `output` not | query | the reason |
+| T16a | idle, open | a frame refused at frame level for the current intent, whose action has ended, or for an open action's own intent after its decision (which P5 never sends) | unchanged; `intent`, `version`, `malformed` mark the lifetime as T15, `output` not; an open action then ends through T34 if nothing is left to act on | query | nothing |
+| T17 | preparing | the prepare's deadline, no frame, no q | idle; the mode unknown | nothing | `unconfirmed` |
+| T17a | preparing | the prepare's deadline, no frame, q queued | idle, q dropped; the mode unknown | nothing | `unconfirmed` |
+| T17b | idle, open | the deadline of the current request, an intent with no frame accepted | unchanged; the mode unknown, so open ends through T34 | nothing | nothing |
+| T18 | prepared | `choose(m)`, m sendable | setting | set (m) | nothing |
+| T19 | prepared | own frame: not ready, `focus-changed` or `target-departed` | open | nothing | nothing |
+| T19a | preparing, prepared | own frame: not ready for a reason not in T10, T11 or T19 | open, q dropped | nothing | nothing |
+| T20 | open, preparing, prepared | `close(d)` | idle, the close's kind recorded | nothing | nothing |
+| T21 | setting | `close(d)` | awaiting, the close's kind recorded | nothing | nothing |
+| T22 | awaiting, or idle with the action's set unread, the close recorded not the user's | `close(true)` | unchanged, the close now the user's | nothing | nothing |
+| T22a | idle, awaiting | any other `close(d)`, the nested `close(false)` that follows every end of the action among them | unchanged | nothing | nothing |
+| T23 | setting, awaiting | own frame without a completion | unchanged; the set read | nothing | nothing |
+| T24 | setting, awaiting | own completion `done` | idle | nothing | clears a notice |
+| T25 | awaiting | first own frame: refused `stale-context` or `focus-changed` | idle | nothing | nothing after `close(true)`; `interrupted` after `close(false)` |
+| T26 | setting | own frame: refused `stale-context`, `focus-changed` or `target-departed` | open | nothing | the reason |
+| T27 | setting, awaiting | own frame: refused `view-changed` or `shell-replaced` | idle | nothing | the reason |
+| T28 | setting | own frame: refused for any other reason | open | nothing | the reason |
+| T29 | awaiting | own frame: refused for a reason not in T25 or T27 | idle | nothing | the reason |
+| T30 | setting, awaiting | the set's deadline, no frame | idle; the mode unknown | nothing | `unconfirmed` |
+| T31 | setting, awaiting | the set's deadline, frames without a completion | open from setting, idle from awaiting | nothing | `unconfirmed` |
+| T32 | idle, or open in the action that sent the set | the first frame carrying the set's completion, after the set's deadline, while the set is the current request | idle on done, else unchanged | nothing | done clears the notice; a refusal its reason, a first frame refused `stale-context` or `focus-changed` as T25 |
+| T33 | any but idle | the bar asks again: another lifetime, the bound offline frame, a name or output change, going idle | idle | a query (none going idle) | `unconfirmed` when a set was out |
+| T34 | open, preparing, prepared, setting | actions become unavailable | idle, or awaiting from setting with the close recorded not the user's | nothing | nothing |
+| T35 | any | a frame of a request the action did not send: a query's, or an earlier action's, including a late completion of a set reaching an action opened after it | unchanged | nothing | nothing; the mode only |
+| T35a | any | any other frame of the current request: a later frame once its completion is taken, a frame of an ended action's prepare, an own frame no row above takes | unchanged | nothing | nothing; the mode only |
+| T36 | any | `input()` outside open; `choose()` in idle, with q, while setting or awaiting, or for a blocked Tiled | unchanged | nothing | nothing (ignored) |
+
+- Where an action is left. A preparation that ended with `focus-changed`, `target-departed` or
+  another reason that does not end the view (T10, T19, T19a), a silent `popup-focus-unconfirmed`
+  (T13) and a prepare refused for another reason (T12, T12a) leave it open: the next input prepares
+  again, and nothing is retried without one. A done prepare can arrive already not ready, and then a
+  queued choice is dropped silently. After the action ends the state is `awaiting` while a set is
+  out before its deadline (T21, T34), and `idle` otherwise; a queued choice, Escape and then the
+  handle arriving sends nothing (T20, T35a).
+- The menu's close before the set is read. The focus change that closes the menu ends the
+  preparation and empties the provider's slot, so a set read after it is refused `stale-context`, or
+  `focus-changed` when KWin did not announce the change, in its first frame. T25 keys on the close,
+  not the reason: after the user's close nothing is presented, after any other "Interrupted, try
+  again". With the menu still open, those reasons say that the workspace changed (T26). So the menu
+  does not close on a choice: it stays open until the provider has read the set, or until the user
+  or KWin closes it, and a done set ends the action (T24), as a done Tiled gives the app focus,
+  which hides the menu.
+- T5 compares two of the provider's views, the frozen one and the frame's, on every accepted frame
+  while the action is open, over T35 and T35a; otherwise the next prepare would be refused
+  `stale-context` and a second notice would follow the first. A reason the moving frame's row
+  presented stays presented. T31 enters open on a deadline, not a frame, so there T5 checks the
+  newest accepted frame.
+- A prepare that times out presents `unconfirmed` with or without a choice queued (T17, T17a): the
+  menu closes with the unknown mode, so the pill says it is not confirmed if the control shows again
+  in time. A late completion is the set's first after its deadline and counts until the bar's next
+  request, not after (T32): the provider tells a request no longer read nothing, and the bar takes
+  only its current request's frames. A late done clears the notice. A set's frames without a
+  completion come while the tiler retries its start; the mode follows them, and the set ends
+  unconfirmed at its deadline (T31), after which a new choice is a new intent that prepares again,
+  not a retry.
+- The mode always comes from the frames' `tiled`, never from a completion.
+
+Tests: `tests/calendar_backend_test.py`, run as above, also runs the action against the real
+component on its private bus, each case with a bar of its own answered by one lifetime, with the
+fields the provider adds to an intent's frames. It has a case for each outcome of each row of the
+table, and one for each outcome where a row has several: T2 in every state of the action and with
+the mode unknown or unavailable; T11 and T19a in preparing, on the first frame, and in prepared, on
+a later one; T15 for each missing or malformed field in each state it lists, the five kinds of a
+set's frame both while setting and while awaited; T16 for each reason, and a prepared action's frame
+refused at frame level, which gives the mode only; T16a in idle after Escape, in idle past the
+prepare's deadline, with the menu opened again and in an open action after its own prepare's
+refusal, each with a reason that marks the lifetime and with `output`, and an open action's own set
+still undecided past its deadline, which T16a does not take; T17 and T17a; T20 from open, preparing
+and prepared, with nothing sent after; T22 in awaiting and in idle past a set's deadline; T22a in
+awaiting and after a done set; T25 for both reasons after both kinds of close; T31 from setting and
+from awaiting; T32 done and refused in idle and in open, a late first frame refused `stale-context`
+after either kind of close, and in idle once a menu opened since has closed; T33 with a set out,
+with none, and going idle; T34 from each state, with the close it records; T35 for a late
+completion, done or refused, reaching a menu opened after the set's deadline, which stays open; and
+T36 for each call it ignores. Beyond the rows it checks the nested `close(false)` from inside the
+user's close, through the change of `actionOpen`, and the closes that the menu's and the control's
+hiding will make from inside a done set's end, a frame that takes the actions away from a setting
+action with the set refused in it (after an earlier action the user closed), a set's deadline, a
+refusal at frame level and another lifetime's frame: the state moves once and the row presents its
+own outcome; an open action ended before its actions go, `actionOpen` false already as
+`actionsAvailable` turns false, in T15, T16 and T16a (with the menu opened again, and after T12);
+the change signals of every action property, `mode` and `outcome`, at most one each, in T3, T4, T7,
+T8 with an app to tile and on a frame that turns the view tiled, T18, T15 from prepared with a
+reason shown, and a frame and a deadline that each move the action into open and end it (T26 or T31,
+then T5); a completion presented once, after T8, T25, T27, T28, T29 and T32; T5 on the frame that
+moved the action into open, on the newest frame when a deadline did, and on a query's frame naming
+another desktop or activity; the exact keys and numbering of a prepare and a set, each saved before
+its wake; the mode kept while an intent waits, its first frame taken at the revision shown, once,
+but not below it, and not kept out by a frame of the request it replaced still waiting for its
+check; a fresh query's first frame at revision 0 not taken; a prepare sent after a set's deadline,
+whose late frame is no late set; actions coming back with another lifetime; the handle emptied on
+every way out of prepared; the choice and the reason kept until the next request, a prepare or a
+query, which clears them, and the reason cleared by a change of state that presents nothing; the
+mode never taken from a completion; and that the cases log exactly one line for each lifetime left
+without actions, in the cases that leave one, and nothing else.
 
 ### Workspace layout control (`LayoutControl.qml`)
 

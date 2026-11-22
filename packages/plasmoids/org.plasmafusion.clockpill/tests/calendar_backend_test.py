@@ -5,6 +5,7 @@
 session bus."""
 
 from pathlib import Path
+import collections
 import hashlib
 import json
 import re
@@ -726,6 +727,1432 @@ waiting.deleteLater()
 watched.deleteLater()
 state.deleteLater()
 QTest.qWait(50)
+
+# The bar's layout action (P6; docs/parts/shell-topbar.md, "The layout action", whose table names
+# the rows T1 to T36 that the messages cite): the menu's choices as the layout state's open(),
+# input(), choose() and close(), sent to the provider as a prepare and a set. Each case has a bar
+# of its own, answered by one provider lifetime and floating unless it says otherwise, and records
+# each outcome the bar presents (actionOutcome) with what its handler sees then. The frames carry
+# what the provider adds to an intent's (kwin.md, "The layout provider's state"): a prepare's
+# completion and preparation, and a set's completion once it has one.
+E10 = hashlib.md5(b"ten").hexdigest()
+HANDLE = E1 + ":1:1"
+ELSEWHERE = dict(VIEW, desktopId="desktop-2")
+DONE = {"completion": {"intent": "set", "result": "done"}}
+action_messages = []
+qInstallMessageHandler(lambda mode, context, message: action_messages.append(message))
+
+
+def invoke(item, name, *args, returns=None):
+    """One of the component's functions, called directly as main.qml calls it; None when the
+    component has no such function, so that each case fails on its own."""
+    try:
+        if returns is None:
+            return QMetaObject.invokeMethod(item, name, Qt.DirectConnection, *args) or None
+        return QMetaObject.invokeMethod(item, name, Qt.DirectConnection, Q_RETURN_ARG(returns), *args)
+    except RuntimeError:
+        return None
+
+
+def ready(handle=HANDLE, target=True, why="no-target"):
+    """A done prepare's fields, its preparation ready."""
+    completion = {"intent": "prepare", "result": "done", "handle": handle, "target": target}
+    if not target:
+        completion["reason"] = why
+    return {"completion": completion, "prepared": {"handle": handle, "ready": True}}
+
+
+def ended(why, handle=HANDLE):
+    """A done prepare's fields once its preparation has ended for `why`."""
+    return {"completion": {"intent": "prepare", "result": "done", "handle": handle, "target": True},
+            "prepared": {"handle": handle, "ready": False, "reason": why}}
+
+
+def refusal(intent, why):
+    return {"completion": {"intent": intent, "result": "refused", "reason": why}}
+
+
+# A deadline with room for what a case does before it: the steps and the reads of the state that
+# must come first, which a short deadline could overtake on a loaded machine. A case that only
+# waits for a deadline to pass keeps a short one.
+ROOMY_DEADLINE = 1000
+
+
+class Bar:
+    """A layout state answered by one lifetime, and the outcomes it presents: each reason and
+    mode, with the action's state, reason and pending flag as the handler sees them."""
+
+    def __init__(self, deadline=10000, epoch=E1, revision=1, **fields):
+        self.item, self.log = create(outputName="Virtual-0", deadlineMs=deadline)
+        self.epoch = epoch
+        self.said = []
+        outcome = getattr(self.item, "actionOutcome", None)
+        if outcome is not None:
+            outcome.connect(lambda reason, mode: self.said.append(
+                (reason, mode, self.get("actionState"), self.get("actionReason"), self.get("actionPending"))))
+        until(lambda: self.log["requests"])
+        self.deliver(self.frame(revision, **fields))
+        until(lambda: self.get("outcome") == "answered")
+
+    def get(self, name):
+        return prop(self.item, name)
+
+    def state(self):
+        return self.get("actionState")
+
+    def presented(self):
+        return [entry[:3] for entry in self.said]
+
+    def open(self):
+        return invoke(self.item, "open", returns=bool)
+
+    def input(self):
+        invoke(self.item, "input")
+
+    def choose(self, mode):
+        invoke(self.item, "choose", Q_ARG(str, mode))
+
+    def close(self, dismissed):
+        invoke(self.item, "close", Q_ARG(bool, dismissed))
+
+    def count(self):
+        return len(self.log["requests"])
+
+    def last(self):
+        return self.log["requests"][-1] if self.log["requests"] else {}
+
+    def sent(self, count):
+        """Whether one request more than `count` went out: it is saved a turn after it is made."""
+        return until(lambda: self.count() > count) and self.count() == count + 1
+
+    def quiet(self, count, ms=100):
+        """Whether no request beyond `count` goes out."""
+        return not until(lambda: self.count() > count, ms=ms)
+
+    def frame(self, revision, **fields):
+        """A frame of the bar's last request, from its lifetime unless `fields` name another."""
+        fields.setdefault("epoch", self.epoch)
+        return frame(self.log, revision, **fields)
+
+    def deliver(self, value):
+        deliver(self.item, value)
+
+    def take(self, value, test, ms=2000):
+        """Deliver a frame and wait for what it should do."""
+        self.deliver(value)
+        return until(test, ms=ms)
+
+    def barrier(self, revision, **fields):
+        """Deliver a newer frame of the last request and wait for it: what was delivered before it
+        has been checked by then, as the checks run in order (see rejected() above)."""
+        return self.take(self.frame(revision, **fields), lambda: self.get("revision") == revision)
+
+    def to_open(self):
+        return self.open() is True and self.state() == "open"
+
+    def to_preparing(self, choice=None):
+        count = self.count()
+        if not self.to_open():
+            return False
+        if choice is None:
+            self.input()
+        else:
+            self.choose(choice)
+        return self.state() == "preparing" and self.sent(count)
+
+    def to_prepared(self, choice=None, tiled=False, **completion):
+        return self.to_preparing(choice) and self.take(self.frame(1, tiled=tiled, **ready(**completion)),
+                                                       lambda: self.state() == "prepared")
+
+    def to_setting(self, mode="floating", deadline=None, **options):
+        if not self.to_prepared(**options):
+            return False
+        if deadline is not None:
+            self.item.setProperty("deadlineMs", deadline)
+        count = self.count()
+        self.choose(mode)
+        return self.state() == "setting" and self.sent(count)
+
+    def to_awaiting(self, dismissed, **options):
+        if not self.to_setting(**options):
+            return False
+        self.close(dismissed)
+        return self.state() == "awaiting"
+
+    def done(self):
+        self.item.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+# What a bar presents and says while it runs: the shell's log gets one line when a provider
+# lifetime is left without actions, naming the side that failed, and nothing else.
+def lifetime_line(failure, epoch=E1):
+    return ("plasmafusion-clockpill: layout state: the provider %s; the layout actions are off for its lifetime %s"
+            % (failure, epoch))
+
+
+def refused_line(kind, why):
+    return lifetime_line("refused the bar's %s at frame level with %s" % (kind, why))
+
+
+def lacked_line(kind):
+    return lifetime_line("sent a frame for the bar's %s that lacked the intent's fields" % kind)
+
+
+expected_lines = []
+
+
+def logged(mark, lines):
+    """Whether exactly `lines` were logged since `mark`; they are expected in the final check too."""
+    expected_lines.extend(lines)
+    return action_messages[mark:] == lines
+
+
+# Each property of the action changes at most once in one input, frame or deadline: a binding to
+# it never sees a value the event does not leave. Counted from reset() on, with the mode and the
+# outcome, which the action's events change too.
+WATCHED = ("actionsAvailable", "actionOpen", "actionState", "actionChoice", "actionPending", "actionHandle",
+           "actionTarget", "tiledBlocked", "actionReason", "mode", "outcome")
+
+
+class ChangeCounts:
+    def __init__(self, bar):
+        self.counts, self.missing = {}, []
+        for name in WATCHED:
+            signal = getattr(bar.item, name + "Changed", None)
+            if signal is None:
+                self.missing.append(name)
+                continue
+            self.counts[name] = 0
+            signal.connect(lambda name=name: self.counts.__setitem__(name, self.counts[name] + 1))
+
+    def reset(self):
+        for name in self.counts:
+            self.counts[name] = 0
+
+    def once(self, **exactly):
+        """No property changed twice or more, and those named as many times as given."""
+        return (not self.missing and all(count <= 1 for count in self.counts.values())
+                and all(self.counts.get(name) == count for name, count in exactly.items()))
+
+
+def wire(bar):
+    """main.qml's two closes as its wiring will make them, from inside the layout state's own
+    change: the menu's hide as the action stops being open, and the control's as the mode stops
+    showing tiled or floating. Each says that it ran."""
+    calls = []
+
+    def menu_hidden():
+        if bar.get("actionOpen") is False:
+            calls.append("menu")
+            bar.close(False)
+
+    def control_hidden():
+        if bar.get("mode") not in ("tiled", "floating"):
+            calls.append("control")
+            bar.close(False)
+
+    for name, handler in (("actionOpenChanged", menu_hidden), ("modeChanged", control_hidden)):
+        signal = getattr(bar.item, name, None)
+        if signal is not None:
+            signal.connect(handler)
+    return calls
+
+
+# T1, T2: open() opens only an idle action with something to act on, and sends nothing.
+bar = Bar()
+count = bar.count()
+expect(bar.open() is True and bar.state() == "open" and bar.get("actionOpen") is True and bar.get("actionsAvailable") is True
+       and bar.quiet(count) and not bar.said,
+       "layout action: T1 open() in idle, with actions available, opens the action and sends nothing")
+bar.done()
+for name, reach in (("open", Bar.to_open), ("preparing", Bar.to_preparing), ("prepared", Bar.to_prepared),
+                    ("setting", Bar.to_setting)):
+    bar = Bar()
+    reached = reach(bar)
+    count = bar.count()
+    expect(reached and bar.open() is False and bar.state() == name and bar.quiet(count),
+           "layout action: T2 open() in %s is refused and changes nothing" % name)
+    bar.done()
+bar = Bar()
+reached = bar.to_awaiting(True)
+count = bar.count()
+expect(reached and bar.open() is False and bar.state() == "awaiting" and bar.get("actionPending") is True
+       and bar.get("actionOpen") is False and bar.quiet(count),
+       "layout action: T2 open() while a set is awaited is refused: the control's activation is ignored")
+bar.done()
+unknown, unknown_log = create(outputName="Virtual-0")
+until(lambda: unknown_log["requests"])
+expect(prop(unknown, "mode") == "unknown" and prop(unknown, "actionsAvailable") is False
+       and invoke(unknown, "open", returns=bool) is False and prop(unknown, "actionState") == "idle",
+       "layout action: T2 open() with the mode unknown is refused")
+unknown.deleteLater()
+bar = Bar(capable=False)
+expect(bar.get("mode") == "unavailable" and bar.get("actionsAvailable") is False and bar.open() is False
+       and bar.state() == "idle", "layout action: T2 open() with the mode unavailable is refused")
+bar.done()
+
+# T3, T4, T6: the first input prepares; a choice made in open queues and prepares, one made while
+# the prepare is out queues; neither sends a set.
+bar = Bar()
+count = bar.count()
+reached = bar.to_open()
+bar.input()
+expect(reached and bar.state() == "preparing" and bar.sent(count) and bar.last().get("intent") == "prepare"
+       and bar.get("actionPending") is False and bar.get("actionChoice") == "" and not bar.said,
+       "layout action: T3 an input in open sends a prepare (%s)" % bar.last())
+bar.done()
+bar = Bar()
+count = bar.count()
+reached = bar.to_open()
+bar.choose("tiled")
+expect(reached and bar.state() == "preparing" and bar.sent(count) and bar.last().get("intent") == "prepare"
+       and bar.get("actionChoice") == "tiled" and bar.get("actionPending") is True and not bar.said,
+       "layout action: T4 a choice in open is queued and sends a prepare, not a set (%s)" % bar.last())
+bar.done()
+bar = Bar()
+reached = bar.to_preparing()
+count = bar.count()
+bar.choose("floating")
+expect(reached and bar.state() == "preparing" and bar.get("actionChoice") == "floating" and bar.get("actionPending") is True
+       and bar.quiet(count) and not bar.said,
+       "layout action: T6 a choice while the prepare is out is queued, and nothing is sent")
+bar.done()
+
+# The requests carry exactly the keys the provider's reader copies, numbered on from the query,
+# each saved before its wake.
+bar = Bar()
+query = bar.last()
+events.clear()
+reached = bar.to_preparing()
+prepare = bar.last()
+woke = until(lambda: len(events) >= 2)
+prepare_events = [kind for kind, _ in events]
+reached = reached and bar.take(bar.frame(1, **ready()), lambda: bar.state() == "prepared")
+events.clear()
+count = bar.count()
+bar.choose("floating")
+chosen_sent = bar.sent(count)
+chosen = bar.last()
+chosen_woke = until(lambda: len(events) >= 2)
+chosen_events = [kind for kind, _ in events]
+expect(reached and sorted(prepare) == ["consumer", "epoch", "intent", "outputName", "request", "version", "view"]
+       and prepare["version"] == 1 and prepare["intent"] == "prepare" and prepare["consumer"] == query["consumer"]
+       and prepare["request"] == query["request"] + 1 and prepare["outputName"] == "Virtual-0" and prepare["epoch"] == E1
+       and prepare["view"] == {"desktopId": "desktop-1", "activityId": "activity-1"} and woke
+       and prepare_events == ["request", "wake"],
+       "layout action: a prepare names the frozen context and the next request number, saved before the wake (%s)" % prepare)
+expect(reached and chosen_sent and sorted(chosen) == ["consumer", "handle", "intent", "mode", "outputName", "request", "version"]
+       and chosen["version"] == 1 and chosen["intent"] == "set" and chosen["consumer"] == query["consumer"]
+       and chosen["request"] == prepare["request"] + 1 and chosen["outputName"] == "Virtual-0"
+       and chosen["mode"] == "floating" and chosen["handle"] == HANDLE and chosen_woke and chosen_events == ["request", "wake"],
+       "layout action: a set names the mode and the prepared handle, with the next request number (%s)" % chosen)
+bar.done()
+
+# While an intent waits for its first frame the bar keeps showing the mode it was sent from; a
+# done prepare moves no revision, so the first frame comes at the revision shown and is taken, and
+# a frame of that request at that revision again, as one the shell did not confirm is written
+# again, is not.
+bar = Bar()
+reached = bar.to_preparing()
+expect(reached and bar.get("outcome") == "pending" and bar.get("mode") == "floating" and bar.get("epoch") == E1
+       and bar.get("revision") == 1 and bar.get("capable") is True and bar.get("view") == VIEW
+       and bar.get("actionsAvailable") is True,
+       "layout action: the mode is kept while an intent waits for its first frame")
+mark = len(bar.log["history"])
+first_taken = reached and bar.take(bar.frame(1, **refusal("prepare", "busy")), lambda: bar.state() == "open")
+bar.deliver("")
+bar.deliver(bar.frame(1, tiled=True, **refusal("prepare", "busy")))
+taken = first_taken and bar.barrier(2, **refusal("prepare", "busy"))
+expect(taken and bar.get("outcome") == "answered" and len(bar.said) == 1
+       and not [h for h in bar.log["history"][mark:] if h[1] == "tiled"],
+       "layout action: an intent's first frame is taken at the revision shown, and only once (%s)" % bar.said)
+bar.done()
+# A new intent clears the frame waiting for its check, as a query does: one of the request it
+# replaces, still waiting behind a check, would otherwise keep out the intent's first frame at the
+# same revision, as only the newest frame of a lifetime waits. All of it happens in one turn.
+bar = Bar()
+reached = bar.to_open()
+query = bar.last()
+bar.deliver(bar.frame(2))
+bar.deliver(bar.frame(3))
+bar.input()
+bar.deliver(dict(bar.frame(3, **ready()), request=query.get("request", 0) + 1))
+expect(reached and until(lambda: bar.state() == "prepared") and bar.get("actionHandle") == HANDLE,
+       "layout action: a new intent clears the frame waiting for its check, so its first frame is not kept out")
+bar.done()
+
+# T5: an open action whose view, as the provider's frames name it, is no longer the frozen one
+# ends: on the frame that moved the action into open, on the newest frame when a deadline did, and
+# on a frame that gives the mode only. A reason the moving frame presented is presented once.
+for row, why in (("T26", "stale-context"), ("T28", "unavailable")):
+    bar = Bar()
+    reached = bar.to_setting()
+    taken = reached and bar.take(bar.frame(1, view=ELSEWHERE, **refusal("set", why)), lambda: bar.state() == "idle")
+    expect(taken and bar.presented() == [(why, "floating", "idle")],
+           "layout action: T5 a frame that moves the action into open (%s) naming another view ends it, its reason"
+           " presented once (%s)" % (row, bar.said))
+    bar.done()
+bar = Bar()
+reached = bar.to_setting(deadline=ROOMY_DEADLINE)
+read = reached and bar.take(bar.frame(2, view=ELSEWHERE), lambda: bar.get("revision") == 2)
+expired = read and bar.state() == "setting" and until(lambda: bar.state() != "setting", ms=3000)
+expect(expired and bar.state() == "idle" and bar.presented() == [("unconfirmed", "floating", "idle")],
+       "layout action: T5 entering open at a set's deadline (T31) checks the newest frame's view (%s)" % bar.said)
+bar.done()
+bar = Bar()
+reached = bar.to_open()
+taken = reached and bar.take(bar.frame(2, view=ELSEWHERE), lambda: bar.state() == "idle")
+expect(taken and not bar.said, "layout action: T5 a query's frame naming another view ends an open action, silently")
+bar.done()
+bar = Bar()
+reached = bar.to_open()
+taken = reached and bar.take(bar.frame(2, view=dict(VIEW, activityId="activity-2")), lambda: bar.state() == "idle")
+expect(taken and not bar.said, "layout action: T5 so does a frame naming another activity")
+bar.done()
+
+# T7: a choice queued before the prepare is done is sent with its handle on the prepare's ready
+# frame, if it can be sent: Floating, or Tiled with a target or on a tiled view.
+for why, tiled, mode, target in (("Floating with no target", False, "floating", False),
+                                 ("Tiled with a target", False, "tiled", True),
+                                 ("Tiled on a tiled view with no target", True, "tiled", False)):
+    bar = Bar(tiled=tiled)
+    reached = bar.to_preparing(mode)
+    count = bar.count()
+    taken = reached and bar.take(bar.frame(1, tiled=tiled, **ready(target=target)), lambda: bar.state() == "setting")
+    expect(taken and bar.sent(count) and bar.last().get("intent") == "set" and bar.last().get("mode") == mode
+           and bar.last().get("handle") == HANDLE and bar.get("actionHandle") == "" and bar.get("actionChoice") == mode
+           and bar.get("actionPending") is True and bar.get("tiledBlocked") is False and not bar.said,
+           "layout action: T7 a queued choice, %s, is sent on the prepare's ready frame (%s)" % (why, bar.last()))
+    bar.done()
+
+# T8, T9: with no choice queued the action is prepared with the prepare's handle and target;
+# Tiled is blocked, and the prepare's reason presented, only with no target on a floating view. A
+# queued Tiled that is blocked is dropped.
+bar = Bar()
+reached = bar.to_prepared(target=True)
+expect(reached and bar.get("actionHandle") == HANDLE and bar.get("actionTarget") is True and bar.get("tiledBlocked") is False
+       and not bar.said, "layout action: T8 a ready prepare with a target is prepared, and presents nothing")
+bar.done()
+bar = Bar()
+reached = bar.to_prepared(target=False)
+expect(reached and bar.get("actionHandle") == HANDLE and bar.get("actionTarget") is False and bar.get("tiledBlocked") is True
+       and bar.presented() == [("no-target", "", "prepared")] and bar.get("actionReason") == "no-target",
+       "layout action: T8 a ready prepare with no target on a floating view blocks Tiled and presents its reason (%s)"
+       % bar.said)
+bar.done()
+bar = Bar(tiled=True)
+reached = bar.to_prepared(target=False, tiled=True)
+expect(reached and bar.get("tiledBlocked") is False and not bar.said,
+       "layout action: T8 on a tiled view Tiled needs no target: nothing is blocked or presented")
+bar.done()
+bar = Bar()
+reached = bar.to_preparing("tiled")
+count = bar.count()
+taken = reached and bar.take(bar.frame(1, **ready(target=False, why="focus-changed")), lambda: bar.state() == "prepared")
+expect(taken and bar.get("actionPending") is False and bar.get("actionChoice") == "tiled" and bar.get("tiledBlocked") is True
+       and bar.presented() == [("focus-changed", "tiled", "prepared")] and bar.quiet(count),
+       "layout action: T9 a queued Tiled that is blocked is dropped and no set sent; the prepare's reason is presented (%s)"
+       % bar.said)
+bar.done()
+
+# T10, T11, T19, T19a: a done prepare whose preparation has ended - already in its first frame,
+# or in a later one while prepared - leaves the action open for the next input, or ends it when
+# the view or the shell changed. Nothing is presented, and a queued choice is dropped unsent.
+for why in ("focus-changed", "target-departed"):
+    bar = Bar()
+    reached = bar.to_preparing("floating")
+    count = bar.count()
+    taken = reached and bar.take(bar.frame(1, **ended(why)), lambda: bar.state() == "open")
+    expect(taken and bar.get("actionPending") is False and bar.get("actionHandle") == "" and bar.quiet(count)
+           and not bar.said,
+           "layout action: T10 a done prepare already not ready (%s) leaves the action open, its queued choice dropped and"
+           " no set sent" % why)
+    bar.done()
+bar = Bar()
+reached = bar.to_preparing("floating")
+count = bar.count()
+taken = reached and bar.take(bar.frame(1, **ended("view-changed")), lambda: bar.state() == "idle")
+expect(taken and bar.get("actionOpen") is False and bar.get("actionPending") is False and bar.quiet(count) and not bar.said,
+       "layout action: T11 a prepare's first frame not ready for view-changed ends the action, silently")
+bar.done()
+bar = Bar()
+reached = bar.to_prepared()
+count = bar.count()
+taken = reached and bar.take(bar.frame(2, **ended("shell-replaced")), lambda: bar.state() == "idle")
+expect(taken and bar.get("actionHandle") == "" and bar.quiet(count) and not bar.said,
+       "layout action: T11 a prepared action's later frame not ready for shell-replaced ends the action, silently")
+bar.done()
+for why in ("focus-changed", "target-departed"):
+    bar = Bar()
+    reached = bar.to_prepared()
+    count = bar.count()
+    taken = reached and bar.take(bar.frame(2, **ended(why)), lambda: bar.state() == "open")
+    expect(taken and bar.get("actionHandle") == "" and bar.quiet(count) and not bar.said,
+           "layout action: T19 a prepared action whose preparation ended (%s) is open again, silently" % why)
+    bar.done()
+bar = Bar()
+reached = bar.to_preparing("tiled")
+count = bar.count()
+taken = reached and bar.take(bar.frame(1, **ended("consumer-retired")), lambda: bar.state() == "open")
+expect(taken and bar.get("actionPending") is False and bar.quiet(count) and not bar.said,
+       "layout action: T19a a prepare's first frame not ready for another reason leaves the action open, its queued"
+       " choice dropped")
+bar.done()
+bar = Bar()
+reached = bar.to_prepared()
+taken = reached and bar.take(bar.frame(2, **ended("consumer-retired")), lambda: bar.state() == "open")
+expect(taken and bar.get("actionHandle") == "" and not bar.said,
+       "layout action: T19a a prepared action's later frame not ready for another reason leaves it open, silently")
+bar.done()
+
+# T12, T12a, T13, T14: a refused prepare leaves the action open for the next input, its queued
+# choice dropped, and presents the reason, except a silent popup-focus-unconfirmed; stale-context
+# ends it.
+for row, why, shown in (("T12", "busy", True), ("T12", "unavailable", True), ("T12", "conflicting-request", True),
+                        ("T12", "stale-request", True), ("T12a", "tree-refused", True),
+                        ("T13", "popup-focus-unconfirmed", False)):
+    bar = Bar()
+    reached = bar.to_preparing("tiled")
+    count = bar.count()
+    taken = reached and bar.take(bar.frame(1, **refusal("prepare", why)), lambda: bar.state() == "open")
+    expect(taken and bar.get("actionPending") is False and bar.quiet(count)
+           and bar.said == ([(why, "tiled", "open", why, False)] if shown else []),
+           "layout action: %s a prepare refused %s leaves the action open, its queued choice dropped, %s (%s)"
+           % (row, why, "the reason presented once the state is final" if shown else "silently", bar.said))
+    bar.done()
+bar = Bar()
+reached = bar.to_preparing()
+taken = reached and bar.take(bar.frame(1, **refusal("prepare", "stale-context")), lambda: bar.state() == "idle")
+expect(taken and bar.presented() == [("stale-context", "", "idle")],
+       "layout action: T14 a prepare refused stale-context ends the action and presents the reason (%s)" % bar.said)
+bar.done()
+
+
+# T15: an own frame without the intent's fields as the provider adds them - a prepare's
+# completion, a done prepare's preparation with its handle, a set's completion when it has one and
+# no preparation, each with its reasons - ends the action, asks again with a query and presents
+# "malformed"; the lifetime is offered no actions, though its answer shows the mode.
+def amend(fields, part, key, value=MISSING):
+    """A copy of an intent's frame fields with one key of one part set, or left out."""
+    result = json.loads(json.dumps(fields))
+    if value is MISSING:
+        del result[part][key]
+    else:
+        result[part][key] = value
+    return result
+
+
+PREPARE_FIELDS = [
+    ("no completion", {}),
+    ("a completion that is null", dict(ready(), completion=None)),
+    ("a completion that is no object", dict(ready(), completion="done")),
+    ("a set's completion", dict(ready(), completion={"intent": "set", "result": "done"})),
+    ("a result neither done nor refused", amend(ready(), "completion", "result", "maybe")),
+    ("a refusal without a reason", amend(refusal("prepare", "busy"), "completion", "reason")),
+    ("a refusal with an empty reason", refusal("prepare", "")),
+    ("a refusal with a reason over 64 characters", refusal("prepare", "r" * 65)),
+    ("a refusal with a malformed preparation", dict(refusal("prepare", "busy"), prepared={"ready": "no"})),
+    ("a done prepare without a handle", amend(ready(), "completion", "handle")),
+    ("an empty handle", ready(handle="")),
+    ("a handle over 128 characters", ready(handle=E1 + ":" + "1" * 96)),
+    ("a handle not of the frame's lifetime", ready(handle=E2 + ":1:1")),
+    ("a target that is no boolean", amend(ready(), "completion", "target", "yes")),
+    ("no target", amend(ready(), "completion", "target")),
+    ("no target and no reason", amend(ready(target=False), "completion", "reason")),
+    ("no preparation", {"completion": ready()["completion"]}),
+    ("a preparation that is null", dict(ready(), prepared=None)),
+    ("a preparation of another handle", amend(ready(), "prepared", "handle", E1 + ":1:2")),
+    ("a readiness that is no boolean", amend(ready(), "prepared", "ready", "true")),
+    ("a preparation not ready without a reason", amend(ended("focus-changed"), "prepared", "reason")),
+]
+PREPARED_FIELDS = [("no completion", {}), ("no preparation", {"completion": ready()["completion"]}),
+                   ("a preparation not ready without a reason", amend(ended("focus-changed"), "prepared", "reason"))]
+SET_FIELDS = [
+    ("a prepare's completion", {"completion": ready()["completion"]}),
+    ("a result neither done nor refused", {"completion": {"intent": "set", "result": "maybe"}}),
+    ("a refusal without a reason", {"completion": {"intent": "set", "result": "refused"}}),
+    ("a preparation", {"prepared": {"handle": HANDLE, "ready": True}}),
+    ("a done set with a preparation", dict(DONE, prepared={"handle": HANDLE, "ready": True})),
+]
+malformed_cases = ([("preparing", "prepare", Bar.to_preparing, 1) + case for case in PREPARE_FIELDS]
+                   + [("prepared", "prepare", Bar.to_prepared, 2) + case for case in PREPARED_FIELDS]
+                   + [("setting", "set", Bar.to_setting, 1) + case for case in SET_FIELDS]
+                   + [("awaiting", "set", lambda b: b.to_awaiting(True), 1) + case for case in SET_FIELDS])
+for name, kind, reach, revision, why, fields in malformed_cases:
+    bar = Bar()
+    reached = reach(bar)
+    count = bar.count()
+    mark = len(action_messages)
+    taken = reached and bar.take(bar.frame(revision, **fields), lambda: bar.state() == "idle")
+    asked = taken and bar.sent(count) and bar.last().get("intent") == "query"
+    answered = asked and bar.take(bar.frame(5), lambda: bar.get("outcome") == "answered")
+    expect(logged(mark, [lacked_line(kind)]) and answered and bar.presented() == [("malformed", "", "idle")]
+           and bar.get("mode") == "floating" and bar.get("actionsAvailable") is False and bar.open() is False,
+           "layout action: T15 in %s, an own frame with %s ends the action, asks again and presents malformed; the"
+           " lifetime is offered no actions, and the log says the provider's frame lacked the fields (%s)"
+           % (name, why, bar.said))
+    bar.done()
+
+# T16: an own frame refused at frame level ends the action with the reason and asks again;
+# intent, version and malformed leave that lifetime without actions, with a line in the log, and
+# output does not. Another lifetime's answer brings them back.
+for name, kind, why, marks, reach in (("preparing", "prepare", "output", False, Bar.to_preparing),
+                                      ("preparing", "prepare", "intent", True, Bar.to_preparing),
+                                      ("setting", "set", "version", True, Bar.to_setting),
+                                      ("awaiting", "set", "malformed", True, lambda b: b.to_awaiting(True))):
+    bar = Bar()
+    reached = reach(bar)
+    count = bar.count()
+    mark = len(action_messages)
+    taken = reached and bar.take(bar.frame(2, refused=why), lambda: bar.state() == "idle")
+    asked = taken and bar.sent(count) and bar.last().get("intent") == "query"
+    answered = asked and bar.take(bar.frame(5), lambda: bar.get("outcome") == "answered")
+    expect(logged(mark, [refused_line(kind, why)] if marks else []) and answered
+           and bar.presented() == [(why, "", "idle")] and bar.get("actionsAvailable") is (not marks),
+           "layout action: T16 in %s, an own frame refused %s ends the action and asks again; the lifetime %s (%s)"
+           % (name, why, "is offered no actions, said once in the log" if marks else "keeps its actions", bar.said))
+    if why == "intent":
+        count = bar.count()
+        bar.deliver(frame(bar.log, 6, epoch=E2))
+        back = answered and bar.sent(count) and bar.take(frame(bar.log, 1, epoch=E2), lambda: bar.get("epoch") == E2)
+        expect(back and bar.get("actionsAvailable") is True and bar.open() is True,
+               "layout action: actions come back once another lifetime answers")
+    bar.done()
+bar = Bar()
+reached = bar.to_prepared()
+count = bar.count()
+taken = reached and bar.take(bar.frame(2, refused="output"), lambda: bar.state() == "idle")
+expect(taken and bar.get("mode") == "unknown" and bar.get("actionHandle") == "" and bar.quiet(count) and not bar.said,
+       "layout action: T16 is not for a prepared action: a frame refused at frame level then gives the mode only, and the"
+       " action ends with nothing left to act on (T34)")
+bar.done()
+
+
+# T16a: a frame refused at frame level for the current intent, once its action has ended, asks
+# again with a query and presents nothing; intent, version and malformed leave the lifetime without
+# actions as T15 does, with the line in the log, and output does not. An action opened since then
+# ends, as nothing is left to act on (T34). So does an open action's own intent after its decision,
+# which the provider never refuses so. An open action's own set still undecided past its deadline
+# is neither T16 nor T16a; its case is with T31's below.
+def escaped(bar):
+    """Escape while the prepare is out (T20): the action has ended, its prepare the current request."""
+    reached = bar.to_preparing()
+    bar.close(True)
+    return reached and bar.state() == "idle"
+
+
+def expired_after_escape(bar):
+    """Escape while the prepare is out, then the prepare's deadline with no frame (T17b)."""
+    reached = bar.to_open()
+    bar.item.setProperty("deadlineMs", ROOMY_DEADLINE)
+    count = bar.count()
+    bar.input()
+    sent = reached and bar.sent(count)
+    bar.close(True)
+    return sent and bar.state() == "idle" and until(lambda: bar.get("outcome") == "unconfirmed", ms=3000)
+
+
+def reopened(bar):
+    """Escape while the prepare is out, then the menu opened again (T1) with that prepare current."""
+    return escaped(bar) and bar.open() is True and bar.state() == "open"
+
+
+for name, reach, why, marks in (("in idle after Escape (T20)", escaped, "intent", True),
+                                ("in idle after Escape (T20)", escaped, "output", False),
+                                ("in idle past the prepare's deadline (T17b)", expired_after_escape, "version", True),
+                                ("in idle past the prepare's deadline (T17b)", expired_after_escape, "output", False),
+                                ("with the menu opened again (T1)", reopened, "malformed", True),
+                                ("with the menu opened again (T1)", reopened, "output", False)):
+    bar = Bar()
+    reached = reach(bar)
+    count = bar.count()
+    mark = len(action_messages)
+    taken = reached and bar.take(bar.frame(2, refused=why), lambda: bar.count() > count)
+    asked = taken and bar.sent(count) and bar.last().get("intent") == "query" and bar.state() == "idle"
+    answered = asked and bar.take(bar.frame(5), lambda: bar.get("outcome") == "answered")
+    expect(logged(mark, [refused_line("prepare", why)] if marks else []) and answered and not bar.said
+           and bar.get("mode") == "floating" and bar.get("actionsAvailable") is (not marks),
+           "layout action: T16a %s, the prepare refused %s at frame level asks again, presents nothing, ends any action"
+           " open and %s (%s)" % (name, why, "leaves the lifetime without actions" if marks else "keeps the actions",
+                                  bar.said))
+    bar.done()
+for why, marks in (("intent", True), ("output", False)):
+    bar = Bar()
+    reached = bar.to_preparing()
+    refused = reached and bar.take(bar.frame(1, **refusal("prepare", "busy")), lambda: bar.state() == "open")
+    count = bar.count()
+    mark = len(action_messages)
+    taken = refused and bar.take(bar.frame(2, refused=why), lambda: bar.count() > count)
+    asked = taken and bar.sent(count) and bar.last().get("intent") == "query" and bar.state() == "idle"
+    answered = asked and bar.take(bar.frame(5), lambda: bar.get("outcome") == "answered")
+    expect(logged(mark, [refused_line("prepare", why)] if marks else []) and answered
+           and bar.presented() == [("busy", "", "open")] and bar.get("mode") == "floating"
+           and bar.get("actionsAvailable") is (not marks),
+           "layout action: T16a takes an open action's own prepare after its decision (T12), refused %s at frame level:"
+           " the bar asks again, presents nothing, ends the action and %s (%s)"
+           % (why, "leaves the lifetime without actions" if marks else "keeps the actions", bar.said))
+    bar.done()
+
+
+# The action ends before the actions go: a frame that leaves the lifetime without actions ends an
+# open action first (T15, T16, T16a), so that actionOpen is false already as actionsAvailable turns
+# false, and a close made then - the menu's, as the actions go - meets the ended action.
+def notified(bar):
+    """The changes of actionOpen and actionsAvailable from now on, in turn, each with the other's
+    value as the change is notified."""
+    seen = []
+    for name, other in (("actionOpen", "actionsAvailable"), ("actionsAvailable", "actionOpen")):
+        signal = getattr(bar.item, name + "Changed", None)
+        if signal is not None:
+            signal.connect(lambda name=name, other=other, item=bar.item: seen.append((name, prop(item, name), prop(item, other))))
+    return seen
+
+
+for row, reach, revision, fields, line in (
+        ("T15 in preparing, an own frame with no completion,", Bar.to_preparing, 1, {}, lacked_line("prepare")),
+        ("T16 in preparing, an own frame refused intent,", Bar.to_preparing, 2, {"refused": "intent"},
+         refused_line("prepare", "intent")),
+        ("T16a with the menu opened again (T1), the prepare refused malformed,", reopened, 2, {"refused": "malformed"},
+         refused_line("prepare", "malformed")),
+        ("T16a after the open action's own prepare was refused busy (T12), then refused version,",
+         lambda b: b.to_preparing() and b.take(b.frame(1, **refusal("prepare", "busy")), lambda: b.state() == "open"), 2,
+         {"refused": "version"}, refused_line("prepare", "version"))):
+    bar = Bar()
+    reached = reach(bar)
+    count = bar.count()
+    mark = len(action_messages)
+    seen = notified(bar)
+    taken = reached and bar.take(bar.frame(revision, **fields), lambda: bar.count() > count)
+    asked = taken and bar.sent(count) and bar.last().get("intent") == "query" and bar.state() == "idle"
+    answered = asked and bar.take(bar.frame(5), lambda: bar.get("outcome") == "answered")
+    expect(logged(mark, [line]) and answered and bar.get("actionsAvailable") is False
+           and seen == [("actionOpen", False, True), ("actionsAvailable", False, False)],
+           "layout action: %s ends the open action before the actions go: actionOpen is false already as"
+           " actionsAvailable turns false (%s)" % (row, seen))
+    bar.done()
+
+# T17, T17a: a prepare with no frame by its deadline drops the kept mode, ends the action and
+# presents unconfirmed, a queued choice dropped. T17b: so does the deadline of a prepare whose
+# action has ended, leaving the bar idle, or ending, as nothing is left to act on (T34), an action
+# opened again meanwhile; it presents nothing.
+for row, choice in (("T17", None), ("T17a", "tiled")):
+    bar = Bar()
+    reached = bar.to_open()
+    bar.item.setProperty("deadlineMs", 300)
+    count = bar.count()
+    if choice is None:
+        bar.input()
+    else:
+        bar.choose(choice)
+    expired = reached and bar.sent(count) and until(lambda: bar.state() == "idle", ms=3000)
+    expect(expired and bar.get("mode") == "unknown" and bar.get("outcome") == "unconfirmed"
+           and bar.get("actionPending") is False and bar.presented() == [("unconfirmed", choice or "", "idle")]
+           and bar.quiet(count + 1),
+           "layout action: %s a prepare with no frame by its deadline ends the action, the mode unknown, and presents"
+           " unconfirmed%s (%s)" % (row, ", its queued choice dropped" if choice else "", bar.said))
+    bar.done()
+bar = Bar()
+reached = bar.to_open()
+bar.item.setProperty("deadlineMs", ROOMY_DEADLINE)
+count = bar.count()
+bar.input()
+sent = reached and bar.sent(count)
+bar.close(True)
+expired = sent and bar.state() == "idle" and until(lambda: bar.get("outcome") == "unconfirmed", ms=3000)
+expect(expired and bar.get("mode") == "unknown" and bar.state() == "idle" and not bar.said and bar.quiet(count + 1),
+       "layout action: T17b after Escape with the prepare unread, its deadline leaves the bar idle with the mode unknown")
+bar.done()
+bar = Bar()
+reached = bar.to_open()
+bar.item.setProperty("deadlineMs", ROOMY_DEADLINE)
+count = bar.count()
+bar.input()
+sent = reached and bar.sent(count)
+bar.close(True)
+again = sent and bar.open() is True and bar.state() == "open"
+expired = again and until(lambda: bar.get("outcome") == "unconfirmed", ms=3000)
+expect(expired and bar.state() == "idle" and bar.get("mode") == "unknown" and not bar.said and bar.quiet(count + 1),
+       "layout action: T17b the menu opened again before an unread prepare's deadline is ended by it, as nothing is left"
+       " to act on (T34)")
+bar.done()
+
+# T18: a choice that can be sent, while prepared, sends a set with the handle.
+for why, tiled, mode, target in (("Floating with no target", False, "floating", False),
+                                 ("Tiled with a target", False, "tiled", True),
+                                 ("Tiled on a tiled view with no target", True, "tiled", False)):
+    bar = Bar(tiled=tiled)
+    reached = bar.to_prepared(tiled=tiled, target=target)
+    count = bar.count()
+    bar.choose(mode)
+    expect(reached and bar.state() == "setting" and bar.sent(count) and bar.last().get("intent") == "set"
+           and bar.last().get("mode") == mode and bar.last().get("handle") == HANDLE and bar.get("actionHandle") == ""
+           and bar.get("actionChoice") == mode and bar.get("actionPending") is True and bar.get("actionOpen") is True,
+           "layout action: T18 %s, chosen while prepared, sends a set with the handle (%s)" % (why, bar.last()))
+    bar.done()
+
+# T20, T21: a close ends the action and sends nothing; while a set is out, the set stays awaited.
+for name, reach, dismissed in (("open", Bar.to_open, True), ("preparing", Bar.to_preparing, True),
+                               ("prepared", Bar.to_prepared, False)):
+    bar = Bar()
+    reached = reach(bar)
+    count = bar.count()
+    bar.close(dismissed)
+    expect(reached and bar.state() == "idle" and bar.get("actionOpen") is False and bar.get("actionHandle") == ""
+           and bar.quiet(count) and not bar.said,
+           "layout action: T20 close(%s) in %s ends the action, and nothing is sent after it" % (str(dismissed).lower(), name))
+    bar.done()
+bar = Bar()
+reached = bar.to_setting()
+count = bar.count()
+bar.close(True)
+expect(reached and bar.state() == "awaiting" and bar.get("actionOpen") is False and bar.get("actionPending") is True
+       and bar.quiet(count) and not bar.said,
+       "layout action: T21 a close while setting ends the action, its set still awaited")
+bar.done()
+
+# T22, T22a: once the action has ended, a close changes how the menu closed only to the user's, and
+# only while its set is awaited or unread; the close(false) the menu's hide makes after every end,
+# also from inside the call that ended the action, changes nothing.
+bar = Bar()
+reached = bar.to_awaiting(False)
+bar.close(True)
+taken = reached and bar.state() == "awaiting" and bar.take(bar.frame(2, **refusal("set", "stale-context")),
+                                                           lambda: bar.state() == "idle")
+expect(taken and not bar.said,
+       "layout action: T22 a press on the control after the menu closed by itself makes the close the user's: a"
+       " stale-context refusal read after it stays silent (%s)" % bar.said)
+bar.done()
+bar = Bar()
+reached = bar.to_setting(deadline=ROOMY_DEADLINE)
+expired = reached and until(lambda: bar.state() == "idle", ms=3000)
+bar.close(True)
+taken = expired and bar.take(bar.frame(2, **refusal("set", "stale-context")), lambda: bar.get("revision") == 2)
+expect(taken and bar.state() == "idle" and bar.presented() == [("unconfirmed", "floating", "idle")],
+       "layout action: T22 past a set's deadline with the set unread, a press on the control makes the close the user's:"
+       " its late stale-context refusal stays silent (%s)" % bar.said)
+bar.done()
+bar = Bar()
+reached = bar.to_awaiting(True)
+bar.close(False)
+taken = reached and bar.state() == "awaiting" and bar.take(bar.frame(2, **refusal("set", "stale-context")),
+                                                           lambda: bar.state() == "idle")
+expect(taken and not bar.said,
+       "layout action: T22a the close(false) after the user's close changes nothing: a stale-context refusal read after"
+       " it stays silent (%s)" % bar.said)
+bar.done()
+bar = Bar()
+reached = bar.to_setting()
+taken = reached and bar.take(bar.frame(1, **DONE), lambda: bar.state() == "idle")
+count = bar.count()
+bar.close(False)
+bar.close(True)
+expect(taken and bar.state() == "idle" and bar.presented() == [("", "floating", "idle")] and bar.quiet(count),
+       "layout action: T22a a close after a done set has ended the action changes nothing (%s)" % bar.said)
+bar.done()
+bar = Bar()
+inside = []
+
+
+def hidden(bar=bar):
+    """The menu's hide as main.qml's wiring makes it: close(false) from inside the change that says
+    the action is no longer open."""
+    if bar.get("actionOpen") is False:
+        inside.append("hidden")
+        bar.close(False)
+
+
+notify = getattr(bar.item, "actionOpenChanged", None)
+if notify is not None:
+    notify.connect(hidden)
+reached = bar.to_setting()
+bar.close(True)
+awaited = bar.state() == "awaiting" and bar.get("actionPending") is True
+taken = reached and awaited and bar.take(bar.frame(2, **refusal("set", "stale-context")), lambda: bar.state() == "idle")
+expect(taken and inside == ["hidden"] and not bar.said,
+       "layout action: the menu's hide calling close(false) from inside the user's close meets the ended action, and a"
+       " stale-context refusal read after it stays silent (%s, %s)" % (inside, bar.said))
+bar.done()
+
+# T23 to T29: a set's frames. One without a completion reads the set and gives the mode; a done
+# set ends the action and clears the notice; a refusal leaves the menu open with its reason, or
+# ends the action, silently after the user's close where the set was refused because the menu had
+# closed before it was read.
+bar = Bar()
+reached = bar.to_setting()
+taken = reached and bar.take(bar.frame(1, tiled=True), lambda: bar.get("outcome") == "answered")
+expect(taken and bar.state() == "setting" and bar.get("mode") == "tiled" and not bar.said,
+       "layout action: T23 a set's frame without a completion changes nothing but the mode it gives")
+bar.done()
+bar = Bar()
+reached = bar.to_awaiting(False)
+taken = reached and bar.take(bar.frame(1), lambda: bar.get("outcome") == "answered")
+refused = taken and bar.take(bar.frame(2, **refusal("set", "stale-context")), lambda: bar.state() == "idle")
+expect(refused and bar.presented() == [("stale-context", "floating", "idle")],
+       "layout action: T23 a set read in a frame without a completion is no longer unread: a later stale-context refusal"
+       " is its reason (T29), not an interruption (%s)" % bar.said)
+bar.done()
+bar = Bar()
+reached = bar.to_setting()
+taken = reached and bar.take(bar.frame(1, **DONE), lambda: bar.state() == "idle")
+expect(taken and bar.get("actionOpen") is False and bar.said == [("", "floating", "idle", "", False)],
+       "layout action: T24 a done set while setting ends the action and clears the notice (%s)" % bar.said)
+bar.done()
+bar = Bar()
+reached = bar.to_awaiting(True)
+taken = reached and bar.take(bar.frame(1, **DONE), lambda: bar.state() == "idle")
+expect(taken and bar.presented() == [("", "floating", "idle")] and bar.get("actionPending") is False,
+       "layout action: T24 a done set while awaited ends it and clears the notice (%s)" % bar.said)
+bar.done()
+for why in ("stale-context", "focus-changed"):
+    for dismissed in (True, False):
+        bar = Bar()
+        reached = bar.to_awaiting(dismissed, mode="tiled")
+        taken = reached and bar.take(bar.frame(1, **refusal("set", why)), lambda: bar.state() == "idle")
+        expect(taken and bar.presented() == ([] if dismissed else [("interrupted", "tiled", "idle")]),
+               "layout action: T25 a set refused %s in its first frame after close(%s) %s (%s)"
+               % (why, str(dismissed).lower(), "stays silent" if dismissed else "presents interrupted", bar.said))
+        bar.done()
+for why in ("stale-context", "focus-changed", "target-departed"):
+    bar = Bar()
+    reached = bar.to_setting("tiled")
+    taken = reached and bar.take(bar.frame(1, **refusal("set", why)), lambda: bar.state() == "open")
+    expect(taken and bar.said == [(why, "tiled", "open", why, False)] and bar.get("actionChoice") == "tiled",
+           "layout action: T26 a set refused %s with the menu open leaves the action open and presents the reason (%s)"
+           % (why, bar.said))
+    bar.done()
+bar = Bar()
+reached = bar.to_setting()
+taken = reached and bar.take(bar.frame(1, **refusal("set", "view-changed")), lambda: bar.state() == "idle")
+expect(taken and bar.presented() == [("view-changed", "floating", "idle")],
+       "layout action: T27 a set refused view-changed while setting ends the action and presents the reason (%s)" % bar.said)
+bar.done()
+bar = Bar()
+reached = bar.to_awaiting(False)
+taken = reached and bar.take(bar.frame(1, **refusal("set", "shell-replaced")), lambda: bar.state() == "idle")
+expect(taken and bar.presented() == [("shell-replaced", "floating", "idle")],
+       "layout action: T27 a set refused shell-replaced while awaited ends it and presents the reason (%s)" % bar.said)
+bar.done()
+for mode, why in (("floating", "unavailable"), ("tiled", "no-target")):
+    bar = Bar()
+    reached = bar.to_setting(mode)
+    taken = reached and bar.take(bar.frame(1, **refusal("set", why)), lambda: bar.state() == "open")
+    expect(taken and bar.said == [(why, mode, "open", why, False)] and bar.get("actionChoice") == mode,
+           "layout action: T28 a %s set refused %s with the menu open leaves it open and presents the reason with that"
+           " mode, once the state is final (%s)" % (mode, why, bar.said))
+    bar.done()
+bar = Bar()
+reached = bar.to_awaiting(True, mode="tiled")
+taken = reached and bar.take(bar.frame(1, **refusal("set", "target-departed")), lambda: bar.state() == "idle")
+expect(taken and bar.presented() == [("target-departed", "tiled", "idle")],
+       "layout action: T29 a set refused target-departed while awaited ends it and presents the reason (%s)" % bar.said)
+bar.done()
+
+
+# T30, T31: a set with no frame by its deadline drops the kept mode and ends the action; one with
+# frames but no completion keeps the mode, and leaves the menu open, or ends an awaited set.
+# Either presents unconfirmed. T32: the set's first completion after that, while it is still the
+# current request, clears the notice or presents its refusal, as it would have while awaited.
+def late_set(dismissed=None, frames=False):
+    """A bar whose set's deadline has passed: with no frame (T30), or after a frame without a
+    completion (T31); closed by the user first when `dismissed`."""
+    bar = Bar()
+    if dismissed is None:
+        reached = bar.to_setting(deadline=ROOMY_DEADLINE)
+    else:
+        reached = bar.to_awaiting(dismissed, deadline=ROOMY_DEADLINE)
+    if frames:
+        reached = reached and bar.take(bar.frame(1), lambda: bar.get("outcome") == "answered")
+    waiting = bar.state()
+    return bar, reached and waiting in ("setting", "awaiting") and until(lambda: bar.state() != waiting, ms=3000)
+
+
+bar, late = late_set()
+expect(late and bar.state() == "idle" and bar.get("mode") == "unknown" and bar.get("outcome") == "unconfirmed"
+       and bar.get("actionPending") is False and bar.presented() == [("unconfirmed", "floating", "idle")],
+       "layout action: T30 a set with no frame by its deadline ends the action, the mode unknown, and presents"
+       " unconfirmed (%s)" % bar.said)
+taken = late and bar.take(bar.frame(2, **DONE), lambda: len(bar.said) == 2)
+expect(taken and bar.state() == "idle" and bar.presented()[1:] == [("", "floating", "idle")] and bar.get("mode") == "floating",
+       "layout action: T32 a set's late done in idle clears the notice, and its frame shows the mode again (%s)" % bar.said)
+bar.done()
+bar, late = late_set(frames=True)
+expect(late and bar.state() == "open" and bar.get("mode") == "floating" and bar.get("actionPending") is False
+       and bar.presented() == [("unconfirmed", "floating", "open")],
+       "layout action: T31 a set with frames but no completion by its deadline leaves the menu open, the mode kept, and"
+       " presents unconfirmed (%s)" % bar.said)
+taken = late and bar.take(bar.frame(2, **DONE), lambda: len(bar.said) == 2)
+expect(taken and bar.state() == "idle" and bar.presented()[1:] == [("", "floating", "idle")],
+       "layout action: T32 a set's late done in open ends the action and clears the notice (%s)" % bar.said)
+bar.done()
+bar, late = late_set(dismissed=True, frames=True)
+expect(late and bar.state() == "idle" and bar.get("mode") == "floating" and bar.presented() == [("unconfirmed", "floating", "idle")],
+       "layout action: T31 an awaited set with frames but no completion by its deadline ends unconfirmed (%s)" % bar.said)
+bar.done()
+bar, late = late_set()
+taken = late and bar.take(bar.frame(2, **refusal("set", "unavailable")), lambda: len(bar.said) == 2)
+expect(taken and bar.state() == "idle" and bar.presented()[1:] == [("unavailable", "floating", "idle")],
+       "layout action: T32 a set's late refusal in idle presents the reason (%s)" % bar.said)
+again = taken and bar.barrier(3, view=ELSEWHERE, **refusal("set", "unavailable"))
+expect(again and len(bar.said) == 2,
+       "layout action: after a late refusal (T32) a newer frame with the same completion presents nothing again (%s)"
+       % bar.said)
+bar.done()
+bar, late = late_set(frames=True)
+taken = late and bar.state() == "open" and bar.take(bar.frame(2, **refusal("set", "unavailable")), lambda: len(bar.said) == 2)
+expect(taken and bar.state() == "open" and bar.presented()[1:] == [("unavailable", "floating", "open")],
+       "layout action: T32 a set's late refusal in open leaves the action open and presents the reason (%s)" % bar.said)
+bar.done()
+# T16a takes an open action's own intent only after its decision: a set still undecided past its
+# deadline (T31) is neither T16 nor T16a, so its frame refused at frame level gives the mode only
+# and the action ends with nothing left to act on (T35a, then T34), with no query.
+bar, late = late_set(frames=True)
+opened = late and bar.state() == "open"
+count = bar.count()
+mark = len(action_messages)
+taken = opened and bar.take(bar.frame(2, refused="intent"), lambda: bar.state() == "idle")
+quiet = taken and bar.quiet(count) and bar.get("mode") == "unknown"
+back = quiet and bar.barrier(3)
+expect(logged(mark, []) and back and bar.get("actionsAvailable") is True
+       and bar.presented() == [("unconfirmed", "floating", "open")],
+       "layout action: T16a takes an open action's own intent after its decision only: its set still undecided past the"
+       " deadline (T31), refused at frame level, gives the mode only and ends the action (T35a, then T34), with no query"
+       " and the lifetime left its actions (%s)" % bar.said)
+bar.done()
+bar, late = late_set()
+taken = late and bar.take(bar.frame(2, **refusal("set", "stale-context")), lambda: len(bar.said) == 2)
+expect(taken and bar.presented()[1:] == [("interrupted", "floating", "idle")],
+       "layout action: T32 a set's late first frame refused stale-context, the menu having closed by itself, presents"
+       " interrupted (%s)" % bar.said)
+bar.done()
+bar, late = late_set(dismissed=True)
+taken = late and bar.take(bar.frame(2, **refusal("set", "stale-context")), lambda: bar.get("revision") == 2)
+expect(taken and bar.presented() == [("unconfirmed", "floating", "idle")],
+       "layout action: T32 the user's close recorded at T21 survives the move from awaiting to idle at T30: the set's late"
+       " stale-context refusal stays silent (%s)" % bar.said)
+bar.done()
+bar, late = late_set(frames=True)
+opened = late and bar.state() == "open"
+bar.item.setProperty("deadlineMs", 300)
+count = bar.count()
+bar.input()
+expired = opened and bar.sent(count) and until(lambda: bar.state() == "idle", ms=3000)
+shown = list(bar.said)
+taken = expired and bar.take(bar.frame(2, **ready()), lambda: bar.get("outcome") == "answered")
+expect(taken and bar.said == shown and len(shown) == 2,
+       "layout action: a new request is no late set: a prepare sent after a set's deadline, past its own deadline too, gives"
+       " the mode only when its frame comes (T35a, not T32) (%s)" % bar.said)
+bar.done()
+# T32 counts in idle, or in the action that sent the set: a late completion reaching an action
+# opened after the set's deadline gives the mode only (T35), and that menu stays open. Once that
+# menu has closed in turn, the bar is idle again and the late completion counts.
+for why, fields in (("done", DONE), ("refused unavailable", refusal("set", "unavailable"))):
+    bar, late = late_set(dismissed=True, frames=True)
+    again = late and bar.state() == "idle" and bar.open() is True
+    taken = again and bar.barrier(2, **fields)
+    expect(taken and bar.state() == "open" and bar.get("actionOpen") is True
+           and bar.presented() == [("unconfirmed", "floating", "idle")],
+           "layout action: T35 a set's late completion (%s) reaching an action opened after its deadline gives the mode"
+           " only, and the new menu stays open (%s)" % (why, bar.said))
+    bar.done()
+bar, late = late_set(dismissed=True, frames=True)
+again = late and bar.open() is True
+bar.close(True)
+taken = again and bar.state() == "idle" and bar.take(bar.frame(2, **DONE), lambda: len(bar.said) == 2)
+expect(taken and bar.presented() == [("unconfirmed", "floating", "idle"), ("", "floating", "idle")],
+       "layout action: T32 counts in idle whichever action ended last: a late done set clears the notice once the menu"
+       " opened since has closed (%s)" % bar.said)
+bar.done()
+
+# T33: asking again - another lifetime, the bound lifetime's offline frame or its name gone, going
+# idle - ends the action, with a query unless the bar goes idle, and presents unconfirmed when a
+# set was out.
+bar = Bar()
+reached = bar.to_setting()
+count = bar.count()
+bar.deliver(bar.frame(2, epoch=E2))
+asked = reached and until(lambda: bar.state() == "idle") and bar.sent(count)
+expect(asked and bar.last().get("intent") == "query" and bar.get("mode") == "unknown"
+       and bar.presented() == [("unconfirmed", "", "idle")],
+       "layout action: T33 another lifetime answering while a set is out ends the action, asks again with a query and"
+       " presents unconfirmed (%s)" % bar.said)
+bar.done()
+bar = Bar()
+reached = bar.to_prepared()
+count = bar.count()
+bar.deliver(bar.frame(2, status="offline"))
+asked = reached and until(lambda: bar.state() == "idle") and bar.sent(count)
+expect(asked and bar.last().get("intent") == "query" and not bar.said,
+       "layout action: T33 the bound lifetime's offline frame ends a prepared action and asks again, silently")
+bar.done()
+check(bus.registerService(PREFIX + E10), "layout action: another identity name is held here")
+bar = Bar(epoch=E10)
+reached = bar.to_open()
+count = bar.count()
+bus.unregisterService(PREFIX + E10)
+asked = reached and until(lambda: bar.state() == "idle") and bar.sent(count)
+expect(asked and bar.last().get("intent") == "query" and not bar.said,
+       "layout action: T33 the bound lifetime's identity name released ends an open action and asks again, silently")
+bar.done()
+bar = Bar()
+reached = bar.to_awaiting(True)
+count = bar.count()
+bar.item.setProperty("outputName", "")
+expect(reached and bar.state() == "idle" and bar.get("outcome") == "idle" and bar.quiet(count)
+       and bar.presented() == [("unconfirmed", "floating", "idle")],
+       "layout action: T33 going idle while a set is awaited sends no query, and presents unconfirmed (%s)" % bar.said)
+bar.done()
+
+# T34: actions becoming unavailable end the action; a set already sent stays awaited, its close
+# recorded as not the user's.
+bar = Bar()
+reached = bar.to_open()
+taken = reached and bar.take(bar.frame(2, capable=False), lambda: bar.state() == "idle")
+expect(taken and bar.get("mode") == "unavailable" and not bar.said,
+       "layout action: T34 an open action ends when actions become unavailable, silently")
+bar.done()
+bar = Bar()
+reached = bar.to_preparing("floating")
+count = bar.count()
+taken = reached and bar.take(bar.frame(1, capable=False, **ready()), lambda: bar.state() == "idle")
+expect(taken and bar.get("actionPending") is False and bar.quiet(count) and not bar.said,
+       "layout action: T34 a preparing action ends when its prepare's frame leaves nothing to act on, and its queued choice"
+       " is not sent")
+bar.done()
+bar = Bar()
+reached = bar.to_prepared()
+taken = reached and bar.take(bar.frame(2, view=None, **ready()), lambda: bar.state() == "idle")
+expect(taken and bar.get("actionHandle") == "" and not bar.said, "layout action: T34 a prepared action ends when its output goes")
+bar.done()
+bar = Bar()
+reached = bar.to_setting()
+taken = reached and bar.take(bar.frame(1, capable=False), lambda: bar.state() == "awaiting")
+expect(taken and bar.get("actionOpen") is False and bar.get("actionPending") is True and not bar.said,
+       "layout action: T34 a setting action whose actions become unavailable still awaits its set")
+bar.done()
+bar = Bar()
+reached = bar.to_setting()
+taken = reached and bar.take(bar.frame(1, capable=False, **refusal("set", "stale-context")), lambda: bar.state() == "idle")
+expect(taken and bar.presented() == [("interrupted", "floating", "idle")],
+       "layout action: T34 records a close that is not the user's: a stale-context refusal in the same first frame presents"
+       " interrupted (%s)" % bar.said)
+bar.done()
+
+# T35, T35a: a frame of a request the action did not send, or one whose completion has been taken,
+# gives the mode only. A prepare sent before Escape and read after the menu opened again gives the
+# new action no handle, and a choice queued before Escape is not sent when the handle comes.
+bar = Bar()
+reached = bar.to_open()
+taken = reached and bar.take(bar.frame(2, tiled=True), lambda: bar.get("revision") == 2)
+expect(taken and bar.state() == "open" and bar.get("mode") == "tiled" and not bar.said,
+       "layout action: T35 a query's frame while open gives the mode only")
+bar.done()
+bar = Bar()
+reached = bar.to_preparing()
+prepare = bar.last()
+bar.close(True)
+again = reached and bar.open() is True
+taken = again and bar.take(bar.frame(1, **ready()), lambda: bar.get("outcome") == "answered")
+still = taken and bar.state() == "open" and bar.get("actionHandle") == ""
+count = bar.count()
+bar.input()
+expect(still and bar.state() == "preparing" and bar.sent(count) and bar.last().get("intent") == "prepare"
+       and bar.last().get("request") == prepare.get("request", 0) + 1 and not bar.said,
+       "layout action: T35 a prepare sent before Escape and read after the menu opened again gives the new action no"
+       " handle; its first input prepares afresh (%s)" % bar.last())
+bar.done()
+bar = Bar()
+reached = bar.to_preparing()
+refused = reached and bar.take(bar.frame(1, **refusal("prepare", "busy")), lambda: bar.state() == "open")
+taken = refused and bar.barrier(2, tiled=True, **refusal("prepare", "busy"))
+expect(taken and bar.state() == "open" and bar.get("mode") == "tiled" and bar.presented() == [("busy", "", "open")],
+       "layout action: T35a a later frame of a refused prepare gives the mode only (%s)" % bar.said)
+bar.done()
+bar = Bar()
+reached = bar.to_preparing("tiled")
+bar.close(True)
+count = bar.count()
+taken = reached and bar.take(bar.frame(1, tiled=True, **ready()), lambda: bar.get("outcome") == "answered")
+expect(taken and bar.state() == "idle" and bar.get("mode") == "tiled" and bar.get("actionPending") is False
+       and bar.get("actionHandle") == "" and bar.quiet(count) and not bar.said,
+       "layout action: T35a a choice queued, Escape, then the prepare's ready frame: the mode only, and no set sent")
+bar.done()
+bar = Bar()
+reached = bar.to_prepared()
+taken = reached and bar.barrier(2, tiled=True, **ready())
+expect(taken and bar.state() == "prepared" and bar.get("mode") == "tiled" and bar.get("actionHandle") == HANDLE
+       and not bar.said, "layout action: T35a a prepared action's later ready frame gives the mode only")
+bar.done()
+
+# T36: an input outside open, and a choice in idle, with one queued, while a set is out or for a
+# blocked Tiled, are ignored; so is a choice that names no mode.
+for name, reach in (("idle", lambda b: True), ("preparing", Bar.to_preparing), ("prepared", Bar.to_prepared),
+                    ("setting", Bar.to_setting), ("awaiting", lambda b: b.to_awaiting(True))):
+    bar = Bar()
+    reached = reach(bar)
+    count = bar.count()
+    bar.input()
+    expect(reached and bar.state() == name and bar.quiet(count), "layout action: T36 an input in %s is ignored" % name)
+    bar.done()
+for name, reach, mode in (("idle", lambda b: True, "floating"),
+                          ("preparing with a choice queued", lambda b: b.to_preparing("tiled"), "floating"),
+                          ("setting", Bar.to_setting, "tiled"), ("awaiting", lambda b: b.to_awaiting(True), "tiled"),
+                          ("prepared, for a blocked Tiled", lambda b: b.to_prepared(target=False), "tiled"),
+                          ("open, naming no mode", Bar.to_open, "sideways")):
+    bar = Bar()
+    reached = reach(bar)
+    count = bar.count()
+    before = (bar.state(), bar.get("actionChoice"), bar.get("actionPending"))
+    bar.choose(mode)
+    expect(reached and before[0] is not None and (bar.state(), bar.get("actionChoice"), bar.get("actionPending")) == before
+           and bar.quiet(count), "layout action: T36 a choice in %s is ignored" % name)
+    bar.done()
+
+# A completion counts once: a newer frame of the request with the same completion, as a desktop
+# switch publishes one, presents nothing again; nor does a prepared action's later frame repeat
+# the prepare's reason.
+for row, reach, why in (("T28", Bar.to_setting, "unavailable"), ("T25", lambda b: b.to_awaiting(True), "stale-context"),
+                        ("T27", Bar.to_setting, "view-changed"), ("T29", lambda b: b.to_awaiting(True), "target-departed")):
+    bar = Bar()
+    reached = reach(bar)
+    taken = reached and bar.take(bar.frame(1, **refusal("set", why)), lambda: bar.get("outcome") == "answered")
+    shown = list(bar.said)
+    again = taken and bar.barrier(2, view=ELSEWHERE, **refusal("set", why))
+    expect(again and bar.said == shown and len(shown) == (0 if row == "T25" else 1),
+           "layout action: after %s a newer frame of the set with the same refusal presents nothing again (%s)" % (row, bar.said))
+    bar.done()
+bar = Bar()
+reached = bar.to_prepared(target=False)
+taken = reached and bar.barrier(2, **ready(target=False))
+expect(taken and bar.state() == "prepared" and bar.presented() == [("no-target", "", "prepared")],
+       "layout action: in prepared after T8 a later frame does not present the prepare's reason again (%s)" % bar.said)
+bar.done()
+
+# The handle is the prepared action's alone, and emptied whenever it leaves prepared; the choice
+# and the reason last until the next request, which clears them, so that an outcome is worded for
+# its mode; the mode comes from the frames, never from a completion.
+exits = []
+for name, step in (("for a set", lambda b: b.choose("floating")),
+                   ("for an ended preparation", lambda b: b.take(b.frame(2, **ended("focus-changed")),
+                                                                 lambda: b.state() == "open")),
+                   ("for a close", lambda b: b.close(True))):
+    bar = Bar()
+    reached = bar.to_prepared()
+    held = bar.get("actionHandle")
+    step(bar)
+    exits.append((name, reached and held == HANDLE and bar.state() != "prepared" and bar.get("actionHandle") == ""
+                  and bar.get("actionTarget") is False))
+    bar.done()
+expect(all(left for _, left in exits),
+       "layout action: the handle is held only while prepared, and emptied as the action leaves (%s)" % exits)
+bar = Bar()
+reached = bar.to_setting("tiled")
+refused = reached and bar.take(bar.frame(1, **refusal("set", "busy")), lambda: bar.state() == "open")
+kept = refused and bar.get("actionChoice") == "tiled" and bar.get("actionReason") == "busy"
+count = bar.count()
+bar.input()
+expect(kept and bar.sent(count) and bar.get("actionChoice") == "" and bar.get("actionReason") == "",
+       "layout action: the choice and the reason are kept until the next request, which clears them")
+bar.done()
+bar = Bar()
+reached = bar.to_awaiting(True, mode="tiled")
+taken = reached and bar.take(bar.frame(1, **refusal("set", "target-departed")), lambda: bar.state() == "idle")
+kept = taken and bar.get("actionChoice") == "tiled" and bar.get("actionReason") == "target-departed"
+count = bar.count()
+bar.item.setProperty("outputName", "Virtual-1")
+expect(kept and bar.sent(count) and bar.last().get("intent") == "query" and bar.state() == "idle"
+       and bar.get("actionChoice") == "" and bar.get("actionReason") == "" and len(bar.said) == 1,
+       "layout action: a query clears the choice and the reason too, with the state left idle")
+bar.done()
+bar = Bar()
+reached = bar.to_preparing()
+refused = reached and bar.take(bar.frame(1, **refusal("prepare", "busy")), lambda: bar.state() == "open")
+shown = refused and bar.get("actionReason") == "busy"
+count = bar.count()
+bar.close(True)
+expect(shown and bar.state() == "idle" and bar.get("actionReason") == "" and bar.quiet(count) and len(bar.said) == 1,
+       "layout action: a change of state that presents nothing clears the reason shown")
+bar.done()
+bar = Bar()
+reached = bar.to_setting("floating")
+taken = reached and bar.take(bar.frame(1, **DONE), lambda: bar.state() == "idle")
+expect(taken and bar.open() is True and bar.get("actionChoice") == "floating",
+       "layout action: an action opened again keeps the last choice, as no request has been sent since")
+bar.done()
+bar = Bar()
+reached = bar.to_setting("tiled")
+taken = reached and bar.take(bar.frame(1, **DONE), lambda: bar.state() == "idle")
+expect(taken and bar.get("mode") == "floating",
+       "layout action: a done Tiled set whose frame says floating leaves the mode floating: the mode comes from the frames")
+bar.done()
+
+
+# Each property changes at most once in one input, frame or deadline, counted from just before it:
+# T3, T4, T7, T8 on a frame that also turns the view tiled, T18, a frame that both leaves the menu
+# open and ends the action (T26, then T5), T15 from prepared with a reason shown, and a deadline
+# that leaves the menu open and ends the action (T31, then T5).
+def counted(bar, act, test, ms=2000, **exactly):
+    """Act on the bar from its state now and wait for `test`: whether every property changed at most
+    once, and those named exactly as often, with the counts."""
+    counter = ChangeCounts(bar)
+    act()
+    return until(test, ms=ms) and counter.once(**exactly), dict(counter.counts)
+
+
+bar = Bar()
+reached = bar.to_open()
+ok, counts = counted(bar, bar.input, lambda: bar.state() == "preparing", actionState=1, outcome=1, actionReason=0)
+expect(reached and ok, "layout action: T3 changes each property at most once (%s)" % counts)
+bar.done()
+bar = Bar()
+reached = bar.to_open()
+ok, counts = counted(bar, lambda: bar.choose("tiled"), lambda: bar.state() == "preparing",
+                     actionState=1, actionChoice=1, actionPending=1, outcome=1)
+expect(reached and ok, "layout action: T4 changes each property at most once (%s)" % counts)
+bar.done()
+bar = Bar()
+reached = bar.to_preparing("floating")
+ok, counts = counted(bar, lambda: bar.deliver(bar.frame(1, **ready(target=False))), lambda: bar.state() == "setting",
+                     actionState=1, actionHandle=0, actionTarget=0, actionChoice=0, actionPending=0, outcome=0)
+expect(reached and ok, "layout action: T7 sends the set with the prepare's handle, never held, and changes each property at"
+       " most once: the choice, the pending flag and the outcome not at all (%s)" % counts)
+bar.done()
+bar = Bar()
+reached = bar.to_preparing()
+ok, counts = counted(bar, lambda: bar.deliver(bar.frame(1, tiled=True, **ready(target=False))),
+                     lambda: bar.state() == "prepared", actionState=1, mode=1, tiledBlocked=0, actionHandle=1)
+expect(reached and ok, "layout action: T8 on a frame that turns the view tiled takes the mode before the state, so Tiled is"
+       " never blocked on the way (%s)" % counts)
+bar.done()
+bar = Bar()
+reached = bar.to_preparing()
+ok, counts = counted(bar, lambda: bar.deliver(bar.frame(1, **ready(target=True))), lambda: bar.state() == "prepared",
+                     actionState=1, actionTarget=1, tiledBlocked=0, actionHandle=1)
+expect(reached and ok, "layout action: T8 with an app to tile holds the target before the state, so Tiled is never blocked"
+       " on the way (%s)" % counts)
+bar.done()
+bar = Bar()
+reached = bar.to_preparing("tiled") and bar.take(bar.frame(1, **ready(target=False, why="focus-changed")),
+                                                 lambda: bar.state() == "prepared")
+ok, counts = counted(bar, lambda: bar.choose("floating"), lambda: bar.state() == "setting", actionState=1, actionChoice=1,
+                     actionHandle=1, tiledBlocked=1, actionPending=1, actionReason=1, outcome=1)
+expect(reached and ok, "layout action: T18 after T9 changes each property at most once (%s)" % counts)
+bar.done()
+bar = Bar()
+reached = bar.to_setting()
+ok, counts = counted(bar, lambda: bar.deliver(bar.frame(1, view=ELSEWHERE, **refusal("set", "stale-context"))),
+                     lambda: bar.state() == "idle", actionState=1, actionOpen=1, actionPending=1, actionReason=1)
+expect(reached and ok, "layout action: a frame that leaves the menu open and ends the action (T26, then T5) moves the state"
+       " once (%s)" % counts)
+bar.done()
+bar = Bar()
+reached = bar.to_prepared(target=False)
+mark = len(action_messages)
+ok, counts = counted(bar, lambda: bar.deliver(bar.frame(2)), lambda: bar.state() == "idle",
+                     actionState=1, actionReason=1, actionsAvailable=1, mode=1, outcome=1, actionHandle=1)
+expect(logged(mark, [lacked_line("prepare")]) and reached and ok,
+       "layout action: T15 from prepared, a reason shown, changes the reason, the mode and the outcome once: the frame's"
+       " state is not held before the bar asks again (%s)" % counts)
+bar.done()
+bar = Bar()
+reached = bar.to_setting(deadline=ROOMY_DEADLINE)
+read = reached and bar.take(bar.frame(2, view=ELSEWHERE), lambda: bar.get("revision") == 2)
+ok, counts = counted(bar, lambda: None, lambda: bar.state() == "idle", ms=3000, actionState=1, actionReason=1)
+expect(read and ok, "layout action: a deadline that leaves the menu open and ends the action (T31, then T5) moves the"
+       " state once (%s)" % counts)
+bar.done()
+
+# The revision floor: an intent's first frame below the revision shown is not taken, nor a fresh
+# query's first frame at revision 0, which offers no actions.
+bar = Bar(revision=2)
+reached = bar.to_preparing()
+bar.deliver(bar.frame(1, **refusal("prepare", "busy")))
+taken = reached and bar.take(bar.frame(2, **ready()), lambda: bar.state() == "prepared")
+expect(taken and not bar.said and bar.get("actionHandle") == HANDLE,
+       "layout action: an intent's first frame below the revision shown is not taken (%s)" % bar.said)
+bar.done()
+floor_bar, floor_log = create(outputName="Virtual-0")
+until(lambda: floor_log["requests"])
+mark = len(floor_log["history"])
+deliver(floor_bar, frame(floor_log, 0, tiled=True))
+deliver(floor_bar, frame(floor_log, 1))
+taken = until(lambda: prop(floor_bar, "revision") == 1)
+expect(taken and prop(floor_bar, "mode") == "floating" and prop(floor_bar, "actionsAvailable") is True
+       and not [h for h in floor_log["history"][mark:] if h[1] == "tiled"],
+       "layout action: a fresh query's first frame at revision 0 is not taken, and the actions come only with an answer"
+       " taken (%s)" % floor_log["history"][mark:])
+floor_bar.deleteLater()
+
+# The closes main.qml's wiring will make from inside the layout state's own change - the menu's
+# hide, and the control's as the mode goes - meet an action already ended, whether a frame (T24;
+# T34 with the set's first refusal in that frame), a deadline (T30), a refusal at frame level (T16)
+# or another lifetime (T33) ends it: the state moves once and the row presents its own outcome.
+bar = Bar()
+calls = wire(bar)
+reached = bar.to_setting()
+del calls[:]
+ok, counts = counted(bar, lambda: bar.deliver(bar.frame(1, **DONE)), lambda: bar.state() == "idle", actionState=1)
+expect(reached and ok and calls == ["menu"] and bar.said == [("", "floating", "idle", "", False)],
+       "layout action: the menu's close(false) from inside a done set's end (T24) changes nothing (%s, %s, %s)"
+       % (calls, bar.said, counts))
+bar.done()
+bar = Bar()
+calls = wire(bar)
+user = bar.to_open()
+bar.close(True)
+reached = user and bar.state() == "idle" and bar.to_setting()
+del calls[:]
+ok, counts = counted(bar, lambda: bar.deliver(bar.frame(1, capable=False, **refusal("set", "stale-context"))),
+                     lambda: bar.state() == "idle", actionState=1, mode=1)
+expect(reached and ok and calls == ["menu", "control"] and bar.presented() == [("interrupted", "floating", "idle")],
+       "layout action: a frame whose mode ends a setting action (T34) with the set refused stale-context presents"
+       " interrupted, an earlier action's close by the user notwithstanding, and the closes from inside meet the action"
+       " ended (%s, %s, %s)" % (calls, bar.said, counts))
+bar.done()
+bar = Bar()
+calls = wire(bar)
+reached = bar.to_setting(deadline=ROOMY_DEADLINE)
+del calls[:]
+ok, counts = counted(bar, lambda: None, lambda: bar.state() == "idle", ms=3000, actionState=1, mode=1)
+late_refusal = reached and ok and bar.take(bar.frame(2, **refusal("set", "stale-context")), lambda: len(bar.said) == 2)
+expect(late_refusal and calls == ["menu", "control"]
+       and bar.presented() == [("unconfirmed", "floating", "idle"), ("interrupted", "floating", "idle")],
+       "layout action: the closes from inside a set's deadline (T30) meet the ended action, and its late stale-context"
+       " refusal presents interrupted (%s, %s, %s)" % (calls, bar.said, counts))
+bar.done()
+bar = Bar()
+calls = wire(bar)
+reached = bar.to_setting()
+del calls[:]
+mark = len(action_messages)
+ok, counts = counted(bar, lambda: bar.deliver(bar.frame(2, refused="version")), lambda: bar.state() == "idle",
+                     actionState=1, mode=1, actionsAvailable=1)
+expect(logged(mark, [refused_line("set", "version")]) and reached and ok and calls == ["menu", "control"]
+       and bar.presented() == [("version", "", "idle")],
+       "layout action: a set refused at frame level (T16) ends the action before the mode goes, so the closes from inside"
+       " meet it ended (%s, %s, %s)" % (calls, bar.said, counts))
+bar.done()
+bar = Bar()
+calls = wire(bar)
+reached = bar.to_setting()
+del calls[:]
+ok, counts = counted(bar, lambda: bar.deliver(bar.frame(2, epoch=E2)), lambda: bar.state() == "idle",
+                     actionState=1, mode=1)
+expect(reached and ok and calls == ["menu", "control"] and bar.presented() == [("unconfirmed", "", "idle")],
+       "layout action: another lifetime's frame while a set is out (T33) ends the action before the mode goes (%s, %s, %s)"
+       % (calls, bar.said, counts))
+bar.done()
+QTest.qWait(50)
+qInstallMessageHandler(None)
+# Compared as a sequence; the message counts each line, as several cases log the same one.
+logged_counts, expected_counts = collections.Counter(action_messages), collections.Counter(expected_lines)
+expect(action_messages == expected_lines,
+       "layout action: the cases log one line for each lifetime left without actions, as expected, and nothing else"
+       " (%d logged, %d expected; logged more often than expected: %s; expected more often than logged: %s%s)"
+       % (len(action_messages), len(expected_lines), dict(logged_counts - expected_counts),
+          dict(expected_counts - logged_counts),
+          "; the same lines in another order" if logged_counts == expected_counts and action_messages != expected_lines
+          else ""))
 
 # The clock's wiring: main.qml's block between "BEGIN layout state" and "END layout state" runs
 # unchanged in a fixture, as the launcher's opening test runs main.qml's blocks, but for the two
