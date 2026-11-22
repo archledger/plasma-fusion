@@ -939,6 +939,31 @@ back = parsed_json(posture_saved[0]) if posture_saved else {}
 expect([kind for kind, _ in events] == ["saved", "wake"] and back.get("request", 0) > first.get("request", 0)
        and prop(posture_layout, "outcome") == "pending",
        "the clock's wiring: tablet posture over, the clock asks again (%s)" % events)
+# Shown, then the bar's output name empty (Screen.name, the control still wanted):
+# the state goes idle and the request is withdrawn, then the provider woken, as when the control is
+# hidden; the screen back, the clock asks again.
+events.clear()
+screenless, screenless_saved = wired()
+until(lambda: len(events) == 2)
+screenless_layout = screenless.property("layout") if screenless is not None else None
+events.clear()
+screenless_saved.clear()
+if screenless is not None:
+    screenless.setProperty("screenName", "")
+expect(screenless is not None and until(lambda: prop(screenless_layout, "outcome") == "idle")
+       and until(lambda: len(events) == 2) and not until(lambda: len(events) > 2, ms=300)
+       and [kind for kind, _ in events] == ["saved", "wake"] and screenless_saved == [""]
+       and prop(screenless.property("config"), "layoutRequest") == "",
+       "the clock's wiring: with no screen the clock goes idle and withdraws its request, then wakes the provider"
+       " (%s)" % events)
+events.clear()
+screenless_saved.clear()
+if screenless is not None:
+    screenless.setProperty("screenName", "Virtual-0")
+until(lambda: len(events) == 2)
+expect([kind for kind, _ in events] == ["saved", "wake"] and screenless_saved
+       and parsed_json(screenless_saved[0]).get("outputName") == "Virtual-0",
+       "the clock's wiring: the screen back, the clock asks again (%s)" % events)
 # The control's place in the width budget: its label goes at step 4, with the short date, and the
 # control at step 7, with the dots, giving up its width and one pill padding; a control that shows
 # no mode gives up nothing.
@@ -1005,7 +1030,7 @@ for region, wanted in SHORT_DATES.items():
 others = [m for m in messages if "clockpill: layout dump " not in m and UNANSWERED not in m]
 expect(not others, "the clock's wiring: the fixtures say nothing else (%s)" % others)
 qInstallMessageHandler(None)
-for item in (hidden, bare, shown, applied, posture, *gated):
+for item in (hidden, bare, shown, applied, posture, screenless, *gated):
     if item is not None:
         item.deleteLater()
 QTest.qWait(50)

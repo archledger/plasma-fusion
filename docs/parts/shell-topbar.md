@@ -215,12 +215,12 @@ provider (`wake()`). The clock's `main.qml` owns it:
   on (`showLayoutControl`), and the bar's own layout one that shows it, a horizontal panel outside
   tablet posture (the specification's scope; a clock on the desktop is not the top bar).
   Otherwise the component stays idle, with no request and no wake. The saved request is then
-  withdrawn - at start, when the user hides the control and when the bar's layout does - and the
-  provider woken (`wake()`): an empty `layoutRequest` is no request, so the provider forgets the
-  widget at that read, and no frame, and no save of the configuration, keeps following a bar that
-  shows nothing. On a change the withdrawal waits for whatever made it (`Qt.callLater`): the
-  settings dialog's Apply writes the setting first, then the page's copy of the request, and
-  saves.
+  withdrawn - at start, when the user hides the control, when the bar's layout does and when it has
+  no output name (`Screen.name` empty) - and the provider woken (`wake()`): an empty `layoutRequest`
+  is no request, so the provider forgets the widget at that read, and no frame, and no save of the
+  configuration, keeps following a bar that shows nothing. On a change the withdrawal waits for
+  whatever made it (`Qt.callLater`): the settings dialog's Apply writes the setting first, then the
+  page's copy of the request, and saves.
 - It binds `response` to the configuration's `layoutResponse`, and writes each request to
   `layoutRequest` and saves the configuration (`writeConfig()`) before the component wakes the
   provider: desktop scripting reads the saved configuration, not the property map.
@@ -327,8 +327,9 @@ settings dialog's Apply in one turn - the setting written false, the page's copy
 written back, the configuration saved - and the request must still end withdrawn. Three start in
 tablet posture, on a vertical panel and outside a panel (nothing asked; a request saved earlier
 withdrawn with one save and one wake), and one meets tablet posture coming (idle, withdrawn, then
-woken) and going (asking again). The control's place in the width budget is checked at every step
-against a stand-in control: its level, and the width it gives up, none while it shows no mode.
+woken) and going (asking again); one loses its screen and gets it back the same way. The control's
+place in the width budget is checked at every step against a stand-in control: its level, and the
+width it gives up, none while it shows no mode.
 `runDebugAction`, outside the block, is checked as text for its `dump-layout` branch, and the
 fixtures must log nothing but the dumps and the one unanswered line. The pill's short date at the
 width budget's step 4 runs through `main.qml`'s own binding in eight regions: the day and the

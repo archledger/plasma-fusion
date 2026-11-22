@@ -335,6 +335,9 @@ PlasmoidItem {
         id: layoutState
         outputName: root.layoutWanted ? Screen.name : ""
         response: Plasmoid.configuration.layoutResponse
+        // A bar with no output name to ask for asks nothing either, and its saved request is
+        // withdrawn as below.
+        onOutputNameChanged: Qt.callLater(root.withdrawLayoutRequest)
         onRequested: text => {
             Plasmoid.configuration.layoutRequest = text;
             Plasmoid.configuration.writeConfig();
@@ -348,12 +351,13 @@ PlasmoidItem {
             }
         }
     }
-    // While the control may not show, its saved request is withdrawn - at start, when the user hides
-    // it and when the bar's layout does - and the provider woken: an empty field is no request, so
-    // the provider forgets the widget at that read, and no frame, and no save of the configuration,
-    // keeps following a bar that shows nothing. On a change the withdrawal waits for whatever made
-    // it: the settings dialog's Apply writes the setting first and then the page's copy of the
-    // request, and saves.
+    // While the control may not show, or the bar has no output name to ask for, its saved request
+    // is withdrawn - at start, when the user hides it, when the bar's layout does and when the
+    // output name empties - and the provider woken: an empty field is no request, so the provider
+    // forgets the widget at that read, and no frame, and no save of the configuration, keeps
+    // following a bar that shows nothing. On a change the withdrawal waits for whatever made it:
+    // the settings dialog's Apply writes the setting first and then the page's copy of the request,
+    // and saves.
     Connections {
         target: Plasmoid.configuration
         function onShowLayoutControlChanged(): void {
@@ -363,7 +367,7 @@ PlasmoidItem {
     }
     onLayoutAllowedChanged: Qt.callLater(root.withdrawLayoutRequest)
     function withdrawLayoutRequest(): void {
-        if (!root.layoutWanted && Plasmoid.configuration.layoutRequest !== "") {
+        if (layoutState.outputName === "" && Plasmoid.configuration.layoutRequest !== "") {
             Plasmoid.configuration.layoutRequest = "";
             Plasmoid.configuration.writeConfig();
             layoutState.wake();
