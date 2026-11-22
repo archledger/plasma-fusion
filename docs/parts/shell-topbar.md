@@ -6,7 +6,7 @@ name, and the centred pill with workspace dots, date and time. The global menu b
 the stock `org.kde.plasma.appmenu` widget. Plasma 6 applets, QML only, GPL-2.0-or-later.
 
 Status: built, checked offline and in private virtual sessions on the ThinkPad, dark and light.
-Last edited 2026-11-21.
+Last edited 2026-11-22.
 
 ## Files
 
@@ -26,7 +26,8 @@ Last edited 2026-11-21.
 | `.../org.plasmafusion.clockpill/contents/ui/WidthBudget.qml` | the top bar's width budget (ADAPTIVE 5.1), run by the clock pill |
 | `.../org.plasmafusion.clockpill/contents/ui/CalendarView.qml` | month view of the pop-up |
 | `.../org.plasmafusion.clockpill/contents/ui/LayoutState.qml` | the bar's workspace layout state, the clock's side of the layout transport, and the layout menu's action |
-| `.../org.plasmafusion.clockpill/contents/ui/LayoutControl.qml` | the workspace layout control in the pill, read only |
+| `.../org.plasmafusion.clockpill/contents/ui/LayoutControl.qml` | the workspace layout control in the pill, read only unless its owner makes it interactive |
+| `.../org.plasmafusion.clockpill/contents/ui/LayoutMenu.qml` | the layout menu the control opens: the Floating and Tiled choices and a status line |
 | `.../org.plasmafusion.clockpill/contents/ui/Chevron.qml`, `FusionText.qml` | 16 px stroke chevron, text helper |
 | `.../org.plasmafusion.clockpill/contents/code/formats.js` | locale-aware date and time formats |
 | `tools/build.d/70-topbar.sh` | checks the metadata and config XML, copies both packages to `$STAGE/.local/share/plasma/plasmoids/` |
@@ -345,9 +346,9 @@ month in the region's order, without the year and what joined it to them.
 The layout menu's Floating and Tiled choices (P6 of `tasks/workspace-layout-control/todo.md`)
 reach the provider's prepared target and desired mode
 ([kwin.md](kwin.md#the-layout-providers-state)) through the layout state, which makes every
-decision. The menu and the pill's interactive control, which come in P6's later slices, forward the
-user's input to it and bind to the action's state; until then nothing calls it, and the bar sends
-queries only.
+decision. The layout menu and the pill's interactive control ("Workspace layout control" and "The
+layout menu" below) forward the user's input to it and bind to the action's state; `main.qml` wires
+them to it in P6's next slice, and until then nothing calls it, and the bar sends queries only.
 
 - `open()` freezes the action's context from the answer the bar holds - its lifetime (`epoch`), its
   `view` (`desktopId`, `activityId`) and the output - and sends nothing, so a menu opened and closed
@@ -574,9 +575,10 @@ without actions, in the cases that leave one, and nothing else.
 
 ### Workspace layout control (`LayoutControl.qml`)
 
-The control that shows the bar's workspace layout state, read only (P4 of
-`tasks/workspace-layout-control/todo.md`); the Floating and Tiled choices come in P6. Its owner
-passes in the state's `mode`, the window's metrics and the pill's text colour, and sets `level`:
+The control that shows the bar's workspace layout state (P4 of
+`tasks/workspace-layout-control/todo.md`) and, once its owner makes it interactive, opens the
+layout menu (P6, "The layout menu" below). Its owner passes in the state's `mode`, the window's
+metrics and the pill's text colour, and sets `level`:
 
 - It shows only a mode an answer confirmed: tiled, a glyph of the window frame and its divider with
   the label "Tiled"; floating, the frame alone with "Floating". Unknown and unavailable show nothing
@@ -597,10 +599,58 @@ passes in the state's `mode`, the window's metrics and the pill's text colour, a
   `px()`, so large text scales them. The label's alignment is set, so that a mirrored layout keeps
   it against its glyph: one left unset follows the text's own direction. The presentation awaits the
   owner's review of the screenshots at the read-only checkpoint.
-- It offers no action yet. It takes no keyboard focus and no click, and a wheel turned over it
-  reaches the pill, which switches workspaces. Its accessible role is static text, named "Dynamic
-  tiling: Tiled" or "Dynamic tiling: Floating"; its tooltip and accessible description say whether
-  the dynamic tiler arranges the workspace's windows. It draws without animation.
+- It is read only, as P4 made it, unless its owner sets `interactive`, which the clock is to do
+  only while the layout actions are available (`actionsAvailable`, "The layout action" above), and
+  does not yet: no build ships a control that takes focus and clicks with nothing behind them, and a
+  provider that refuses the intents leaves this same control. Read only, it offers no action. It
+  takes no keyboard focus and no click, and a wheel turned over it reaches the pill, which switches
+  workspaces. Its accessible role is static text, named "Dynamic tiling: Tiled" or "Dynamic tiling:
+  Floating", with no press action for assistive technology; its tooltip and accessible description
+  say whether the dynamic tiler arranges the workspace's windows. It draws without animation. Turned
+  read only again, it gives up the keyboard focus it held. Its press action is connected only while
+  it is interactive: Qt goes on offering a press action once one has been connected, so after that
+  it stays listed, doing nothing.
+- Interactive, it is a drop-down button, as every opener in the bar (`Accessible.ButtonDropDown`,
+  with the same name), and a Tab stop while it shows a mode, between the dots and the date. It asks
+  its owner for the menu with `menuRequested(by)`, saying how: `pointer` for a left press then
+  release, `keys` for a press of Return, Enter, Space or Select while it has focus, never an
+  auto-repeat (the repeats are taken and go no further), and `accessibility` for its accessible
+  press action, so that the menu can give its row a focus reason that shows the ring only for the
+  keyboard. It decides nothing: its owner opens the menu, or does not while a set is awaited. A
+  press while `menuOpen` (the menu open, or closed a moment ago) is the user's close,
+  `menuDismissed()`, and the click after it asks for nothing, the date's toggle. It takes no arrow
+  and no Escape: the panel turns arrows into Tab and Backtab and leaves on Escape. Its pointer area
+  sits inside its tooltip area, as the date's, exists only while it is interactive, and takes only
+  the left button and no wheel, so a right click still opens the widget's context menu and the
+  wheel still switches workspaces; nothing under it takes its click.
+- Its looks while interactive stay within its width. Focused: the Fusion ring, 2 px in the focus
+  colour with a 2 px gap outside it (the Controls board), round as the pill. With its menu open
+  (`menuOpen`): the opener's look the pill takes while the calendar is open, the accent at 35 % with
+  an inset 1 px edge (the QuickSettings board's open status pill), as a capsule of the pill's height
+  reaching half the pill's padding past each side, and no tooltip, as the date has none over the
+  calendar. A choice awaited with the menu closed (`pending`): the glyph and label at 0.7, as quick
+  settings dims a busy row's status, and "Waiting for an answer" as its tooltip and description,
+  with no animation. Its owner passes the window's `accent` (`FusionAccent`) for the ring and the
+  opener's look.
+- `outcomeText(reason, mode, inMenu)` words the layout action's outcomes, so that the menu's status
+  line and the pill say the same; `mode` is the mode the outcome concerns, empty for a prepare with
+  no choice queued, and `inMenu` words an unconfirmed outcome for the open menu or for the pill.
+  "No app window to tile": `no-target` with no choice or Tiled (a prepare done without an app to
+  tile, or a Tiled set), `not-eligible` with Tiled. "Focus an app window first": `focus-changed`
+  with no choice or Tiled, a prepare that found no app to hand off. "Busy, try again": `busy`. "The
+  workspace changed": `stale-context`, `target-departed`, `view-changed`, `shell-replaced`, and
+  `focus-changed` with Floating. "Interrupted, try again": `interrupted`. "Couldn't tile this
+  workspace": `tree-refused`, `admission-refused` and `unavailable` with Tiled. "Cancelled":
+  `cancelled`. "No answer yet" in the menu and "Not confirmed" in the pill: `unconfirmed`. "Couldn't
+  change the layout": anything else, Floating's `unavailable`, the frame-level refusals and
+  `malformed` among them. An outcome carries no intent, so with Tiled a prepare and a set that share
+  a reason share its text: `focus-changed` reads as a prepare's, the case the menu shows after a
+  Tiled choice made first (a Tiled set refused so is one read as the menu closes), and `unavailable`
+  as a Tiled set's, which a prepare refused so with Tiled queued reads too.
+- `notify(reason, mode)` shows an outcome, worded so, in its tooltip and accessible description for
+  5 s, quick settings' refused-state time; an empty reason, a done set's, clears it at once. A
+  choice awaited takes precedence. Neither the control nor the menu announces anything: the clock's
+  handler of `actionOutcome()` is to be the one announcer, so that a reason is said once.
 - It does not compare an answer's view with the bar's own. The placement script is the only
   authority for the view, and on a desktop switch the bar's own desktop and the provider's frame for
   the new view arrive separately, so a comparison would disagree for a moment on every switch,
@@ -630,7 +680,102 @@ label's alignment toward its glyph; a wheel and a click reaching what is behind 
 it handling a click itself; and nothing taking focus. Its control checks go on after a failure, so
 that one run shows them all. A stand-in bar around the staged `WidthBudget.qml` checks that the
 budget evaluates again when a saving changes while the pill keeps its width: the control showing
-no mode at step 7, and a saving that only the steps below give up.
+no mode at step 7, and a saving that only the steps below give up. Those read-only checks run on
+the read-only control unchanged; a read-only control also offers no press action.
+
+The interactive control and the menu run in windows of their own, as the menu has its pop-up, with
+the window made active before its keys and the pointer moved off the control after each press:
+offscreen, a window that loses the activation drops its active focus item, and a Plasma tooltip
+window takes the activation as it shows. For the interactive control the suite checks the
+drop-down role and name; a Tab stop at both levels that show a mode and none where none shows; the
+ring's width, gap, colour and shape; each opening key asking once with `keys` and going no
+further, an auto-repeat asking nothing and going no further either, and arrows and Escape reaching
+its parent; the accessible press action asking with `accessibility`; a press then release asking
+once, on the release, with `pointer`, with nothing under it taking the click; a press with the menu
+open making the user's close, on the press, and the click after it asking nothing; the opener's
+look, its colours and geometry within the width, and no tooltip while the menu is open; a right
+click and a wheel passing it; the pending look at 0.7 at once, no wider, with its text;
+`outcomeText()` for each text over the reasons and modes it words, `focus-changed` with Tiled
+included; the notice's 5 s, its text, its replacement worded for its own mode, its end and its
+clearing by an empty outcome; no announcement in the source; and the control turned read only
+again, P4's in every check, its focus gone and its pending look, opener's look and notice hidden.
+
+### The layout menu (`LayoutMenu.qml`)
+
+The menu the layout control opens (P6), the Floating and Tiled choices for the bar's view and a
+status line for their outcome. `main.qml` is to show it in an applet pop-up of its own in P6's next
+slice, as the provider accepts a prepare only while a focused shell applet pop-up holds the focus,
+and a Qt menu would be a pop-up surface that never does. The menu decides nothing: its owner binds
+`mode`, `tiledBlocked`, `choice` (the layout state's `actionChoice`), `pending` (`actionPending`),
+`status` (the outcome, worded by the control's `outcomeText()`), `touch` and `location`, and
+forwards what it reports.
+
+- Two radio rows, Floating then Tiled (`Accessible.RadioButton`, checkable, the confirmed mode's
+  checked), in a pane named "Dynamic tiling", as the window card's root.
+  `focusConfirmed(byKeyboard)` gives the confirmed row the focus as the menu opens, so that a screen
+  reader names the mode shown first and one arrow reaches the other choice: with a keyboard focus
+  reason, which shows its ring, when the menu was opened by keys or the accessible press action,
+  and with a mouse reason for the pointer. The row's focus is taken first, as a row focused already
+  would keep the reason it had.
+- Up and Down move between the rows and wrap, and Home and End go to the first and the last, over
+  the menu's own two rows rather than the window's focus chain; Tab and Backtab go through Qt's Tab
+  chain, which in the pop-up's window holds the rows alone, and wrap there. A disabled row is
+  skipped. Return, Enter, Space and Select choose (`chosen(mode)`), on a press and never on an
+  auto-repeat; they are taken, repeated or not, so that the button's own Space handling does not
+  click as well. Escape asks to close (`closeRequested()`, the user's close). A left press on a row
+  reports the input and its release chooses; hover only highlights. The confirmed mode's row
+  chooses too, as the provider decides, and the menu stays open on a choice.
+- `inputReported()` comes for each press of Up, Down, Home, End, Tab, Backtab, Return, Enter, Space
+  or Select, and each left press on a row; the first prepares. None comes for an auto-repeat (the
+  Space that opened the menu can repeat into it), Escape, hover or the window becoming active.
+- Tiled blocked (`tiledBlocked`): the Tiled row is disabled, in the disabled text colour, and its
+  description gives the reason the status line shows. A disabled row hands the active focus to its
+  scope, the menu, not to the other row (Qt 6.11's `QQuickItem`), so the menu gives it to the next
+  enabled row, Floating, itself, with a keyboard reason, once the rows have settled: the end of a
+  wait and Tiled's block can come in one event in either order (T9). The menu says nothing of the
+  reason; its owner announces it.
+- A choice awaited (`pending`): both rows are disabled, the chosen row's label gains "…", and its
+  description says "Waiting for an answer"; Escape still closes. The menu holds the focus meanwhile,
+  and the row that had it takes it back as the rows are enabled again, with no ring until the next
+  key, as Qt gives it back with no keyboard reason.
+- The status line, while `status` is not empty: 11.5 px in the Controls board's secondary text,
+  wrapping, the board menu's 6 px from the rows, on the side away from the bar, from `location`:
+  under the rows in a top bar, above them in a bottom bar. A line that appears so grows the pop-up
+  away from the bar and moves no row under the pointer; that the pop-up keeps its edge at the bar is
+  for a real session to show.
+- No board draws the menu, and its values are the boards' (the owner judges the presentation on
+  real sessions' screenshots). The rows are the Controls board's menu rows: 32 px high, radius 8,
+  padding 0 10, Manrope 13 px, 1 px apart; with `touch`, the TabletPairs board's touch menu, 44 px,
+  padding 0 12, 14.5 px at 600. The confirmed row has the accent's soft fill (18 % dark, 12 %
+  light), weight 700 and the Gestures board's 16 px check at the trailing edge, in the selected text
+  colour, as the settings module's drop-down draws its chosen option. Hover is the ink at 7 %, as on
+  the window card's rows, so that it does not read as the confirmed row. Keyboard focus is a 2 px
+  ring in the focus colour on the row's own edge, as the window card's, since a ring outside a row
+  would cover its neighbour; it leaves out the Controls board's 2 px gap. Disabled text is text3. No
+  row has a glyph, as next to the check a Floating glyph would read as an empty checkbox. The width
+  is the board menu's 236 px (touch 250) through the metrics, fixed: large text widens it, but "…"
+  and a reason never do, and long texts wrap, a row growing by its label's extra lines. It mirrors
+  right to left. It has its own `FusionMetrics` and `FusionAccent`, as the pop-up is a window of its
+  own, and the pop-up's dialog frame stands for the board menu's frame and padding.
+
+Tests: `tests/calendar_view_test.py`, as above, loads the staged menu in a window of its own and
+checks the named pane; the two radio rows in order, their names and the confirmed one checked, for
+either mode; the check on the confirmed row alone, its size and place; the confirmed row's fill and
+weight and its check's colour; the rows' height, radius, spacing, label inset and font, and the
+menu's width, through the metrics; hover's tint on another row, the confirmed row's fill kept, and
+no input from hover; the confirmed row focused with a keyboard reason and its ring, with a mouse
+reason and none, and again with a mouse reason after the keys; the row's ring on its own edge; Down
+and Up wrapping, End and Home, and Tab and Backtab wrapping through the Tab chain, each with the
+ring; one input per counted press, none for an auto-repeat or for Escape, which asks to close; each
+choosing key choosing once, Space not twice, and a press then release on a row; a right click doing
+nothing; a blocked Tiled row skipped by every moving key, in the disabled colour with its reason as
+description; Floating taking the focus with a keyboard reason when the focused Tiled row is
+blocked, and when a wait ends with Tiled blocked in either order; the pending rows disabled with
+"…" and their descriptions at the same width, taking no press or key, with Escape still closing;
+the status line's text, size and colour under the rows in a top bar with no row moved, above them
+in a bottom bar with each row's distance from the bar's side kept, a long status wrapping at the
+same width and no room taken when empty; a long label wrapping and its row growing; the touch rows;
+right to left; and no announcement in the source.
 
 ## Global menu (stock `org.kde.plasma.appmenu`)
 
