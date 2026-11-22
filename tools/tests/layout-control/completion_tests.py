@@ -448,7 +448,8 @@ class CompletionRun:
         for frame in frames:
             self.revision += 1
             published.append((self.revision, frame))
-            if frame["intent"] == "query":
+            if frame["intent"] == "query" or frame.get("unlogged"):
+                # A query has no native verdict; an unlogged frame is published without one.
                 continue
             native = {"consumer": frame["boot"], "request": frame["request"],
                       "intent": frame["intent"], "revision": self.revision,
@@ -499,7 +500,8 @@ class CompletionRun:
               refusal_token=False, holder_refused=False, conflict=False, early_decision=False,
               re_leased=False, missed_delivery=False, second_start=False,
               advanced_drop=False, advanced_change=False, received_mismatch=False,
-              early_newer=False) -> None:
+              early_newer=False, unlogged=False, advanced_holder=False,
+              query_completion=False) -> None:
         held = prepare(HOLDER, 2, completion=ACCEPTED)
         busy = prepare(COMPETITOR, 2, completion=BUSY, reason="busy")
         # The holder's preparation was accepted before the case began.
@@ -540,6 +542,12 @@ class CompletionRun:
             # The verdict reports the target no longer valid; the received frame says ready.
             later = dict(held, received={"ready": True, "reason": "", "token": TOKEN})
         self.publish(later, query(COMPETITOR, 1), epoch="d" * 32 if two_lifetimes else EPOCH)
+        if unlogged:
+            # A frame for the decided request that drops its completion and has no verdict.
+            self.publish(dict(held, completion=None, unlogged=True))
+        if query_completion:
+            # A query, which no verdict answers, carrying a completion.
+            self.publish(dict(query(COMPETITOR, 1), completion=refused(1, "busy")))
         self.step("context")
         # The competitor's menu opens from the controlled app: two more context changes.
         self.subject("competitor", COMPETITOR)
@@ -556,6 +564,10 @@ class CompletionRun:
                 frame = (prepare(HOLDER, 3, reason="unavailable", completion=None) if opening == 0
                          else prepare(HOLDER, 2, completion=None))
             self.publish(frame, query(COMPETITOR, 1))
+        if advanced_holder:
+            # A newer holder request the provider handled: request 2 may then drop its completion.
+            self.publish(dict(prepare(HOLDER, 3, reason="focus-changed", completion=None),
+                              intent="validate"))
         self.mark("competitor")
         decision = busy
         if refusal_token:
@@ -565,6 +577,9 @@ class CompletionRun:
                                completion=ACCEPTED | {"token": EPOCH + ":2"})
         if competitor_alone:
             self.publish(decision)
+        elif advanced_holder:
+            self.publish(prepare(HOLDER, 2, reason="stale-or-conflicting-request",
+                                 completion=None), decision)
         else:
             self.publish(held, decision)
         self.step("competitor")
@@ -650,6 +665,15 @@ class CompletionCheckerTests(unittest.TestCase):
     def test_a_received_preparation_that_differs_from_the_native_verdict_fails(self):
         self.assert_rejected("does not match its native verdict", received_mismatch=True)
 
+    def test_a_prepared_frame_without_a_native_verdict_fails(self):
+        # Only a query or offline frame has no verdict; a prepared one could drop a decided
+        # completion that no verdict shows.
+        self.assert_rejected("without a native target verdict carried a preparation",
+                             unlogged=True)
+
+    def test_a_frame_without_a_native_verdict_cannot_carry_a_completion(self):
+        self.assert_rejected("without a native target verdict carried a", query_completion=True)
+
     def test_a_frame_without_a_context_change_cannot_stand_for_one(self):
         self.assert_rejected("no context change", no_context=True)
 
@@ -658,6 +682,11 @@ class CompletionCheckerTests(unittest.TestCase):
 
     def test_the_competitors_decision_must_also_carry_the_holders_completion(self):
         self.assert_rejected("holder's completion", competitor_alone=True)
+
+    def test_a_holder_frame_without_its_completion_cannot_stand_for_one_that_keeps_it(self):
+        # Once the holder has a newer handled request, a replay of request 2 may drop the
+        # completion; it then cannot show that the busy publication kept it.
+        self.assert_rejected("keeping the holder's completion", advanced_holder=True)
 
     def test_the_competitor_must_be_refused_as_busy(self):
         self.assert_rejected("busy", competitor_accepted=True)

@@ -166,8 +166,10 @@ def check_frames(frames: list, native: list, decided: dict) -> None:
         completion = packet.get("completion")
         verdict = published.get((packet["consumer"], packet["revision"]))
         if packet.get("status") != "online" or verdict is None:
-            require(completion is None, "a frame without a native target verdict carried a"
-                    " completion")
+            # The provider logs a verdict for every frame it publishes with a preparation, so a
+            # frame without one is a query or offline frame and carries neither field.
+            require(packet.get("preparation") is None and completion is None,
+                    "a frame without a native target verdict carried a preparation or completion")
             continue
         preparation = packet.get("preparation")
         require(packet["request"] == verdict["request"] and isinstance(preparation, dict)
@@ -290,7 +292,8 @@ def evaluate(directory: Path, name: str, end: dict | None) -> dict:
     previous = max([index for index in evidence["publications"] if index < busy["index"]],
                    default=-1)
     holders = [row for index, row in native if previous < index < later[0]
-               and row["consumer"] == holder and row["request"] == held["request"]]
+               and row["consumer"] == holder and row["request"] == held["request"]
+               and row["completion"] == held["completion"]]
     require(holders, "the competitor's decision was not published with a frame keeping the"
             " holder's completion")
     require(accepted_with(evidence["observed"], competitor, busy, start["shellLines"]),
