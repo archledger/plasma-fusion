@@ -550,6 +550,15 @@ Item {
             }
             return;
         }
+        if (scenario === "set") {
+            try {
+                runSet();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
         if (scenario === "prepare") {
             try {
                 runPrepare();
@@ -707,6 +716,7 @@ Item {
         ws.desktops = [desktop];
         ws.currentDesktop = desktop;
         ws.currentActivity = "a";
+        ws.activities = ["a", "b"];
         // A 133% output, as the ThinkPad's: the frames KWin lands are not the whole-pixel cells.
         ws.activeScreen = { name: "Virtual-1", geometry: Qt.rect(0, 0, 1440, 900), devicePixelRatio: 4 / 3 };
         const older = legacyFacade ? facadeWithoutRestore() : interimFacade ? facadeWithoutRestore(["restoreWindow"]) : null;
@@ -791,7 +801,12 @@ Item {
                             activityId: provider.activityId, outputName: provider.outputName,
                             views: JSON.stringify(provider.views === undefined ? null : provider.views),
                             preparations: JSON.stringify(provider.preparations === undefined ? null
-                                                         : provider.preparations) } : null;
+                                                         : provider.preparations),
+                            // A set decided after its read moves the revision with its completion
+                            // alone (P5).
+                            completions: JSON.stringify(provider.requests === undefined ? null
+                                                        : provider.requests.map(r => [r.id, r.request,
+                                                            r.completion === undefined ? null : r.completion])) } : null;
     }
 
     // The provider moved `moves` revisions since the state `before` and now reads `fields`.
@@ -1704,15 +1719,18 @@ Item {
         }
         // A withdrawn request (an empty field) is listed as such; an unreadable one only as seen. A
         // prepare carries its frozen context - the epoch, and the view as its two scalars - and
-        // nothing else.
+        // nothing else; a set its mode and handle (P5), and nothing else.
         const prepareText = JSON.stringify({ consumer: "c21", request: 21, version: 1, intent: "prepare",
                                              outputName: "Virtual-1", epoch: "e1", title: "not copied",
                                              view: { desktopId: "11", activityId: "a", token: "not copied" } });
+        const setText = JSON.stringify({ consumer: "c24", request: 24, version: 1, intent: "set",
+                                         outputName: "Virtual-1", mode: "tiled", handle: "e1:1:1", title: "not copied" });
         const inventoryRead = runReaderScript(script, [[{ type: clock, id: 20, text: "" },
                                                         { type: "org.kde.plasma.digitalclock", id: 22, text: "" },
                                                         { type: clock, id: 21, text: prepareText },
-                                                        { type: clock, id: 23, text: "{not json" }]]);
-        if (!inventoryRead || JSON.stringify(inventoryRead.widgets) !== JSON.stringify([20, 21, 23])
+                                                        { type: clock, id: 23, text: "{not json" },
+                                                        { type: clock, id: 24, text: setText }]]);
+        if (!inventoryRead || JSON.stringify(inventoryRead.widgets) !== JSON.stringify([20, 21, 23, 24])
                 || JSON.stringify(inventoryRead.empty) !== JSON.stringify([20]) || inventoryRead.truncated !== false) {
             fail("read-pipeline: the inventory lists the clock's widgets and the empty field (got "
                  + JSON.stringify(inventoryRead) + ")");
@@ -1724,6 +1742,12 @@ Item {
                 || prepareRow.epoch !== "e1" || prepareRow.view.desktopId !== "11" || prepareRow.view.activityId !== "a") {
             fail("read-pipeline: a prepare's row carries its epoch and view's two scalars, nothing else (got "
                  + JSON.stringify(prepareRow) + ")");
+        }
+        const setRow = inventoryRead ? inventoryRead.rows.find(row => row.id === 24) : null;
+        if (!setRow || JSON.stringify(Object.keys(setRow).sort())
+                !== JSON.stringify(["consumer", "handle", "id", "intent", "mode", "outputName", "request", "version"])
+                || setRow.mode !== "tiled" || setRow.handle !== "e1:1:1") {
+            fail("read-pipeline: a set's row carries its mode and handle, nothing else (got " + JSON.stringify(setRow) + ")");
         }
         // The answer: the provider checks every row again; a query of version 1 for a named
         // output is a request, anything else with a well-formed identity a refusal, kept with its
@@ -1997,6 +2021,467 @@ Item {
         done = true;
     }
 
+    // P5's desired mode on the real script: a bar's set through the slot its prepare took, the
+    // tiler's untoggle and start behind it (main.qml, applyMode). Tiled from floating, decided at
+    // once, the app the master and given focus; a re-read that starts nothing again; Tiled again
+    // with no target, a no-op; a set validated when it is handled, its popup's focus included;
+    // another lifetime's handle; Floating on the tiled view, which ends the session, and with no
+    // session, which changes nothing; a refused tree; a completion that outlives a failed
+    // publication. Then the cross-output transfer whose first admission is refused 7 while the old
+    // master's restore takes focus: it starts on its retry, the prepared app focused after the
+    // first attempt and nothing moving focus after it, and inside its retry window a re-read
+    // starts nothing and another widget's set is busy. A desktop switch of the user's inside a
+    // retry window: the start takes the captured view and the switch stands. The shortcut
+    // cancelling a set's retry; a retry whose target was minimized; an admission refused for good.
+    function runSet() {
+        if (setup() === "") {
+            done = true;
+            return;
+        }
+        const ws = KWinStubs.Workspace;
+        const p = provider;
+        script.admitRetryMillis = 20;
+        script.admitRetryLimit = 3;
+        const output = ws.activeScreen;
+        const second = { name: "Virtual-2", geometry: Qt.rect(1440, 0, 1440, 900), devicePixelRatio: 1 };
+        ws.screens = [output, second];
+        const otherDesktop = { id: 12 };
+        ws.desktops = [firstDesktop, otherDesktop];
+        const shellPid = 900;
+        master.pid = 500;
+        winA.pid = 501;
+        winB.pid = 502;
+        const surface = (id, over, on) => {
+            const w = mk(Object.assign({ internalId: id, normalWindow: false, pid: shellPid }, over));
+            w.output = on || output;
+            w.desktops = [firstDesktop];
+            return w;
+        };
+        const popup = surface("popup", { appletPopup: true });
+        const awayPopup = surface("popup-away", { appletPopup: true }, second);
+        const foreign = surface("foreign", { appletPopup: true, pid: 777 });
+        // An app on the other output, with that output's bar.
+        const away = mk({ internalId: "away", resourceClass: "org.fusion.away", desktopFileName: "org.fusion.away.desktop",
+                          frameGeometry: Qt.rect(1500, 80, 600, 400), pid: 503 });
+        away.output = second;
+        away.desktops = [firstDesktop];
+        const focus = w => {
+            ws.activeWindow = w;
+            ws.windowActivated(w);
+        };
+        DBusStubs.SessionBus.answer(expectIdentityRequest("set", p), [{ value: 1 }]);
+        p.identityLookup.finished([":1.42"]);
+        const ask = (id, consumer, request, intent, extra) => Object.assign({
+            id: id, consumer: consumer, request: request, version: 1, intent: intent, outputName: "Virtual-1" }, extra || {});
+        const prep = (id, consumer, request, extra) => ask(id, consumer, request, "prepare", Object.assign({
+            epoch: p.label, view: { desktopId: "11", activityId: "a" } }, extra || {}));
+        const setTo = (id, consumer, request, mode, handle, extra) => ask(id, consumer, request, "set",
+            Object.assign({ mode: mode, handle: handle }, extra || {}));
+        // Answering a publication can start the next one at once (a completion or a view change
+        // made one due meanwhile), so they are answered until none is in flight.
+        const settle = () => {
+            for (let i = 0; i < 8 && p.publishing; ++i) {
+                p.writer.finished([writeAnswer(1)]);
+            }
+        };
+        const framesSince = from => {
+            const frames = {};
+            for (let i = from; i < p.writer.callLog.length; ++i) {
+                Object.assign(frames, framesOf(p, i, [5, 6]));
+            }
+            settle();
+            return frames;
+        };
+        // Each clock's field keeps its last request, as the shell's widget configuration does: a
+        // read carries every field, the rows given replacing their widgets' (an inventory with
+        // only some widgets would say the others are gone). The frames it published, or with
+        // `holdPublication` its publication left unanswered.
+        const fields = {};
+        let owner = ":1.9";
+        const read = (rows, holdPublication) => {
+            for (const row of rows) {
+                fields[row.id] = row;
+            }
+            const all = Object.keys(fields).map(id => fields[id]);
+            settle();
+            const from = p.writer.callLog.length;
+            if (!p.reading) {
+                p.wake.activated();
+            }
+            p.shellLookup.finished([owner]);
+            p.reader.finished([JSON.stringify({ start: Date.now(), rows: all, widgets: all.map(r => r.id), empty: [],
+                                                truncated: false })]);
+            return holdPublication ? null : framesSince(from);
+        };
+        const completionOf = id => {
+            const row = p.requests.find(r => r.id === id);
+            return row ? row.completion : "no request";
+        };
+        const decided = (what, id, wanted) => {
+            if (canonical(completionOf(id)) !== canonical(wanted)) {
+                fail("set: " + what + " (got " + canonical(completionOf(id)) + ", not " + canonical(wanted) + ")");
+            }
+        };
+        const pending = (what, id) => {
+            if (completionOf(id) !== undefined) {
+                fail("set: " + what + " (got " + canonical(completionOf(id)) + ")");
+            }
+        };
+        const doneSet = { intent: "set", result: "done" };
+        const refusedSet = reason => ({ intent: "set", result: "refused", reason: reason });
+        // A prepare of widget `id` from the popup `opener` opened after `app` (null: none); its
+        // handle.
+        const prepareFrom = (id, consumer, request, app, opener, extra) => {
+            if (app) {
+                focus(app);
+            }
+            focus(opener);
+            read([prep(id, consumer, request, extra)]);
+            const completion = completionOf(id);
+            if (!completion || completion.result !== "done") {
+                fail("set: widget " + id + " prepares (got " + canonical(completion) + ")");
+                return "";
+            }
+            return completion.handle;
+        };
+        // The first read, with nothing to answer, takes the shell's PID.
+        p.shellLookup.finished([":1.9"]);
+        p.shellPidLookup.finished([shellPid]);
+        p.reader.finished([JSON.stringify({ start: Date.now(), rows: [], widgets: [], empty: [], truncated: false })]);
+        settle();
+        let frames = null;
+        let from = 0;
+        let h = "";
+        let h6 = "";
+        let creates = 0;
+        let admits = 0;
+        // ---- Tiled from floating: decided at once, the app the master, focus given to it ----
+        h = prepareFrom(5, "c5", 1, master, popup);
+        creates = calls("createTile").length;
+        frames = read([setTo(5, "c5", 2, "tiled", h)]);
+        if (facade.owned !== master || !inColumn(winA) || !p.active || calls("createTile").length !== creates + 1) {
+            fail("set: Tiled starts the session with the prepared app as the master (owned "
+                 + (facade.owned ? facade.owned.internalId : null) + ", a in column " + inColumn(winA) + ", active "
+                 + p.active + ", trees " + (calls("createTile").length - creates) + ")");
+        }
+        if (!frames[5] || canonical(frames[5].completion) !== canonical(doneSet) || frames[5].tiled !== true
+                || frames[5].prepared !== undefined) {
+            fail("set: the set's frame says it is done and the view tiled (got " + canonical(frames[5]) + ")");
+        }
+        if (ws.activeWindow !== master || p.slot !== null) {
+            fail("set: focus goes to the app, and the set consumed the slot");
+        }
+        admits = calls("admitTile").length;
+        const writes = p.writer.calls;
+        read([setTo(5, "c5", 2, "tiled", h)]);
+        if (calls("admitTile").length !== admits || p.writer.calls !== writes) {
+            fail("set: a set read again starts nothing again and tells nothing new");
+        }
+        read([setTo(5, "c5", 2, "tiled", "0".repeat(32) + ":9:9")]);
+        decided("the same set with another handle is refused", 5, refusedSet("conflicting-request"));
+        if (calls("admitTile").length !== admits) {
+            fail("set: a conflicting set starts nothing");
+        }
+        // ---- Tiled again: the master on its tile is no eligible app, so no target; a no-op ----
+        h = prepareFrom(5, "c5", 3, master, popup);
+        if (!completionOf(5) || completionOf(5).target !== false) {
+            fail("set: the popup opened from the master on its tile has no target");
+        }
+        creates = calls("createTile").length;
+        read([setTo(5, "c5", 4, "tiled", h)]);
+        decided("Tiled on the tiled view is a no-op, done before any target is needed", 5, doneSet);
+        if (calls("createTile").length !== creates || facade.owned !== master) {
+            fail("set: re-selecting Tiled changes nothing");
+        }
+        // ---- validated when handled: the popup lost focus unseen, the set refused with that ----
+        h = prepareFrom(5, "c5", 5, master, popup);
+        ws.activeWindow = winA;
+        read([setTo(5, "c5", 6, "floating", h)]);
+        decided("a set whose popup no longer holds focus is refused with that", 5, refusedSet("focus-changed"));
+        if (!p.active || facade.owned !== master || p.slot !== null) {
+            fail("set: a refused set changes nothing, and its slot ends");
+        }
+        ws.activeWindow = popup;
+        // ---- another lifetime's handle is stale ----
+        prepareFrom(5, "c5", 7, master, popup);
+        read([setTo(5, "c5", 8, "floating", "0".repeat(32) + ":1:1")]);
+        decided("another lifetime's handle is stale", 5, refusedSet("stale-context"));
+        if (!p.active || p.slot !== null) {
+            fail("set: a stale set changes nothing, and the holder's slot ends");
+        }
+        // ---- an incapable provider refuses the set, and the slot is freed ----
+        h = prepareFrom(7, "c7", 1, master, popup);
+        p.nativeCapable = false;
+        read([setTo(7, "c7", 2, "floating", h)]);
+        p.nativeCapable = true;
+        decided("an incapable provider refuses a set", 7, refusedSet("unavailable"));
+        if (p.slot !== null || !p.active) {
+            fail("set: an unavailable set frees the slot and changes nothing");
+        }
+        // ---- another widget's set, under the holder's own consumer label, is stale ----
+        h = prepareFrom(7, "c7", 3, master, popup);
+        read([setTo(8, "c7", 1, "floating", h)]);
+        decided("another widget's set naming the holder's handle is stale", 8, refusedSet("stale-context"));
+        if (!p.slot || p.slot.id !== 7 || !p.active) {
+            fail("set: another widget's set leaves the holder's slot and the session alone");
+        }
+        // ---- the holder's set naming another output is stale, and ends the preparation ----
+        read([setTo(7, "c7", 4, "floating", h, { outputName: "Virtual-2" })]);
+        decided("a set for another output than its preparation's is stale", 7, refusedSet("stale-context"));
+        if (p.slot !== null || !p.active) {
+            fail("set: the holder's stale set frees the slot and changes nothing");
+        }
+        // ---- Floating on the tiled view ends the session ----
+        h = prepareFrom(5, "c5", 9, master, popup);
+        frames = read([setTo(5, "c5", 10, "floating", h)]);
+        decided("Floating on the tiled view is done", 5, doneSet);
+        if (p.active || facade.owned !== null || onTile(master) || !frames[5] || frames[5].tiled !== false) {
+            fail("set: Floating ends the session on the prepared view (got " + canonical(frames[5]) + ")");
+        }
+        // ---- Floating with no session: done, nothing changes ----
+        h = prepareFrom(5, "c5", 11, master, popup);
+        creates = calls("createTile").length;
+        const restores = calls("restoreWindow").length;
+        read([setTo(5, "c5", 12, "floating", h)]);
+        decided("Floating with no session is done", 5, doneSet);
+        if (p.active || calls("createTile").length !== creates || calls("restoreWindow").length !== restores) {
+            fail("set: Floating with no session changes nothing");
+        }
+        // ---- Tiled with no target on a view that is not tiled: no-target ----
+        focus(foreign);
+        focus(popup);
+        read([prep(7, "c7", 5)]);
+        if (!completionOf(7) || completionOf(7).target !== false) {
+            fail("set: a popup opened from another process's window has no target");
+        }
+        read([setTo(7, "c7", 6, "tiled", completionOf(7).handle)]);
+        decided("Tiled with no target on an untiled view is refused", 7, refusedSet("no-target"));
+        if (p.active) {
+            fail("set: a set with no target starts nothing");
+        }
+        // ---- a refused tree refuses the set ----
+        h = prepareFrom(5, "c5", 13, master, popup);
+        facade.refuseCreate = true;
+        read([setTo(5, "c5", 14, "tiled", h)]);
+        facade.refuseCreate = false;
+        decided("a refused tree refuses the set", 5, refusedSet("tree-refused"));
+        if (p.active) {
+            fail("set: a refused tree starts nothing");
+        }
+        // ---- a completion outlives a failed publication: the next one carries it ----
+        h = prepareFrom(5, "c5", 15, master, popup);
+        read([setTo(5, "c5", 16, "tiled", h)], true);
+        if (!p.publishing || !p.active) {
+            fail("set: the set started the session and its frame is going out");
+        }
+        p.writer.failed();
+        frames = read([setTo(5, "c5", 16, "tiled", h)]);
+        if (!frames[5] || canonical(frames[5].completion) !== canonical(doneSet) || frames[5].tiled !== true) {
+            fail("set: the frame a failed publication did not deliver goes out with the next one (got "
+                 + canonical(frames[5]) + ")");
+        }
+        steps = [
+            { name: "the transfer to the other output", run: function () {
+                // ---- the cross-output transfer: the session on the first output ends, the old
+                // master's restore focuses it, the first admission on the second is refused 7 ----
+                // ---- Floating on another output leaves the session here alone ----
+                focus(away);
+                focus(awayPopup);
+                read([prep(6, "c6", 1, { outputName: "Virtual-2" })]);
+                read([setTo(6, "c6", 2, "floating", completionOf(6).handle, { outputName: "Virtual-2" })]);
+                decided("Floating on another output is done", 6, doneSet);
+                if (!p.active || facade.owned !== master || p.outputName !== "Virtual-1") {
+                    fail("set: Floating on another output leaves this output's session alone");
+                }
+                focus(away);
+                focus(awayPopup);
+                read([prep(6, "c6", 3, { outputName: "Virtual-2" })]);
+                h6 = completionOf(6) ? completionOf(6).handle : "";
+                if (!completionOf(6) || completionOf(6).target !== true) {
+                    fail("set: the popup on the second output opened from its app prepares it");
+                }
+                facade.admitAnswers = [7];
+                admits = calls("admitTile").length;
+                const restored = calls("restoreWindow").length;
+                read([setTo(6, "c6", 4, "tiled", h6, { outputName: "Virtual-2" })]);
+                pending("a set whose admission is retried has no completion yet", 6);
+                if (p.active || facade.owned !== null || calls("admitTile").length !== admits + 1
+                        || calls("restoreWindow").length === restored) {
+                    fail("set: the session on the first output ended and the first admission was refused");
+                }
+                if (ws.activeWindow !== away) {
+                    fail("set: focus went to the prepared app after the first attempt (got "
+                         + (ws.activeWindow ? ws.activeWindow.internalId : null) + ")");
+                }
+                // ---- inside the retry window: a re-read starts nothing, another set is busy ----
+                read([setTo(6, "c6", 4, "tiled", h6, { outputName: "Virtual-2" })]);
+                pending("the re-read set is still under way", 6);
+                const h5 = prepareFrom(5, "c5", 17, master, popup);
+                read([setTo(5, "c5", 18, "tiled", h5)]);
+                decided("another set while a start is retried is busy", 5, refusedSet("busy"));
+                if (p.slot !== null) {
+                    fail("set: a busy set frees the slot");
+                }
+                pending("the retried set is still under way", 6);
+                if (calls("admitTile").length !== admits + 1) {
+                    fail("set: nothing inside the retry window admitted again");
+                }
+                settle();
+                from = p.writer.callLog.length;
+            } },
+            { name: "the transfer's retry", until: () => facade.owned === away && p.writer.callLog.length > from,
+              run: function () {
+                frames = framesSince(from);
+                if (!frames[6] || canonical(frames[6].completion) !== canonical(doneSet) || frames[6].tiled !== true) {
+                    fail("set: the retried set is told done, the second output tiled (got " + canonical(frames[6]) + ")");
+                }
+                if (calls("admitTile").length !== admits + 2 || p.outputName !== "Virtual-2" || ws.activeWindow !== popup) {
+                    fail("set: the retry admitted the app on the second output, and moved no focus");
+                }
+                read([]);
+                decided("a set decided after its read keeps its completion when read again", 6, doneSet);
+                // ---- the completion rides a newer state frame: the activity switched ----
+                settle();
+                from = p.writer.callLog.length;
+                ws.currentActivity = "b";
+            } },
+            { name: "a newer state frame", until: () => p.writer.callLog.length > from, run: function () {
+                const decidedAt = frames[6] ? frames[6].revision : -1;
+                frames = framesSince(from);
+                if (!frames[6] || canonical(frames[6].completion) !== canonical(doneSet) || !(frames[6].revision > decidedAt)
+                        || !frames[6].view || frames[6].view.activityId !== "b") {
+                    fail("set: a newer state frame for the request carries its completion (got " + canonical(frames[6]) + ")");
+                }
+                ws.currentActivity = "a";
+            } },
+            { name: "the activity back", until: () => p.views[6] && p.views[6].view && p.views[6].view.activityId === "a",
+              run: function () {
+                settle();
+                // ---- a desktop switch of the user's inside a retry window ----
+                h6 = prepareFrom(6, "c6", 5, null, awayPopup, { outputName: "Virtual-2" });
+                read([setTo(6, "c6", 6, "floating", h6, { outputName: "Virtual-2" })]);
+                decided("Floating on the second output's tiled view is done", 6, doneSet);
+                h = prepareFrom(5, "c5", 19, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 20, "tiled", h)]);
+                pending("a retried set has no completion yet", 5);
+                ws.currentDesktop = otherDesktop;
+            } },
+            { name: "the retry after the desktop switch", until: () => facade.owned === master, run: function () {
+                if (p.desktopId !== "11" || ws.currentDesktop !== otherDesktop || ws.activeWindow !== master) {
+                    fail("set: the retry starts on the captured desktop, the user's switch stands and focus stays");
+                }
+                decided("the retried set is done", 5, doneSet);
+                ws.currentDesktop = firstDesktop;
+            } },
+            { name: "the desktop back", until: () => p.views[5] && p.views[5].view && p.views[5].view.desktopId === "11",
+              run: function () {
+                // ---- the shortcut cancels a set's retry ----
+                h = prepareFrom(5, "c5", 21, master, popup);
+                read([setTo(5, "c5", 22, "floating", h)]);
+                decided("Floating ends the session", 5, doneSet);
+                h = prepareFrom(5, "c5", 23, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 24, "tiled", h)]);
+                pending("a retried set has no completion yet", 5);
+                settle();
+                from = p.writer.callLog.length;
+                tileShortcut.activated();
+                decided("the shortcut cancels a set's retry", 5, refusedSet("cancelled"));
+                if (!p.active || facade.owned !== master) {
+                    fail("set: the shortcut's own press then tiles as it always does");
+                }
+            } },
+            { name: "the cancellation's publication", until: () => p.writer.callLog.length > from, run: function () {
+                frames = framesSince(from);
+                if (!frames[5] || canonical(frames[5].completion) !== canonical(refusedSet("cancelled"))) {
+                    fail("set: the cancelled set is told so (got " + canonical(frames[5]) + ")");
+                }
+                tileShortcut.activated();
+                // ---- a retry whose target was minimized meanwhile is refused with that ----
+                h = prepareFrom(5, "c5", 25, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 26, "tiled", h)]);
+                settle();
+                from = p.writer.callLog.length;
+                master.minimized = true;
+            } },
+            // A refusal that comes later with no state change is told at its own revision step.
+            { name: "the retry of a minimized target", until: () => completionOf(5) !== undefined
+                                                                && p.writer.callLog.length > from, run: function () {
+                frames = framesSince(from);
+                if (!frames[5] || canonical(frames[5].completion) !== canonical(refusedSet("target-departed"))) {
+                    fail("set: a refusal decided later is told with a frame of its own (got " + canonical(frames[5]) + ")");
+                }
+                decided("a retry whose target left is refused with that", 5, refusedSet("target-departed"));
+                master.minimized = false;
+                if (p.active || facade.owned !== null) {
+                    fail("set: a retry refused starts nothing");
+                }
+                // ---- an admission refused for good ----
+                h = prepareFrom(5, "c5", 27, master, popup);
+                facade.admitAnswers = [7, 7, 7, 7];
+                admits = calls("admitTile").length;
+                read([setTo(5, "c5", 28, "tiled", h)]);
+            } },
+            { name: "the last admission", until: () => completionOf(5) !== undefined, run: function () {
+                decided("an admission refused after its retries refuses the set", 5, refusedSet("admission-refused"));
+                if (calls("admitTile").length !== admits + 4 || p.active) {
+                    fail("set: the first admission and its three retries, then the refusal stands (admissions "
+                         + (calls("admitTile").length - admits) + ")");
+                }
+                // ---- a retry whose desktop was removed meanwhile is refused with that ----
+                h = prepareFrom(5, "c5", 29, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 30, "tiled", h)]);
+                ws.desktops = [otherDesktop];
+            } },
+            { name: "the retry on a removed desktop", until: () => completionOf(5) !== undefined, run: function () {
+                decided("a retry whose view is gone is refused with that", 5, refusedSet("view-changed"));
+                ws.desktops = [firstDesktop, otherDesktop];
+                // ---- a retry whose activity was removed meanwhile is refused with that ----
+                h = prepareFrom(5, "c5", 31, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 32, "tiled", h)]);
+                ws.activities = [];
+            } },
+            { name: "the retry on a removed activity", until: () => completionOf(5) !== undefined, run: function () {
+                decided("a retry whose activity is gone is refused with that", 5, refusedSet("view-changed"));
+                ws.activities = ["a", "b"];
+                // ---- a retry whose output was unplugged meanwhile is refused with that ----
+                focus(away);
+                focus(awayPopup);
+                read([prep(6, "c6", 7, { outputName: "Virtual-2" })]);
+                facade.admitAnswers = [7];
+                read([setTo(6, "c6", 8, "tiled", completionOf(6).handle, { outputName: "Virtual-2" })]);
+                pending("a retried set on the other output has no completion yet", 6);
+                ws.screens = [output];
+            } },
+            { name: "the retry on an unplugged output", until: () => completionOf(6) !== undefined, run: function () {
+                decided("a retry whose output is gone is refused with that", 6, refusedSet("view-changed"));
+                ws.screens = [output, second];
+                if (p.active || facade.owned !== null) {
+                    fail("set: a retry on an unplugged output starts nothing");
+                }
+                // ---- a retry after the shell's connection changed is refused with that ----
+                h = prepareFrom(5, "c5", 33, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 34, "tiled", h)]);
+                owner = ":1.10";
+                read([]);
+            } },
+            { name: "the retry after a new shell", until: () => completionOf(5) !== undefined, run: function () {
+                decided("a retry under another shell is refused with that", 5, refusedSet("shell-replaced"));
+                facade.admitAnswers = [];
+                if (p.active) {
+                    fail("set: no retry refused for its view or shell started anything");
+                }
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
+
     // P5's prepared target, on a provider of its own: the shell's PID looked up beside the read; a
     // prepare decided once per request identity against the bar's frozen context, the one slot and
     // a verified shell applet popup holding focus; its target the app the popup was opened from, or
@@ -2170,6 +2655,22 @@ Item {
                  + JSON.stringify(p.refusals.map(r => [r.id, r.reason])) + ")");
         }
         decided("a prepare on the bounds is taken, and refused for its epoch", 40, refused("stale-context"));
+        // A set names a mode, tiled or floating, and a handle of 1 to 128 characters; anything else
+        // is malformed. Widget 48 sits on the bounds and is taken: refused for its handle, which
+        // names no slot.
+        read([ask(2, "c2", 1, "query"), prep(1, "c1", 1),
+              ask(42, "c42", 1, "set", { mode: "x", handle: "h" }), ask(43, "c43", 1, "set", { handle: "h" }),
+              ask(44, "c44", 1, "set", { mode: "tiled", handle: "" }),
+              ask(45, "c45", 1, "set", { mode: "tiled", handle: longest("h", 129) }),
+              ask(46, "c46", 1, "set", { mode: "floating", handle: 7 }), ask(47, "c47", 1, "set", { mode: "floating" }),
+              ask(48, "c48", 1, "set", { mode: "floating", handle: longest("h", 128) })]);
+        if (JSON.stringify(p.refusals.map(r => [r.id, r.reason]))
+                !== JSON.stringify([42, 43, 44, 45, 46, 47].map(id => [id, "malformed"]))) {
+            fail("prepare: a set without its mode and handle is malformed, at each bound (got "
+                 + JSON.stringify(p.refusals.map(r => [r.id, r.reason])) + ")");
+        }
+        decided("a set on the bounds is taken, and refused for its handle", 48,
+                { intent: "set", result: "refused", reason: "stale-context" });
         p.shellPidLookup.finished([shellPid]);
         if (p.shellPid !== 900 || p.shellSerial !== 1) {
             fail("prepare: the shell's PID is kept with the first shell serial (got " + p.shellPid + ", " + p.shellSerial + ")");
@@ -2285,12 +2786,15 @@ Item {
         read([prep(5, "c5", 12)]);
         decided("a popup opened from the panel while the app is remembered hands the app off", 5, ready(handle(1, 7), true));
         holds("keyboard entry targets the remembered app", 5, app);
-        // ---- refused before any action: a set (P5's next slice) and an unknown intent ----
+        // ---- another widget's set naming the holder's handle is stale, an unknown intent refused
+        // before any action; neither touches the holder's slot ----
         read([prep(5, "c5", 12), ask(7, "c7", 1, "set", { mode: "tiled", handle: handle(1, 7) }), ask(8, "c8", 1, "toggle")]);
-        if (JSON.stringify(p.refusals.map(r => [r.id, r.reason])) !== JSON.stringify([[7, "intent"], [8, "intent"]])) {
-            fail("prepare: a set and an unknown intent are refused before any action (got "
+        if (JSON.stringify(p.refusals.map(r => [r.id, r.reason])) !== JSON.stringify([[8, "intent"]])) {
+            fail("prepare: an unknown intent is refused before any action (got "
                  + JSON.stringify(p.refusals.map(r => [r.id, r.reason])) + ")");
         }
+        decided("another widget's set naming the holder's handle is stale", 7,
+                { intent: "set", result: "refused", reason: "stale-context" });
         holds("refusals leave the slot", 5, app);
         // ---- the completion across a newer state ----
         settle();
@@ -2507,8 +3011,8 @@ Item {
                 focus(popup);
                 prepareAgain("from another popup, the app on another output, there is no target", false, "no-target");
                 // ---- the holder's next request ends its preparation however it is answered: a set,
-                // refused before any action, and a query reusing the prepare's number; neither is a
-                // change any bar is told of ----
+                // refused here as no tiler applies it (this provider runs alone), and a query
+                // reusing the prepare's number; neither is a change any bar is told of ----
                 focus(app);
                 focus(popup);
                 const held = handle(2, serial);
@@ -2517,8 +3021,9 @@ Item {
                 frames = read([prep(6, "c6", 3), ask(5, "c5", request, "set", { mode: "tiled", handle: held })]);
                 request += 1;
                 if (p.slot !== null || p.preparations[5] !== undefined || p.revision !== revisionBefore || !frames[5]
-                        || frames[5].refused !== "intent" || frames[5].completion !== undefined
-                        || frames[5].prepared !== undefined) {
+                        || frames[5].refused !== undefined || frames[5].prepared !== undefined
+                        || canonical(frames[5].completion) !== canonical({ intent: "set", result: "refused",
+                                                                           reason: "unavailable" })) {
                     fail("prepare: the holder's set, refused, frees the slot and ends its preparation, with no revision"
                          + " step (got " + canonical(frames[5]) + ", revision " + revisionBefore + " to " + p.revision + ")");
                 }
@@ -2532,6 +3037,39 @@ Item {
                                                                          { capable: true, view: view, tiled: false }))) {
                     fail("prepare: a query reusing the holder's number frees the slot and is answered as a query (got "
                          + canonical(frames[5]) + ")");
+                }
+                // ---- a set with an older number than the preparation's frees the slot as any
+                // other request does ----
+                focus(app);
+                focus(popup);
+                const older = handle(2, serial);
+                prepareAgain("the holder prepares again", true);
+                read([prep(6, "c6", 3), ask(5, "c5", request - 2, "set", { mode: "tiled", handle: older })]);
+                decided("a set older than the preparation is refused", 5,
+                        { intent: "set", result: "refused", reason: "stale-request" });
+                holds("an older set frees the slot", null);
+                // ---- the holder's next request refused at the frame's level frees the slot too ----
+                focus(app);
+                focus(popup);
+                prepareAgain("the holder prepares again", true);
+                read([prep(6, "c6", 3), ask(5, "c5", request, "set", { mode: "x", handle: "h" })]);
+                request += 1;
+                if (!p.refusals.some(r => r.id === 5 && r.reason === "malformed")) {
+                    fail("prepare: the holder's malformed set is refused at the frame's level");
+                }
+                holds("the holder's malformed request frees the slot", null);
+                // ---- a tiler that throws: the set refused, the read finished ----
+                focus(app);
+                focus(popup);
+                const thrown = handle(2, serial);
+                prepareAgain("the holder prepares again", true);
+                p.applier = () => { throw new Error("the tiler failed"); };
+                read([prep(6, "c6", 3), ask(5, "c5", request, "set", { mode: "tiled", handle: thrown })]);
+                request += 1;
+                p.applier = null;
+                decided("a set whose tiler throws is refused", 5, { intent: "set", result: "refused", reason: "unavailable" });
+                if (p.reading || p.slot !== null) {
+                    fail("prepare: a tiler that throws leaves the read finished and the slot consumed");
                 }
                 focus(app);
                 focus(desktopSurface);
@@ -2595,12 +3133,19 @@ Item {
                 focus(popup);
                 // Its first read is answered before the bus tells it the shell's PID: the saved prepare
                 // is stale for its epoch whatever else holds.
-                later.reader.finished([JSON.stringify({ start: Date.now(), rows: [prep(5, "c5", exhausted + 1)], widgets: [5],
-                                                        empty: [], truncated: false })]);
+                later.reader.finished([JSON.stringify({ start: Date.now(), widgets: [5, 6], empty: [], truncated: false,
+                                                        rows: [prep(5, "c5", exhausted + 1),
+                                                               ask(6, "c6", 9, "set", { mode: "tiled", handle: handle(2, 14) })] })]);
                 const saved = later.requests.find(r => r.id === 5);
                 if (!saved || canonical(saved.completion) !== canonical(refused("stale-context")) || later.slot !== null) {
                     fail("prepare: a later lifetime refuses a prepare saved under an earlier one (got "
                          + (saved ? canonical(saved.completion) : "no request") + ")");
+                }
+                const savedSet = later.requests.find(r => r.id === 6);
+                if (!savedSet || canonical(savedSet.completion) !== canonical({ intent: "set", result: "refused",
+                                                                               reason: "stale-context" })) {
+                    fail("prepare: a later lifetime refuses a set saved under an earlier one (got "
+                         + (savedSet ? canonical(savedSet.completion) : "no request") + ")");
                 }
                 later.shellPidLookup.finished([shellPid]);
                 // Under its own epoch it prepares, from the popup activated once it read the shell;

@@ -1279,6 +1279,21 @@ Item {
             const pending = pendingStart;
             if (!pending || session.active) {
                 pendingStart = null;
+                if (pending && typeof pending.invoked.outcome === "function") {
+                    pending.invoked.outcome("refused", "busy");
+                }
+                return;
+            }
+            // A set's retry (P5) first checks what its start needs still holds - its target, its
+            // view's existence, the provider's lifetime and shell - and is refused with what
+            // failed.
+            const check = pending.invoked.check;
+            const trouble = typeof check === "function" ? check() : "";
+            if (trouble !== "") {
+                pendingStart = null;
+                if (typeof pending.invoked.outcome === "function") {
+                    pending.invoked.outcome("refused", trouble);
+                }
                 return;
             }
             start(pending.invoked);
@@ -1288,9 +1303,15 @@ Item {
             }
         }
 
+        // The shortcut's press, the newer intent, drops a start still being retried; a set's start
+        // is told it was cancelled (P5).
         function cancelPendingStart() {
+            const pending = pendingStart;
             pendingStart = null;
             admitRetry.stop();
+            if (pending && typeof pending.invoked.outcome === "function") {
+                pending.invoked.outcome("refused", "cancelled");
+            }
         }
 
         // Whether a window is one of this session's managed windows.
@@ -1370,20 +1391,26 @@ Item {
         // (toggle): start() runs right after an untoggle that activated the old master, and
         // KWin's activation may have moved the current desktop and screen under the script -
         // the captured view, not a fresh read, is what the user asked for. A null invoked is
-        // a plain start with no teardown behind it.
+        // a plain start with no teardown behind it. A bar's set (applyMode) passes its outcome
+        // too, which every end of the start calls once, a retry's once the retry ends.
         function start(invoked) {
+            const tell = invoked && typeof invoked.outcome === "function" ? invoked.outcome
+                : () => {};
             if (session.active || !loaded) {
+                tell("refused", "unavailable");
                 return;
             }
             const w = invoked ? invoked.window : Workspace.activeWindow;
             if (!Tiling.eligibleForMaster(w)) {
                 log("tiling: the active window is not eligible");
+                tell("refused", "not-eligible");
                 return;
             }
             const output = invoked ? invoked.output : viewOutput(w);
             const desktop = invoked ? invoked.desktop : Workspace.currentDesktop;
             const activity = invoked ? invoked.activity : String(Workspace.currentActivity);
             if (!output || !desktop) {
+                tell("refused", "unavailable");
                 return;
             }
 
@@ -1411,6 +1438,7 @@ Item {
                 const result = api.createTile(output, desktop, Qt.rect(tileRect.x, tileRect.y, tileRect.width, tileRect.height));
                 if (!result || result.result !== 0) { // 0 = Accepted
                     log("tiling: the tree was refused");
+                    tell("refused", "tree-refused");
                     return;
                 }
                 const gen = result.generation;
@@ -1436,16 +1464,21 @@ Item {
                 if (admitResult !== 0) { // 0 = Accepted
                     // The tree goes whatever follows: a later attempt creates its own.
                     api.releaseTile(gen);
-                    if (Tiling.admitAgain(admitResult)
-                            && scheduleStartRetry({ window: w, desktop: desktop, activity: activity, output: output })) {
+                    // A retry keeps what the start was given, a set's outcome and check too.
+                    const retry = Object.assign({}, invoked,
+                                                { window: w, desktop: desktop, activity: activity,
+                                                  output: output });
+                    if (Tiling.admitAgain(admitResult) && scheduleStartRetry(retry)) {
                         return;
                     }
                     log("tiling: the admission was refused (" + admitResult + ")");
+                    tell("refused", "admission-refused");
                     return;
                 }
                 session.generation = gen;
             } else {
                 log("tiling: the native facade is not available; the tiler needs the fork");
+                tell("refused", "unavailable");
                 return;
             }
 
@@ -1491,6 +1524,43 @@ Item {
             relayout();
             log("tiling: on (" + session.stack.length + " stack window(s))");
             reportSession();
+            tell("done");
+        }
+
+        // A bar's set through the layout provider (P5): the mode for the view the bar's menu was
+        // prepared for, with the app it was opened from. done(result, reason) is called once.
+        // Floating ends the session on that view, or leaves everything as it is. Tiled leaves a
+        // view already tiled as it is - re-selecting is no toggle - and otherwise moves the one
+        // session there as the shortcut's transfer does: the session elsewhere ends first,
+        // reported, then the start, whose outcome is the set's, at once or when its retry ends;
+        // a refusal leaves the old session ended. Focus goes to the app right after the first
+        // attempt, as toggle() gives it back to the window the shortcut was pressed in.
+        function applyMode(request, done) {
+            const here = session.active
+                && Tiling.sameView(session, request.desktop, request.activity, request.output);
+            if (request.mode === "floating") {
+                if (here) {
+                    untoggle();
+                }
+                done("done");
+                return;
+            }
+            if (here) {
+                done("done");
+                return;
+            }
+            if (!request.window) {
+                done("refused", "no-target");
+                return;
+            }
+            if (session.active) {
+                untoggle();
+            }
+            start({ window: request.window, desktop: request.desktop, activity: request.activity,
+                    output: request.output, outcome: done, check: request.check });
+            if (Tiling.alive(request.window) && Workspace.activeWindow !== request.window) {
+                Workspace.activeWindow = request.window;
+            }
         }
 
         // The layout provider is told where a session starts or ends: on or off, and the view
@@ -1998,6 +2068,8 @@ Item {
         id: layoutProvider
         objectName: "layoutProvider"
         nativeCapable: root.nativeWriter && root.loaded && tiler.apiAvailable
+        // A bar's set is refused busy while a start is retried (applier: Component.onCompleted).
+        startPending: tiler.pendingStart !== null
     }
 
     // ---------------------------------------------------------------- start and stop
@@ -2033,6 +2105,8 @@ Item {
         if (tiler.apiAvailable && nativeWriter) {
             tiler.adoptStranded(windows);
         }
+        // The provider applies a bar's set through the tiler, never holding the tiler itself.
+        layoutProvider.applier = (request, done) => tiler.applyMode(request, done);
         layoutProvider.start();
     }
 

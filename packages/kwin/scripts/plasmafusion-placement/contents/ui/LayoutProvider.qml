@@ -16,7 +16,8 @@ import "Tiling.js" as Tiling
 // label and the lifetime's identity name on the session bus, reads the bars' requests and
 // answers them; it is never given the native token. A bar's menu prepares its action first (P5):
 // the provider keeps the app the menu was opened from and the bar's view, inside KWin, in its one
-// prepared slot, and the bar names that preparation by a handle.
+// prepared slot, and the bar names that preparation by a handle when it sets a mode, which the
+// script's tiler applies (main.qml, tiler.applyMode).
 //
 // Read the state on revisionChanged: a change sets the fields first and moves the revision
 // last, once.
@@ -35,7 +36,8 @@ QtObject {
     property bool capable: false
     // The state's order: 1 at start(), then one step for each change of what a reader is told -
     // capability, the session or its view, a bar's own view (views), the end of a holder's
-    // preparation, going offline - and none otherwise.
+    // preparation, a set's completion decided after its read, going offline - and none
+    // otherwise.
     property int revision: 0
     // The session, and the view it tiles as a bar names one.
     property bool active: false
@@ -104,11 +106,12 @@ QtObject {
     // shell's unique connection. The reads are bounded as the probe's - at most 16 widgets,
     // requests of at most 2048 characters, a consumer label of 1 to 128 characters and a request
     // number of 1 to 2147483646 - copy only the fields the intents need (the epoch and the view's
-    // two ids, which a prepare names), and carry widget data as JSON, never as code. With the
-    // rows, the script says when it started, for the call's length, and which widgets it saw:
-    // their ids, those whose request field is empty (a withdrawn request), and whether there were
-    // more than it reads. A widget is gone, or its request withdrawn, only by such a complete
-    // inventory; an unreadable request proves neither (the layout probe's rule, testing.md).
+    // two ids, which a prepare names, and a set's mode and handle), and carry widget data as JSON,
+    // never as code. With the rows, the script says when it started, for the call's length, and
+    // which widgets it saw: their ids, those whose request field is empty (a withdrawn request),
+    // and whether there were more than it reads. A widget is gone, or its request withdrawn, only
+    // by such a complete inventory; an unreadable request proves neither (the layout probe's
+    // rule, testing.md).
     readonly property string requestApplet: "org.plasmafusion.clockpill"
     readonly property string readerScript: "var start=Date.now(),rows=[],widgets=[],empty=[],"
         + "truncated=false;"
@@ -123,7 +126,7 @@ QtObject {
         + "||!Number.isInteger(q.request)||q.request<=0||q.request>2147483646)return;"
         + "var v=q.view;"
         + "rows.push({id:w.id,consumer:q.consumer,request:q.request,version:q.version,"
-        + "intent:q.intent,outputName:q.outputName,epoch:q.epoch,"
+        + "intent:q.intent,outputName:q.outputName,epoch:q.epoch,mode:q.mode,handle:q.handle,"
         + "view:v!==null&&typeof v==='object'?{desktopId:v.desktopId,activityId:v.activityId}:v});"
         + "}catch(e){} }); });"
         + "print(JSON.stringify({start:start,rows:rows,widgets:widgets,empty:empty,"
@@ -165,6 +168,11 @@ QtObject {
     property int slotSerial: 0
     property var records: ({})
     property var preparations: ({})
+    // The tiler's side of a set (main.qml): `applier(request, done)` applies a mode with a slot's
+    // native references and calls done(result, reason) once, at once or when a retried start
+    // ends; `startPending` says a start is being retried. The provider is never given the tiler.
+    property var applier: null
+    property bool startPending: false
 
     property DBusCall shellPidLookup: DBusCall {
         service: "org.freedesktop.DBus"
@@ -483,12 +491,13 @@ QtObject {
         finishRead();
     }
 
-    // The shell's answer, checked again here: the script's start and at most 16 rows - bounded
-    // before anything walks them - with an inventory consistent with the rows if there is one,
-    // else the whole answer is malformed; then each row with a well-formed identity (a row without
-    // one cannot be answered and is dropped) is a request if it is a version-1 query or prepare for
-    // a named output, a prepare with its frozen context; every other row is refused before any
-    // action, with its reason.
+    // The shell's answer, checked again here: the script's start, at most 16 rows - bounded
+    // before anything walks them - and, if it has an inventory, one consistent with the rows; an
+    // answer that fails any of these is malformed as a whole. Then each row with a well-formed
+    // identity (a row without one cannot be answered and is dropped) is a request if it is a
+    // version-1 query, prepare or set for a named output, a prepare with its frozen context and a
+    // set with its mode and handle; every other row is refused before any action, with its
+    // reason.
     function readFinished(text: string): void {
         if (!reading) {
             return;
@@ -572,14 +581,20 @@ QtObject {
     // number too - or a withdrawal (an empty field); a complete inventory without the holder's
     // widget ends the slot as `consumer-retired`, told to no bar, since none is there to read it,
     // so it moves no revision. Such an inventory also drops the records of the widgets it did not
-    // see, and nothing else does. Then each prepare is decided once per request identity: the
-    // same identity and payload read again gets the completion recorded for it, the same identity
-    // with another payload or a lower request number is refused, and a new one is handled.
+    // see, and nothing else does. The holder's set naming the slot's handle is the exception: it
+    // is handled below against the slot, which it ends whatever its outcome (applySet); a set
+    // with an older request number than the preparation's is not, and frees it as any other
+    // request does. Then each intent is decided once per request identity: the same identity and
+    // payload read again gets the completion recorded for it (none while a set is under way, whose
+    // outcome is recorded when it comes), the same identity with another payload or a lower
+    // request number is refused, and a new one is handled and recorded.
     function settleIntents(accepted: var, refused: var, inventory: var): void {
         const same = (held, row) => row.intent === "prepare" && held.consumer === row.consumer
             && held.request === row.request;
+        const consumes = row => row.intent === "set" && slot.consumer === row.consumer
+            && slot.handle === row.handle && row.request > slot.request;
         for (const row of accepted.concat(refused)) {
-            if (slot && slot.id === row.id && !same(slot, row)) {
+            if (slot && slot.id === row.id && !same(slot, row) && !consumes(row)) {
                 slot = null;
             }
             const prep = preparations[row.id];
@@ -608,11 +623,12 @@ QtObject {
             }
         }
         for (const row of accepted) {
-            if (row.intent !== "prepare") {
+            if (row.intent === "query") {
                 continue;
             }
-            const payload = JSON.stringify([row.intent, row.outputName, row.epoch,
-                                            row.view.desktopId, row.view.activityId]);
+            const payload = JSON.stringify(row.intent === "prepare"
+                ? [row.intent, row.outputName, row.epoch, row.view.desktopId, row.view.activityId]
+                : [row.intent, row.outputName, row.mode, row.handle]);
             const record = records[row.id];
             if (record && record.consumer === row.consumer && row.request <= record.request) {
                 row.completion = row.request < record.request
@@ -621,14 +637,23 @@ QtObject {
                     : refusal(row.intent, "conflicting-request");
                 continue;
             }
-            const completion = prepare(row);
+            const entry = { consumer: row.consumer, request: row.request, payload: payload,
+                            completion: undefined };
+            records[row.id] = entry;
+            const completion = row.intent === "prepare" ? prepare(row) : applySet(row);
             row.completion = completion;
-            records[row.id] = { consumer: row.consumer, request: row.request, payload: payload,
-                                completion: completion };
-            console.info("plasmafusion-placement: layout provider: a prepare "
-                + (completion.result !== "done" ? "was refused, " + completion.reason
-                   : completion.target ? "is ready with its target"
-                   : "is ready, " + completion.reason));
+            entry.completion = completion;
+            if (row.intent === "prepare") {
+                console.info("plasmafusion-placement: layout provider: a prepare "
+                    + (completion.result !== "done" ? "was refused, " + completion.reason
+                       : completion.target ? "is ready with its target"
+                       : "is ready, " + completion.reason));
+            } else {
+                console.info("plasmafusion-placement: layout provider: a set (" + row.mode + ") "
+                    + (completion === undefined ? "is under way"
+                       : completion.result === "done" ? "is done"
+                       : "was refused, " + completion.reason));
+            }
         }
     }
 
@@ -694,6 +719,113 @@ QtObject {
         return completion;
     }
 
+    // A set handled for the first time. It acts only through the slot its handle names - this
+    // widget's, for the output it names, under this lifetime and shell - and, as its holder's
+    // next request, ends it whatever its outcome. Refused before any action, in this order:
+    // `stale-context` when the handle names no such slot; `unavailable` when the provider cannot
+    // act and `busy` while the tiler retries a start, the shortcut's or another set's, both
+    // freeing the slot as any next request does (the menu prepares again on its next input); or
+    // the reason the preparation no longer holds, its focus surface included (the user's live
+    // intent), with which the slot ends. Otherwise the set consumes the slot and the tiler
+    // applies the mode with the slot's native references and decides the completion: returned
+    // here when it decides at once, else undefined and told when its retried start ends. Each
+    // retry re-checks only what the set itself does not move - the target, the captured view's
+    // existence (its output, desktop and activity), the lifetime and the shell - not the focus
+    // or which view is current, as the transfer moves both.
+    function applySet(row: var): var {
+        if (!slot || slot.id !== row.id || slot.consumer !== row.consumer
+                || slot.handle !== row.handle || slot.outputName !== row.outputName) {
+            // The holder's own set for another output still ends its preparation; another
+            // widget's leaves the holder's slot alone.
+            if (slot && slot.id === row.id) {
+                slot = null;
+            }
+            return refusal("set", "stale-context");
+        }
+        if (!capable || shellPid <= 0 || shellPidOwner !== replyOwner
+                || typeof applier !== "function") {
+            slot = null;
+            return refusal("set", "unavailable");
+        }
+        if (startPending) {
+            slot = null;
+            return refusal("set", "busy");
+        }
+        const trouble = slotTrouble(slot);
+        if (trouble !== "") {
+            invalidate(trouble);
+            return refusal("set", trouble);
+        }
+        const s = slot;
+        slot = null;
+        const identity = { id: row.id, consumer: row.consumer, request: row.request };
+        let deciding = true;
+        let decided = undefined;
+        let answered = false;
+        const done = (result, reason) => {
+            if (answered || !online) {
+                return;
+            }
+            answered = true;
+            const completion = result === "done" ? { intent: "set", result: "done" }
+                : refusal("set", reason);
+            if (deciding) {
+                decided = completion;
+            } else {
+                setDecided(identity, completion);
+            }
+        };
+        const check = () => {
+            if (!online) {
+                return "unavailable";
+            }
+            if (shellPidOwner !== s.owner || replyOwner !== s.owner) {
+                return "shell-replaced";
+            }
+            if (Workspace.screens.indexOf(s.output) < 0
+                    || !Workspace.desktops.some(d => Tiling.desktopMatches(d, s.desktop))
+                    || (s.activity !== "" && Workspace.activities.indexOf(s.activity) < 0)) {
+                return "view-changed";
+            }
+            if (!Tiling.eligibleForMaster(s.window)
+                    || !Tiling.onWorkspace(s.window, s.desktop, s.activity, s.output)) {
+                return "target-departed";
+            }
+            return "";
+        };
+        // A tiler that throws would leave the read unfinished and every bar unanswered: the set
+        // is refused instead, unless the tiler had already answered it.
+        try {
+            applier({ mode: row.mode, window: s.window, output: s.output, desktop: s.desktop,
+                      activity: s.activity, check: check }, done);
+        } catch (e) {
+            console.warn("plasmafusion-placement: layout provider: a set could not be applied: "
+                         + e);
+            done("refused", "unavailable");
+        }
+        deciding = false;
+        return decided;
+    }
+
+    // A set's outcome that came after its read: kept for its identity, carried by its request's
+    // frames while that request is the widget's, and told at a newer revision; a request no
+    // longer read is told nothing.
+    function setDecided(identity: var, completion: var): void {
+        const record = records[identity.id];
+        if (record && record.consumer === identity.consumer
+                && record.request === identity.request) {
+            record.completion = completion;
+        }
+        console.info("plasmafusion-placement: layout provider: a set "
+            + (completion.result === "done" ? "is done" : "was refused, " + completion.reason));
+        const row = requests.find(r => r.id === identity.id && r.consumer === identity.consumer
+                                  && r.request === identity.request);
+        if (row) {
+            row.completion = completion;
+            revision += 1;
+        }
+    }
+
     // A window counts as the shell's only with the shell's verified PID, on the output meant, as
     // an applet popup, dock or desktop window that is not a normal window (the layout probe's
     // rule); a class or app id would prove nothing.
@@ -740,28 +872,36 @@ QtObject {
         }
     }
 
+    // What ends a slot now, or "" while it holds: another shell connection, the view (its output
+    // gone, or not the output's current view), the target (closed, no eligible app, or off the
+    // view) or the focus surface (closed, or no longer the active window).
+    function slotTrouble(s: var): string {
+        const view = viewOf(s.outputName);
+        if (s.owner !== replyOwner || shellPidOwner !== s.owner) {
+            return "shell-replaced";
+        }
+        if (Workspace.screens.indexOf(s.output) < 0 || view === null
+                || view.desktopId !== s.view.desktopId || view.activityId !== s.view.activityId) {
+            return "view-changed";
+        }
+        if (s.window !== null
+                && (!Tiling.eligibleForMaster(s.window)
+                    || !Tiling.onWorkspace(s.window, s.desktop, s.activity, s.output))) {
+            return "target-departed";
+        }
+        if (!Tiling.alive(s.focusSurface) || Workspace.activeWindow !== s.focusSurface) {
+            return "focus-changed";
+        }
+        return "";
+    }
+
     // The slot checked again on an event that may end it: a window gone, a change of a desktop,
     // the activity or the outputs, or the target's own change.
     function revalidate(): void {
         if (!online || !slot) {
             return;
         }
-        const s = slot;
-        const view = viewOf(s.outputName);
-        let reason = "";
-        if (s.owner !== replyOwner || shellPidOwner !== s.owner) {
-            reason = "shell-replaced";
-        } else if (Workspace.screens.indexOf(s.output) < 0 || view === null
-                   || view.desktopId !== s.view.desktopId
-                   || view.activityId !== s.view.activityId) {
-            reason = "view-changed";
-        } else if (s.window !== null
-                   && (!Tiling.eligibleForMaster(s.window)
-                       || !Tiling.onWorkspace(s.window, s.desktop, s.activity, s.output))) {
-            reason = "target-departed";
-        } else if (!Tiling.alive(s.focusSurface) || Workspace.activeWindow !== s.focusSurface) {
-            reason = "focus-changed";
-        }
+        const reason = slotTrouble(slot);
         if (reason !== "") {
             invalidate(reason);
         }
@@ -790,7 +930,7 @@ QtObject {
         if (row.version !== 1) {
             return Object.assign(identity, { reason: "version" });
         }
-        if (row.intent !== "query" && row.intent !== "prepare") {
+        if (row.intent !== "query" && row.intent !== "prepare" && row.intent !== "set") {
             return Object.assign(identity, { reason: "intent" });
         }
         if (typeof row.outputName !== "string" || row.outputName.length < 1 || row.outputName.length > 128) {
@@ -798,6 +938,15 @@ QtObject {
         }
         if (row.intent === "query") {
             return Object.assign(identity, { intent: "query", outputName: row.outputName });
+        }
+        // A set names the mode and the handle its prepare's completion gave.
+        if (row.intent === "set") {
+            if ((row.mode !== "tiled" && row.mode !== "floating") || typeof row.handle !== "string"
+                    || row.handle.length < 1 || row.handle.length > 128) {
+                return Object.assign(identity, { reason: "malformed" });
+            }
+            return Object.assign(identity, { intent: "set", outputName: row.outputName,
+                                             mode: row.mode, handle: row.handle });
         }
         // A prepare names the frozen context the bar holds: the lifetime and the view of its
         // answer.

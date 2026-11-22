@@ -450,7 +450,7 @@ check(not thrown, "provider-rules: nothing threw, got %s" % thrown)
 retire(provider_rules, "provider-rules")
 
 # P5's prepared target on a provider of its own (the harness checks each decision, frame and end):
-# its revisions each a change of what a bar is told, each fresh decision said once - 34 ready and
+# its revisions each a change of what a bar is told, each fresh decision said once - 37 ready and
 # 20 refused, the later lifetime's refusal and its own prepare among them - and each end of a
 # preparation said with its reason, a holder's widget gone among them; a read again or a
 # conflicting payload decides nothing new and says nothing, and a malformed prepare is a refusal
@@ -462,8 +462,8 @@ for problem in list(prepare_run.property("problems").toVariant() or []):
 journal = messages[before:]
 ready_lines = sum("layout provider: a prepare is ready" in message for message in journal)
 refused_lines = sum("layout provider: a prepare was refused" in message for message in journal)
-check(ready_lines == 34 and refused_lines == 20,
-      "prepare: each fresh decision is said once, 34 ready and 20 refused, got %s and %s" % (ready_lines, refused_lines))
+check(ready_lines == 37 and refused_lines == 20,
+      "prepare: each fresh decision is said once, 37 ready and 20 refused, got %s and %s" % (ready_lines, refused_lines))
 ends = {}
 for message in journal:
     if "layout provider: a preparation ended, " in message:
@@ -475,6 +475,28 @@ check(ends == {"focus-changed": 11, "target-departed": 11, "view-changed": 3, "s
 thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
 check(not thrown, "prepare: nothing threw, got %s" % thrown)
 retire(prepare_run, "prepare")
+
+# P5's desired mode on the real script (the harness checks each set, its completion and what the
+# tiler did). Each set whose start is retried is said under way once and decided once later -
+# two done, and one each cancelled by the shortcut, refused for a target gone, for an admission
+# refused for good, for its desktop removed, for its activity removed, for its output unplugged
+# and under a new shell - and nothing throws.
+before = len(messages)
+set_run = run_harness({"scenario": "set"})
+for problem in list(set_run.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+under_way = sum("layout provider: a set (" in message and ") is under way" in message for message in journal)
+later = sorted(message.split("layout provider: a set ", 1)[1] for message in journal
+               if "layout provider: a set is done" in message or "layout provider: a set was refused, " in message)
+check(under_way == 9 and later == ["is done", "is done", "was refused, admission-refused", "was refused, cancelled",
+                                   "was refused, shell-replaced", "was refused, target-departed",
+                                   "was refused, view-changed", "was refused, view-changed",
+                                   "was refused, view-changed"],
+      "set: each retried set is under way once and decided once later, got %s under way and %s" % (under_way, later))
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "set: nothing threw, got %s" % thrown)
+retire(set_run, "set")
 
 # A third run: the master a native teardown released without restoring it (a removed desktop, a
 # second window of its app, a move of the master). The harness asserts the geometry, the settle
