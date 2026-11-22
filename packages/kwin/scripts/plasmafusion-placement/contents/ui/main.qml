@@ -1533,8 +1533,11 @@ Item {
         // view already tiled as it is - re-selecting is no toggle - and otherwise moves the one
         // session there as the shortcut's transfer does: the session elsewhere ends first,
         // reported, then the start, whose outcome is the set's, at once or when its retry ends;
-        // a refusal leaves the old session ended. Focus goes to the app right after the first
-        // attempt, as toggle() gives it back to the window the shortcut was pressed in.
+        // a refusal leaves the old session ended. A view whose master has left its tile is tiled
+        // no more, though its session's end is still queued (vacated): Tiled is handled there as
+        // on an untiled view, the vacated teardown taken now as a press takes it (untoggle).
+        // Focus goes to the app right after the first attempt, as toggle() gives it back to the
+        // window the shortcut was pressed in.
         function applyMode(request, done) {
             const here = session.active
                 && Tiling.sameView(session, request.desktop, request.activity, request.output);
@@ -1545,7 +1548,7 @@ Item {
                 done("done");
                 return;
             }
-            if (here) {
+            if (here && !vacated()) {
                 done("done");
                 return;
             }

@@ -2165,7 +2165,8 @@ Item {
     // cancelling a set's retry; a retry whose target was minimized; an admission refused for good.
     // A retried set's outcome, which reaches that set read again as it was and nothing else under
     // its identity: neither another payload - refused, or handled afresh once another consumer
-    // replaced the record - nor a query reusing its number.
+    // replaced the record - nor a query reusing its number. Tiled between the master's release
+    // and the tree's end, handled as on an untiled view.
     function runSet() {
         if (setup() === "") {
             done = true;
@@ -2670,12 +2671,46 @@ Item {
                 read([setTo(5, "c5", 44, "tiled", "0".repeat(32) + ":9:9")]);
                 decided("a set handled afresh under its identity keeps its own answer once the retried set is decided", 5,
                         refusedSet("stale-context"));
-                // The session ends, as the run found it.
+                // The session ends: the next case starts one with the shortcut.
                 h = prepareFrom(5, "c5", 45, master, popup);
                 read([setTo(5, "c5", 46, "floating", h)]);
                 decided("Floating ends the session", 5, doneSet);
                 if (p.active) {
                     fail("set: the last Floating ends the session");
+                }
+            } },
+            // ---- Tiled between the master's release and the tree's end (vacated): the view is
+            // tiled no more, so the set is handled as on an untiled view - refused with no target,
+            // and with one the vacated teardown taken now and the session started there ----
+            { name: "a set between the master's release and the tree's end", run: function () {
+                focus(master);
+                tileShortcut.activated();
+                if (!p.active || facade.owned !== master) {
+                    fail("set: the shortcut tiles the view before the master's release");
+                }
+                h = prepareFrom(5, "c5", 47, master, popup);
+                facade.vacate();
+                read([setTo(5, "c5", 48, "tiled", h)]);
+                decided("Tiled in the gap with no target is refused, never done", 5, refusedSet("no-target"));
+                facade.treeAlive = false;
+                facade.treeChanged();
+                if (p.active) {
+                    fail("set: the tree's end after the refused set ends the session");
+                }
+                focus(master);
+                tileShortcut.activated();
+                if (!p.active || facade.owned !== master) {
+                    fail("set: the shortcut tiles the view again before the master's second release");
+                }
+                h = prepareFrom(5, "c5", 49, winA, popup);
+                creates = calls("createTile").length;
+                facade.vacate();
+                read([setTo(5, "c5", 50, "tiled", h)]);
+                decided("Tiled in the gap with a target is done", 5, doneSet);
+                if (calls("createTile").length !== creates + 1 || facade.owned !== winA || !p.active) {
+                    fail("set: Tiled in the gap starts the session with the prepared app (owned "
+                         + (facade.owned ? facade.owned.internalId : null) + ", trees "
+                         + (calls("createTile").length - creates) + ", active " + p.active + ")");
                 }
             } }
         ];

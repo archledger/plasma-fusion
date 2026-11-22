@@ -1236,8 +1236,10 @@ Offline (laptop):
    (`admission-refused`). A retried set's outcome reaches that set read again as it was and nothing
    else under its identity: another handle read meanwhile stays `conflicting-request`, a query
    reusing its number gets no completion, and a set of its identity handled afresh, once another
-   consumer replaced the record, keeps its `stale-context`. The driver checks that each retried set
-   is said under way once and decided once later.
+   consumer replaced the record, keeps its `stale-context`. Tiled between the master's release and
+   the tree's end (`vacated`) is handled as on an untiled view: refused `no-target` with no target,
+   and with one the vacated teardown taken and the session started with the prepared app. The
+   driver checks that each retried set is said under way once and decided once later.
    A run (`scenario: "time-limit"`) times the calls against decision 1's limit: a read and a
    publication answered at once, and a read whose owner lookup took 70 ms, measured from its own
    call; a read and a publication whose script ran from the call's start for 70 ms, each said over
@@ -2019,7 +2021,9 @@ deliberately defers.
   untoggle's explicit restore would find no record it owns, and nobody would settle the one
   the release left. The press is that native teardown, taken now: the stack goes back, the
   master is returned and its record settled as after any native release, and the vacated
-  tree is released. The same when the script goes in that moment.
+  tree is released. The same when the script goes in that moment, and when a bar's Tiled set
+  with a prepared app comes then: the view is tiled no more, so the set is handled as on an
+  untiled view, and one with no app is refused `no-target` (see "The layout provider's state").
 - **Live**: new eligible windows on the tiled workspace join the stack (a window with a
   remembered placement keeps it as its saved float: the untoggle returns the app to its
   remembered spot, as the memory would have placed it); a window the stack
@@ -2328,8 +2332,10 @@ and the answers it publishes to them.
   otherwise moves the one session there as the shortcut's transfer does, the session elsewhere
   ending first, reported, then the start with the prepared app as the master, refused `no-target`
   with no app; focus goes to the app right after the first attempt, and a refusal leaves the old
-  session ended. A tiler that throws refuses the set `unavailable`, unless it had already answered
-  it, and the read goes on. The completion is the tiler's outcome - `done`, or refused
+  session ended. A view whose master has left its tile, its session's end still queued (`vacated`),
+  is tiled no more: Tiled is handled there as on an untiled view, the vacated teardown taken now as
+  a press takes it. A tiler that throws refuses the set `unavailable`, unless it had already
+  answered it, and the read goes on. The completion is the tiler's outcome - `done`, or refused
   `not-eligible`, `tree-refused`, `admission-refused` or `unavailable` - decided at once or, when
   the admission is retried, once the retry ends: until then the frames carry none and a re-read does
   nothing. The decision is then recorded for that set and comes, at a newer revision, to the frames
