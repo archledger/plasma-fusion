@@ -845,7 +845,7 @@ the independent cleanup evidence. A provider without the dock and desktop part o
 refused the first keyboard preparation as stale, and the case failed there.
 
 This covers one output and one panel with two probe widgets, with keyboard focus given by the
-shell's own shortcut. The menu's arrow keys, Return and Escape belong to P1's menu; this mode does
+shell's own shortcut. The menu's arrow keys, Return and Escape belong to P6's menu; this mode does
 not clear G0/P1.
 
 `--check-result` requires the explicit selected-scope receipt, successful inner scenario/session
