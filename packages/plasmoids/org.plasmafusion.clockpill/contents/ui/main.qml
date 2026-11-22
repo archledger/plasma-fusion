@@ -380,8 +380,15 @@ PlasmoidItem {
     property string layoutMenuBy: "pointer"
     function openLayoutMenu(by: string): void {
         layoutMenuBy = by;
+        if (layoutMenuStarted === 0) {
+            layoutMenuStarted = Date.now();
+        }
         layoutState.open();
     }
+    // The time from the first open request to its first frame, logged once (D20), as the
+    // calendar's.
+    property real layoutMenuStarted: 0
+    property bool layoutMenuShownOnce: false
     // The one announcer (D10): the control's notice, and the reason announced once, worded for the
     // menu while it is open and for the pill otherwise.
     Connections {
@@ -446,6 +453,8 @@ PlasmoidItem {
         const rows = menu ? menu.rowItems : [];
         console.info("clockpill: layout menu dump " + tag + " " + JSON.stringify({
             shown: root.layoutMenuShown,
+            status: menu ? menu.status : "",
+            statusAbove: menu ? menu.statusAbove : false,
             rows: rows.map(row => {
                 const at = row.mapToItem(null, 0, 0);
                 return { mode: row.mode, x: Math.round(at.x), y: Math.round(at.y),
@@ -956,6 +965,16 @@ PlasmoidItem {
                 root.layoutMenuHidden();
             }
         }
+        // The popup's activation resets the row's focus reason to the window's, so a keyboard
+        // opening would lose its ring; the reason is applied again once the popup is active (D12).
+        onActiveChanged: {
+            if (active) {
+                const menu = layoutMenuLoader.item;
+                if (menu) {
+                    menu.focusConfirmed(root.layoutMenuBy !== "pointer");
+                }
+            }
+        }
 
         mainItem: Loader {
             id: layoutMenuLoader
@@ -973,6 +992,19 @@ PlasmoidItem {
                 onInputReported: layoutState.input()
                 onChosen: mode => layoutState.choose(mode)
                 onCloseRequested: layoutState.close(true)
+            }
+        }
+        Connections {
+            target: layoutMenuPopup
+            enabled: root.layoutMenuStarted > 0
+            function onFrameSwapped() {
+                if (!layoutMenuPopup.visible) {
+                    return;
+                }
+                console.info("clockpill: layout menu " + (root.layoutMenuShownOnce ? "open" : "first open")
+                             + ", first frame after " + (Date.now() - root.layoutMenuStarted) + " ms");
+                root.layoutMenuStarted = 0;
+                root.layoutMenuShownOnce = true;
             }
         }
     }

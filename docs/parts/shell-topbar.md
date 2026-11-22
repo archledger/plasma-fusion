@@ -803,7 +803,8 @@ block, so that the backend test's fixture runs it with a stand-in pop-up and con
   `menuOpen`: the pop-up hides itself on a press on the panel, possibly before the control sees
   that press, and the lingering flag keeps the press-then-click toggle from opening the menu again
   on the click.
-- `openLayoutMenu(by)` calls `layoutState.open()` and keeps `by` for the pop-up's focus reason.
+- `openLayoutMenu(by)` calls `layoutState.open()`, keeps `by` for the pop-up's focus reason, and
+  starts the first-open timing (D20).
 - The handler of `actionOutcome(reason, mode)` is the only announcer: it hands the reason and the
   mode to the control's notice, and for a reason that is not empty it announces
   `outcomeText(reason, mode, inMenu)` through `announceLayout(text)`, which calls
@@ -816,11 +817,14 @@ show, `requestActivate()` and the menu's `focusConfirmed(byKeyboard)` with `by` 
 hide, `layoutMenuHidden()`), its synchronous `Loader` and the menu's bindings (`mode`,
 `tiledBlocked`, `choice`, `pending`, `status` worded by the control's `outcomeText()`, `touch` and
 `location`), and its signals (the input to `layoutState.input()`, the choice to
-`layoutState.choose()`, Escape to `layoutState.close(true)`). The control is `interactive` only
-while `layoutState.actionsAvailable` (D19), takes `menuOpen` and `pending`, and forwards
-`menuRequested(by)` and `menuDismissed()`. `Plasmoid.status` is raised while either pop-up is open
-(D17). The testing hooks `dump-layout:TAG` and `dump-layout-menu:TAG` log the action's public fields
-and the menu's rows' positions.
+`layoutState.choose()`, Escape to `layoutState.close(true)`). The pop-up's activation resets the
+row's focus reason to the window's, so `onActiveChanged` applies `focusConfirmed(byKeyboard)` again
+once it is active: a keyboard opening keeps its ring (D12, checked natively). A `Connections` on the
+pop-up's `onFrameSwapped` logs the first open's time once, as the calendar's (D20). The control is
+`interactive` only while `layoutState.actionsAvailable` (D19), takes `menuOpen` and `pending`, and
+forwards `menuRequested(by)` and `menuDismissed()`. `Plasmoid.status` is raised while either pop-up
+is open (D17). The testing hooks `dump-layout:TAG` and `dump-layout-menu:TAG` log the action's
+public fields and the menu's rows' positions, its status and the status line's side.
 
 ## Global menu (stock `org.kde.plasma.appmenu`)
 
@@ -917,6 +921,19 @@ The layout places it right after the app name with its defaults (`compactView=fa
   `calendar-popup-{dark,light}.png`, `appmenu-light-hover-contrast.png`, `offscreen/`,
   `offscreen-{dark,light}.txt`, `dbuscalls.txt`, `vsession/tb-4`, `tb-5`, `tb-6` (full screenshots and logs),
   `test/` (harness, scenarios).
+- P6's layout menu in a private session on the approved image (KWin 6.8.3-1.fc44.pf1, Qt 6.11.2;
+  `tools/vsession/cvsession.sh`, a top bar with the clock pill as the only panel, the placement
+  script enabled as the Fusion setup leaves it): the provider answers (mode floating, actions
+  available); a click on the control opens the action and the menu; Escape closes it and the panel
+  leaves keyboard navigation (D13); Meta+Alt+P then Return opens the menu with the confirmed row
+  focused and its ring shown, and a second keyboard opening after Escape shows the ring again (the
+  pop-up's activation resets the focus reason, so `onActiveChanged` applies it again); the menu
+  opens over the calendar, whose press hid it, and the prepare then finds no target (`no-target`,
+  "No app window to tile") with Tiled blocked; the wheel over the control still switches
+  workspaces; the first open's first frame came 22 ms after the request (D20); a reason shows in
+  the status line under the rows in a top bar, and the menu grows away from the bar. The image has
+  no screen reader, so the announcement's naming was not checked there. The scenario is
+  build-only; the screenshots are the D14 review's.
 
 ## Deviations from the boards
 

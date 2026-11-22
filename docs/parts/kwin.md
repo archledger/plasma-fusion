@@ -4,7 +4,7 @@ Status: built, checked offline and in private virtual sessions on the ThinkPad (
 1440x900); reviewed and fixed (see "Review" at the end). KWIN-2 (2026-09-30) changed the switcher's
 windows and previews, the flyout's side and layouts, the picker's backdrop, and added the
 screen-change and touchpad handling: see "KWIN-2" at the end, which replaces the older text where
-they differ. Last edited 2026-09-30.
+they differ. Last edited 2026-11-22.
 
 ## What it is
 
@@ -2394,6 +2394,16 @@ and the answers it publishes to them.
   among them. Not shown here: a retried start (its checks, `busy` during it, `cancelled`), as every
   set here was decided at once; the real menu's focus order (P6); two controls on one output; `busy`
   between two bars; hardware timing; and XWayland apps.
+- In a real session (P6 slice 4, 2026-11-22): the same image and a top bar with the clock pill as
+  the only panel, the placement script enabled as the Fusion setup leaves it, and P6's menu in
+  place of the scenario. The provider answered the bar's query (mode floating, actions available);
+  a click on the control opened the menu, and the menu's first input prepared. With the calendar
+  open first, the press on the control hid it, and the prepare was done with no target
+  (`no-target`, the menu's "No app window to tile") and the preparation then ended `focus-changed`,
+  as section 6 of P6's design expected; Tiled was blocked. One publication took 69 ms from its
+  script's start to its answer, over the 50 ms limit, on the first prepare after the calendar
+  closed; the others stayed under it. The menu's first frame came 22 ms after the request. Not
+  shown: a set from the menu (the session had no app window to tile), and the retried start.
 - Decision 1's time limit: the shell serves a script call on its main thread and takes no input
   until the call answers - in the G0 click reproduction a click sent meanwhile arrived when the call
   ended - so a read or a publication should keep the shell at most 50 ms (`shellLimit`), which

@@ -2477,6 +2477,9 @@ expect('interactive: layoutState.actionsAvailable' in source
        and 'menuOpen: root.layoutMenuRecent' in source
        and 'pending: layoutState.actionPending && !layoutState.actionOpen' in source,
        "the clock's wiring: the control is interactive only while the actions are available, and takes the action's state")
+expect('onActiveChanged: {\n            if (active) {\n                const menu = layoutMenuLoader.item;' in source
+       and 'menu.focusConfirmed(root.layoutMenuBy !== "pointer")' in source,
+       "the clock's wiring: the pop-up's activation applies the focus reason again, so a keyboard opening keeps its ring (D12)")
 expect('status: layoutControl.outcomeText(layoutState.actionReason, layoutState.actionChoice, true)' in source
        and 'onInputReported: layoutState.input()' in source
        and 'onChosen: mode => layoutState.choose(mode)' in source
