@@ -336,10 +336,18 @@ withdrawn with one save and one wake), and one meets tablet posture coming (idle
 woken) and going (asking again); one loses its screen and gets it back the same way. The control's
 place in the width budget is checked at every step against a stand-in control: its level, and the
 width it gives up, none while it shows no mode.
-`runDebugAction`, outside the block, is checked as text for its `dump-layout` branch, and the
-fixtures must log nothing but the dumps and the one unanswered line. The pill's short date at the
-width budget's step 4 runs through `main.qml`'s own binding in eight regions: the day and the
-month in the region's order, without the year and what joined it to them.
+`runDebugAction`, outside the block, is checked as text for its `dump-layout` and
+`dump-layout-menu` branches, and the fixtures must log nothing but the dumps and the one unanswered
+line. The pill's short date at the width budget's step 4 runs through `main.qml`'s own binding in
+eight regions: the day and the month in the region's order, without the year and what joined it to
+them.
+
+The menu's wiring runs in the same fixture: the control's request opens the action and keeps the
+way it was opened; the pop-up hiding itself ends the action at once, and the sync keeps the
+press-then-click toggle from reopening it; Escape closes it; the control hiding ends it at once
+(S11); Escape after a choice, then the pop-up hiding, then a `stale-context` refusal stays silent
+(B3); a presented reason is announced once, worded for the menu while it is open, and an empty one
+is not announced. The pop-up's and the menu's bindings are checked as text.
 
 ### The layout action (`LayoutState.qml`)
 
@@ -348,7 +356,8 @@ reach the provider's prepared target and desired mode
 ([kwin.md](kwin.md#the-layout-providers-state)) through the layout state, which makes every
 decision. The layout menu and the pill's interactive control ("Workspace layout control" and "The
 layout menu" below) forward the user's input to it and bind to the action's state; `main.qml` wires
-them to it in P6's next slice, and until then nothing calls it, and the bar sends queries only.
+them to it ("The wiring in main" below), and the bar sends queries only until the user opens the
+menu.
 
 - `open()` freezes the action's context from the answer the bar holds - its lifetime (`epoch`), its
   `view` (`desktopId`, `activityId`) and the output - and sends nothing, so a menu opened and closed
@@ -650,7 +659,7 @@ metrics and the pill's text colour, and sets `level`:
 - `notify(reason, mode)` shows an outcome, worded so, in its tooltip and accessible description for
   5 s, quick settings' refused-state time; an empty reason, a done set's, clears it at once. A
   choice awaited takes precedence. Neither the control nor the menu announces anything: the clock's
-  handler of `actionOutcome()` is to be the one announcer, so that a reason is said once.
+  handler of `actionOutcome()` is the one announcer, so that a reason is said once.
 - It does not compare an answer's view with the bar's own. The placement script is the only
   authority for the view, and on a desktop switch the bar's own desktop and the provider's frame for
   the new view arrive separately, so a comparison would disagree for a moment on every switch,
@@ -703,9 +712,9 @@ again, P4's in every check, its focus gone and its pending look, opener's look a
 ### The layout menu (`LayoutMenu.qml`)
 
 The menu the layout control opens (P6), the Floating and Tiled choices for the bar's view and a
-status line for their outcome. `main.qml` is to show it in an applet pop-up of its own in P6's next
-slice, as the provider accepts a prepare only while a focused shell applet pop-up holds the focus,
-and a Qt menu would be a pop-up surface that never does. The menu decides nothing: its owner binds
+status line for their outcome. `main.qml` shows it in an applet pop-up of its own, as the provider
+accepts a prepare only while a focused shell applet pop-up holds the focus, and a Qt menu would be a
+pop-up surface that never does. The menu decides nothing: its owner binds
 `mode`, `tiledBlocked`, `choice` (the layout state's `actionChoice`), `pending` (`actionPending`),
 `status` (the outcome, worded by the control's `outcomeText()`), `touch` and `location`, and
 forwards what it reports.
@@ -776,6 +785,42 @@ the status line's text, size and colour under the rows in a top bar with no row 
 in a bottom bar with each row's distance from the bar's side kept, a long status wrapping at the
 same width and no room taken when empty; a long label wrapping and its row growing; the touch rows;
 right to left; and no announcement in the source.
+
+### The wiring in main (`main.qml`)
+
+`main.qml` binds and forwards; the decisions are the layout state's. Inside the `BEGIN layout state`
+block, so that the backend test's fixture runs it with a stand-in pop-up and control:
+
+- `layoutMenuShown` is `layoutState.actionOpen && layoutControl.visible`, and the menu's pop-up is
+  bound to it. A handler on the control's `visible` calls `layoutState.close(false)` at once when
+  the control hides (S11): a hidden control cannot be pressed, so no sync is needed there.
+- `layoutMenuHidden()`, which the pop-up's own hide calls, calls `layoutState.close(false)` at once
+  and restarts a 150 ms sync, as the calendar's. The layout state must learn of the close at once:
+  a set's refusal can come within those 150 ms, and T25 must see the close first. The hide also
+  follows every end of the action the layout state makes itself, so this call is then the nested
+  `close(false)` of B3, which meets an ended action and changes nothing (T22a).
+- `layoutMenuRecent` is `layoutState.actionOpen || layoutMenuSync.running`, the control's
+  `menuOpen`: the pop-up hides itself on a press on the panel, possibly before the control sees
+  that press, and the lingering flag keeps the press-then-click toggle from opening the menu again
+  on the click.
+- `openLayoutMenu(by)` calls `layoutState.open()` and keeps `by` for the pop-up's focus reason.
+- The handler of `actionOutcome(reason, mode)` is the only announcer: it hands the reason and the
+  mode to the control's notice, and for a reason that is not empty it announces
+  `outcomeText(reason, mode, inMenu)` through `announceLayout(text)`, which calls
+  `Accessible.announce()` on the menu while it is open and on the pill otherwise (D10). The pill is
+  always shown, while the control is hidden in exactly the rows that announce with the menu closed
+  (T15, T16, T17, T17a, T30, T33), where the mode is unknown.
+
+Outside the block: the menu's `AppletPopup` (`visible: layoutMenuShown && the loader is ready`; on
+show, `requestActivate()` and the menu's `focusConfirmed(byKeyboard)` with `by` not `pointer`; on
+hide, `layoutMenuHidden()`), its synchronous `Loader` and the menu's bindings (`mode`,
+`tiledBlocked`, `choice`, `pending`, `status` worded by the control's `outcomeText()`, `touch` and
+`location`), and its signals (the input to `layoutState.input()`, the choice to
+`layoutState.choose()`, Escape to `layoutState.close(true)`). The control is `interactive` only
+while `layoutState.actionsAvailable` (D19), takes `menuOpen` and `pending`, and forwards
+`menuRequested(by)` and `menuDismissed()`. `Plasmoid.status` is raised while either pop-up is open
+(D17). The testing hooks `dump-layout:TAG` and `dump-layout-menu:TAG` log the action's public fields
+and the menu's rows' positions.
 
 ## Global menu (stock `org.kde.plasma.appmenu`)
 

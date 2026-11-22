@@ -125,7 +125,7 @@ PlasmoidItem {
 
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
     Plasmoid.constraintHints: Plasmoid.CanFillArea
-    Plasmoid.status: popupOpen ? PlasmaCore.Types.RequiresAttentionStatus : PlasmaCore.Types.ActiveStatus
+    Plasmoid.status: popupOpen || layoutMenuShown ? PlasmaCore.Types.RequiresAttentionStatus : PlasmaCore.Types.ActiveStatus
     activationTogglesExpanded: false
     hideOnWindowDeactivate: true
     toolTipMainText: ""
@@ -351,6 +351,48 @@ PlasmoidItem {
             }
         }
     }
+    // The layout menu's pop-up shows while the action is open and the control shows (S11): a
+    // hidden control cannot be pressed, so the menu goes with it.
+    readonly property bool layoutMenuShown: layoutState.actionOpen && layoutControl.visible
+    // The control hid: the menu goes at once, with no sync, as nothing can press a hidden control.
+    Connections {
+        target: layoutControl
+        function onVisibleChanged(): void {
+            if (!layoutControl.visible) {
+                layoutState.close(false);
+            }
+        }
+    }
+    // The pop-up hid itself: the action ends at once, so that a set's refusal arriving within the
+    // sync sees the close first (T25), and the sync keeps the press-then-click toggle from opening
+    // the menu again on the click after the press that closed it.
+    function layoutMenuHidden(): void {
+        layoutState.close(false);
+        layoutMenuSync.restart();
+    }
+    Timer {
+        id: layoutMenuSync
+        interval: 150
+    }
+    // The control's menuOpen: the action open, or closed a moment ago.
+    readonly property bool layoutMenuRecent: layoutState.actionOpen || layoutMenuSync.running
+    // The way the menu was opened, for its focus reason.
+    property string layoutMenuBy: "pointer"
+    function openLayoutMenu(by: string): void {
+        layoutMenuBy = by;
+        layoutState.open();
+    }
+    // The one announcer (D10): the control's notice, and the reason announced once, worded for the
+    // menu while it is open and for the pill otherwise.
+    Connections {
+        target: layoutState
+        function onActionOutcome(reason, mode): void {
+            layoutControl.notify(reason, mode);
+            if (reason !== "") {
+                root.announceLayout(layoutControl.outcomeText(reason, mode, root.layoutMenuShown));
+            }
+        }
+    }
     // While the control may not show, or the bar has no output name to ask for, its saved request
     // is withdrawn - at start, when the user hides it, when the bar's layout does and when the
     // output name empties - and the provider woken: an empty field is no request, so the provider
@@ -387,14 +429,45 @@ PlasmoidItem {
         return level >= 7 ? layoutControl.fullWidth + pillPadding
              : level >= 4 ? layoutControl.fullWidth - layoutControl.compactWidth : 0;
     }
-    // The testing hook "dump-layout:TAG" (runDebugAction) logs the layout state.
+    // The testing hook "dump-layout:TAG" (runDebugAction) logs the layout state and the action's
+    // public fields. The action's read state is internal to LayoutState, so it is not here.
     function dumpLayout(tag: string): void {
         console.info("clockpill: layout dump " + tag + " " + JSON.stringify({
             output: layoutState.outputName, outcome: layoutState.outcome, mode: layoutState.mode,
-            epoch: layoutState.epoch, revision: layoutState.revision, refusal: layoutState.refusal
+            epoch: layoutState.epoch, revision: layoutState.revision, refusal: layoutState.refusal,
+            state: layoutState.actionState, choice: layoutState.actionChoice,
+            pending: layoutState.actionPending, reason: layoutState.actionReason,
+            available: layoutState.actionsAvailable
+        }));
+    }
+    // The testing hook "dump-layout-menu:TAG" logs the menu's rows' positions in the scene.
+    function dumpLayoutMenu(tag: string): void {
+        const menu = layoutMenuLoader.item;
+        const rows = menu ? menu.rowItems : [];
+        console.info("clockpill: layout menu dump " + tag + " " + JSON.stringify({
+            shown: root.layoutMenuShown,
+            rows: rows.map(row => {
+                const at = row.mapToItem(null, 0, 0);
+                return { mode: row.mode, x: Math.round(at.x), y: Math.round(at.y),
+                         width: Math.round(row.width), height: Math.round(row.height),
+                         enabled: row.enabled, focused: row.activeFocus };
+            })
         }));
     }
     // END layout state
+
+    // The one announcer (D10): the menu while it is open, the pill otherwise, as the pill is
+    // always shown and the control is hidden whenever the mode is unknown.
+    function announceLayout(text: string): void {
+        if (text === "") {
+            return;
+        }
+        if (root.layoutMenuShown && layoutMenuLoader.item) {
+            layoutMenuLoader.item.Accessible.announce(text);
+        } else {
+            pill.Accessible.announce(text);
+        }
+    }
 
     // Testing hooks (config key debugAction, cleared after use): "dump-bar:TAG", "menu-refresh"
     // (rebuild the global menu's cached full view now), "dump-calendar:TAG", "dump-layout:TAG",
@@ -414,6 +487,8 @@ PlasmoidItem {
             console.info("clockpill: debug: full view rebuilt " + (widthBudget.item as WidthBudget).refreshFullView());
         } else if (parts[0] === "dump-layout") {
             root.dumpLayout(parts.slice(1).join(":"));
+        } else if (parts[0] === "dump-layout-menu") {
+            root.dumpLayoutMenu(parts.slice(1).join(":"));
         } else if (parts[0] === "dump-pill") {
             root.dumpPill(parts.slice(1).join(":"));
         } else if (parts[0] === "dump-calendar") {
@@ -622,6 +697,14 @@ PlasmoidItem {
                 color: root.textColor
                 location: Plasmoid.location
                 cellHeight: pill.height
+                // The gate (D19): interactive only while the layout actions are available, so a
+                // provider that refuses them leaves P4's read-only control.
+                interactive: layoutState.actionsAvailable
+                menuOpen: root.layoutMenuRecent
+                pending: layoutState.actionPending && !layoutState.actionOpen
+                accent: accent
+                onMenuRequested: by => root.openLayoutMenu(by)
+                onMenuDismissed: layoutState.close(true)
             }
 
             // Date and time: one button that opens the calendar. It reaches the pill's edge so
@@ -832,6 +915,64 @@ PlasmoidItem {
                              + (Date.now() - root.openStarted) + " ms");
                 root.openStarted = 0;
                 root.calendarShown = true;
+            }
+        }
+    }
+
+    // ---- Layout menu pop-up
+    // The menu the layout control opens (P6): an applet pop-up of its own, as the provider accepts
+    // a prepare only while a focused shell applet pop-up holds the focus, and a Qt menu would be a
+    // pop-up surface that never does.
+    PlasmaCore.AppletPopup {
+        id: layoutMenuPopup
+
+        visualParent: pill
+        popupDirection: {
+            switch (Plasmoid.location) {
+            case PlasmaCore.Types.BottomEdge:
+                return Qt.TopEdge;
+            case PlasmaCore.Types.LeftEdge:
+                return Qt.RightEdge;
+            case PlasmaCore.Types.RightEdge:
+                return Qt.LeftEdge;
+            default:
+                return Qt.BottomEdge;
+            }
+        }
+        margin: Plasmoid.configuration.popupGap
+        floating: !root.inPanel
+        removeBorderStrategy: PlasmaCore.AppletPopup.Never
+        hideOnWindowDeactivate: true
+        visible: root.layoutMenuShown && layoutMenuLoader.status === Loader.Ready
+
+        onVisibleChanged: {
+            if (visible) {
+                requestActivate();
+                const menu = layoutMenuLoader.item;
+                if (menu) {
+                    menu.focusConfirmed(root.layoutMenuBy !== "pointer");
+                }
+            } else {
+                root.layoutMenuHidden();
+            }
+        }
+
+        mainItem: Loader {
+            id: layoutMenuLoader
+            active: root.layoutMenuShown
+            asynchronous: false
+            focus: true
+            sourceComponent: LayoutMenu {
+                mode: layoutState.mode
+                tiledBlocked: layoutState.tiledBlocked
+                choice: layoutState.actionChoice
+                pending: layoutState.actionPending
+                status: layoutControl.outcomeText(layoutState.actionReason, layoutState.actionChoice, true)
+                touch: m.touch
+                location: Plasmoid.location
+                onInputReported: layoutState.input()
+                onChosen: mode => layoutState.choose(mode)
+                onCloseRequested: layoutState.close(true)
             }
         }
     }

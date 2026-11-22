@@ -2187,8 +2187,13 @@ FIXTURE = ("import QtQuick\nItem {\n    id: root\n    property string screenName
            "    property bool inPanel: INPANEL\n    property bool vertical: VERTICAL\n"
            "    property QtObject tabletState: QtObject {\n        property bool tablet: TABLET\n    }\n"
            "    property int budgetLevel: 0\n    property real pillPadding: 12\n"
+           "    property var announcements: []\n"
+           "    function announceLayout(text) { root.announcements = root.announcements.concat([text]); }\n"
            "    property QtObject layoutControl: QtObject {\n        property bool available: true\n"
-           "        property real fullWidth: 80\n        property real compactWidth: 13\n    }\n"
+           "        property bool visible: true\n        property var notices: []\n"
+           "        property real fullWidth: 80\n        property real compactWidth: 13\n"
+           "        function notify(reason, mode) { root.layoutControl.notices = root.layoutControl.notices.concat([[reason, mode]]); }\n"
+           "        function outcomeText(reason, mode, inMenu) { return reason + \"|\" + mode + \"|\" + inMenu; }\n    }\n"
            "    signal saved(string request)\n    property var saves: []\n    property QtObject config: QtObject {\n"
            "        property bool showLayoutControl: SHOWN\n        property string layoutRequest: REQUEST\n"
            "        property string layoutResponse: \"\"\n        function writeConfig(): void {\n"
@@ -2249,8 +2254,9 @@ if wiring is not None:
     QMetaObject.invokeMethod(wiring, "dumpLayout", Q_ARG(str, "wired"))
     lines = [m.split("clockpill: layout dump wired ", 1)[1] for m in messages if "clockpill: layout dump wired " in m]
     dumped = parsed_json(lines[0]) if lines else {}
-    expect(dumped == {"output": "Virtual-0", "outcome": "answered", "mode": "tiled", "epoch": WIRED, "revision": 1, "refusal": ""},
-           "the clock's wiring: the testing hook dump-layout says the layout state (%s)" % lines)
+    expect(dumped == {"output": "Virtual-0", "outcome": "answered", "mode": "tiled", "epoch": WIRED, "revision": 1, "refusal": "",
+                      "state": "idle", "choice": "", "pending": False, "reason": "", "available": True},
+           "the clock's wiring: the testing hook dump-layout says the layout state and the action's fields (%s)" % lines)
     events.clear()
     saved.clear()
     config.setProperty("showLayoutControl", False)
@@ -2391,6 +2397,93 @@ until(lambda: len(events) == 2)
 expect([kind for kind, _ in events] == ["saved", "wake"] and screenless_saved
        and parsed_json(screenless_saved[0]).get("outputName") == "Virtual-0",
        "the clock's wiring: the screen back, the clock asks again (%s)" % events)
+
+
+def wired_frame(wiring, revision, **fields):
+    """A frame answering the wiring fixture's last saved request, from the wired lifetime."""
+    request = parsed_json(prop(wiring.property("config"), "layoutRequest"))
+    result = {"version": 1, "consumer": request.get("consumer"), "request": request.get("request"),
+              "epoch": WIRED, "identityName": PREFIX + WIRED, "backendOwner": owner, "revision": revision,
+              "status": "online", "capable": True, "view": dict(VIEW, outputName="Virtual-0"), "tiled": False}
+    result.update(fields)
+    return result
+
+
+# The layout menu's wiring (P6, slice 3): the control asks for the menu, the block opens the action
+# and keeps the way it was opened; the pop-up's visibility follows the action and the control; the
+# pop-up's own hide ends the action at once, with the sync keeping the press-then-click toggle; the
+# control hiding ends it at once (S11); Escape after a choice, then the pop-up hiding, then a
+# stale-context refusal stays silent (B3); a presented reason is announced once, worded for the
+# menu while it is open, and an empty one is not announced.
+events.clear()
+menu, _ = wired()
+until(lambda: len(events) == 2)
+menu_layout = menu.property("layout") if menu is not None else None
+menu_control = menu.property("layoutControl") if menu is not None else None
+menu_config = menu.property("config") if menu is not None else None
+if menu is not None:
+    menu_config.setProperty("layoutResponse", json.dumps(wired_frame(menu, 1, tiled=True)))
+    until(lambda: prop(menu_layout, "mode") == "tiled")
+    invoke(menu, "openLayoutMenu", Q_ARG(str, "keys"))
+expect(menu is not None and prop(menu, "layoutMenuBy") == "keys" and prop(menu, "layoutMenuShown") is True
+       and prop(menu_layout, "actionOpen") is True,
+       "the clock's wiring: the control's request opens the action and keeps the way it was opened")
+if menu is not None:
+    invoke(menu, "layoutMenuHidden")
+expect(menu is not None and prop(menu_layout, "actionOpen") is False and prop(menu, "layoutMenuRecent") is True,
+       "the clock's wiring: the pop-up hiding itself ends the action at once, and the sync keeps the toggle")
+QTest.qWait(200)
+expect(menu is not None and prop(menu, "layoutMenuRecent") is False,
+       "the clock's wiring: the sync over, the toggle is free again")
+if menu is not None:
+    invoke(menu, "openLayoutMenu", Q_ARG(str, "pointer"))
+    invoke(menu_layout, "close", Q_ARG(bool, True))
+expect(menu is not None and prop(menu_layout, "actionOpen") is False,
+       "the clock's wiring: Escape closes the action")
+if menu is not None:
+    invoke(menu, "openLayoutMenu", Q_ARG(str, "keys"))
+    menu_control.setProperty("visible", False)
+expect(menu is not None and prop(menu_layout, "actionOpen") is False,
+       "the clock's wiring: the control hiding ends the action at once (S11)")
+if menu is not None:
+    menu_control.setProperty("visible", True)
+    invoke(menu, "openLayoutMenu", Q_ARG(str, "keys"))
+    invoke(menu_layout, "input")
+    menu_config.setProperty("layoutResponse", json.dumps(wired_frame(
+        menu, 2, completion={"intent": "prepare", "result": "done", "handle": WIRED + ":1:1", "target": True},
+        prepared={"handle": WIRED + ":1:1", "ready": True})))
+    until(lambda: prop(menu_layout, "actionState") == "prepared")
+    invoke(menu_layout, "choose", Q_ARG(str, "tiled"))
+    invoke(menu_layout, "close", Q_ARG(bool, True))
+    invoke(menu, "layoutMenuHidden")
+    menu_config.setProperty("layoutResponse", json.dumps(wired_frame(
+        menu, 3, completion={"intent": "set", "result": "refused", "reason": "stale-context"})))
+    QTest.qWait(50)
+expect(menu is not None and prop(menu_layout, "actionReason") == "" and prop(menu, "announcements") == [],
+       "the clock's wiring: Escape after a choice, then the pop-up hiding, then a stale-context refusal, stays silent (B3)")
+if menu is not None:
+    invoke(menu, "openLayoutMenu", Q_ARG(str, "keys"))
+    invoke(menu_layout, "input")
+    QTest.qWait(20)
+    menu_config.setProperty("layoutResponse", json.dumps(wired_frame(
+        menu, 4, completion={"intent": "prepare", "result": "refused", "reason": "busy"})))
+    QTest.qWait(50)
+expect(menu is not None and prop(menu, "announcements") == ["busy||true"],
+       "the clock's wiring: a presented reason is announced once, worded for the menu while it is open")
+expect('visible: root.layoutMenuShown && layoutMenuLoader.status === Loader.Ready' in source
+       and 'root.layoutMenuHidden()' in source,
+       "the clock's wiring: the menu's pop-up shows while the action is open and the control shows, and its hide ends the action")
+expect('interactive: layoutState.actionsAvailable' in source
+       and 'menuOpen: root.layoutMenuRecent' in source
+       and 'pending: layoutState.actionPending && !layoutState.actionOpen' in source,
+       "the clock's wiring: the control is interactive only while the actions are available, and takes the action's state")
+expect('status: layoutControl.outcomeText(layoutState.actionReason, layoutState.actionChoice, true)' in source
+       and 'onInputReported: layoutState.input()' in source
+       and 'onChosen: mode => layoutState.choose(mode)' in source
+       and 'onCloseRequested: layoutState.close(true)' in source,
+       "the clock's wiring: the menu binds to the action and forwards its input, choice and Escape")
+expect('parts[0] === "dump-layout-menu"' in source and 'root.dumpLayoutMenu(parts.slice(1).join(":"))' in source,
+       "the clock's wiring: runDebugAction hands dump-layout-menu:TAG to dumpLayoutMenu")
 # The control's place in the width budget: its label goes at step 4, with the short date, and the
 # control at step 7, with the dots, giving up its width and one pill padding; a control that shows
 # no mode gives up nothing.
