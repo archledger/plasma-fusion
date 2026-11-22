@@ -47,8 +47,10 @@ def target_reply(arguments: list[str]) -> None:
                and event[2]["boot"] == arguments[3] and event[2]["request"] == request]
     assert len(queries) == 1 and queries[0][0] < index
     native = native_verdicts(arguments[2])
+    # The verdict of the accepted frame itself: later frames may re-validate the same request.
     native = [row for row in native if row["consumer"] == arguments[3]
-              and row["request"] == request and row["intent"] == arguments[4]][-1]
+              and row["request"] == request and row["intent"] == arguments[4]
+              and row["revision"] == packet["revision"]][-1]
     assert native["ready"] is preparation["ready"]
     if preparation["ready"]:
         assert native["targetAlive"] and native["targetClass"] == arguments[7], native
@@ -122,12 +124,14 @@ def target_settled(arguments: list[str]) -> None:
     the minimum), the receiver holds that newest context, and no read or publication is
     outstanding."""
     _, observation, _ = accepted_exchange(arguments[1], arguments[3])
+    # Busy first: a change that starts and ends after the receiver read still advances the
+    # generation read below, which the receiver's context then cannot match.
+    assert not provider_busy(arguments[2])
     generation = provider_context(arguments[2])["contextGeneration"]
     assert type(generation) is int and generation >= int(arguments[4])
     assert observation["phase"] == "online"
     context = observation["packet"]["targetContext"]
     assert context and context["generation"] == generation
-    assert not provider_busy(arguments[2])
     print(generation)
 
 

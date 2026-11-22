@@ -2,12 +2,16 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Native target/view guard cases; also loaded by test_prepare_seed.py."""
 
+import contextlib
+import importlib
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 if __package__:
     from .qml_helpers import qml_handler
@@ -432,18 +436,26 @@ process.stdout.write(JSON.stringify({
     def run_target_checker(self, fault=None):
         outbound = {"boot": "current", "request": 4}
         observation = {"boot": "current", "request": 4, "phase": "online", "packet": {
-            "consumer": "current", "request": 4, "preparation": {
+            "consumer": "current", "request": 4, "revision": 5, "preparation": {
                 "intent": "validate", "ready": False, "reason": "focus-changed", "token": "",
             },
         }}
-        native = {"consumer": "current", "request": 4, "intent": "validate",
+        # The provider logs one verdict per published frame, numbered as that frame.
+        native = {"consumer": "current", "request": 4, "intent": "validate", "revision": 5,
                   "ready": False, "targetAlive": False, "targetClass": ""}
+        verdicts = [native]
         if fault == "old-state":
             observation["request"] = observation["packet"]["request"] = 3
         elif fault == "wrong-receiver":
             observation["packet"]["consumer"] = "other"
         elif fault == "wrong-native":
             native["ready"] = True
+        elif fault == "newer-verdict":
+            # A later publication re-validated the same request differently.
+            verdicts.append(native | {"revision": 6, "ready": True, "targetAlive": True,
+                                      "targetClass": "pf.focus.alpha"})
+        elif fault == "missing-own-verdict":
+            native["revision"] = 6
         events = [("query", outbound), ("observation", observation)]
         if fault == "out-of-order":
             events.reverse()
@@ -456,7 +468,8 @@ process.stdout.write(JSON.stringify({
                 f"qml: layout-probe-{kind} {json.dumps(row)}\n" for kind, row in events
             ))
             backend = root / "kwin.log"
-            backend.write_text("qml: layout-probe-target " + json.dumps(native) + "\n")
+            backend.write_text("".join("qml: layout-probe-target " + json.dumps(row) + "\n"
+                                       for row in verdicts))
             return subprocess.run(
                 [sys.executable, str(Path(__file__).with_name("receipts.py")), "target-reply",
                  str(shell), str(backend), "current", "validate", "false", "3", "-", str(root)],
@@ -473,6 +486,13 @@ process.stdout.write(JSON.stringify({
                       "out-of-order", "received-not-accepted"):
             with self.subTest(fault=fault):
                 self.assertNotEqual(self.run_target_checker(fault).returncode, 0)
+
+    def test_a_newer_verdict_for_the_same_request_cannot_replace_the_accepted_ones(self):
+        result = self.run_target_checker("newer-verdict")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_the_accepted_revision_needs_its_own_native_verdict(self):
+        self.assertNotEqual(self.run_target_checker("missing-own-verdict").returncode, 0)
 
 
 class TargetSettleTests(unittest.TestCase):
@@ -537,6 +557,37 @@ class TargetSettleTests(unittest.TestCase):
         result = self.settle(mode="provider-generation")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "7")
+
+    def test_a_change_between_its_reads_cannot_settle_on_the_older_generation(self):
+        receipts = importlib.import_module(
+            f"{__package__}.receipts" if __package__ else "receipts")
+        observation = {"boot": "current", "phase": "online", "epoch": "e", "revision": 9,
+                       "accepted": 3, "request": 4, "packet": {
+                           "consumer": "current", "request": 4,
+                           "targetContext": {"epoch": "e", "generation": 7}}}
+        busy = receipts.provider_busy
+
+        def change_meanwhile(path):
+            # The provider observes a change, reads and publishes, all after the receiver read.
+            with open(path, "a") as log:
+                log.write("qml: layout-probe-focus "
+                          + json.dumps({"event": "activation", "contextGeneration": 8}) + "\n"
+                          + "qml: layout-probe: read started\n"
+                          + "qml: layout-probe: publication online 2\n"
+                          + "qml: layout-probe: read finished\n"
+                          + "qml: layout-probe: publication writes 2\n")
+            return busy(path)
+
+        with tempfile.TemporaryDirectory(prefix="pf-settle-race-") as scratch:
+            shell, kwin = Path(scratch) / "plasmashell.log", Path(scratch) / "kwin.log"
+            shell.write_text("qml: layout-probe-observation " + json.dumps(observation) + "\n")
+            kwin.write_text("qml: layout-probe-focus "
+                            + json.dumps({"event": "removed", "contextGeneration": 7}) + "\n")
+            with (mock.patch.object(receipts, "provider_busy", side_effect=change_meanwhile),
+                  contextlib.redirect_stdout(io.StringIO())):
+                with self.assertRaises(AssertionError):
+                    receipts.target_settled(["receipts.py", str(shell), str(kwin), "current",
+                                             "7"])
 
     def test_each_click_after_a_context_change_waits_for_the_shell(self):
         # Each step's change, and how many context generations it advances at least: the second

@@ -322,8 +322,8 @@ The native scenario uses the first Space to prepare and the second to validate t
 It then requires refusal after another app activates, a new explicit preparation followed by
 close/refusal, and a desktop
 leave/return followed by refusal of the old handle. Each reply must match the receiver, outbound
-generation and native verdict. Unit cases also cover ineligible/spoofed focus, destroyed wrappers,
-membership/activity loss and same-name output-object replacement.
+generation and the native verdict of the accepted revision. Unit cases also cover ineligible/spoofed
+focus, destroyed wrappers, membership/activity loss and same-name output-object replacement.
 Pre-capture focus/view races and immutable client snapshots also have regression coverage.
 Pre-capture popup-to-popup, dismissal and return sequences are regression cases too. A
 [window's active flag](https://doc.qt.io/qt-6/qwindow.html#isActive) includes its transient chain;
