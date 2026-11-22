@@ -835,8 +835,9 @@ recomputes each step from the raw logs, from a mark set before its shortcut: the
 as the shell's dock with the expected app remembered or none, then the popup with nothing activated
 in between, the focus consumer's keyboard preparation after its popup took focus, and the
 provider's first verdict for that request, given in that popup before anything else was activated.
-That verdict decides the request's completion, which a frame the consumer accepted must carry. No
-verdict in the run may name anything but the app or no target.
+That verdict decides the request's completion, which restates it (its reason, and a handle only when
+it is ready) and which a frame the consumer accepted must carry. No verdict in the run may name
+anything but the app or no target.
 `keyboard-entry-result.json` is written only after that recomputation, and this scope also requires
 the independent cleanup evidence. A provider without the dock and desktop part of the handoff
 refused the first keyboard preparation as stale, and the case failed there.

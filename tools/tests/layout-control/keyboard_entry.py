@@ -66,10 +66,18 @@ def remembers(row: dict, app: str) -> bool:
 
 def decides(row: dict, request: int) -> bool:
     """The verdict at a preparation's first handling decides its completion, which later re-checks
-    of the same request keep; an early refusal carries none."""
+    of the same request keep; an early refusal carries none. The completion restates that answer:
+    accepted with its handle, or refused with its reason and no handle."""
     completion = row["completion"]
-    return (isinstance(completion, dict) and completion["request"] == request
-            and completion["intent"] == "prepare" and completion["accepted"] is row["ready"])
+    # `is`, not ==: in a dict comparison 1 would count as True.
+    if not (isinstance(completion, dict) and isinstance(completion.get("token"), str)
+            and completion.get("accepted") is row["ready"]):
+        return False
+    token = completion["token"]
+    handle = 0 < len(token) <= 128 if row["ready"] else token == ""
+    return handle and completion == {"request": request, "intent": "prepare",
+                                     "accepted": row["ready"], "token": token,
+                                     "reason": row["reason"]}
 
 
 def evaluate(directory: Path, label: str, start: dict, end: dict, shell_pid: int,

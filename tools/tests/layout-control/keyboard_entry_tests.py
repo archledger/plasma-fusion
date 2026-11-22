@@ -373,6 +373,36 @@ class KeyboardEntryCheckerTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "did not decide"):
                     self.check(**{step: rows})
 
+    def test_the_deciding_completion_restates_its_answer(self):
+        # A frame carrying it is accepted, so only the restatement check can reject these.
+        focused = ("popup-focus", {"boot": BOOT, "screen": "Virtual-0"})
+        ready = completion(2, True)
+        frame = ("observation", accepted(2, False, decision=ready))
+        rechecked = ("target", verdict(2, False, "", decision=ready))
+        handleless = ready | {"token": ""}
+
+        def refusal(decided):
+            # The first verdict refuses as stale-context; the completion says otherwise.
+            return {"refusal-kwin": [("focus", dock("")), rechecked, ("focus", popup("")),
+                                     rechecked,
+                                     ("target", verdict(3, False, "", decision=decided))],
+                    "refusal-shell": [frame, focused, frame, ("keyboard-query", key(3)),
+                                      ("observation", accepted(3, False, decision=decided))]}
+        cases = {
+            "a stale-context refusal decided as busy": refusal(
+                completion(3, False) | {"reason": "busy"}),
+            "a refusal decided with a handle": refusal(completion(3, False) | {"token": "t"}),
+            "an acceptance decided without its handle": {
+                "entry-kwin": [("focus", dock(APP)), ("focus", popup(APP)),
+                               ("target", verdict(2, True, APP, decision=handleless))],
+                "entry-shell": [focused, ("keyboard-query", key(2)),
+                                ("observation", accepted(2, True, decision=handleless))]},
+        }
+        for case, change in cases.items():
+            with self.subTest(case=case):
+                with self.assertRaisesRegex(ValueError, "did not decide"):
+                    self.check(**change)
+
     def test_the_consumer_must_accept_the_answer(self):
         focused = ("popup-focus", {"boot": BOOT, "screen": "Virtual-0"})
         for case, rows in {
