@@ -2689,8 +2689,9 @@ Item {
     // none with a reason; the preparation's frames, and their end by focus, the target, the view or
     // the shell, with a revision step; the slot freed by its holder's next request, a withdrawal or
     // its widget gone in a complete inventory, never by an incomplete read; a saved prepare refused
-    // by a later lifetime; a set and an unknown intent refused before any action; a query's frames
-    // as they were, and the offline frames with nothing of an intent.
+    // by a later lifetime; a lifetime started while the app or a popup holds focus; a set and an
+    // unknown intent refused before any action; a query's frames as they were, and the offline
+    // frames with nothing of an intent.
     function runPrepare() {
         const base = "file://" + packagesRoot + "/scripts/plasmafusion-placement/contents/ui/";
         const component = Qt.createComponent(base + "LayoutProvider.qml");
@@ -3372,6 +3373,51 @@ Item {
                     fail("prepare: a lifetime retired holding the slot keeps nothing prepared");
                 }
                 later.destroy();
+                // ---- a lifetime that starts while the app holds focus (the script enabled or
+                // reloaded in a running session) remembers the app as if its activation had been
+                // seen: a popup opened from it hands it off; one that starts on a popup takes
+                // nothing, and the popup's focus stays unconfirmed ----
+                const startedOn = (active, owner, focusPopup) => {
+                    focus(app);
+                    if (active !== app) {
+                        focus(active);
+                    }
+                    const made = component.createObject(harness);
+                    made.nativeCapable = true;
+                    made.start();
+                    DBusStubs.SessionBus.answer(expectIdentityRequest("prepare (started on " + active.internalId + ")",
+                                                                      made), [{ value: 1 }]);
+                    made.identityLookup.finished([owner]);
+                    made.shellLookup.finished([":1.12"]);
+                    made.reader.finished([JSON.stringify({ start: Date.now(), rows: [], widgets: [], empty: [],
+                                                           truncated: false })]);
+                    made.shellPidLookup.finished([shellPid]);
+                    if (focusPopup) {
+                        focus(popup);
+                    }
+                    made.wake.activated();
+                    made.shellLookup.finished([":1.12"]);
+                    made.reader.finished([JSON.stringify({ start: Date.now(), widgets: [5], empty: [], truncated: false,
+                                                           rows: [prep(5, "c5", 1, { epoch: made.label })] })]);
+                    const row = made.requests.find(r => r.id === 5);
+                    return { made: made, completion: row ? row.completion : "no request" };
+                };
+                const seeded = startedOn(app, ":1.44", true);
+                if (canonical(seeded.completion) !== canonical(ready(seeded.made.label + ":1:1", true))
+                        || !seeded.made.slot || seeded.made.slot.window !== app) {
+                    fail("prepare: a lifetime started while the app holds focus prepares it from a popup opened from it"
+                         + " (got " + canonical(seeded.completion) + ")");
+                }
+                seeded.made.retire();
+                seeded.made.destroy();
+                const onPopup = startedOn(popup, ":1.45", false);
+                if (canonical(onPopup.completion) !== canonical(refused("popup-focus-unconfirmed"))
+                        || onPopup.made.slot !== null) {
+                    fail("prepare: a lifetime started while a popup holds focus takes nothing of it (got "
+                         + canonical(onPopup.completion) + ")");
+                }
+                onPopup.made.retire();
+                onPopup.made.destroy();
                 // ---- the retirement: the offline frames carry nothing of an intent ----
                 settle();
                 from = p.writer.callLog.length;

@@ -477,8 +477,8 @@ check(not thrown, "provider-rules: nothing threw, got %s" % thrown)
 retire(provider_rules, "provider-rules")
 
 # P5's prepared target on a provider of its own (the harness checks each decision, frame and end):
-# its revisions each a change of what a bar is told, each fresh decision said once - 37 ready and
-# 20 refused, the later lifetime's refusal and its own prepare among them - and each end of a
+# its revisions each a change of what a bar is told, each fresh decision said once - 38 ready and
+# 21 refused, the later lifetimes' refusals and prepares among them - and each end of a
 # preparation said with its reason, a holder's widget gone among them; a read again or a
 # conflicting payload decides nothing new and says nothing, and a malformed prepare is a refusal
 # of the read's, not a decision.
@@ -489,8 +489,8 @@ for problem in list(prepare_run.property("problems").toVariant() or []):
 journal = messages[before:]
 ready_lines = sum("layout provider: a prepare is ready" in message for message in journal)
 refused_lines = sum("layout provider: a prepare was refused" in message for message in journal)
-check(ready_lines == 37 and refused_lines == 20,
-      "prepare: each fresh decision is said once, 37 ready and 20 refused, got %s and %s" % (ready_lines, refused_lines))
+check(ready_lines == 38 and refused_lines == 21,
+      "prepare: each fresh decision is said once, 38 ready and 21 refused, got %s and %s" % (ready_lines, refused_lines))
 ends = {}
 for message in journal:
     if "layout provider: a preparation ended, " in message:

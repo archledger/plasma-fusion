@@ -1208,9 +1208,11 @@ Offline (laptop):
    preparation's frames, with no revision step, and so does a widget gone. A PID answered for a
    connection no longer read from is not kept; both serials refuse when exhausted; a later lifetime
    refuses the saved prepare and a saved set `stale-context` before it knows the shell's PID,
-   prepares under its own epoch and, retired holding the slot, keeps nothing prepared; a tiler that
-   throws refuses the set `unavailable` and the read finishes; the offline frames carry nothing of
-   an intent. The driver counts each fresh decision's line and each end's reason.
+   prepares under its own epoch and, retired holding the slot, keeps nothing prepared; a lifetime
+   started while the app holds focus prepares it from a popup opened from it, and one started
+   while a popup holds focus takes nothing of it (`popup-focus-unconfirmed`); a tiler that throws
+   refuses the set `unavailable` and the read finishes; the offline frames carry nothing of an
+   intent. The driver counts each fresh decision's line and each end's reason.
    A run (`scenario: "set"`) drives P5's desired mode on the real script, its provider and tiler
    together: Tiled from floating, decided at once with the prepared app admitted as the master and
    focused, a re-read starting nothing and the same request with another handle refused
@@ -2268,7 +2270,10 @@ and the answers it publishes to them.
   the last eligible app (`Tiling.eligibleForMaster`), which a shell surface keeps and any other
   window clears, and a shell applet popup activated straight from that app, or from a shell dock
   or desktop surface on its output while the app is remembered, hands the app off; each focus
-  change replaces the handoff. A surface is the shell's only with the shell's PID, which the bus
+  change replaces the handoff. It starts from the app that holds focus when the provider starts
+  (the script enabled or reloaded in a running session), as if that activation had been seen; a
+  popup or any other window holding focus then is not taken, and its activation stays unseen.
+  A surface is the shell's only with the shell's PID, which the bus
   gives for the connection read from (`GetConnectionUnixProcessID`, looked up beside the read
   once per connection; each connection with a PID takes the next shell serial), on the output
   meant, as an applet popup, dock or desktop window that is not a normal window: a class or app

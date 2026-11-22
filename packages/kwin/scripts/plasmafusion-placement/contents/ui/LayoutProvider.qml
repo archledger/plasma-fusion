@@ -346,6 +346,15 @@ QtObject {
         }
         online = true;
         capable = nativeCapable;
+        // An app that holds focus as the lifetime starts - the script enabled or reloaded in a
+        // running session - is remembered as if its activation had been seen, so a popup opened
+        // straight from it hands it off. Nothing else is taken: a popup, the panel or any other
+        // window holding focus then stays unseen, and confirms no focus for a prepare.
+        const active = Workspace.activeWindow;
+        if (Tiling.eligibleForMaster(active)) {
+            lastFocused = active;
+            lastEligible = active;
+        }
         revision = 1;
         // An explicit signature: the plugin then encodes each argument by its letter, so the
         // flags go out as a uint32 with no wrapper type (plasma-workspace components/dbus,
