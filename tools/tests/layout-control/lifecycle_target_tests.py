@@ -3,6 +3,7 @@
 """Process replacement with a target-mode seed: fresh contexts and leases after each restart, and a
 serialized pipeline in each provider lifetime."""
 
+import ast
 import contextlib
 import importlib.util
 import io
@@ -28,24 +29,26 @@ def runner():
 
 
 def row(boot, epoch, lease, *, context_epoch=None, context=True, preparation=None,
-        completion=None):
+        completion=None, backend=":1.4"):
     """A receiver's latest online observation, as consumer.qml logs it in target mode."""
     target = {"epoch": context_epoch or epoch, "generation": 0, "desktopId": "desktop",
               "activityId": "activity", "outputName": "Virtual-1", "consumerLease": lease}
     packet = {"consumer": boot, "epoch": epoch, "revision": 3, "status": "online",
               "capable": True, "refusal": -1, "request": 1, "preparation": preparation,
               "completion": completion, "targetContext": target if context else None,
-              "competingProviderRejected": True, "backendOwner": ":1.4",
+              "competingProviderRejected": True, "backendOwner": backend,
               "identityName": "org.plasmafusion.LayoutProbe.p" + epoch}
     return {"boot": boot, "phase": "online", "epoch": epoch, "revision": 3, "accepted": 1,
             "packet": packet, "request": 1}
 
 
 def shells():
-    """Two shells under the first KWin, then one under its replacement."""
+    """Two shells under the first KWin, then one under its replacement, each receiver bound to
+    its KWin's connection as the receipt names them."""
     return [[row("1:0.1", E1, E1 + ":1"), row("1:0.2", E1, E1 + ":2")],
             [row("2:0.1", E1, E1 + ":3"), row("2:0.2", E1, E1 + ":4")],
-            [row("3:0.1", E2, E2 + ":1"), row("3:0.2", E2, E2 + ":2")]]
+            [row("3:0.1", E2, E2 + ":1", backend=":1.498"),
+             row("3:0.2", E2, E2 + ":2", backend=":1.498")]]
 
 
 LEASES = [[E1 + ":1", E1 + ":2"], [E1 + ":3", E1 + ":4"], [E2 + ":1", E2 + ":2"]]
@@ -192,6 +195,23 @@ class LifecycleTargetTests(unittest.TestCase):
         self.assertTrue(self.runner.bootstrapped(unleased, "plain"))
         self.assertFalse(self.runner.bootstrapped([], "plain"))
 
+    def test_no_receiver_appears_in_two_shells(self):
+        self.assertTrue(self.runner.distinct_receivers(shells()))
+        # {A,B}, {C,D}, {A,E}: neighbouring shells differ, yet shell 3 reuses shell 1's A.
+        reused = shells()
+        reused[2][0] = dict(reused[2][0], boot=reused[0][0]["boot"])
+        self.assertFalse(self.runner.distinct_receivers(reused))
+
+    def test_the_container_applies_the_rule_to_all_three_shells(self):
+        # session_probe runs only in the container. After the KWin restart it must apply the
+        # tested rule to every shell's receivers, not only to the last two shells'.
+        tree = ast.parse(LIFECYCLE.read_text())
+        probe = next(node for node in ast.walk(tree)
+                     if isinstance(node, ast.FunctionDef) and node.name == "session_probe")
+        calls = [ast.unparse(node) for node in ast.walk(probe) if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Name) and node.func.id == "distinct_receivers"]
+        self.assertEqual(calls, ["distinct_receivers([rows1, rows2, rows3])"])
+
     def test_a_target_receipt_requires_its_check_and_consistent_leases(self):
         self.runner.check_receipt(receipt())
         with self.assertRaisesRegex(ValueError, "replacement receipt"):
@@ -281,6 +301,39 @@ class LifecycleTargetResultTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "do not match"):
             self.check()
 
+    def record(self, number, rows):
+        """Shell NUMBER's receivers become ROWS, logged after its earlier observations."""
+        log = self.output / f"shell-{number}.log"
+        log.write_text(log.read_text() + "".join(
+            "qml: layout-probe-observation " + json.dumps(item) + "\n" for item in rows))
+        (self.output / f"shell-{number}-observations.json").write_text(json.dumps(rows))
+
+    def test_each_shells_receivers_are_bound_to_its_own_backend(self):
+        # Shells 1 and 2 ran under the first KWin and shell 3 under its replacement: a receiver
+        # naming the other connection fails, in either lifetime.
+        for number, backend in ((1, ":1.498"), (3, ":1.4")):
+            with self.subTest(shell=number):
+                files = [self.output / f"shell-{number}.log",
+                         self.output / f"shell-{number}-observations.json"]
+                kept = [path.read_text() for path in files]
+                self.record(number, [
+                    row(item["boot"], item["epoch"],
+                        item["packet"]["targetContext"]["consumerLease"], backend=backend)
+                    for item in self.groups[number - 1]])
+                with self.assertRaisesRegex(ValueError, f"shell-{number} receiver is bound to"
+                                            " another backend"):
+                    self.check()
+                for path, text in zip(files, kept):
+                    path.write_text(text)
+
+    def test_no_receiver_of_an_earlier_shell_reappears_after_the_kwin_restart(self):
+        # {A,B}, {C,D}, {A,E}: neighbouring shells differ, yet shell 3 reuses shell 1's A.
+        reused = dict(self.groups[2][0], boot="1:0.1")
+        reused["packet"] = dict(reused["packet"], consumer="1:0.1")
+        self.record(3, [reused, self.groups[2][1]])
+        with self.assertRaisesRegex(ValueError, "reused a receiver"):
+            self.check()
+
     def test_each_provider_lifetime_must_keep_reads_and_publications_serialized(self):
         lines = list(PIPELINE)
         # A read starts while the publication is outstanding.
@@ -336,27 +389,53 @@ class LifecycleTargetResultTests(unittest.TestCase):
         self.assertNotEqual(missing.returncode, 0)
         self.assertIn("lifecycle-result.json", missing.stderr)
 
-    def run_container(self, skip=()):
+    def run_container(self, skip=(), stop=None):
+        """run_container over a copy of this run. With STOP, podman also writes the container ID
+        file, and stopping that container exits with STOP."""
         root = Path(tempfile.mkdtemp(dir=self.output))
         output = root / "vsession-out/layout-control-lc-unit"
+        self.cid = output.with_suffix(".cid")
+        self.printed = io.StringIO()
+        self.printed_at_stop = None
 
-        def container(command, **_):
+        def podman(command, **_):
+            if command[:2] == ["podman", "stop"]:
+                self.printed_at_stop = self.printed.getvalue()
+                return subprocess.CompletedProcess(command, stop)
+            if stop is not None:
+                self.cid.write_text("f" * 64 + "\n")
             # The container writes the run's evidence: here a copy of a complete target run.
             for path in self.output.iterdir():
                 if path.is_file() and path.name not in skip:
                     (output / path.name).write_bytes(path.read_bytes())
             return subprocess.CompletedProcess(command, 0)
 
-        with (mock.patch.object(self.runner.subprocess, "run", side_effect=container),
-              contextlib.redirect_stdout(io.StringIO()) as printed):
+        with (mock.patch.object(self.runner.subprocess, "run", side_effect=podman),
+              contextlib.redirect_stdout(self.printed)):
             self.runner.run_container(root / "build/seed", output, "layout-control-lc-unit",
                                       "1" * 64)
-        return printed.getvalue()
+        return self.printed.getvalue()
 
     def test_the_runner_checks_the_run_after_its_container(self):
         self.assertIn("PASS", self.run_container())
         with self.assertRaisesRegex(OSError, "kwin-1.log"):
             self.run_container(skip={"kwin-1.log"})
+
+    def test_the_run_passes_only_after_its_container_stop_is_confirmed(self):
+        self.assertIn("PASS", self.run_container(stop=0))
+        self.assertEqual(self.printed_at_stop, "")
+        self.assertFalse(self.cid.exists())
+        self.assertEqual((self.cid.with_suffix("") / "container-id.txt").read_text(),
+                         "f" * 64 + "\n")
+
+    def test_an_unconfirmed_container_stop_keeps_its_id_and_fails_the_run(self):
+        # The container may still run: its ID file stays for whoever cleans up.
+        with (contextlib.redirect_stderr(io.StringIO()) as reported,
+              self.assertRaisesRegex(ValueError, "stop was not confirmed")):
+            self.run_container(stop=125)
+        self.assertNotIn("PASS", self.printed.getvalue())
+        self.assertEqual(self.cid.read_text(), "f" * 64 + "\n")
+        self.assertIn("podman stop exited 125", reported.getvalue())
 
 
 if __name__ == "__main__":

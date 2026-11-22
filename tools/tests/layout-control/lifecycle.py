@@ -163,6 +163,14 @@ def target_bootstrap(shells: list) -> dict:
     return {"leases": leases, "epochs": epochs}
 
 
+def distinct_receivers(shells: list) -> bool:
+    """No receiver appears in two shells. A receiver's label belongs to one QML instance, so a
+    shell that shows an earlier shell's label kept a receiver it should have replaced. The run
+    and the recheck both apply this to all three shells."""
+    boots = [row["boot"] for rows in shells for row in rows]
+    return len(set(boots)) == len(boots)
+
+
 def check_receipt(receipt: dict) -> None:
     mode = receipt.get("mode", "plain")
     checks = CHECKS + (["target-bootstrap"] if mode == "target" else [])
@@ -221,6 +229,14 @@ def check_run(output: Path) -> dict:
         shells.append(rows)
     if target_bootstrap(shells) != {"leases": receipt["leases"], "epochs": receipt["epochs"]}:
         raise ValueError("the receipt's leases do not match the receivers' frames")
+    # Shells 1 and 2 ran under the first KWin and shell 3 under its replacement. The run bound
+    # each receiver to that connection (online_rows), and its files must agree.
+    for number, rows in enumerate(shells, 1):
+        backend = receipt["backendOwners"][0 if number < 3 else 1]
+        if any(row["packet"].get("backendOwner") != backend for row in rows):
+            raise ValueError(f"a shell-{number} receiver is bound to another backend")
+    if not distinct_receivers(shells):
+        raise ValueError("a restart reused a receiver")
     kept = saved_response_leases((output / KEPT_CONFIGURATION).read_text())
     if sorted(kept) != receipt["savedLeases"]:
         raise ValueError("the receipt's saved leases are not the kept configuration's")
@@ -407,7 +423,7 @@ def session_probe(name: str) -> None:
         backend2 = wait_until(lambda: owner_of("org.kde.KWin"), "replacement KWin owner")
         _, owner3, rows3 = start_shell("shell-3", backend2)
         ids.append(bus_id())
-        if (kwin2.poll() is not None or {row["boot"] for row in rows2} & {row["boot"] for row in rows3}
+        if (kwin2.poll() is not None or not distinct_receivers([rows1, rows2, rows3])
                 or rows2[0]["epoch"] == rows3[0]["epoch"]):
             raise ValueError("replacement did not establish new receiver/provider lifetimes")
         bootstrap = target_bootstrap([rows1, rows2, rows3]) if mode == "target" else {}
@@ -459,26 +475,38 @@ def run_container(seed: Path, output: Path, name: str, image: str) -> None:
         "command": command, "image": image, "runnerSha256": hashlib.sha256(HERE.read_bytes()).hexdigest(),
     })
     cid = output.with_suffix(".cid")
+    stopped = True
     try:
         with (output / "container.log").open("w") as log:
             result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, timeout=240, check=False)
         if result.returncode != 0:
             raise ValueError(f"container exited {result.returncode}; inspect {output}/container.log")
         receipt = check_run(output)
-        if receipt.get("mode", "plain") == "target":
-            print("PASS: private-bus process replacement with fresh target contexts and leases"
-                  f" and a serialized pipeline; results in {output}")
-        else:
-            print(f"PASS: private-bus process replacement only; results in {output}")
     finally:
         if cid.is_file():
             identifier = cid.read_text().strip()
             if re.fullmatch(r"[0-9a-f]{64}", identifier):
                 # This ID was created by this invocation, never found by name or process scan.
-                subprocess.run(["podman", "stop", "--ignore", "--time", "10", identifier],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20, check=False)
+                # --ignore: a container that --rm already removed is not an error.
+                stop = subprocess.run(["podman", "stop", "--ignore", "--time", "10", identifier],
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                      timeout=20, check=False)
                 (output / "container-id.txt").write_text(identifier + "\n")
-                cid.unlink()
+                if stop.returncode == 0:
+                    cid.unlink()
+                else:
+                    # The container may still run: keep its ID file and say so, also when the
+                    # run has already failed for another reason.
+                    stopped = False
+                    print(f"cleanup: podman stop exited {stop.returncode}; container ID kept in"
+                          f" {cid}", file=sys.stderr)
+    if not stopped:
+        raise ValueError(f"the container stop was not confirmed; its ID is kept in {cid}")
+    if receipt.get("mode", "plain") == "target":
+        print("PASS: private-bus process replacement with fresh target contexts and leases"
+              f" and a serialized pipeline; results in {output}")
+    else:
+        print(f"PASS: private-bus process replacement only; results in {output}")
 
 
 def main() -> None:

@@ -896,14 +896,16 @@ retries only `NameHasNoOwner`; other bus errors remain failures.
 The supervisor owns the private bus independently of KWin. It restarts Plasma, then KWin and its
 shell, retaining the same HOME and bus. The receipt requires one bus UUID, two different backend
 connections and three different shell connections. Each receiver must first trace unknown with
-zero accepted frames, then bind a fresh response; saved response fields must exist before the
-first restart. The replaced backend's alias must disappear. These checks use
+zero accepted frames, then bind a fresh response, and no receiver of one shell may reappear in a
+later one; saved response fields must exist before the first restart. The replaced backend's alias
+must disappear. These checks use
 [D-Bus GetId and GetNameOwner](https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-get-id),
 not a process name or a generic service Boolean.
 
 Results go to `vsession-out/<name>/`, with explicit `lifecycle-result.json`, per-process logs,
 receiver observations, versions and child exit statuses. Cleanup stops only children it started
-and the container ID created by that invocation. Container teardown also removes private
+and the container ID created by that invocation; a stop it cannot confirm keeps the ID file and
+fails the run, which reports PASS only after the stop. Container teardown also removes private
 bus-activated services. Missing receipts, changed bus identity or reused connection identities
 fail the run.
 
@@ -932,8 +934,9 @@ in its widgets' configuration. Before the third starts, the first KWin's teardow
 frames, which carry no lease, in those fields, and that restart has no such control. The receivers
 of both restarted shells still first trace unknown and bind only frames addressed to them, with new
 leases. After the container exits, the runner rechecks the run from its files, as `--check-result`
-also does without writing anything: the receivers recorded for each shell must be in its raw log and
-give the receipt's leases, the receipt's saved leases must be those of the kept configuration's
+also does without writing anything: the receivers recorded for each shell must be in its raw log,
+name that shell's backend connection from the receipt and give the receipt's leases, no receiver
+may appear in two shells, the receipt's saved leases must be those of the kept configuration's
 responses, and each KWin lifetime's log must pass the replay's serialization rules up to its
 teardown, with at least one read and one publication. Stopping drops a queued delayed publication
 and sends the offline frame even while a publication is outstanding, so nothing from the offline
