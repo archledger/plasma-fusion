@@ -356,6 +356,14 @@ while pending:
     pending.extend(item.childItems())
 expect(bool(items) and not any(item.property("activeFocusOnTab") for item in items),
        "it offers no action, so nothing of it takes keyboard focus")
+# The click above reaches the fixture's TapHandler, whose grab is passive: a tap handler of the
+# control's own would act on the same click unseen. So nothing of the read-only control handles a
+# click itself: no pointer handler but a hover one, and no mouse area.
+handlers = [obj.metaObject().className() for item in items for obj in item.children()
+            if obj.inherits("QQuickPointerHandler") and not obj.inherits("QQuickHoverHandler")]
+areas = [item.metaObject().className() for item in items if item.inherits("QQuickMouseArea")]
+expect(bool(items) and not handlers and not areas,
+       "it offers no action, so nothing of it handles a click itself (handlers %s, mouse areas %s)" % (handlers, areas))
 
 _, rtl = control_fixture("tiled", rtl=True)
 rtl_glyph, rtl_label = child(rtl, "layoutGlyph"), child(rtl, "layoutLabel")

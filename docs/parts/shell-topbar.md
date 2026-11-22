@@ -383,8 +383,9 @@ accessible name and tooltip; unknown and unavailable showing nothing and taking 
 compact and hidden levels; the width, which a change of mode keeps; sizes and text through the
 metrics, and the label not in the display family; the colour; the layout as drawn in either
 direction - the gap between glyph and label, the label's box, the two filling the control, and the
-label's alignment toward its glyph; a wheel and a click reaching what is behind it; and nothing
-taking focus. Its control checks go on after a failure, so that one run shows them all.
+label's alignment toward its glyph; a wheel and a click reaching what is behind it, and nothing of
+it handling a click itself; and nothing taking focus. Its control checks go on after a failure, so
+that one run shows them all.
 
 ## Global menu (stock `org.kde.plasma.appmenu`)
 
