@@ -247,8 +247,12 @@ Item {
         return c.hint + saving(c.applet, now) - saving(c.applet, at);
     }
 
-    // Everything the result depends on, read in one binding so that any change re-evaluates:
-    // the children and their hints, the window width, the menu estimate and the posture.
+    // What the result depends on, read in one binding so that a change re-evaluates: the
+    // children and their hints, the window width, the pill's width and its savings at every step,
+    // the menu estimate and the posture. A saving can change while the pill's width does not: at
+    // step 7 the layout control takes no room whether it shows a mode or not, but only one that
+    // shows a mode takes room at the steps below. The other widgets' savings are not read: one
+    // that changes while their hints do not waits for the next change here.
     readonly property var snapshot: {
         const layout = panelLayout;
         if (!layout || !clock.Window.window) {
@@ -261,10 +265,15 @@ Item {
             }
             children.push({ "item": child, "applet": child.applet ?? null, "hint": hint(child), "spacer": isExpandingSpacer(child) });
         }
+        const savings = [];
+        for (let at = 0; at <= maxLevel; ++at) {
+            savings.push(clock.budgetSaving(at));
+        }
         return {
             "children": children,
             "windowWidth": clock.Window.window.width,
             "pill": clock.pillWidth,
+            "savings": savings,
             "menu": menuEstimate,
             "compact": menuCompact,
             "tablet": tablet,

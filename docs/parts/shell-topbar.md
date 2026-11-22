@@ -375,7 +375,10 @@ passes in the state's `mode`, the window's metrics and the pill's text colour, a
   state keeps asking: the budget counts the control's room only while it shows a mode, so idling
   the state there would free that room, let the budget step back and show the control again, in a
   loop. A bar that narrow keeps receiving frames. The testing hook `dump-pill:TAG` (`debugAction`)
-  logs where the pill's parts sit, the step, the control's level and mode, and its measures.
+  logs where the pill's parts sit, the step, the control's level and mode, and its measures. The
+  budget evaluates again when one of the clock's savings changes while the pill's width does not:
+  at step 7 a control that stops showing a mode lets it step back, and a new query there moves the
+  bar down until its answer comes, then back up, as below step 7.
 
 Tests: `tests/calendar_view_test.py`, run on a stage as in the calendar's regression checks above,
 loads the staged control beside the shared `FusionMetrics`. It checks both modes' glyph, label,
@@ -385,7 +388,9 @@ metrics, and the label not in the display family; the colour; the layout as draw
 direction - the gap between glyph and label, the label's box, the two filling the control, and the
 label's alignment toward its glyph; a wheel and a click reaching what is behind it, and nothing of
 it handling a click itself; and nothing taking focus. Its control checks go on after a failure, so
-that one run shows them all.
+that one run shows them all. A stand-in bar around the staged `WidthBudget.qml` checks that the
+budget evaluates again when a saving changes while the pill keeps its width: the control showing
+no mode at step 7, and a saving that only the steps below give up.
 
 ## Global menu (stock `org.kde.plasma.appmenu`)
 

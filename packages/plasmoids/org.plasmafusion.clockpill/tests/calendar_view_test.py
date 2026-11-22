@@ -379,6 +379,115 @@ if rtl is not None:
     QTest.qWait(20)
 expect(drawn(rtl, True, 1), "right-to-left and compact, the glyph fills the control")
 
+# The width budget (contents/ui/WidthBudget.qml) evaluates again when the clock's savings change
+# while the pill keeps its width: at step 7 the layout control takes no room whether it shows a
+# mode or not, but at the steps below only a control that shows a mode does. A stand-in bar around
+# the staged budget: a left widget that fits only beside a pill of at most 410 px, two expanding
+# spacers and a stand-in clock whose control gives up its label (30 px) from step 4 and 50 px at
+# step 7, while the date and the dots give up 100 px at step 7.
+BUDGET_FIXTURE = """import QtQuick
+import QtQuick.Layouts
+Item {
+    id: fixture
+    width: 1440
+    height: 30
+    property Item clock: clock
+    component Spacer: Item {
+        property bool isAppletContainer: true
+        property QtObject applet: QtObject {
+            property QtObject plasmoid: QtObject {
+                property string pluginName: "org.kde.plasma.panelspacer"
+                property QtObject configuration: QtObject {
+                    property bool expanding: true
+                }
+            }
+        }
+        Layout.fillWidth: true
+    }
+    GridLayout {
+        width: fixture.width
+        height: fixture.height
+        rows: 1
+        columnSpacing: 0
+        Item {
+            property bool isAppletContainer: true
+            property QtObject applet: QtObject {}
+            readonly property real side: fixture.width / 2 - 205 - budget.gap
+            Layout.minimumWidth: side
+            Layout.preferredWidth: side
+            Layout.maximumWidth: side
+        }
+        Spacer {}
+        Item {
+            id: clock
+            property bool isAppletContainer: true
+            property Item applet: clock
+            property int budgetLevel: 0
+            property bool controlShown: true
+            property real labelSaving: 30
+            function budgetSaving(level: int): real {
+                return (level >= 7 ? 100 : 0) + (controlShown ? (level >= 7 ? 50 : level >= 4 ? labelSaving : 0) : 0);
+            }
+            readonly property real pillWidth: 400 + (controlShown ? 50 : 0) - budgetSaving(budgetLevel)
+            Layout.preferredWidth: pillWidth
+        }
+        Spacer {}
+    }
+    FusionMetrics {
+        id: metrics
+    }
+    WidthBudget {
+        id: budget
+        clock: clock
+        cell: clock
+        metrics: metrics
+        tablet: false
+    }
+}
+"""
+original_size = (view.width(), view.height())
+view.resize(1440, max(view.height(), 30))
+budget_component = QQmlComponent(view.engine())
+budget_component.setData(BUDGET_FIXTURE.encode(), QUrl.fromLocalFile(str(ui / "WidthBudgetFixture.qml")))
+bar = budget_component.create()
+if bar is None:
+    print("the width budget's fixture did not load: " + "; ".join(e.toString() for e in budget_component.errors()))
+else:
+    bar.setParentItem(view.contentItem())
+    fixtures.append((budget_component, bar))
+budget_clock = bar.property("clock") if bar is not None else None
+
+
+def budget_level_reaches(level, ms=2000):
+    started = time.monotonic()
+    while budget_clock is not None and budget_clock.property("budgetLevel") != level and time.monotonic() - started < ms / 1000:
+        QTest.qWait(10)
+    return budget_clock is not None and budget_clock.property("budgetLevel") == level
+
+
+expect(budget_level_reaches(7), "the width budget takes step 7 while the control's room fits at no lower step (%s)"
+       % prop(budget_clock, "budgetLevel"))
+before_width = prop(budget_clock, "pillWidth")
+if budget_clock is not None:
+    budget_clock.setProperty("controlShown", False)
+expect(prop(budget_clock, "pillWidth") == before_width and budget_level_reaches(0),
+       "the control showing no mode at step 7, the width budget steps back though the pill kept its width (%s)"
+       % prop(budget_clock, "budgetLevel"))
+# Every step's saving, not only the current one's: back at step 7, a saving that only the steps
+# below it give up grows (a wider label, 45 px) while the pill and its saving at step 7 stay as they
+# were, and step 4 now fits.
+if budget_clock is not None:
+    budget_clock.setProperty("controlShown", True)
+expect(budget_level_reaches(7), "the control showing its mode again, the width budget goes back to step 7 (%s)"
+       % prop(budget_clock, "budgetLevel"))
+before_width = prop(budget_clock, "pillWidth")
+if budget_clock is not None:
+    budget_clock.setProperty("labelSaving", 45)
+expect(prop(budget_clock, "pillWidth") == before_width and budget_level_reaches(4),
+       "a saving only the lower steps give up grown at step 7, the width budget takes step 4 (%s)"
+       % prop(budget_clock, "budgetLevel"))
+view.resize(*original_size)
+
 for _, item in fixtures:
     item.deleteLater()
 QTest.qWait(20)
