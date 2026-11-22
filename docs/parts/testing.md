@@ -498,8 +498,10 @@ modes emit none of this, and the wire packets are unchanged.
 
 `view_loss.py` binds each step to the complete shell/backend lines between an exclusive
 `view-mark-*.json`, written before the native action, and the point where the step was confirmed
-(`view-<step>.json`). A required event must carry its own native source, so a broken screens or
-activity handler cannot hide behind a focus change. Each refusal must match its exact native
+(`view-<step>.json`). The baseline step also requires a native verdict for the guarded consumer
+after the last wake record: a ready one logged after the disable mark fails the loss step. A
+required event must carry its own native source, so a broken screens or activity handler cannot
+hide behind a focus change. Each refusal must match its exact native
 verdict, its actual receipt and accepted memory. The final check recomputes every step from its
 window, requires the windows in order without overlap and audits the whole run. Every generation
 advance appears once, in order, with a known source. Until the first output change only the

@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 if __package__:
     from . import view_loss
@@ -41,8 +42,11 @@ def block_function(source: str, start: int) -> str:
 def connections_handler(target: str, name: str) -> str:
     """One handler from the Connections block bound to this exact target."""
     source = PROVIDER.read_text()
-    block = source.index(f"target: {target}\n")
-    return block_function(source, source.index(f"function {name}(", block))
+    binding = source.index(f"target: {target}\n")
+    start = source.rindex("Connections {", 0, binding)
+    # Search only that block: a handler moved elsewhere is not connected to this target.
+    block = block_function(source, start)
+    return block_function(block, block.index(f"function {name}(", binding - start))
 
 
 class ViewLossSeedTests(unittest.TestCase):
@@ -262,6 +266,20 @@ globalThis.replies=[first, second];
                 result = self.run_trace(f"{name}();", handlers=(handler,))
                 self.assertEqual([(row["reason"], row["source"]) for row in result["records"]],
                                  [("view-changed", source)])
+
+    def test_a_handler_moved_out_of_its_bound_block_is_not_found(self):
+        # Moved to the window's block, onScreensChanged no longer follows Workspace.screens.
+        handler = connections_handler("Workspace", "onScreensChanged")
+        binding = "target: probe.lastEligibleWindow\n"
+        moved = PROVIDER.read_text().replace(handler, "", 1)
+        moved = moved.replace(binding, binding + handler + "\n", 1)
+        scratch = tempfile.TemporaryDirectory(prefix="pf-view-handler-")
+        self.addCleanup(scratch.cleanup)
+        copy = Path(scratch.name) / "provider.qml"
+        copy.write_text(moved)
+        with mock.patch.object(sys.modules[__name__], "PROVIDER", copy):
+            with self.assertRaises(ValueError):
+                connections_handler("Workspace", "onScreensChanged")
 
     def test_window_handlers_name_membership_and_eligibility_sources(self):
         for name, setup, source in (
@@ -585,13 +603,21 @@ class ViewLossFixture:
         self.mark("start")
         if late:
             self.accept(late)
+        if "verdict-before-wake" in self.faults:
+            # A read already under way at the mark answers before the wake's own read does.
+            self.reply(FOCUS, VALIDATED, self.context(FOCUS))
         self.view("wake", "wake", prepared=True)
-        self.reply(FOCUS, VALIDATED, self.context(FOCUS))
+        pending = bool(self.faults & {"wake-read-pending", "verdict-before-wake"})
+        if not pending:
+            self.reply(FOCUS, VALIDATED, self.context(FOCUS))
         self.inventory("baseline")
         if done("baseline"):
             return
 
         self.mark("disable")
+        if pending:
+            # The wake's read answers only after the disable mark, before the output goes.
+            self.reply(FOCUS, VALIDATED, self.context(FOCUS))
         self.subject_output = OUT_B
         self.view("target-departed", "window-output", prepared=True)
         listed = OUT_A if "removed-output-listed" in self.faults else OUT_B
@@ -842,6 +868,8 @@ class ViewLossCheckerTests(unittest.TestCase):
 
     def test_step_faults_are_refused_where_the_native_wait_would_stop(self):
         for fault, message in (
+            ("wake-read-pending", "baseline wake"),
+            ("verdict-before-wake", "baseline wake"),
             ("no-screens-source", "screens event"),
             ("removed-output-listed", "screens event"),
             ("loss-ready", "became ready"),

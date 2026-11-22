@@ -284,6 +284,13 @@ def step_baseline(directory: Path, saved: dict, ev: Evidence) -> dict:
     wakes = [row for row in ev.views() if row["reason"] == "wake"]
     require(bool(wakes), "missing current native view report")
     view = wakes[-1]
+    # A verdict for the guarded consumer must follow the last wake record, not the record alone:
+    # a ready one logged after the disable mark would fail the loss step although the provider
+    # then refuses the handle. Bound by log position, it may also come from a read already under
+    # way at the wake; the scenario starts none. The audit checks which readiness it may carry.
+    wake = max(index for index, row in ev.backend("view") if row["reason"] == "wake")
+    require(any(index > wake and row["consumer"] == focus for index, row in ev.backend("target")),
+            "no verdict for the guarded consumer follows the baseline wake yet")
     names = [screen["name"] for screen in view["screens"]]
     require(len(names) == 2 == len(set(names)) and output in names
             and all(screen["known"] is True for screen in view["screens"]),
