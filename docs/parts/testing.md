@@ -408,8 +408,9 @@ provider/query fields to exercise a retired consumer; the other retains the reti
 but uses the survivor's current request and a high revision. These are controlled transport
 faults, not new authoritative native acknowledgements. Every exact frame must reach its intended
 live receiver, never become accepted state, and be followed by a newer genuine native response
-on the unchanged exchange. That response drains asynchronous verification; an unchanged snapshot
-immediately after delivery cannot certify rejection.
+on the unchanged exchange. That response must be received after the receiver's last late frame
+and match its own `layout-probe-published` row (below); it drains asynchronous verification, and
+an unchanged snapshot immediately after delivery cannot certify rejection.
 
 The survivor's original preparation envelope is replayed once as a labeled driver fault. Its
 exact native `consumer-not-current` refusal must reach that consumer. Restoring its current
@@ -428,9 +429,10 @@ acknowledgements must follow that boundary; an earlier queued reply cannot stand
 Receipt precedes asynchronous receiver verification, so a post-boundary observation alone is
 insufficient. Each recovery observation must match its exact receiver-bound receipt after the
 boundary and a later native `layout-probe-published` row with the same widget, destination,
-consumer, request, epoch and revision. That backend-only diagnostic is enabled only for this
-mixed mode and does not add fields to the wire packet. Thus a pre-restoration packet cannot
-qualify merely by completing verification or arriving late after the marker.
+consumer, request, epoch and revision. That backend-only diagnostic, which also binds the
+late-frame response, is enabled only for this mixed mode and does not add fields to the wire
+packet. Thus a pre-restoration packet cannot qualify merely by completing verification or
+arriving late after the marker.
 
 This scope requires `mixed-lifetime-result.json`, the `mixed-*` phase/inventory/frame records,
 complete shell/backend traces and the existing independent cleanup evidence. A target,

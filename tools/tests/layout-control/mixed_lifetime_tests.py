@@ -544,6 +544,69 @@ class MixedLifetimeReceiptTests(unittest.TestCase):
             path.write_text("".join(lines[:before] + other + late + lines[after:]))
         self.assertNotEqual(self.run_check(reversed_delivery).returncode, 0)
 
+    def test_a_response_received_before_the_late_frame_cannot_prove_the_drain(self):
+        def early_receipt(root):
+            # The survivor's revision 3 arrived before its late frame and was verified after it,
+            # while the late frame waited in the pending slot.
+            path = root / "plasmashell.log"
+            lines = path.read_text().splitlines(keepends=True)
+            marker = "layout-probe-received "
+
+            def revision(line):
+                return json.loads(line.split(marker, 1)[1])["revision"] if marker in line else None
+            genuine = next(index for index, line in enumerate(lines) if revision(line) == 3)
+            late = next(index for index, line in enumerate(lines) if revision(line) == 2001)
+            lines.insert(late, lines.pop(genuine))
+            path.write_text("".join(lines))
+        result = self.run_check(early_receipt)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing genuine response after the late-frame drain", result.stderr)
+
+    def test_the_late_frame_drain_needs_its_exact_native_publication(self):
+        def missing_publication(root):
+            path = root / "kwin.log"
+            marker = "layout-probe-published "
+            lines = [line.replace(marker, "layout-probe-not-published ")
+                     if marker in line and json.loads(line.split(marker, 1)[1])["revision"] == 3
+                     else line for line in path.read_text().splitlines(keepends=True)]
+            path.write_text("".join(lines))
+        result = self.run_check(missing_publication)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("late-frame drain lacks its exact native publication", result.stderr)
+
+    def test_a_publication_before_the_reload_cannot_stand_for_the_drains(self):
+        def early_publication(root):
+            path = root / "kwin.log"
+            lines = path.read_text().splitlines(keepends=True)
+            marker = "layout-probe-published "
+            reloaded = json.loads((root / "mixed-reloaded.json").read_text())["kwinLines"]
+            genuine = next(index for index, line in enumerate(lines) if marker in line
+                           and json.loads(line.split(marker, 1)[1])["revision"] == 3)
+            lines.insert(reloaded - 1, lines.pop(genuine))
+            path.write_text("".join(lines))
+        result = self.run_check(early_publication)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("late-frame drain lacks its exact native publication", result.stderr)
+
+    def test_the_drains_response_must_be_received_before_it_was_accepted(self):
+        def receipt_after_acceptance(root):
+            path = root / "plasmashell.log"
+            lines = path.read_text().splitlines(keepends=True)
+
+            def revision(line, kind):
+                marker = f"layout-probe-{kind} "
+                return json.loads(line.split(marker, 1)[1])["revision"] if marker in line else None
+            genuine = next(index for index, line in enumerate(lines)
+                           if revision(line, "received") == 3)
+            accepted = next(index for index, line in enumerate(lines)
+                            if revision(line, "observation") == 3)
+            # Popping the earlier receipt moves the acceptance up one line: insert after it.
+            lines.insert(accepted, lines.pop(genuine))
+            path.write_text("".join(lines))
+        result = self.run_check(receipt_after_acceptance)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing genuine response after the late-frame drain", result.stderr)
+
     def test_transient_acceptance_of_the_replayed_obsolete_request_is_not_hidden_by_recovery(self):
         def stale_request(root):
             path = root / "plasmashell.log"

@@ -159,6 +159,8 @@ def check_late(directory: Path) -> None:
     lines = complete_lines(directory / "plasmashell.log")
     received = events(lines, "received")
     memory = events(lines, "observation")
+    published = events(complete_lines(directory / "kwin.log")[:after["kwinLines"]], "published")
+    owner = json.loads((directory / "cleanup-identity.json").read_text())["session"]["shell"]
     for identifier, current in widgets(after).items():
         previous = widgets(before)[identifier]
         boot = current["query"]["consumer"]
@@ -174,9 +176,22 @@ def check_late(directory: Path) -> None:
             delivered.extend(matches)
         acknowledgements = [index for index, row in memory if row == current["observation"]
                             and index < after["shellLines"]]
-        require(acknowledgements and min(acknowledgements) > max(delivered)
+        packet = current["observation"]["packet"]
+        # Receipt precedes verification, and a consumer holds one packet pending: only a response
+        # received after the last late frame shows, once accepted, that none is still queued.
+        receipts = [index for index, value in received if index < after["shellLines"]
+                    and value == packet | {"receiverBoot": boot}]
+        require(acknowledgements and len(receipts) == 1
+                and max(delivered) < receipts[0] < min(acknowledgements)
                 and current["observation"]["revision"] > previous["observation"]["revision"],
                 "missing genuine response after the late-frame drain")
+        expected = {key: packet[key] for key in
+                    ("consumer", "request", "epoch", "revision", "status")} | {
+                        "widget": identifier, "destination": owner,
+                    }
+        native = [index for index, value in published if value == expected]
+        require(len(native) == 1 and native[0] >= before["kwinLines"],
+                "late-frame drain lacks its exact native publication")
     require(not [row for index, row in events(lines, "query")
                  if before["shellLines"] <= index < after["shellLines"]],
             "late frame triggered an automatic query retry")
