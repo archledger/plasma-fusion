@@ -258,7 +258,8 @@ class TwoBarRun(CompletionRun):
               retired_missed=False, retired_request=False, holder_again=False,
               wrong_class=False, wrong_output=False, recovery_missed=False, drift=False,
               mismatch=False, busy_missed=False, unpublished=False, silent_read=False,
-              unread=False, stale_read=False, viewless_recovery=False) -> None:
+              unread=False, stale_read=False, viewless_recovery=False,
+              advanced_holder=False) -> None:
         # The other bar's query when the case begins: its first request, or its second after a
         # refresh. Its preparations follow that number.
         first = 2 if refresh else 1
@@ -297,6 +298,10 @@ class TwoBarRun(CompletionRun):
                 # The verdict reports the target no longer valid; the received frame says ready.
                 kept = dict(held, received={"ready": True, "reason": "", "token": EPOCH + ":1"})
             self.publish(kept, other, epoch="d" * 32 if two_lifetimes and opening == 2 else EPOCH)
+        if advanced_holder:
+            # A newer holder request the provider handled: request 2 may then drop its completion.
+            self.publish(self.on(dict(prepare(HOLDER, 3, reason="focus-changed", completion=None),
+                                      intent="validate")))
         self.mark("competitor")
         busy = self.on(prepare(OTHER, first + 1, completion=refused(first + 1, "busy"),
                                reason="busy"))
@@ -306,7 +311,12 @@ class TwoBarRun(CompletionRun):
             decision = self.on(dict(prepare(OTHER, first + 1, ready=True, token=EPOCH + ":2",
                                             completion=accepted(first + 1, EPOCH + ":2")),
                                     **{"class": "pf.focus.beta"}))
-        self.publish(*(() if holder_missing else (held,)), dict(decision, missed=busy_missed))
+        holder_row = held
+        if advanced_holder:
+            holder_row = self.on(prepare(HOLDER, 2, reason="stale-or-conflicting-request",
+                                         completion=None))
+        self.publish(*(() if holder_missing else (holder_row,)),
+                     dict(decision, missed=busy_missed))
         self.step("competitor")
         if in_flight or retired_missed:
             # A read already under way at the removal still answers the holder after the mark.
@@ -401,6 +411,11 @@ class TwoBarCheckerTests(unittest.TestCase):
 
     def test_the_competing_decision_must_also_carry_the_holders_completion(self):
         self.assert_rejected("holder's completion", holder_missing=True)
+
+    def test_a_holder_frame_without_its_completion_cannot_stand_for_one_that_keeps_it(self):
+        # Once the holder has a newer handled request, a replay of request 2 may drop the
+        # completion; it then cannot show that the busy publication kept it.
+        self.assert_rejected("keeping the holder's completion", advanced_holder=True)
 
     def test_a_holder_that_is_still_read_after_its_bar_is_removed_fails(self):
         self.assert_rejected("not retired", holder_after=True)

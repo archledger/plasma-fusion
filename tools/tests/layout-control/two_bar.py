@@ -209,7 +209,8 @@ def evaluate(directory: Path, name: str, end: dict | None) -> dict:
         later = [index for index in publications if index > busy["index"]]
         require(later, "the other bar's decision has not been published yet")
         holders = [row for row in publication_rows(native, publications, later[0])
-                   if row["consumer"] == holder and row["request"] == held["request"]]
+                   if row["consumer"] == holder and row["request"] == held["request"]
+                   and row["completion"] == held["completion"]]
         require(holders, "the other bar's decision was not published with a frame keeping the"
                 " holder's completion")
         require(accepted_with(observed, other, busy, start["shellLines"]),
