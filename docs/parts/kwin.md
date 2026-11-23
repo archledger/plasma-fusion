@@ -2349,11 +2349,11 @@ and the answers it publishes to them.
   answered it, and the read goes on. The completion is the tiler's outcome - `done`, or refused
   `not-eligible`, `tree-refused`, `admission-refused` or `unavailable` - decided at once or, when
   the admission is retried, once the retry ends: until then the frames carry none and a re-read does
-  nothing. The decision is then recorded for that set and comes, at a newer revision, to the frames
-  of that set read again as it was, and every later frame for it carries it; another payload under
-  its identity keeps its own answer (refused `conflicting-request`, or the one it got when handled
-  afresh once another consumer replaced the record), and a query reusing its number is answered as a
-  query, with no completion.
+  nothing. The decision is recorded only if the original record is still current. It comes, at a
+  newer revision, to the frames of that exact set read again, and every later frame for it carries
+  it. A set handled afresh after the original record was replaced keeps its own answer even when
+  its payload is identical. A conflicting payload keeps `conflicting-request`, and a query reusing
+  the set's number carries no completion.
   Each retry checks again only what its start needs - the target, the captured view's existence
   (its output, desktop and activity), the lifetime and the shell connection the set came from, as
   the reads know it: another one read since refuses it `shell-replaced`, while a shell gone with

@@ -2705,8 +2705,8 @@ Item {
                     fail("set: a query reusing a retried set's number is answered as a query, the set's outcome in its"
                          + " record (got " + canonical(completionOf(5)) + ", frame " + canonical(frames[5]) + ")");
                 }
-                // ---- nor a set of its identity handled afresh, once another consumer replaced the
-                // record ----
+                // ---- nor an identical set handled afresh, once another consumer replaced
+                // the record ----
                 h = prepareFrom(5, "c5", 41, master, popup);
                 read([setTo(5, "c5", 42, "floating", h)]);
                 decided("Floating ends the session", 5, doneSet);
@@ -2715,14 +2715,16 @@ Item {
                 read([setTo(5, "c5", 44, "tiled", h)]);
                 pending("a retried set has no completion yet", 5);
                 read([setTo(5, "c5b", 1, "tiled", "0".repeat(32) + ":8:8")]);
-                read([setTo(5, "c5", 44, "tiled", "0".repeat(32) + ":9:9")]);
+                read([setTo(5, "c5", 44, "tiled", h)]);
                 decided("a set handled afresh under a replaced record names no slot", 5, refusedSet("stale-context"));
             } },
             { name: "a retried set's outcome beside a replaced record", until: () => p.active, run: function () {
                 if (facade.owned !== master) {
                     fail("set: the retried set started the session with its app");
                 }
-                read([setTo(5, "c5", 44, "tiled", "0".repeat(32) + ":9:9")]);
+                decided("the deferred decision does not update the replacement's live answer", 5,
+                        refusedSet("stale-context"));
+                read([setTo(5, "c5", 44, "tiled", h)]);
                 decided("a set handled afresh under its identity keeps its own answer once the retried set is decided", 5,
                         refusedSet("stale-context"));
                 // The session ends: the next case starts one with the shortcut.

@@ -657,7 +657,7 @@ QtObject {
             const entry = { consumer: row.consumer, request: row.request, payload: payload,
                             completion: undefined };
             records[row.id] = entry;
-            const completion = row.intent === "prepare" ? prepare(row) : applySet(row);
+            const completion = row.intent === "prepare" ? prepare(row) : applySet(row, entry);
             row.completion = completion;
             entry.completion = completion;
             if (row.intent === "prepare") {
@@ -760,7 +760,7 @@ QtObject {
     // current: the start lays out the view it captured, and a switch the user makes meanwhile
     // stands. A shell gone with no other connection read yet does not stop it: the start uses
     // nothing of the shell, and the next shell's bars ask afresh.
-    function applySet(row: var): var {
+    function applySet(row: var, entry: var): var {
         if (!slot || slot.id !== row.id || slot.consumer !== row.consumer
                 || slot.handle !== row.handle || slot.outputName !== row.outputName) {
             // The holder's own set for another output still ends its preparation; another
@@ -786,10 +786,7 @@ QtObject {
         }
         const s = slot;
         slot = null;
-        // The set's payload goes with its identity: its outcome reaches this set alone, never
-        // another request under the same number (setDecided).
-        const identity = { id: row.id, consumer: row.consumer, request: row.request,
-                           payload: payloadOf(row) };
+        const id = row.id;
         let deciding = true;
         let decided = undefined;
         let answered = false;
@@ -803,7 +800,7 @@ QtObject {
             if (deciding) {
                 decided = completion;
             } else {
-                setDecided(identity, completion);
+                setDecided(id, entry, completion);
             }
         };
         const check = () => {
@@ -838,23 +835,20 @@ QtObject {
         return decided;
     }
 
-    // A set's outcome that came after its read: kept in the record of its identity and payload,
-    // carried by its request's frames while the widget's request is that set read again as it
-    // was, and told at a newer revision. A request no longer read is told nothing, and neither is
-    // another payload under its identity - refused conflicting-request, or handled afresh once
-    // another consumer replaced the record - nor a query reusing its number, whose frames stay as
-    // they were.
-    function setDecided(identity: var, completion: var): void {
-        const record = records[identity.id];
-        if (record && record.consumer === identity.consumer
-                && record.request === identity.request && record.payload === identity.payload) {
-            record.completion = completion;
-        }
+    // Only the record that started a set can receive its deferred outcome. An identical set
+    // handled afresh after the record was replaced keeps its own answer. While the original
+    // record is current, tell only an exact replay of that set, not a conflicting payload or
+    // a query reusing its number.
+    function setDecided(id: var, entry: var, completion: var): void {
         console.info("plasmafusion-placement: layout provider: a set "
             + (completion.result === "done" ? "is done" : "was refused, " + completion.reason));
-        const row = requests.find(r => r.id === identity.id && r.consumer === identity.consumer
-                                  && r.request === identity.request && r.intent === "set"
-                                  && payloadOf(r) === identity.payload);
+        if (records[id] !== entry) {
+            return;
+        }
+        entry.completion = completion;
+        const row = requests.find(r => r.id === id && r.consumer === entry.consumer
+                                  && r.request === entry.request && r.intent === "set"
+                                  && payloadOf(r) === entry.payload);
         if (row) {
             row.completion = completion;
             revision += 1;
