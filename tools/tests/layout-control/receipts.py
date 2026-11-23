@@ -14,7 +14,8 @@ PUBLICATION = re.compile(r"layout-probe: publication (\S+)")
 
 
 def accepted_exchange(path: str, consumer: str) -> tuple:
-    trace = open(path).readlines()
+    with open(path) as log:
+        trace = log.readlines()
     events = []
     for index, line in enumerate(trace):
         if line.endswith("\n"):
@@ -89,18 +90,18 @@ def consumer_state(arguments: list[str]) -> None:
     print(observation["request"], packet["revision"])
 
 
-def provider_context(path: str) -> dict:
+def provider_context(lines: list[str]) -> dict:
     """The provider's newest focus observation, which carries its current context generation."""
     return [json.loads(line.split("layout-probe-focus ", 1)[1])
-            for line in open(path)
+            for line in lines
             if line.endswith("\n") and "layout-probe-focus " in line][-1]
 
 
-def provider_busy(path: str) -> bool:
+def provider_busy(lines: list[str]) -> bool:
     """Whether a provider read or publication has started and not finished. A publication is a
     shell script call, which the shell serves on its main thread."""
     reads = publications = 0
-    for line in open(path):
+    for line in lines:
         if not line.endswith("\n"):
             continue
         if "layout-probe: read started" in line:
@@ -114,7 +115,8 @@ def provider_busy(path: str) -> bool:
 
 
 def provider_generation(arguments: list[str]) -> None:
-    generation = provider_context(arguments[1])["contextGeneration"]
+    with open(arguments[1]) as log:
+        generation = provider_context(log.readlines())["contextGeneration"]
     assert type(generation) is int
     print(generation)
 
@@ -124,10 +126,12 @@ def target_settled(arguments: list[str]) -> None:
     the minimum), the receiver holds that newest context, and no read or publication is
     outstanding."""
     _, observation, _ = accepted_exchange(arguments[1], arguments[3])
-    # Busy first: a change that starts and ends after the receiver read still advances the
-    # generation read below, which the receiver's context then cannot match.
-    assert not provider_busy(arguments[2])
-    generation = provider_context(arguments[2])["contextGeneration"]
+    # One snapshot after reading the receiver: a wake can start work without advancing the
+    # generation, so reading it separately from the outstanding-work markers is insufficient.
+    with open(arguments[2]) as log:
+        lines = log.readlines()
+    assert not provider_busy(lines)
+    generation = provider_context(lines)["contextGeneration"]
     assert type(generation) is int and generation >= int(arguments[4])
     assert observation["phase"] == "online"
     context = observation["packet"]["targetContext"]

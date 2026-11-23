@@ -617,36 +617,64 @@ class TargetSettleTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "7")
 
-    def test_a_change_between_its_reads_cannot_settle_on_the_older_generation(self):
+    def test_target_settled_reads_provider_state_from_one_snapshot(self):
+        receipts = importlib.import_module(
+            f"{__package__}.receipts" if __package__ else "receipts")
+        with tempfile.TemporaryDirectory(prefix="pf-settle-snapshot-") as scratch:
+            shell, kwin = Path(scratch) / "plasmashell.log", Path(scratch) / "kwin.log"
+            shell.write_text("qml: layout-probe-observation " + json.dumps({
+                "boot": "current", "phase": "online", "packet": {"targetContext": {"generation": 7}},
+            }) + "\n")
+            kwin.write_text("qml: layout-probe-focus "
+                            + json.dumps({"event": "removed", "contextGeneration": 7}) + "\n")
+            with (mock.patch("builtins.open", wraps=open) as reads,
+                  contextlib.redirect_stdout(io.StringIO()) as output):
+                receipts.target_settled(["receipts.py", str(shell), str(kwin), "current", "7"])
+            self.assertEqual(output.getvalue(), "7\n")
+            self.assertEqual(sum(call.args[0] == str(kwin) for call in reads.call_args_list), 1)
+
+    def test_an_older_receiver_snapshot_does_not_settle_after_an_intervening_change(self):
         receipts = importlib.import_module(
             f"{__package__}.receipts" if __package__ else "receipts")
         observation = {"boot": "current", "phase": "online", "epoch": "e", "revision": 9,
                        "accepted": 3, "request": 4, "packet": {
                            "consumer": "current", "request": 4,
                            "targetContext": {"epoch": "e", "generation": 7}}}
-        busy = receipts.provider_busy
-
-        def change_meanwhile(path):
-            # The provider observes a change, reads and publishes, all after the receiver read.
-            with open(path, "a") as log:
-                log.write("qml: layout-probe-focus "
-                          + json.dumps({"event": "activation", "contextGeneration": 8}) + "\n"
-                          + "qml: layout-probe: read started\n"
-                          + "qml: layout-probe: publication online 2\n"
-                          + "qml: layout-probe: read finished\n"
-                          + "qml: layout-probe: publication writes 2\n")
-            return busy(path)
-
+        accepted = receipts.accepted_exchange
         with tempfile.TemporaryDirectory(prefix="pf-settle-race-") as scratch:
             shell, kwin = Path(scratch) / "plasmashell.log", Path(scratch) / "kwin.log"
             shell.write_text("qml: layout-probe-observation " + json.dumps(observation) + "\n")
             kwin.write_text("qml: layout-probe-focus "
                             + json.dumps({"event": "removed", "contextGeneration": 7}) + "\n")
-            with (mock.patch.object(receipts, "provider_busy", side_effect=change_meanwhile),
-                  contextlib.redirect_stdout(io.StringIO())):
-                with self.assertRaises(AssertionError):
-                    receipts.target_settled(["receipts.py", str(shell), str(kwin), "current",
-                                             "7"])
+            args = ["receipts.py", str(shell), str(kwin), "current", "7"]
+            baseline = kwin.read_text()
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                receipts.target_settled(args)
+            self.assertEqual(output.getvalue(), "7\n")
+            cases = (
+                # A completed change after the receiver read advances the generation.
+                "qml: layout-probe-focus "
+                + json.dumps({"event": "activation", "contextGeneration": 8}) + "\n"
+                + "qml: layout-probe: read started\nqml: layout-probe: read finished\n",
+                # A wake after the receiver read need not advance it. The read is busy.
+                "qml: layout-probe: read started\n",
+            )
+            for events in cases:
+                with self.subTest(events=events):
+                    kwin.write_text(baseline)
+
+                    def change_meanwhile(*receiver_args):
+                        result = accepted(*receiver_args)
+                        with kwin.open("a") as log:
+                            log.write(events)
+                        return result
+
+                    with (mock.patch.object(receipts, "accepted_exchange", side_effect=change_meanwhile) as receiver,
+                          contextlib.redirect_stdout(io.StringIO())):
+                        with self.assertRaises(AssertionError):
+                            receipts.target_settled(args)
+                    receiver.assert_called_once_with(str(shell), "current")
+                    self.assertEqual(kwin.read_text(), baseline + events)
 
     def test_each_click_after_a_context_change_waits_for_the_shell(self):
         # Each step's change, and how many context generations it advances at least: the second

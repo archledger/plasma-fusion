@@ -375,7 +375,8 @@ its press about 460 ms after it was sent, and its release never did. Untraced, i
 QtWayland defect ([the blocked queue](../DEFERRED.md)). The scenario works around the publication
 case: before each Validate click that follows a context change, it waits until the provider has
 observed the change, the receiver holds the provider's newest context and no read or publication is
-outstanding (`receipts.py target-settled`; the floor is the provider's context generation before the
+outstanding. The checker reads the provider's generation and outstanding work from the same log
+snapshot (`receipts.py target-settled`; the floor is the provider's context generation before the
 change plus the generations the change advances). A read the provider has scheduled but not yet
 started does not show in its log, so the wait cannot see one. With the wait no click was lost in 30
 native target-mode runs; without it about one run in seven had lost one.
