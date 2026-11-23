@@ -150,15 +150,14 @@ Item {
         case "cancelled":
             return i18nc("@info:status layout control, the tiling shortcut cancelled the choice", "Cancelled");
         case "stale-context":
+        case "focus-changed":
         case "target-departed":
         case "view-changed":
         case "shell-replaced":
             return changedText;
-        case "focus-changed":
-            // A set refused so, or, with no choice or Tiled, a prepare that found no app to hand
-            // off: the outcome carries no intent, and a prepare's is the one the menu shows.
-            return mode === "floating" ? changedText : i18nc("@info:status layout menu, Tiled needs an app window to tile",
-                                                             "Focus an app window first");
+        case "focus-needed":
+            return i18nc("@info:status layout menu, Tiled needs an app window to tile",
+                         "Focus an app window first");
         case "no-target":
             // A prepare that found no app to tile, with no choice or Tiled queued, or a Tiled set.
             return mode === "floating" ? genericText : noAppText;

@@ -1151,7 +1151,7 @@ reached = bar.to_preparing("tiled")
 count = bar.count()
 taken = reached and bar.take(bar.frame(1, **ready(target=False, why="focus-changed")), lambda: bar.state() == "prepared")
 expect(taken and bar.get("actionPending") is False and bar.get("actionChoice") == "tiled" and bar.get("tiledBlocked") is True
-       and bar.presented() == [("focus-changed", "tiled", "prepared")] and bar.quiet(count),
+       and bar.presented() == [("focus-needed", "tiled", "prepared")] and bar.quiet(count),
        "layout action: T9 a queued Tiled that is blocked is dropped and no set sent; the prepare's reason is presented (%s)"
        % bar.said)
 bar.done()

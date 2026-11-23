@@ -754,8 +754,11 @@ Item {
             decision.handle = completion.handle;
             return decision;
         }
-        // Prepared, with why Tiled is blocked when it is (T8, T9).
-        decision.shown = !completion.target && floatingView(answer) ? completion.reason : null;
+        // A ready prepare with no target can ask for focus; a set that lost focus is a refusal.
+        // Keep those notices distinct even when Tiled was queued (T8, T9).
+        if (!completion.target && floatingView(answer)) {
+            decision.shown = completion.reason === "focus-changed" ? "focus-needed" : completion.reason;
+        }
         decision.hold = true;
         decision.handle = completion.handle;
         decision.target = completion.target;

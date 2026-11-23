@@ -810,7 +810,9 @@ block, so that the backend test's fixture runs it with a stand-in pop-up and con
   `outcomeText(reason, mode, inMenu)` through `announceLayout(text)`, which calls
   `Accessible.announce()` on the menu while it is open and on the pill otherwise (D10). The pill is
   always shown, while the control is hidden in exactly the rows that announce with the menu closed
-  (T15, T16, T17, T17a, T30, T33), where the mode is unknown.
+  (T15, T16, T17, T17a, T30, T33), where the mode is unknown. A ready prepare that finds no
+  target because focus changed says "Focus an app window first"; a set refused on focus change
+  says "The workspace changed" unless the menu closed before the set was read (T25).
 
 Outside the block: the menu's `AppletPopup` (`visible: layoutMenuShown && the loader is ready`; on
 show, `requestActivate()` and the menu's `focusConfirmed(byKeyboard)` with `by` not `pointer`; on

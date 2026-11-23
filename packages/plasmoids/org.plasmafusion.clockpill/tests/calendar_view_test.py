@@ -804,9 +804,11 @@ OUTCOME_TEXTS = {
     "": [("", "", True), ("", "tiled", False)],
     "No app window to tile": [("no-target", "", True), ("no-target", "tiled", True), ("no-target", "tiled", False),
                               ("not-eligible", "tiled", True)],
-    "Focus an app window first": [("focus-changed", "", True), ("focus-changed", "", False)],
+    "Focus an app window first": [("focus-needed", "", True), ("focus-needed", "", False),
+                                  ("focus-needed", "tiled", True)],
     "Busy, try again": [("busy", "", True), ("busy", "tiled", False), ("busy", "floating", True)],
     "The workspace changed": [("stale-context", "", True), ("stale-context", "tiled", True), ("focus-changed", "floating", True),
+                              ("focus-changed", "tiled", True), ("focus-changed", "tiled", False),
                               ("target-departed", "tiled", True), ("view-changed", "floating", False), ("shell-replaced", "tiled", False)],
     "Interrupted, try again": [("interrupted", "tiled", False), ("interrupted", "floating", True)],
     "Couldn't tile this workspace": [("tree-refused", "tiled", True), ("admission-refused", "tiled", False), ("unavailable", "tiled", True)],
@@ -821,11 +823,6 @@ OUTCOME_TEXTS = {
 for text, cases in OUTCOME_TEXTS.items():
     wrong = [(case, outcome_text(*case)) for case in cases if outcome_text(*case) != text]
     expect(icontrol is not None and not wrong, "outcomeText() words %s as %r (wrong: %s)" % ([case[:2] for case in cases], text, wrong))
-# The design words focus-changed apart by intent, which an outcome does not carry: a prepare done
-# without a target with Tiled queued (T9) and a Tiled set refused so share their arguments. T9's is
-# the case the menu shows; a Tiled set is refused so only as the menu closes.
-expect(icontrol is not None and outcome_text("focus-changed", "tiled", True) == "Focus an app window first",
-       "outcomeText() words focus-changed with Tiled as T9's prepare: focus an app window first")
 
 notice_timer = icontrol.findChild(QObject, "layoutNotice") if icontrol is not None else None
 evaluated(icontrol, 'notify("busy", "tiled")')
@@ -835,6 +832,10 @@ expect(prop(notice_timer, "interval") == 5000 and prop(notice_timer, "running") 
 evaluated(icontrol, 'notify("unavailable", "floating")')
 expect(icontrol is not None and prop(itip, "subText") == GENERIC,
        "a later outcome replaces it, worded for its own mode: Floating's unavailable is not Tiled's")
+evaluated(icontrol, 'notify("focus-changed", "tiled")')
+expect(icontrol is not None and prop(itip, "subText") == "The workspace changed"
+       and evaluated(icontrol, "Accessible.description") == "The workspace changed",
+       "a Tiled set refused after the focus changed does not show the prepare's focus advice")
 if notice_timer is not None:
     notice_timer.setProperty("interval", 60)
 QTest.qWait(200)
