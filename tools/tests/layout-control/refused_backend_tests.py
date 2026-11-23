@@ -342,41 +342,47 @@ class RefusedRun:
             "request": self.request[boot]}) + "\n")
 
     def frame(self, boot: str, epoch: str, capable: bool, status: str, *,
-              alias: str = ALIAS) -> dict:
+              alias: str = ALIAS, received=True) -> dict:
         self.revision += 1
         packet = {"consumer": boot, "epoch": epoch, "revision": self.revision, "status": status,
                   "capable": capable, "refusal": -1, "request": self.request[boot],
                   "preparation": None, "targetContext": None, "competingProviderRejected": True,
                   "backendOwner": ":1.0", "identityName": alias + epoch}
-        self.shell.append("qml: layout-probe-received "
-                          + json.dumps(packet | {"receiverBoot": boot}) + "\n")
+        if received:
+            self.shell.append("qml: layout-probe-received "
+                              + json.dumps(packet | {"receiverBoot": boot}) + "\n")
         return packet
 
     def deliver(self, boot: str, epoch: str, capable: bool, *, alias: str = ALIAS,
-                phase: str = "") -> None:
-        packet = self.frame(boot, epoch, capable, "online", alias=alias)
+                phase: str = "", received=True) -> None:
+        packet = self.frame(boot, epoch, capable, "online", alias=alias, received=received)
         self.observe(boot, phase or ("online" if capable else "unsupported"), epoch, packet)
 
-    def drop(self, boot: str) -> None:
+    def drop(self, boot: str, *, query=True) -> None:
         """The consumer's fresh query: its binding is gone and its request advances."""
         self.request[boot] += 1
         self.observe(boot, "unknown", "", None)
+        if query:
+            self.shell.append("qml: layout-probe-query "
+                              + json.dumps({"boot": boot, "request": self.request[boot],
+                                            "deadlineMs": 10000}) + "\n")
 
-    def retire(self, boot: str, previous: str, upcoming: str, capable: bool, how: str) -> None:
+    def retire(self, boot: str, previous: str, upcoming: str, capable: bool, how: str, *,
+               query=True) -> None:
         """One of the three racing ways the real consumer leaves a provider lifetime."""
         if how == "invalidate":
             self.shell.append("qml: layout-probe-invalidated "
                               + json.dumps({"boot": boot, "name": ALIAS + previous}) + "\n")
-            self.drop(boot)
+            self.drop(boot, query=query)
         elif how == "offline":
             # The previous provider's accepted retirement frame.
             packet = self.frame(boot, previous, False, "offline")
             self.observe(boot, "offline", previous, packet)
-            self.drop(boot)
+            self.drop(boot, query=query)
         elif how == "replaced":
             # The next provider's first frame answers the old request; it is never accepted.
             self.frame(boot, upcoming, capable, "online")
-            self.drop(boot)
+            self.drop(boot, query=query)
         # "none": the consumer keeps the previous binding.
 
     def late(self, previous: str, how: str | None) -> None:
@@ -403,7 +409,7 @@ class RefusedRun:
     def build(self, *, epochs=(E1, E2, E3), refused_online=False, release_early=False,
               first_capable=False, alias=ALIAS, retire="invalidate", returned=False,
               stale_request=False, capable_after_release=False, capable_frame=False,
-              late_previous=None, left_between=False) -> None:
+              late_previous=None, left_between=False, missing_query=False, missing_received=False) -> None:
         first, second, third = epochs
         self.backend("layout-occupier: registered true")
         self.mark("start")
@@ -448,8 +454,10 @@ class RefusedRun:
         self.late(second, late_previous)
         self.backend("layout-probe: initialized true -1")
         for boot in BOOTS:
-            self.retire(boot, second, third, True, retire)
-            self.deliver(boot, third, True, alias=alias)
+            self.retire(boot, second, third, True, retire,
+                        query=not missing_query or boot != BOOTS[-1])
+            self.deliver(boot, third, True, alias=alias,
+                         received=not missing_received or boot != BOOTS[-1])
         self.step("accepted")
 
 
@@ -533,6 +541,12 @@ class RefusedCheckerTests(unittest.TestCase):
 
     def test_settling_without_a_fresh_query_fails(self):
         self.assert_rejected("without a fresh query", stale_request=True)
+
+    def test_larger_request_without_a_logged_query_fails(self):
+        self.assert_rejected("without a fresh query", missing_query=True)
+
+    def test_only_one_of_two_receivers_logging_delivery_fails(self):
+        self.assert_rejected("no matching received frame", missing_received=True)
 
     def test_malformed_event_rows_fail_cleanly(self):
         self.run_.shell.append("qml: layout-probe-observation [1, 2]\n")

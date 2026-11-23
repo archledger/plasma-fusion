@@ -153,6 +153,7 @@ def lifetime(ev: Evidence, name: str, *, capable: bool, boots: list | None,
     require(all(row.get("boot") in boots for _, row in observations),
             f"{name}: an unexpected consumer reported state")
     received = frames(ev, boots)
+    queries = ev.shell("query")
     # Report the specific violation first: no capable state or frame in a refused lifetime.
     for _, row in observations:
         packet = row.get("packet")
@@ -179,6 +180,9 @@ def lifetime(ev: Evidence, name: str, *, capable: bool, boots: list | None,
                 f"{name}: accepted capable flag does not match the native verdict")
         require(packet.get("identityName") == ALIAS + epoch,
                 f"{name}: the identity is not derived from the provider label")
+        deliveries = [index for index, row in received
+                      if index < final_index and row == packet | {"receiverBoot": boot}]
+        require(deliveries, f"{name}: consumer {boot} has no matching received frame")
         labels.add(epoch)
         owners.add(packet.get("backendOwner"))
         requests[boot] = packet.get("request")
@@ -193,8 +197,10 @@ def lifetime(ev: Evidence, name: str, *, capable: bool, boots: list | None,
             require(all(row.get("epoch") != previous["epoch"]
                         for index, row in rows if index > dropped[0]),
                     f"{name}: consumer {boot} returned to the previous provider")
-            require(type(packet.get("request")) is int
-                    and packet["request"] > previous["requests"][boot],
+            request = packet.get("request")
+            require(type(request) is int and request > previous["requests"][boot]
+                    and any(dropped[0] < index < deliveries[-1] and row.get("boot") == boot
+                            and row.get("request") == request for index, row in queries),
                     f"{name}: consumer {boot} settled without a fresh query")
         for index, row in rows[:-1]:
             phase = row.get("phase")

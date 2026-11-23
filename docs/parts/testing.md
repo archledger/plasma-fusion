@@ -581,8 +581,9 @@ check. This scope also requires the independent cleanup evidence.
 Three events can end a consumer's binding to the previous lifetime, and they race: its own
 invalidation of the old alias, its acceptance of the old provider's `offline` frame, and the new
 provider's first frame, which carries another label. The check accepts any of them. Whichever
-won, each consumer must report `unknown` with no packet, settle through a request newer than the
-one it settled with before, and never again report the previous label. Before that drop a
+won, each consumer must report `unknown` with no packet, log a fresh query and receive its matching
+frame before accepting it, and never again report the previous label. The query must be newer
+than its previous settled request. Before that drop a
 consumer may still accept a newer frame of the previous lifetime: each provider publishes once
 per wake, and a consumer verifies one frame at a time, so a step can be confirmed between two of
 its acceptances. Such a row is accepted only with the previous lifetime's settled state, label,
