@@ -268,6 +268,14 @@ class LifecycleTargetResultTests(unittest.TestCase):
     def test_a_complete_target_run_passes(self):
         self.assertEqual(self.check()["mode"], "target")
 
+    def test_each_recorded_receiver_needs_its_initial_unknown_observation(self):
+        log = self.output / "shell-2.log"
+        lines = log.read_text().splitlines(keepends=True)
+        self.assertIn('"phase": "unknown"', lines[0])
+        log.write_text("".join(lines[1:]))
+        with self.assertRaisesRegex(ValueError, "receiver did not bootstrap unknown"):
+            self.check()
+
     def test_the_recheck_leaves_the_search_path_as_it_found_it(self):
         path = [entry for entry in sys.path if entry != str(HERE)]
         with mock.patch.object(sys, "path", list(path)):

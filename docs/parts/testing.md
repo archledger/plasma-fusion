@@ -949,7 +949,7 @@ frames, which carry no lease, in those fields, and that restart has no such cont
 of both restarted shells still first trace unknown and bind only frames addressed to them, with new
 leases. After the container exits, the runner rechecks the run from its files, as `--check-result`
 also does without writing anything: the receivers recorded for each shell must be in its raw log,
-name that shell's backend connection from the receipt and give the receipt's leases, no receiver
+have started unbound, name that shell's backend connection and give the receipt's leases; no receiver
 may appear in two shells, the receipt's saved leases must be those of the kept configuration's
 responses, and each KWin lifetime's log must pass the replay's serialization rules up to its
 teardown, with at least one read and one publication. Stopping drops a queued delayed publication

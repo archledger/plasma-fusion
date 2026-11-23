@@ -201,7 +201,8 @@ def check_receipt(receipt: dict) -> None:
 def check_run(output: Path) -> dict:
     """Recheck a finished run from its files, as run_container does after its container: the
     receipt and, for a target seed, the receivers it recorded, which must be in their shells' raw
-    logs, the saved leases, recomputed from the kept configuration, and each provider lifetime's
+    logs and must first have reported unknown, the saved leases, recomputed from the kept
+    configuration, and each provider lifetime's
     reads and publications, which must pass the replay's serialization rules up to its teardown.
     Stopping drops a queued delayed publication and sends the offline frame even while a
     publication is outstanding, so nothing from the offline frame on is replayed."""
@@ -219,14 +220,18 @@ def check_run(output: Path) -> dict:
     finally:
         if added:
             sys.path.remove(str(HERE.parent))
-    shells = []
+    shells, first_by_shell = [], []
     for number in (1, 2, 3):
         rows = json.loads((output / f"shell-{number}-observations.json").read_text())
         logged = [row for _, row in events(complete_lines(output / f"shell-{number}.log"),
                                            "observation")]
         if not isinstance(rows, list) or any(row not in logged for row in rows):
             raise ValueError(f"a recorded receiver is not in shell-{number}.log")
+        first = {}
+        for row in logged:
+            first.setdefault(row["boot"], row)
         shells.append(rows)
+        first_by_shell.append(first)
     if target_bootstrap(shells) != {"leases": receipt["leases"], "epochs": receipt["epochs"]}:
         raise ValueError("the receipt's leases do not match the receivers' frames")
     # Shells 1 and 2 ran under the first KWin and shell 3 under its replacement. The run bound
@@ -237,6 +242,9 @@ def check_run(output: Path) -> dict:
             raise ValueError(f"a shell-{number} receiver is bound to another backend")
     if not distinct_receivers(shells):
         raise ValueError("a restart reused a receiver")
+    for rows, first in zip(shells, first_by_shell):
+        for row in rows:
+            require_unbound(first[row["boot"]])
     kept = saved_response_leases((output / KEPT_CONFIGURATION).read_text())
     if sorted(kept) != receipt["savedLeases"]:
         raise ValueError("the receipt's saved leases are not the kept configuration's")
@@ -317,6 +325,11 @@ def require_container() -> None:
         raise ValueError("refusing execution outside the disposable container")
 
 
+def require_unbound(first: dict) -> None:
+    if first["phase"] != "unknown" or first["accepted"] != 0 or first["packet"] is not None:
+        raise ValueError("receiver did not bootstrap unknown")
+
+
 def online_rows(log: Path, backend: str) -> list[dict]:
     latest = {}
     first = {}
@@ -329,11 +342,11 @@ def online_rows(log: Path, backend: str) -> list[dict]:
     if len(latest) != 2 or any(row["phase"] != "online" for row in latest.values()):
         return []
     for boot, row in latest.items():
+        require_unbound(first[boot])
         packet = row["packet"]
-        if (first[boot]["phase"] != "unknown" or first[boot]["accepted"] != 0
-                or first[boot]["packet"] is not None or packet["consumer"] != boot
+        if (packet["consumer"] != boot
                 or packet["backendOwner"] != backend or packet["capable"] is not True):
-            raise ValueError("receiver did not bootstrap unknown and bind the expected backend")
+            raise ValueError("receiver did not bind the expected backend")
         if owner_of(packet["identityName"]) != backend:
             raise ValueError("receiver's alias belongs to another connection")
     return list(latest.values())
