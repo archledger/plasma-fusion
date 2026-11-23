@@ -22,6 +22,7 @@ KCM.SimpleKCM {
     // before saving (nothing written meanwhile is lost).
     property bool cfg_showWorkspaces: true
     property bool cfg_wheelSwitchesWorkspaces: true
+    property bool cfg_showLayoutControl: true
     property bool cfg_showDate: true
     property string cfg_dateFormat: "auto"
     property string cfg_customDateFormat: "ddd d MMM"
@@ -36,9 +37,12 @@ KCM.SimpleKCM {
     property bool cfg_menuCompacted: false
     property string cfg_debugAction: ""
     property int cfg_popupGap: 10
+    property string cfg_layoutRequest: ""
+    property string cfg_layoutResponse: ""
 
     property bool cfg_showWorkspacesDefault
     property bool cfg_wheelSwitchesWorkspacesDefault
+    property bool cfg_showLayoutControlDefault
     property bool cfg_showDateDefault
     property string cfg_dateFormatDefault
     property string cfg_customDateFormatDefault
@@ -53,12 +57,15 @@ KCM.SimpleKCM {
     property bool cfg_menuCompactedDefault
     property string cfg_debugActionDefault
     property int cfg_popupGapDefault
+    property string cfg_layoutRequestDefault
+    property string cfg_layoutResponseDefault
 
     function saveConfig() {
         const config = Plasmoid.configuration;
         // edited on the General page
         cfg_showWorkspaces = config.showWorkspaces;
         cfg_wheelSwitchesWorkspaces = config.wheelSwitchesWorkspaces;
+        cfg_showLayoutControl = config.showLayoutControl;
         cfg_showDate = config.showDate;
         cfg_dateFormat = config.dateFormat;
         cfg_customDateFormat = config.customDateFormat;
@@ -76,6 +83,10 @@ KCM.SimpleKCM {
         cfg_menuPolicy = config.menuPolicy;
         cfg_menuCompacted = config.menuCompacted;
         cfg_debugAction = config.debugAction;
+        // the layout request the clock writes itself, and the answer the placement script writes
+        // through desktop scripting ("Workspace layout state" in docs/parts/shell-topbar.md)
+        cfg_layoutRequest = config.layoutRequest;
+        cfg_layoutResponse = config.layoutResponse;
     }
 
     // Defaults and Reset change the key from outside: the checks follow it. A click changes it from

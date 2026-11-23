@@ -17,6 +17,10 @@
       <label>Scrolling over the pill switches workspaces.</label>
       <default>true</default>
     </entry>
+    <entry name="showLayoutControl" type="Bool">
+      <label>Show the dynamic tiling control (Floating or Tiled for the current workspace). It appears only once the placement script confirms that tiling is available there; the tiling shortcut works either way.</label>
+      <default>true</default>
+    </entry>
     <entry name="showDate" type="Bool">
       <label>Show the date before the time.</label>
       <default>true</default>
@@ -76,6 +80,14 @@
     <entry name="popupGap" type="Int">
       <label>Gap in px between the top bar and the calendar pop-up.</label>
       <default>10</default>
+    </entry>
+    <entry name="layoutRequest" type="String">
+      <label>Internal: the clock's query to the placement script's layout provider (JSON; docs/parts/shell-topbar.md, "Workspace layout state"), which the provider reads through desktop scripting.</label>
+      <default></default>
+    </entry>
+    <entry name="layoutResponse" type="String">
+      <label>Internal: the layout provider's answer to that query (JSON), written by the placement script through desktop scripting. A saved answer alone never counts: each clock asks afresh.</label>
+      <default></default>
     </entry>
   </group>
 </kcfg>

@@ -174,6 +174,9 @@ Item {
             nativeWriter = false;
             api = null;
             nativeRefused = true;
+            // The refusal's text is no token: keep none, so providerToken stays empty for
+            // every session that has no accepted registration.
+            providerToken = "";
             return;
         }
         log("registered as the placement provider");
@@ -937,8 +940,9 @@ Item {
                 api = Workspace.transientTiling();
                 if (!api) {
                     // The facade exists (the detection saw the function) but answers nothing:
-                    // leave the tiler off without interrupting the script - the placement
-                    // memory keeps working, as it does through a refused provider.
+                    // leave the tiler off without interrupting the script. The placement memory
+                    // is off as well: registerWithWriter met the same silence and disabled it
+                    // for the session, as it does a refused provider.
                     apiAvailable = false;
                     log("tiling: the native facade did not answer; the tiler stays off this session");
                     return apiAvailable;
@@ -982,6 +986,7 @@ Item {
             disconnectMinimizeHandlers();
             session = Tiling.createSession();
             cellRects = {};
+            reportSession();
             log("tiling: off (native teardown)");
             releaseMaster(master, float, tile, output);
         }
@@ -1274,18 +1279,44 @@ Item {
             const pending = pendingStart;
             if (!pending || session.active) {
                 pendingStart = null;
+                if (pending && typeof pending.invoked.outcome === "function") {
+                    pending.invoked.outcome("refused", "busy");
+                }
                 return;
             }
-            start(pending.invoked);
+            // A set's retry (P5) first checks what its start needs still holds - its target, its
+            // view's existence, the provider's lifetime and the shell connection the set came
+            // from - and is refused with what failed.
+            let trouble = "";
+            try {
+                const check = pending.invoked.check;
+                trouble = typeof check === "function" ? check() : "";
+                if (trouble === "") {
+                    start(pending.invoked);
+                }
+            } catch (error) {
+                log("tiling: the queued start failed: " + error);
+                trouble = "unavailable";
+                admitRetry.stop();
+            }
             // A start that scheduled nothing new has ended the matter either way.
-            if (pendingStart === pending) {
+            if (trouble !== "" || pendingStart === pending) {
                 pendingStart = null;
+            }
+            if (trouble !== "" && typeof pending.invoked.outcome === "function") {
+                pending.invoked.outcome("refused", trouble);
             }
         }
 
+        // The shortcut's press, the newer intent, drops a start still being retried; a set's start
+        // is told it was cancelled (P5).
         function cancelPendingStart() {
+            const pending = pendingStart;
             pendingStart = null;
             admitRetry.stop();
+            if (pending && typeof pending.invoked.outcome === "function") {
+                pending.invoked.outcome("refused", "cancelled");
+            }
         }
 
         // Whether a window is one of this session's managed windows.
@@ -1365,20 +1396,26 @@ Item {
         // (toggle): start() runs right after an untoggle that activated the old master, and
         // KWin's activation may have moved the current desktop and screen under the script -
         // the captured view, not a fresh read, is what the user asked for. A null invoked is
-        // a plain start with no teardown behind it.
+        // a plain start with no teardown behind it. A bar's set (applyMode) passes its outcome
+        // too, which every end of the start calls once, a retry's once the retry ends.
         function start(invoked) {
+            const tell = invoked && typeof invoked.outcome === "function" ? invoked.outcome
+                : () => {};
             if (session.active || !loaded) {
+                tell("refused", "unavailable");
                 return;
             }
             const w = invoked ? invoked.window : Workspace.activeWindow;
             if (!Tiling.eligibleForMaster(w)) {
                 log("tiling: the active window is not eligible");
+                tell("refused", "not-eligible");
                 return;
             }
             const output = invoked ? invoked.output : viewOutput(w);
             const desktop = invoked ? invoked.desktop : Workspace.currentDesktop;
             const activity = invoked ? invoked.activity : String(Workspace.currentActivity);
             if (!output || !desktop) {
+                tell("refused", "unavailable");
                 return;
             }
 
@@ -1406,41 +1443,46 @@ Item {
                 const result = api.createTile(output, desktop, Qt.rect(tileRect.x, tileRect.y, tileRect.width, tileRect.height));
                 if (!result || result.result !== 0) { // 0 = Accepted
                     log("tiling: the tree was refused");
+                    tell("refused", "tree-refused");
                     return;
                 }
                 const gen = result.generation;
-                const key = appIdOf(w);
-                // The place the native layer admits the window from is the one the memory has
-                // for its app: this window's, from here on (recordForAdmission). Not a window
-                // the native layer still has a record for: a release left it where it stands
-                // and nobody has returned it (this script was not there, or could not), its
-                // admission answers busy, and where it stands is nobody's choice. A rectangle
-                // says nothing about that - a window the user put on the tile's own rectangle
-                // floats there. A fork build that cannot say (no floatingFrame) gets no
-                // record at all.
-                if (typeof api.floatingFrame === "function" && !nativeKeeps(w)) {
-                    root.recordForAdmission(w);
-                }
                 let admitResult = -1;
-                admitting = w;
                 try {
+                    const key = appIdOf(w);
+                    // The place the native layer admits the window from is the one the memory has
+                    // for its app: this window's, from here on (recordForAdmission). Do not record a
+                    // window the native layer still has a record for: where it stands after release
+                    // is nobody's choice, and admission answers busy. A fork build without
+                    // floatingFrame cannot distinguish this from a window the user placed there.
+                    if (typeof api.floatingFrame === "function" && !nativeKeeps(w)) {
+                        root.recordForAdmission(w);
+                    }
+                    admitting = w;
                     admitResult = api.admitTile(gen, w, key, providerToken);
                 } finally {
                     admitting = null;
+                    // An unaccepted attempt owns no session to release its tree, even if it threw.
+                    if (admitResult !== 0) {
+                        api.releaseTile(gen);
+                    }
                 }
                 if (admitResult !== 0) { // 0 = Accepted
-                    // The tree goes whatever follows: a later attempt creates its own.
-                    api.releaseTile(gen);
-                    if (Tiling.admitAgain(admitResult)
-                            && scheduleStartRetry({ window: w, desktop: desktop, activity: activity, output: output })) {
+                    // A retry keeps what the start was given, a set's outcome and check too.
+                    const retry = Object.assign({}, invoked,
+                                                { window: w, desktop: desktop, activity: activity,
+                                                  output: output });
+                    if (Tiling.admitAgain(admitResult) && scheduleStartRetry(retry)) {
                         return;
                     }
                     log("tiling: the admission was refused (" + admitResult + ")");
+                    tell("refused", "admission-refused");
                     return;
                 }
                 session.generation = gen;
             } else {
                 log("tiling: the native facade is not available; the tiler needs the fork");
+                tell("refused", "unavailable");
                 return;
             }
 
@@ -1485,6 +1527,60 @@ Item {
             }
             relayout();
             log("tiling: on (" + session.stack.length + " stack window(s))");
+            reportSession();
+            tell("done");
+        }
+
+        // A bar's set through the layout provider (P5): the mode for the view the bar's menu was
+        // prepared for, with the app it was opened from. done(result, reason) is called once.
+        // Floating ends the session on that view, or leaves everything as it is. Tiled leaves a
+        // view already tiled as it is - re-selecting is no toggle - and otherwise moves the one
+        // session there as the shortcut's transfer does: the session elsewhere ends first,
+        // reported, then the start, whose outcome is the set's, at once or when its retry ends;
+        // a refusal leaves the old session ended. A view whose master has left its tile is tiled
+        // no more, though its session's end is still queued (vacated): Tiled is handled there as
+        // on an untiled view, the vacated teardown taken now as a press takes it (untoggle).
+        // Focus goes to the app right after the first attempt, as toggle() gives it back to the
+        // window the shortcut was pressed in.
+        function applyMode(request, done) {
+            const here = session.active
+                && Tiling.sameView(session, request.desktop, request.activity, request.output);
+            if (request.mode === "floating") {
+                if (here) {
+                    untoggle();
+                }
+                done("done");
+                return;
+            }
+            if (here && !vacated()) {
+                done("done");
+                return;
+            }
+            if (!request.window) {
+                done("refused", "no-target");
+                return;
+            }
+            if (session.active) {
+                untoggle();
+            }
+            start({ window: request.window, desktop: request.desktop, activity: request.activity,
+                    output: request.output, outcome: done, check: request.check });
+            if (Tiling.alive(request.window) && Workspace.activeWindow !== request.window) {
+                Workspace.activeWindow = request.window;
+            }
+        }
+
+        // The layout provider is told where a session starts or ends: on or off, and the view
+        // it tiles as a bar names one - the desktop's id, the activity, the output's name.
+        // Only a live session's view is read; both resets hand in a session that is off, so
+        // the script's teardown reads nothing of KWin here (see going).
+        function reportSession() {
+            if (!session.active) {
+                layoutProvider.setSession(false, "", "", "");
+                return;
+            }
+            layoutProvider.setSession(true, String(session.desktop.id), String(session.activity),
+                                      String(session.output.name));
         }
 
         // Whether the session's master has left its tile. The native layer releases the
@@ -1648,6 +1744,7 @@ Item {
             disconnectMinimizeHandlers();
             session = Tiling.createSession();
             cellRects = {};
+            reportSession();
             // The master's native restore: the Window Restore action (Meta+Backspace's path)
             // for that window, through the facade - the scripting Workspace has no slot for
             // the action, and it addresses a window, not whichever is active. KWin raises and
@@ -1968,6 +2065,20 @@ Item {
         onActivated: tiler.focusPrevious()
     }
 
+    // What the bars' layout controls are told about tiling (LayoutProvider.qml). Capable on the
+    // native verdict alone: the writer accepted the registration (nativeWriter stays true only
+    // then), the memory loaded from it, and the tiler's facade is complete - so the legacy
+    // lane, a refused registration and a facade without restoreWindow never report ready, and
+    // a memory that loads late turns it capable then. The session goes in through
+    // tiler.reportSession.
+    LayoutProvider {
+        id: layoutProvider
+        objectName: "layoutProvider"
+        nativeCapable: root.nativeWriter && root.loaded && tiler.apiAvailable
+        // A bar's set is refused busy while a start is retried (applier: Component.onCompleted).
+        startPending: tiler.pendingStart !== null
+    }
+
     // ---------------------------------------------------------------- start and stop
 
     Component.onCompleted: {
@@ -2001,6 +2112,9 @@ Item {
         if (tiler.apiAvailable && nativeWriter) {
             tiler.adoptStranded(windows);
         }
+        // The provider applies a bar's set through the tiler, never holding the tiler itself.
+        layoutProvider.applier = (request, done) => tiler.applyMode(request, done);
+        layoutProvider.start();
     }
 
     // Disabled or KWin going away: the newest record goes out one last time, best effort (the D-Bus
@@ -2010,10 +2124,12 @@ Item {
     // left connected would call into a destroyed context, and every disable/enable cycle would add
     // another.
     Component.onDestruction: {
-        // See going. Nothing of the script answers anything from here on: the memory's window
-        // handlers go first, then the tiler's own connections, and only then does the
-        // session end (tiler.teardown).
+        // See going. Nothing of the script answers anything from here on: the layout provider
+        // goes offline first, then the memory's window handlers go, then the tiler's own
+        // connections, and only then does the session end (tiler.teardown) - which moves the
+        // provider no more.
         going = true;
+        layoutProvider.retire();
         for (const key in watched) {
             disconnectHandlers(watched[key]);
         }

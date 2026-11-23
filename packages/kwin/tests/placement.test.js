@@ -201,12 +201,24 @@ assert.ok(!teardownWrite(false, 3, 0, false, -1), "the memory was never read: no
 // transport - so these drive the decisions the wiring follows.
 // ---------------------------------------------------------------------------
 
-// ---- a refused registration: empty or broken token text disables the memory, no legacy bypass
+// ---- a refused registration: only a well-formed UUID other than the null one registers; empty,
+// broken, malformed or null token text disables the memory, no legacy bypass. The fork's writer
+// answers a held provider slot or a busy writer with a null QUuid, and its script API returns
+// the token's text, braces included (TransientTilingApi::registerProvider returns
+// token.toString()).
 assert.ok(providerRefused(""));
 assert.ok(providerRefused(undefined));
 assert.ok(providerRefused(null));
 assert.ok(providerRefused("undefined"), "a broken call surfaces undefined as text");
+assert.ok(providerRefused("{00000000-0000-0000-0000-000000000000}"), "the fork's refusal: a null UUID");
+assert.ok(providerRefused("00000000-0000-0000-0000-000000000000"), "a null UUID without its braces");
+assert.ok(providerRefused("harness-token"), "text that is no UUID is no registration");
+assert.ok(providerRefused("{7c9e6679-7425-40de-944b-e07fc1f90ae7"), "braces are stripped only as a pair");
+assert.ok(providerRefused("x7c9e6679-7425-40de-944b-e07fc1f90ae7"), "nothing before the UUID");
+assert.ok(providerRefused("7c9e6679-7425-40de-944b-e07fc1f90ae7x"), "nothing after the UUID");
 assert.ok(!providerRefused("7c9e6679-7425-40de-944b-e07fc1f90ae7"));
+assert.ok(!providerRefused("{7c9e6679-7425-40de-944b-e07fc1f90ae7}"), "an accepted token keeps its braces");
+assert.ok(!providerRefused("{7C9E6679-7425-40DE-944B-E07FC1F90AE7}"), "either case, as QUuid parses it");
 
 // ---- the identity binding: the writer holds one key per window for its whole lifetime
 assert.strictEqual(trackingDecision(undefined, "org.kde.kate"), "track", "the first binding");

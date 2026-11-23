@@ -27,6 +27,9 @@ QtObject {
     property var customRoots: ({})
     property point cursorPos: Qt.point(700, 400)
     property string currentActivity: "a"
+    // The activities that exist, as the fork's Workspace lists them (activities, a list of ids):
+    // the layout provider checks a set's captured activity is still one of them.
+    property var activities: ["a", "b"]
     // The fork's TransientTilingApi facade (a null impl is a stock KWin: no facade). The
     // harness installs its mock here; the placement script and the tiler probe it through
     // transientTiling().

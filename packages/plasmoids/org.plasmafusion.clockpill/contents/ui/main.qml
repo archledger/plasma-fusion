@@ -19,7 +19,8 @@ import "../code/formats.js" as Formats
 
 // Centre of the Plasma Fusion top bar (Main / MainLight boards): one pill, 24 px tall, radius
 // 12, rgba(255,255,255,.08) (light: rgba(20,24,39,.08)), padding 0 12, gap 12, holding the
-// workspace dots, the date (Manrope 13 px 700) and the time (Space Grotesk 13 px 600).
+// workspace dots, the workspace layout control (LayoutControl.qml, no board), the date (Manrope
+// 13 px 700) and the time (Space Grotesk 13 px 600).
 // A click on the date or time opens a calendar pop-up that floats below the bar like the
 // quick-settings pop-up. Scrolling over the pill switches workspaces.
 //
@@ -77,7 +78,7 @@ PlasmoidItem {
     // The width the pill gives up at a budget step, against step 0 (WidthBudget.qml).
     readonly property string fullDateText: Qt.locale().toString(clock.dateTime, root.dateFormat)
     readonly property string shortDateText: Qt.locale().toString(clock.dateTime,
-        Formats.shortDateFormat(Qt.locale(), Qt.locale().dateFormat(Locale.ShortFormat)))
+        Formats.numericDateFormat(Qt.locale().dateFormat(Locale.ShortFormat)))
     TextMetrics {
         id: fullDateMetrics
         font: dateLabel.font
@@ -103,7 +104,7 @@ PlasmoidItem {
         if (level >= 7 && !tabletState.tablet && Plasmoid.configuration.showWorkspaces && desktopCount > 1) {
             saving += dotsSeen + pillPadding - 2 * dots.cellPadding;
         }
-        return saving;
+        return saving + layoutSaving(level);
     }
 
     // ---- Formats
@@ -124,7 +125,7 @@ PlasmoidItem {
 
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
     Plasmoid.constraintHints: Plasmoid.CanFillArea
-    Plasmoid.status: popupOpen ? PlasmaCore.Types.RequiresAttentionStatus : PlasmaCore.Types.ActiveStatus
+    Plasmoid.status: popupOpen || layoutMenuShown ? PlasmaCore.Types.RequiresAttentionStatus : PlasmaCore.Types.ActiveStatus
     activationTogglesExpanded: false
     hideOnWindowDeactivate: true
     toolTipMainText: ""
@@ -320,8 +321,166 @@ PlasmoidItem {
         trackSeconds: Plasmoid.configuration.showSeconds
     }
 
+    // BEGIN layout state
+    // The bar's workspace layout state (LayoutState.qml; docs/parts/shell-topbar.md, "Workspace
+    // layout state"), which the pill's layout control shows. It asks for this bar's output while the
+    // control may show - the user's setting on, and the bar's own layout one that shows it, a
+    // horizontal panel outside tablet posture (the specification's scope; a clock on the desktop is
+    // not the top bar) - and otherwise stays idle: no request and no wake. Desktop scripting reads
+    // the saved configuration, not this property map, so each request is saved before the component
+    // wakes the provider.
+    readonly property bool layoutAllowed: inPanel && !vertical && !tabletState.tablet
+    readonly property bool layoutWanted: Plasmoid.configuration.showLayoutControl && layoutAllowed
+    LayoutState {
+        id: layoutState
+        outputName: root.layoutWanted ? Screen.name : ""
+        response: Plasmoid.configuration.layoutResponse
+        // A bar with no output name to ask for asks nothing either, and its saved request is
+        // withdrawn as below.
+        onOutputNameChanged: Qt.callLater(root.withdrawLayoutRequest)
+        onRequested: text => {
+            Plasmoid.configuration.layoutRequest = text;
+            Plasmoid.configuration.writeConfig();
+        }
+        // Said once for each request with no answer taken by its deadline: no placement script,
+        // stock KWin, a Kiosk policy that refuses the shell's scripting, or an answer whose check
+        // failed. A late answer still counts.
+        onOutcomeChanged: {
+            if (layoutState.outcome === "unconfirmed") {
+                console.info("clockpill: no layout answer was taken in time; the mode is unknown until one is");
+            }
+        }
+    }
+    // The layout menu's pop-up shows while the action is open and the control shows (S11): a
+    // hidden control cannot be pressed, so the menu goes with it.
+    readonly property bool layoutMenuShown: layoutState.actionOpen && layoutControl.visible
+    // The control hid: the menu goes at once, with no sync, as nothing can press a hidden control.
+    Connections {
+        target: layoutControl
+        function onVisibleChanged(): void {
+            if (!layoutControl.visible) {
+                layoutState.close(false);
+            }
+        }
+    }
+    // The pop-up hid itself: the action ends at once, so that a set's refusal arriving within the
+    // sync sees the close first (T25), and the sync keeps the press-then-click toggle from opening
+    // the menu again on the click after the press that closed it.
+    function layoutMenuHidden(): void {
+        layoutState.close(false);
+        layoutMenuSync.restart();
+    }
+    Timer {
+        id: layoutMenuSync
+        interval: 150
+    }
+    // The control's menuOpen: the action open, or closed a moment ago.
+    readonly property bool layoutMenuRecent: layoutState.actionOpen || layoutMenuSync.running
+    // The way the menu was opened, for its focus reason.
+    property string layoutMenuBy: "pointer"
+    function openLayoutMenu(by: string): void {
+        layoutMenuBy = by;
+        if (layoutMenuStarted === 0) {
+            layoutMenuStarted = Date.now();
+        }
+        layoutState.open();
+    }
+    // The time from the first open request to its first frame, logged once (D20), as the
+    // calendar's.
+    property real layoutMenuStarted: 0
+    property bool layoutMenuShownOnce: false
+    // The one announcer (D10): the control's notice, and the reason announced once, worded for the
+    // menu while it is open and for the pill otherwise.
+    Connections {
+        target: layoutState
+        function onActionOutcome(reason, mode): void {
+            layoutControl.notify(reason, mode);
+            if (reason !== "") {
+                root.announceLayout(layoutControl.outcomeText(reason, mode, root.layoutMenuShown));
+            }
+        }
+    }
+    // While the control may not show, or the bar has no output name to ask for, its saved request
+    // is withdrawn - at start, when the user hides it, when the bar's layout does or when the
+    // output name is outside the protocol's bounds - and the provider woken. An empty field is
+    // no request, so the provider forgets the widget at that read, and no frame or save keeps
+    // following a bar that shows nothing. On a change the withdrawal waits for whatever made it:
+    // the settings dialog's Apply writes the setting first and then the page's copy of the request,
+    // and saves.
+    Connections {
+        target: Plasmoid.configuration
+        function onShowLayoutControlChanged(): void {
+            Qt.callLater(root.withdrawLayoutRequest);
+        }
+        Component.onCompleted: root.withdrawLayoutRequest()
+    }
+    onLayoutAllowedChanged: Qt.callLater(root.withdrawLayoutRequest)
+    function withdrawLayoutRequest(): void {
+        if (!layoutState.hasEligibleOutput() && Plasmoid.configuration.layoutRequest !== "") {
+            Plasmoid.configuration.layoutRequest = "";
+            Plasmoid.configuration.writeConfig();
+            layoutState.wake();
+        }
+    }
+    // The control's place in the width budget (WidthBudget.qml): its label goes at step 4, with the
+    // short date, and the control at step 7, with the workspace dots, giving up its width and one
+    // pill padding. A control that shows no mode takes no room. At step 7 the state keeps asking:
+    // the budget counts the control's room only while it shows a mode, so idling the state there
+    // would free that room, let the budget step back and show the control again, in a loop. A bar
+    // that narrow keeps receiving frames.
+    readonly property int layoutLevel: budgetLevel >= 7 ? 2 : budgetLevel >= 4 ? 1 : 0
+    function layoutSaving(level: int): real {
+        if (!layoutControl.available) {
+            return 0;
+        }
+        return level >= 7 ? layoutControl.fullWidth + pillPadding
+             : level >= 4 ? layoutControl.fullWidth - layoutControl.compactWidth : 0;
+    }
+    // The testing hook "dump-layout:TAG" (runDebugAction) logs the layout state and the action's
+    // public fields. The action's read state is internal to LayoutState, so it is not here.
+    function dumpLayout(tag: string): void {
+        console.info("clockpill: layout dump " + tag + " " + JSON.stringify({
+            output: layoutState.outputName, outcome: layoutState.outcome, mode: layoutState.mode,
+            epoch: layoutState.epoch, revision: layoutState.revision, refusal: layoutState.refusal,
+            state: layoutState.actionState, choice: layoutState.actionChoice,
+            pending: layoutState.actionPending, reason: layoutState.actionReason,
+            available: layoutState.actionsAvailable
+        }));
+    }
+    // The testing hook "dump-layout-menu:TAG" logs the menu's rows' positions in the scene.
+    function dumpLayoutMenu(tag: string): void {
+        const menu = layoutMenuLoader.item;
+        const rows = menu ? menu.rowItems : [];
+        console.info("clockpill: layout menu dump " + tag + " " + JSON.stringify({
+            shown: root.layoutMenuShown,
+            status: menu ? menu.status : "",
+            statusAbove: menu ? menu.statusAbove : false,
+            rows: rows.map(row => {
+                const at = row.mapToItem(null, 0, 0);
+                return { mode: row.mode, x: Math.round(at.x), y: Math.round(at.y),
+                         width: Math.round(row.width), height: Math.round(row.height),
+                         enabled: row.enabled, focused: row.activeFocus };
+            })
+        }));
+    }
+    // END layout state
+
+    // The one announcer (D10): the menu while it is open, the pill otherwise, as the pill is
+    // always shown and the control is hidden whenever the mode is unknown.
+    function announceLayout(text: string): void {
+        if (text === "") {
+            return;
+        }
+        if (root.layoutMenuShown && layoutMenuLoader.item) {
+            layoutMenuLoader.item.Accessible.announce(text);
+        } else {
+            pill.Accessible.announce(text);
+        }
+    }
+
     // Testing hooks (config key debugAction, cleared after use): "dump-bar:TAG", "menu-refresh"
-    // (rebuild the global menu's cached full view now).
+    // (rebuild the global menu's cached full view now), "dump-calendar:TAG", "dump-layout:TAG",
+    // "dump-pill:TAG".
     readonly property string debugAction: Plasmoid.configuration.debugAction
     onDebugActionChanged: Qt.callLater(runDebugAction)
     function runDebugAction(): void {
@@ -335,6 +494,12 @@ PlasmoidItem {
             (widthBudget.item as WidthBudget).dump(parts.slice(1).join(":"));
         } else if (parts[0] === "menu-refresh" && widthBudget.item) {
             console.info("clockpill: debug: full view rebuilt " + (widthBudget.item as WidthBudget).refreshFullView());
+        } else if (parts[0] === "dump-layout") {
+            root.dumpLayout(parts.slice(1).join(":"));
+        } else if (parts[0] === "dump-layout-menu") {
+            root.dumpLayoutMenu(parts.slice(1).join(":"));
+        } else if (parts[0] === "dump-pill") {
+            root.dumpPill(parts.slice(1).join(":"));
         } else if (parts[0] === "dump-calendar") {
             const view = calendarLoader.item as CalendarView;
             if (view) {
@@ -348,6 +513,16 @@ PlasmoidItem {
                 }));
             }
         }
+    }
+    // Where the pill's parts sit in it, and the layout control's measures.
+    function dumpPill(tag: string): void {
+        const at = item => item.visible ? Math.round(item.mapToItem(pill, 0, 0).x) + "+" + Math.round(item.width) : "hidden";
+        console.info("clockpill: pill dump " + tag + " " + JSON.stringify({
+            step: budgetLevel, pill: Math.round(pill.width), dots: at(dots), control: at(layoutControl),
+            date: at(dateTip), level: layoutControl.level, mode: layoutControl.mode, calendar: popupOpen,
+            textScale: m.ts, glyph: layoutControl.glyphSize, gap: layoutControl.gap,
+            labelPx: layoutControl.metrics.font(layoutControl.px), labelWidth: layoutControl.labelWidth
+        }));
     }
     function calendarTargets(item: Item, targets: var): void {
         if (!item || !item.visible || item.opacity === 0) {
@@ -514,13 +689,41 @@ PlasmoidItem {
                 onOverviewRequested: root.showOverview()
             }
 
+            // The workspace layout control (LayoutControl.qml): after the dots, or first with one
+            // workspace (the specification's item 1), one pill padding from its neighbours; the dot
+            // cells carry 2 px of it.
+            Item {
+                width: layoutControl.visible ? root.pillPadding - (root.showDots ? dots.cellPadding : 0) : 0
+                height: 1
+            }
+
+            LayoutControl {
+                id: layoutControl
+                anchors.verticalCenter: parent.verticalCenter
+                mode: layoutState.mode
+                level: root.layoutLevel
+                metrics: m
+                color: root.textColor
+                location: Plasmoid.location
+                cellHeight: pill.height
+                // The gate (D19): interactive only while the layout actions are available, so a
+                // provider that refuses them leaves P4's read-only control.
+                interactive: layoutState.actionsAvailable
+                menuOpen: root.layoutMenuRecent
+                pending: layoutState.actionPending && !layoutState.actionOpen
+                accent: accent
+                onMenuRequested: by => root.openLayoutMenu(by)
+                onMenuDismissed: layoutState.close(true)
+            }
+
             // Date and time: one button that opens the calendar. It reaches the pill's edge so
             // the whole right part is clickable. The tooltip area is the outer item: a
             // hover-enabled item on top of a MouseArea would take the hover from it.
             PlasmaCore.ToolTipArea {
                 id: dateTip
 
-                readonly property real leading: root.showDots ? root.pillPadding - dots.cellPadding : root.pillPadding
+                readonly property real leading: root.showDots && !layoutControl.visible
+                    ? root.pillPadding - dots.cellPadding : root.pillPadding
 
                 anchors.verticalCenter: parent.verticalCenter
                 width: leading + timeRow.implicitWidth + root.pillPadding
@@ -721,6 +924,87 @@ PlasmoidItem {
                              + (Date.now() - root.openStarted) + " ms");
                 root.openStarted = 0;
                 root.calendarShown = true;
+            }
+        }
+    }
+
+    // ---- Layout menu pop-up
+    // The menu the layout control opens (P6): an applet pop-up of its own, as the provider accepts
+    // a prepare only while a focused shell applet pop-up holds the focus, and a Qt menu would be a
+    // pop-up surface that never does.
+    PlasmaCore.AppletPopup {
+        id: layoutMenuPopup
+
+        visualParent: pill
+        popupDirection: {
+            switch (Plasmoid.location) {
+            case PlasmaCore.Types.BottomEdge:
+                return Qt.TopEdge;
+            case PlasmaCore.Types.LeftEdge:
+                return Qt.RightEdge;
+            case PlasmaCore.Types.RightEdge:
+                return Qt.LeftEdge;
+            default:
+                return Qt.BottomEdge;
+            }
+        }
+        margin: Plasmoid.configuration.popupGap
+        floating: !root.inPanel
+        removeBorderStrategy: PlasmaCore.AppletPopup.Never
+        hideOnWindowDeactivate: true
+        visible: root.layoutMenuShown && layoutMenuLoader.status === Loader.Ready
+
+        onVisibleChanged: {
+            if (visible) {
+                requestActivate();
+                const menu = layoutMenuLoader.item;
+                if (menu) {
+                    menu.focusConfirmed(root.layoutMenuBy !== "pointer");
+                }
+            } else {
+                root.layoutMenuHidden();
+            }
+        }
+        // The popup's activation resets the row's focus reason to the window's, so a keyboard
+        // opening would lose its ring; the reason is applied again once the popup is active (D12).
+        onActiveChanged: {
+            if (active) {
+                const menu = layoutMenuLoader.item;
+                if (menu) {
+                    menu.focusConfirmed(root.layoutMenuBy !== "pointer");
+                }
+            }
+        }
+
+        mainItem: Loader {
+            id: layoutMenuLoader
+            active: root.layoutMenuShown
+            asynchronous: false
+            focus: true
+            sourceComponent: LayoutMenu {
+                mode: layoutState.mode
+                tiledBlocked: layoutState.tiledBlocked
+                choice: layoutState.actionChoice
+                pending: layoutState.actionPending
+                status: layoutControl.outcomeText(layoutState.actionReason, layoutState.actionChoice, true)
+                touch: m.touch
+                location: Plasmoid.location
+                onInputReported: layoutState.input()
+                onChosen: mode => layoutState.choose(mode)
+                onCloseRequested: layoutState.close(true)
+            }
+        }
+        Connections {
+            target: layoutMenuPopup
+            enabled: root.layoutMenuStarted > 0
+            function onFrameSwapped() {
+                if (!layoutMenuPopup.visible) {
+                    return;
+                }
+                console.info("clockpill: layout menu " + (root.layoutMenuShownOnce ? "open" : "first open")
+                             + ", first frame after " + (Date.now() - root.layoutMenuStarted) + " ms");
+                root.layoutMenuStarted = 0;
+                root.layoutMenuShownOnce = true;
             }
         }
     }

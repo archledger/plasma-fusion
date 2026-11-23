@@ -83,6 +83,914 @@ metric's window for noise; only quiet windows count when there are any).
 `run.sh` that runs, which is the snapshot's copy when run from `build/snap`). To update the
 repository's baseline from a snapshot run, pass `--baseline <repo>/tools/tests/perf/baseline.json`.
 
+### Workspace layout transport probe (P0)
+
+`tools/tests/layout-control/` contains test-only KWin and applet fixtures, not the production
+layout control. The accepted scope and remaining gates are in
+[`tasks/workspace-layout-control/plan.md`](../../tasks/workspace-layout-control/plan.md), and the
+phase where each open G0 item is met is in
+[`g0-decisions.md`](../../tasks/workspace-layout-control/g0-decisions.md).
+Nothing in these fixtures installs into the logged-in desktop.
+
+The Python entry point remains `tools/tests/layout-control/test_prepare_seed.py`. Guard cases
+live in `target_guard_tests.py`; consumer inventory, lease and retirement cases live in
+`consumer_lifecycle_tests.py`; cleanup qualification/ownership cases live in `cleanup_tests.py`.
+Combined lifetime, seed and raw-evidence cases live in `mixed_lifetime_tests.py`; output-loss and
+activity-switch cases live in `view_loss_tests.py`; refused and absent native backend cases live in
+`refused_backend_tests.py`; read/publish pipeline cases live in `pipeline_tests.py`; keyboard-entry
+cases live in `keyboard_entry_tests.py`. They share
+`qml_helpers.py` with the entry point. The driver
+re-exports the classes, preserving existing class selectors and all cases. The support module
+names deliberately do not match `test_*.py`, avoiding duplicate default discovery.
+Cases make their scratch directories in the default temporary directory, which follows `TMPDIR`;
+`ScratchDirectoryTests` rejects a directory fixed in the source, given to a tempfile function or
+assigned to `tempfile.tempdir`: a string literal or a name only ever assigned string literals, as
+the whole value, or inside a larger expression if one of those literals is absolute.
+Package-aware imports also preserve `python3 -m unittest` with the entry file's path.
+Target-mode seeds copy and hash `receipts.py`. The shell wait helpers and their Python tests
+call its `target-reply` and `consumer-state` entry points. Complete-line event/native parsing is
+shared, while each checker's existing correlation rules remain separate; this extraction does
+not strengthen the older target checker or settle the production protocol.
+Mixed-lifetime seeds additionally copy and hash `mixed_lifetime.py` and `mixed_scenario.sh`.
+The scenario is sourced after the existing target/retirement prelude, keeping the main Bash
+process responsible for its children and cleanup. Snapshot and partial runtime checks are the
+same functions used by the final combined qualifier. View-loss seeds instead copy and hash
+`view_loss.py`, `view_loss_scenario.sh` and the `mixed_lifetime.py` complete-line reader that
+checker reuses; the mixed scenario itself is not copied. Refused-backend seeds copy and hash
+`occupier.qml`, `refused_backend.py`, `refused_scenario.sh` and the same complete-line reader.
+Pipeline seeds copy and hash `pipeline.py`, `pipeline_scenario.sh` and the same reader.
+Keyboard-entry seeds copy and hash `keyboard_entry.py`, `keyboard_scenario.sh` and the same
+reader.
+
+Build `topbar kwin` into a private stage, then make a fresh seed under this worktree's `build/`:
+
+```sh
+python3 tools/tests/layout-control/test_prepare_seed.py
+python3 tools/tests/layout-control/prepare_seed.py \
+    --stage build/layout-control-stage --output build/layout-probe/seed-example
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-example tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-example" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-example
+```
+
+`IMAGE` must identify an independently prepared, immutable fork test image. Use a new, short run
+name each time: the existing harness puts it twice in a Unix socket path, which must fit 108
+bytes including its terminator. The seed preparer refuses an existing output or an output
+outside `build/`; it never copies live user configuration. The provider remains inactive without
+`ProbeAuthorized=true` in its private KWin configuration.
+Every fresh seed also copies/hashes `cleanup.py`, its existing `lifecycle.py` bus helpers and
+the private-container marker in `pfv-env`. Old seeds without these inputs must not be reused.
+
+The probe saves each request before waking KWin and records incoming frames separately from
+accepted receiver memory. It checks native capability/refusal, two-widget delivery, graceful
+retirement, alias release, reload with a fresh query, and rejection of a high-revision frame
+claiming the wrong backend connection. Its identity-only alias exports no objects or methods.
+The receiver checks the current KWin owner and the alias owner before accepting an online frame;
+request and revision checks also run after those asynchronous lookups. Owner-loss events clear
+state and advance the query generation even if the final frame never arrives. The current
+in-flight verification is watched too, before its first binding is accepted. The workspace
+decoder wraps string signal arguments; convert them to strings before comparing connection IDs.
+The relevant version-matched APIs are
+[the workspace D-Bus decoder and connection](https://invent.kde.org/plasma/plasma-workspace/-/tree/v6.8.3/components/dbus)
+and [KConfigPropertyMap::writeConfig](https://invent.kde.org/frameworks/kconfig/-/blob/v6.32.0/src/qml/kconfigpropertymap.cpp).
+
+To test loss without a final frame, create another fresh seed with an explicit fault:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-loss --drop-retirement-frame
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-loss tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-loss" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-loss --scope silent-retirement
+```
+
+The fault is off by default, recorded in the seed's KWin configuration and covered by its input
+hashes. The fault case must prove alias disappearance, unchanged KWin connection, no received
+offline frame, unknown receiver state with a newer query, and recovery with a new provider epoch.
+Normal retirement still requires both cached frames to reach their intended live widgets, but
+those frames cannot keep withdrawn state authoritative: receivers become unknown. An unconfirmed
+read does not retarget the cached recipients to the connection that supplied it. A delivery
+negative control swaps claimed consumers between receivers; the trace records the emitting
+receiver's lifetime separately, so packet claims alone cannot satisfy delivery. The wrong-backend
+injection permits legitimate queued replies to advance state, while asserting that no
+wrong-owner or injected high revision is accepted. Event-routing unit tests execute the real
+QML handler in Node, including wrapped strings and loss during an unbound verification; real
+session tests remain necessary to validate D-Bus delivery and state transitions.
+
+The normal scenario also sends a low/high/middle revision burst to each live widget. All six
+frames must reach the intended receivers before any burst state is accepted, so the test
+actually exercises the pending slot during asynchronous verification. The highest revision must
+eventually be confirmed without changing the request or provider binding. Coalescing keeps the
+highest pending state only within the complete consumer/request/epoch/backend/alias exchange;
+revision watermarks do not hide a different exchange. The queue still has one active verification
+and one pending packet.
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-example --scope reply-ordering
+```
+
+That scope requires `reply-ordering-result.json`; a first-slice receipt cannot certify it.
+This covers same-exchange query-state ordering, not mixed-lifetime stress or production action
+completion acknowledgements.
+
+The query-timeout case uses a short client deadline and delayed native publication:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-timeout --query-timeout-ms 200 --reply-delay-ms 2000
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-timeout tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-timeout" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-timeout --scope query-timeout-late
+```
+
+The private query deadline defaults to 10000 ms and accepts 100–10000 ms. Reply delay defaults
+to zero; the fault accepts up to 3000 ms and must exceed the chosen deadline. It cannot be
+combined with `--drop-retirement-frame`: the scenario runs only one of the two cases. The seed
+hashes both the provider configuration and client schema. Intervals follow
+[Qt's one-shot Timer](https://doc.qt.io/qt-6/qml-qtqml-timer.html), not a real-time guarantee.
+Timers are dynamically created with an explicit owner and captured request/destination; see
+[Component.createObject](https://doc.qt.io/qt-6/qml-qtqml-component.html#createObject-method).
+They do not repeat or poll. Confirmed replies, replacement queries and teardown cancel owned
+client deadlines. Provider teardown cancels held publications, whose unique shell destination
+is never resolved again when the delay expires.
+
+The case captures the provider alias before creating widgets. Each live consumer must start
+unknown, become unconfirmed once, and accept its valid late state on the same query and provider
+lifetime. A timeout neither advances the query identity nor retries it. Outbound traces and
+native wake counts prove that no automatic retry occurred. Wrong-request high revisions must
+remain rejected after the valid late response. A dedicated receipt is required. These are
+read-only query checks, not qualification of mutating-action cancellation, retries or outcome
+acknowledgements.
+
+The focus observation case uses opt-in diagnostic controls, not production layout-control UI:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-focus --focus-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-focus tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-focus" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-focus --scope focus-observation
+```
+
+The seed copies and hashes the existing guarded `heldclient.py`; no shared helper is modified.
+A controlled Wayland app is activated, the native applet popup takes focus, and EIS sends Space
+to the focused control. The case requires the actual received key, a new correlated query, a
+live retained eligible app, matching Qt/native output names and candidate clearing after close.
+The key trace names its expected query generation before the
+[deferred query](https://doc.qt.io/qt-6/qml-qtqml-qt.html#callLater-method).
+One shell-log snapshot must show that receiver's key, matching outbound query and accepted state
+in order. Native wake evidence must follow the pre-key log baseline; an older online response
+cannot certify a newer key. Negative checker fixtures exercise this stale-snapshot case.
+It records activation order instead of assuming that keyboard focus and KWin's active window
+are identical. App classes stay in backend diagnostics; the client packet no longer includes
+the old window identifier. Interactive test controls have explicit accessible names and use
+native Qt controls/AppletPopup behavior.
+
+This receipt establishes focus/event/output-name feasibility only. The retained observation
+candidate is not a prepared token or guarded captured-view contract: focus-change/view-change
+refusal, competing controls and output-object lifetime validation are exercised by the modes
+below, and tiler integration belongs to P1. The diagnostic dimensions are not production design
+values.
+
+The separate `--target-probe` mode exercises non-mutating preparation and validation:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-target --target-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-target tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-target" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-target --scope target-preparation
+```
+
+The default-off seed enables the diagnostic focus controls and requires normal transport.
+The provider resolves the captured unique shell owner's PID through the existing session bus.
+Only a non-normal shell applet popup, dock or desktop surface with that verified PID and the
+intended native output may preserve the remembered eligible app. A class/app-id string is not
+identity evidence. Native PID/type observations were checked in the private Wayland environment;
+this is not an XWayland qualification.
+
+The captured window, focus surface, desktop and output objects stay in KWin. A small diagnostic handle
+binds one prepared slot to its shell connection, live widget ID and consumer lifetime. The
+provider accepts only versioned `prepare`/`validate` intents, bounds the envelope and rows, rejects
+conflicting identities and never renews a repeated preparation. Validation rechecks native state;
+it is not a cached action acknowledgement. Focus, membership and view events invalidate the
+reference and advance a bounded context generation rather than selecting another window. The
+exact captured focus surface must remain live and focused: another shell popup or menu dismissal
+also invalidates the preparation, not merely another application. The provider publishes read-only
+view/context updates on those events. The menu request freezes the
+confirmed provider incarnation, generation and desktop/activity/output IDs before its deferred
+send. Every actual focus transition advances that generation, including before capture. The
+first received popup input dispatches preparation against the frozen pre-opening context; opening
+alone does not send it. Only the recorded single eligible-app/panel-to-popup handoff may bridge
+one generation, with the same live candidate and view. Another popup, dismissal or return cannot
+use that exception. The provider rejects a stale snapshot before choosing any target. Returning
+to an earlier view cannot revive that intent. The accepted preparation context is separate from
+the original immutable request and is used for validation. Loss of readiness retains only an
+inert last-confirmed diagnostic snapshot so stale-handle rejection can be tested.
+Preparation responses contain only intent, readiness, reason and
+the handle; context frames contain only their required scalar view IDs and generation, never
+window IDs, PIDs, classes or placement records. Each context also carries its consumer's public
+freshness lease, not a native writer token or authentication credential. The client copies that
+lease with the frozen menu, original request and accepted preparation contexts; a later update
+cannot replace it in an outstanding intent. Each target frame also repeats the consumer's decided
+completion, separately from the preparation (see the completion case below).
+
+Target mode reads a complete native widget inventory separately from parsed requests. At most
+16 widgets and 2048 characters per request are accepted. Unreadable requests leave their widgets
+in the inventory with an unknown consumer. Truncation, malformed or inconsistent snapshots and
+reader failures unconfirm records; they do not prove absence or free the slot. Only a complete
+inventory can retire a missing widget or a confirmed replacement consumer. Inventory is reconciled
+on the existing event-driven scans, not an idle polling timer.
+
+The provider retains bounded request/payload/refusal history per current consumer, independently
+of the single prepared slot. Repeating a refused preparation keeps its original reason, even
+after the holder disappears or the view or focus changes; a new explicit intent is required.
+A newer query from a confirmed consumer also advances its request sequence, so a delayed
+earlier preparation cannot capture a window. Replacement or reappearance gets a distinct,
+monotonically issued lease, so a saved old request cannot revive even if its boot label returns.
+Lease exhaustion refuses rather than wrapping.
+
+The native scenario uses the first Space to prepare and the second to validate the controlled app.
+It then requires refusal after another app activates, a new explicit preparation followed by
+close/refusal, and a desktop
+leave/return followed by refusal of the old handle. Each reply must match the receiver, outbound
+generation and the native verdict of the accepted revision. Unit cases also cover ineligible/spoofed
+focus, destroyed wrappers, membership/activity loss and same-name output-object replacement.
+Pre-capture focus/view races and immutable client snapshots also have regression coverage.
+Pre-capture popup-to-popup, dismissal and return sequences are regression cases too. A
+[window's active flag](https://doc.qt.io/qt-6/qwindow.html#isActive) includes its transient chain;
+it is not used alone as the popup-input receipt.
+Recorded frame centers are backend-only test input coordinates used to reactivate the controlled
+app after close; they are never target/view identity or mode evidence.
+
+The target scenario then prepares through the competing widget, requires a busy refusal, and
+removes only the owned holder widget after checking its native ID and current consumer. It
+enumerates native applets to confirm removal, wakes the provider and requires a newer accepted
+revision that still refuses the same competing request. A new keyboard preparation must succeed
+with the surviving consumer's unchanged lease. The checker correlates accepted state with the
+exact native verdict revision; merely received or older frames cannot satisfy it.
+[Widget::remove()](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/widget.h)
+is exposed as a slot; its
+[implementation](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/widget.cpp)
+destroys the applet. The inventory comes from
+[Containment::widgets()](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/containment.cpp),
+not the presence of saved request fields.
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-target --scope consumer-retirement
+```
+
+This requires `consumer-retirement-result.json`; the guarded-target receipt alone is insufficient.
+It remains a one-slot diagnostic prototype, not the settled production protocol. Mixed lifetimes,
+activity/output loss, a completion that newer state frames keep and competing requests from two
+bars have their own modes below; fair arbitration belongs to P7, mutating action acknowledgements
+and timeouts to P5 and existing-tiler integration to P1. No preparation or validation admits a
+window, changes its geometry or writes placement memory.
+
+Each publication is a shell script call (`evaluateScript`) that the shell serves on its main thread.
+In the instrumented runs most took under 10 ms, but about one in ten took over 100 ms, up to 0.9 s,
+and a click that follows a context change can be sent while the provider is still publishing it. A
+pointer click sent while the shell was serving a publication usually lost its button events: 15 of
+18 such clicks were lost, the button seeing only a late hover, and none of 157 clicks outside a
+publication. A reproduction without the probe lost clicks the same way and traced it to the test
+input: every `pfinput` run is its own EIS input client with its own pointer, and the session has no
+other, so a shell busy with a script call when a run connects binds its pointer only after the
+call, and nothing sent to the pointer before that reaches it; the late hover is the enter that
+follows the bind. With one input client held connected for the run, every click sent during a call
+arrived when the call returned. The probe itself has not run with a held pointer. Once a prelude
+click with no read or publication outstanding lost its release instead: its hover arrived at once,
+its press about 460 ms after it was sent, and its release never did. Untraced, it matches a
+QtWayland defect ([the blocked queue](../DEFERRED.md)). The scenario works around the publication
+case: before each Validate click that follows a context change, it waits until the provider has
+observed the change, the receiver holds the provider's newest context and no read or publication is
+outstanding. The checker reads the provider's generation and outstanding work from the same log
+snapshot (`receipts.py target-settled`; the floor is the provider's context generation before the
+change plus the generations the change advances). A read the provider has scheduled but not yet
+started does not show in its log, so the wait cannot see one. With the wait no click was lost in 30
+native target-mode runs; without it about one run in seven had lost one.
+
+The bridge's target waits (for a reply, the consumer's context, a consumer state, the shell to
+settle, the popup, the second app's activation and the owned consumer's removal) each check 40
+times, 0.1 s apart. One that gives up prints a single FAIL line naming the wait, what it waited for
+and the log that holds its last check's reason; the bridge runs under errexit, so that line is the
+last the scenario writes (`TargetWaitTimeoutTests`).
+
+The default-off `--mixed-lifetime-probe` mode composes these boundaries in one ordinary session:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-mixed --mixed-lifetime-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-mixed tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-mixed" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-mixed --scope mixed-lifetimes
+```
+
+This implies the existing target/focus controls and rejects the other transport faults. After
+the guarded-target and busy-retirement prelude, the driver preserves the surviving consumer,
+creates one replacement widget and reloads only the provider. Native inventories and accepted
+memory must show a new consumer lifetime/lease and provider epoch/alias, while the bus, backend
+and shell connections remain unchanged. Unknown memory is observed before the deferred fresh
+query; online evidence must follow its exact outbound query and native output attachment.
+
+The driver then re-delivers one unmodified captured preparation frame to the replacement and
+two explicitly labeled fence-isolation frames. One changes only the captured frame's surrounding
+provider/query fields to exercise a retired consumer; the other retains the retired provider
+but uses the survivor's current request and a high revision. These are controlled transport
+faults, not new authoritative native acknowledgements. Every exact frame must reach its intended
+live receiver, never become accepted state, and be followed by a newer genuine native response
+on the unchanged exchange. That response must be received after the receiver's last late frame
+and match its own `layout-probe-published` row (below); it drains asynchronous verification, and
+an unchanged snapshot immediately after delivery cannot certify rejection.
+
+The survivor's original preparation envelope is replayed once as a labeled driver fault. Its
+exact native `consumer-not-current` refusal must reach that consumer. Restoring its current
+read-only query is not an automatic consumer retry. Both live receivers must then confirm newer
+genuine responses without lease or request replacement. Finally, actual focused Space input
+through the replacement must produce one new explicit preparation of the controlled application.
+The final native inventory and accepted states must still show both consumers and their leases.
+The qualifier scans the retained accepted-state/outbound history, not only final state; hidden
+query retries, reused leases, wrong application verdicts and mere success flags fail.
+Every accepted packet is checked against the active request timeline, including transient states
+later overwritten by recovery. Provider replacement permits exactly one next-generation query
+per live consumer, with unknown observed before its deferred send and no unsolicited native
+preparation before reload confirmation. The final explicit input is the only further exchange.
+After the replay refusal reaches its consumer and the restore call completes, an exclusive
+`mixed-restored-boundary.json` records complete-line shell/backend positions. Both recovery
+acknowledgements must follow that boundary; an earlier queued reply cannot stand in for them.
+Receipt precedes asynchronous receiver verification, so a post-boundary observation alone is
+insufficient. Each recovery observation must match its exact receiver-bound receipt after the
+boundary and a later native `layout-probe-published` row with the same widget, destination,
+consumer, request, epoch and revision. That backend-only diagnostic, which also binds the
+late-frame response, is enabled only for this mixed mode and does not add fields to the wire
+packet. Thus a pre-restoration packet cannot qualify merely by completing verification or
+arriving late after the marker.
+
+This scope requires `mixed-lifetime-result.json`, the `mixed-*` phase/inventory/frame records,
+complete shell/backend traces and the existing independent cleanup evidence. A target,
+consumer-retirement or ordering receipt cannot stand in for it. The provider and consumer QML
+behavior is reused unchanged. This is one captured-frame replay and competing-control
+interleaving, not fair arbitration, a mixed shell/KWin process-replacement stress matrix,
+actual activity/output-loss testing, mutating action completion or production tiler integration.
+Output and activity loss have their own mode below; fair arbitration and the replacement matrix
+belong to P7, mutating action completion to P5 and tiler integration to P1. This mode does not
+clear G0/P1 or fix the Qt shutdown bug.
+
+The default-off `--view-loss-probe` mode exercises real output-object loss and activity switches.
+It needs two virtual outputs:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-view --view-loss-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 PFV_OUTPUTS=2 tools/vsession/cvsession.sh \
+    layout-control-view tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-view" 1440x900 240
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-view --scope view-loss
+```
+
+The mode implies the target and focus controls, rejects transport faults and cannot be combined
+with `--mixed-lifetime-probe`. The driver branches right after the target prelude's first
+explicit preparation and keyboard validation, while that validation is still live, and changes
+only the private session:
+
+1. `kscreen-doctor` disables the output holding the controlled app and the one probe panel,
+   which carries both widgets. The retained validation names the removed output and must be
+   refused `stale-context` without a context. KWin must evacuate the app, still alive, to the
+   remaining output; the panel must follow, and both widgets must keep their consumer lifetimes
+   and leases.
+2. Re-enabling the output creates a new native output with the same name. The same retained
+   envelope must stay refused in a newer context of that output. A fresh validation click that
+   re-sends the old handle unchanged, apart from its request number, is refused too.
+3. `AddActivity` creates a second activity. After a new explicit preparation and validation on
+   the returned output, `SetCurrentActivity` switches away and back; that handle must be refused
+   on both sides, including a fresh re-send after the return.
+4. With the app remembered again on its own activity, the same control on the other activity
+   opens its popup and sends a keyboard preparation. It must be refused without capturing the
+   app, which is not part of that view.
+5. A final explicit preparation on the original activity must succeed with a new handle.
+
+The driver checks, rather than assumes, KWin's evacuation and restoration of the app and
+Plasma's move of the panel; those were observed on the pinned image, not a guaranteed placement
+policy. Clicks on the app follow a click on empty desktop, so each one is a real activation.
+After an activity switch the next click waits until both widgets accepted the switched context;
+one click that raced the shell's own switch handling opened no popup.
+
+In this mode the provider adds a backend-only `layout-probe-view` record to every context
+generation advance. It names the native source (`screens`, `current-activity`, `activities`,
+`activation`, `window-output` and the other window, desktop and shell-identity events) and
+whether a live preparation existed. Each screen entry says whether that native output object was
+present when the provider started or appeared in an earlier record (a bounded history), so a
+same-name replacement reports a new object rather than the name's old one. Whichever record
+first lists the returned name must report it unknown, independent of event order. A diagnostic
+reference to the last activated eligible app supplies its class, output, frame and view
+membership; decisions never read it and it never enters a packet. The wake shortcut adds a
+record without advancing the generation, and the driver uses it to read current geometry. Other
+modes emit none of this, and the wire packets are unchanged.
+
+`view_loss.py` binds each step to the complete shell/backend lines between an exclusive
+`view-mark-*.json`, written before the native action, and the point where the step was confirmed
+(`view-<step>.json`). Before disabling the output, the baseline step requires a ready native verdict
+for the retained validation from a completed read that started after the last wake. A read in
+flight at the wake cannot qualify, even if its verdict arrived after the wake; a later completed
+read without a verdict does not undo one already confirmed. A required event must carry its own
+native source, so a broken screens or activity handler cannot
+hide behind a focus change. Each refusal must match its exact native
+verdict, its actual receipt and accepted memory. The final check recomputes every step from its
+window, requires the windows in order without overlap and audits the whole run. Every generation
+advance appears once, in order, with a known source. Until the first output change only the
+original validation may be re-confirmed. Afterwards readiness occurs only for the three explicit
+recovery verdicts, each naming the live app within its own recovery's log span, so a recovered
+handle re-confirmed after a later switch fails. Every accepted ready packet must match the exact
+exchange of one of these verdicts or of a pre-change re-confirmation of the original validation
+that the shell accepts before the output-loss refusal. The guarded consumer sends exactly its six
+explicit requests, the read-only consumer sends no target
+intent, and all accepted state keeps one provider lifetime and both leases. The checker writes
+`view-loss-result.json` from its own check list, and only after this full check passes.
+
+This scope requires `view-loss-result.json`, the view records and inventories, complete traces
+and the independent cleanup evidence. It covers one private two-output layout and one added
+activity on this image. Hot-plugging a new connector, bars spanning several outputs, desktop
+removal, mutating action acknowledgements and production tiler integration remain untested, and
+this mode does not clear G0/P1.
+
+The default-off `--refused-backend-probe` mode exercises a refused native registration over the
+plain transport, without target controls or transport faults:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-refused --refused-backend-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-refused tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-refused" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-refused --scope refused-backend
+```
+
+The fork keeps one native provider slot. `TransientPlacementWriter::registerProvider` (tag
+`v6.8.2-pf5`) returns a null UUID while another provider holds it or while the writer is busy, and
+releases the slot when that provider object is destroyed; the script API returns an empty string
+when there is no writer at all. The seed installs the test-only `occupier.qml` as a second KWin
+script and starts only that one, so the slot is held before the probe exists, as when another
+provider such as the placement script holds it. The occupier logs only its verdict and never
+creates tiles, moves windows or writes configuration. The scenario branches before the startup
+probe check, then:
+
+1. loads the probe, whose registration is refused, and creates the two widgets; both must settle
+   `unsupported`, and no capable state or frame may appear;
+2. reloads the probe while the slot is still held; each consumer must drop the first lifetime's
+   state, and the second refused lifetime must report a different provider label and alias;
+3. unloads the occupier, which releases the slot;
+4. reloads the probe, which is accepted; both widgets settle `online` with a third label.
+
+Each load runs only the script it just loaded, through its own `/Scripting/Script<id>` object.
+`Scripting.start` would re-read `[Plugins]` and unload a loaded script that is disabled there
+(`Scripting::queryScriptsToLoad` in the fork), and this seed disables the probe, so the first
+native run of the scenario, which called it, loaded the probe and destroyed it at once. KWin also
+runs `Scripting.start` whenever its configuration changes, so a KWin reconfigure during the case
+would unload the probe the same way; that fails the case, and nothing in it reconfigures KWin.
+KWin numbers a script by the current script count, so the scenario waits until an unloaded probe
+is really gone before loading the next one, and requires the numbers 1, 1 and 0: the occupier is
+the only other script, until it is unloaded. A different number means the session holds other
+scripts than assumed; the number may then also belong to one of them, whose object `run` would
+reach instead.
+
+The provider takes its public lifetime label from `newLifetimeLabel()` in `registerNative()`,
+independently of the native token and of whether registration succeeded. Before this change the
+label was the MD5 of the token, so every refused lifetime shared one label and alias name, as did
+every lifetime on a KWin without the API. The ownership token is never kept, logged or published.
+
+`refused_backend.py` binds each step to the complete lines between an exclusive
+`refused-mark-*.json`, written before the native action, and the step's confirmation. The final
+check recomputes every step and audits the run up to its last step: three initializations
+reporting refused, refused and accepted, each with the fork's null-output `createTile` refusal
+(`-1`); the occupier registered before the first and released between the second and third;
+three distinct labels with identity names derived from them; capable state only in the accepted
+lifetime; no consumer reporting a lifetime after it has reported a later one, also between the
+steps' windows; and one backend connection. It writes `refused-backend-result.json` only after that
+check. This scope also requires the independent cleanup evidence.
+
+Three events can end a consumer's binding to the previous lifetime, and they race: its own
+invalidation of the old alias, its acceptance of the old provider's `offline` frame, and the new
+provider's first frame, which carries another label. The check accepts any of them. Whichever
+won, each consumer must report `unknown` with no packet, log a fresh query and receive its matching
+frame before accepting it, and never again report the previous label. The query must be newer
+than its previous settled request. Before that drop a
+consumer may still accept a newer frame of the previous lifetime: each provider publishes once
+per wake, and a consumer verifies one frame at a time, so a step can be confirmed between two of
+its acceptances. Such a row is accepted only with the previous lifetime's settled state, label,
+alias, capability and request.
+
+This covers a refused registration on this image. A KWin without the transient-tiling API and a
+missing writer are covered by unit cases only. In the qualifying native runs every consumer left
+each lifetime through its own alias invalidation and accepted every frame of a lifetime before the
+next step's mark; the retirement-frame and new-label paths, and a frame accepted after that mark,
+are covered by synthetic checker cases only. The consumers'
+`unsupported` state is a transport observation; no UI exists yet, and this mode does not clear
+G0/P1.
+
+The read/publish pipeline is serialized in every mode. The provider starts a read only when no
+read or publication is outstanding; a wake-up during either sets one pending flag, so several
+wake-ups coalesce into one later read. The writer's completion or failure resumes the pipeline,
+and a delayed publication (the query-timeout fault) that falls due during a read waits for that
+read. In target mode a failed shell PID lookup invalidates the context without scheduling another
+read; the next wake-up or context event reads again. Every mode's reader visits at most 16 widgets
+of at most 2048 characters each and accepts
+only a well-formed consumer and request; target mode applied these bounds before. The provider
+logs `read started`, `read finished`, each publication it sends and each completion, so a native
+run can replay the pipeline. Two limits remain. Retirement at teardown sends its offline frame at
+once, even while a publication is outstanding. A publication the shell never answers holds the
+pipeline until the D-Bus reply timeout ends it as a failure, which resumes it.
+
+The default-off `--pipeline-probe` mode checks that order natively over the plain transport:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-pipeline --pipeline-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-pipeline tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-pipeline" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-pipeline --scope pipeline
+```
+
+After the first online exchange and its identity checks, `pipeline_scenario.sh` writes an
+exclusive mark and the number of wake-ups it fires, then sends 24 wake-ups concurrently and waits
+only for those clients, each in turn, stopping there with a FAIL line unless all of them
+succeeded. `pipeline.py` replays every pipeline event of the run up to the settled
+step: no read may start while a read or publication is outstanding, at most one publication may
+be outstanding, and every wake-up must be followed by a read, so coalesced wake-ups are told
+apart from lost ones. Every wake-up of the burst must arrive, at least one must meet a busy
+pipeline, and the burst must coalesce into fewer reads than wake-ups. Both consumers must end
+online on their current request with a frame the provider published after the mark: the probe's
+revision counter starts at zero and rises by one per message, so the publication lines' message
+counts bound it. Each settled frame must also match the provider's own consumer, request, epoch
+and revision record. A read or publication line the checker does not recognize fails the check. The
+settled record keeps the counts of wake-ups, reads, publications and response saves.
+`pipeline-result.json` is written only after that record is recomputed from the raw logs, and
+this scope also requires the independent cleanup evidence.
+
+With the previous provider and only the two read log lines added, the same scenario failed: a read
+started while a publication was outstanding. Which stage a busy wake-up meets depends on timing: in
+one passing run every busy wake-up arrived during a read, and in another four also arrived while a
+publication was outstanding and were served by the next read. A delayed publication falling due
+during a read and target-mode context scans are covered by unit cases. The same rules were also
+replayed over the native logs of every other mode's regression run, one provider lifetime at a time
+without the teardown retirement frames, with no violation. This mode shows serialization and
+coalescing for one burst on one panel. It does not reduce how often a scan publishes, which the G0
+decisions require of P1, and it does not clear G0/P1.
+
+The completion that newer state frames keep is part of every target frame (G0 decisions, section 3).
+When the provider first handles a consumer's `prepare`, that answer becomes the request's
+completion: accepted with its handle, or refused with its reason. The provider keeps it for the
+consumer's identity, lease and request number. Every later online frame for that consumer, lease and
+number repeats it unchanged until the provider handles a newer request for that consumer, whatever
+that frame's own answer is: a conflicting or malformed row at the same number carries it too. The
+preparation remains the per-frame re-check: a later frame can report the target no longer valid, or
+the context unavailable, while the completion still says the request was accepted. A refused
+request's later identical preparations repeat the stored `stale-context` or
+`popup-focus-unconfirmed` refusal, while handle exhaustion leaves the generic `refused` outcome.
+The completion keeps the original decision. Until the provider handles a request, its frames
+carry no completion: while
+the context is unavailable, or while the provider does not know the consumer or its lease. A frame
+for a request older than the newest one the provider has handled for that consumer carries none, and
+neither do validations, queries and retirement frames. A newer valid query advances the confirmed
+consumer's request watermark and drops the previous completion. After prepare 2 and query 3, a
+replay of prepare 2 returns `stale-or-conflicting-request` without its old completion. The native
+target verdict records the completion it published.
+
+The default-off `--completion-probe` mode checks this natively in target mode:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-completion --completion-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-completion tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-completion" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-completion --scope completion
+```
+
+The scenario branches after the holder's first accepted preparation, while its popup is still
+open. `completion_scenario.sh` then:
+
+1. closes the popup, a context change;
+2. waits for the competitor's observation and focus control, opens its menu from the app and
+   prepares there, which is refused as busy while the holder holds the slot;
+3. closes that popup;
+4. reopens the holder's menu from the app and creates a virtual desktop while the popup stays
+   active, which makes the menu's captured context stale;
+5. prepares there, which is refused for that stale context;
+6. closes the popup.
+
+Each step is marked before its action. `completion.py` replays every native verdict and received
+frame up to each step, in a window with exactly one provider start, because verdicts do not name
+their provider lifetime. A prepare's deciding answer must carry a completion that restates it, and
+no answer given before the provider touches the consumer's record may introduce one. The checker
+enforces that for an unknown consumer or lease, an older or conflicting request and a malformed
+envelope, but not for an unavailable context: that answer looks like the unavailable refusal a
+decided prepare gets when the provider runs out of handles, so for the holder and the competitor it
+is the steps, which require the expected decisions, that rule it out. Every later verdict for that
+consumer and request number, whatever its intent or answer, must carry the identical completion
+until a verdict shows that the provider handled a newer request for that consumer, and every
+received frame must carry exactly what its verdict published. The checker is stricter than the
+provider in two respects: a consumer re-leased at its decided request fails it, and so does an older
+row that drops its completion after a newer validation the provider handled but answered
+`unavailable`, which happens only after handle exhaustion. It keeps the second on purpose: an early
+unavailable answer to a validation gives the same verdict, and that one must not supersede the
+decision. The steps require the newer frames those actions cause, each accepted from a publication
+after the action. After the context change, a frame keeps the accepted completion while its
+preparation reports the target no longer valid. The publication that decides the competitor's
+refusal also carries a frame that keeps the holder's completion. After each refusal, a later frame
+keeps it. `completion-result.json` is written only after every step record is recomputed from the
+raw logs, and this scope also requires the independent cleanup evidence.
+
+The previous provider published only the per-frame answer. Published as the completion, that answer
+made the same scenario fail at the first context change: a completion changed after its decision. In
+the passing run the stale refusal's preparation changed to `refused` on the next frame while its
+completion kept `stale-context`. Natively this covers one holder and one competitor on one panel and
+output: an accepted completion kept across context changes and another consumer's request, and busy
+and stale-context refusals. A popup-focus refusal, an unavailable context, a replaced consumer, an
+advanced request and a conflicting or malformed row at the decided number are covered by unit cases.
+The completion lives in the provider's consumer record, so a provider restart or a shell replacement
+does not carry it over; the consumer gets a new lease and must request again. It is not a mutating
+acknowledgement, which belongs to P5, and this mode does not clear G0/P1.
+
+Two bars, one on each output, compete for the provider's one slot in the default-off
+`--two-bar-probe` target mode, which needs a session with two outputs:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-two-bar --two-bar-probe
+PFV_OUTPUTS=2 PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-two-bar tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-two-bar" 1440x900 240
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-two-bar --scope two-bar
+```
+
+The bridge puts each probe widget on its own panel instead of both on one. A scripted panel
+starts on screen 0
+([ScriptEngine::createContainment](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/scriptengine.cpp)),
+so the second is moved with its `screen` property, which
+[Containment::setScreen](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/containment.cpp)
+passes to the shell to move the panel. That bar's consumer can send its first request for output 0
+before it sees the move; it then refreshes once. Neither panel floats: a scripted panel floats by
+default and moves into its floating position after its control first reports where it is, and a
+click during that move reached the desktop instead of the control. The holder is the bar on the
+first output: it prepares from the app there, as in target mode, and the scenario branches while
+that accepted preparation is still its current request. `two_bar_scenario.sh` then:
+
+1. closes the holder's popup and opens a second app, `pf.focus.beta`, on the other output, whose
+   desktop it clicks first so that KWin places the app there;
+2. opens the other bar's menu from that app and prepares there, which is refused as busy while the
+   holder holds the slot;
+3. with that popup still open, removes the holder's panel, found by its consumer, marks the logs
+   and wakes the provider;
+4. closes the popup, reopens the other bar's menu from its app and prepares again, a new explicit
+   request.
+
+`two_bar.py` replays every native verdict and received frame up to each step, in a window with one
+provider start, and applies the completion rules to both bars. Each bar's output is the screen its
+control last reported, and the two must differ. Once a bar's control has reported that output,
+every frame the bar accepts with a view must carry that output's view, so a frame for the other
+bar's view, or one view shared by both, fails; frames accepted before that report answer the
+request the consumer sent before it saw the move. The other bar's busy refusal must be published
+together with a frame that keeps the holder's accepted completion. The scenario marks the logs once
+the holder's panel is removed. A scripted
+[Containment::remove()](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/containment.cpp)
+destroys the panel, and the
+[destruction](https://github.com/KDE/libplasma/blob/v6.8.3/src/plasma/private/applet_p.cpp)
+signals it before deleting it, which
+[removes it](https://github.com/KDE/libplasma/blob/v6.8.3/src/plasma/corona.cpp) from the
+containments that the scripting
+[`panels()`](https://github.com/KDE/plasma-workspace/blob/v6.8.3/shell/scripting/scriptengine_v1.cpp)
+lists; the undo notification belongs only to a removal from the user interface. The scenario also
+repeats the provider reader's walk after the removal and stops unless the holder's panel and widget
+are gone. So no read started after the mark may answer the holder, while a read already under way
+may. A read publishes before it logs its end, so every publication after the mark must come from
+the latest read started before it, one that has not ended yet. A read that ends without publishing
+answers nobody, so it is the first publication after the first read started after the mark that
+must answer the other bar's refused request, before any context change since the refusal; the
+other bar must accept a frame from that publication or a later one. The refused request must never
+be answered ready again. This provider repeats the stored `busy` outcome then, and a prepare it
+does not handle afresh is only re-validated, never prepared, so only the new explicit request is
+accepted, with the native capture of `pf.focus.beta` on that bar's output and a frame carrying its
+own view. Each retirement publication consumes one distinct read. `two-bar-result.json` is
+written only after every step and the later complete log lines are checked, and this scope also requires
+the independent cleanup evidence.
+
+Three changed providers each made the same scenario fail at the step meant to catch them. One that
+lets the other bar's prepare take the held slot failed at the competing request, which was not
+refused as busy. One that gives every bar the active output's view failed at the first step, when
+the other bar accepted the holder's view. One that retries a refused prepare by itself once the slot
+is free, evaluating it again on each read and preparing it afresh while its exchange has no handle,
+failed at the retirement step: it answered the busy request ready with `pf.focus.beta` while the
+completion still said busy. Dropping the stored outcome alone does not do that, because a prepare
+that is not handled afresh is only re-validated: in that run the busy request's later answers
+changed to `consumer-retired` and then `stale-context`, still refusals, and the case passed.
+
+Natively this covers two bars on two outputs of one session, one holder at a time, and a holder
+that retires because its panel is removed. Two controls for the same view, on one panel, are the
+holder and competitor of the target and completion modes. Fair arbitration between bars belongs to
+P7 and double-toggle prevention to P5; this mode does not clear G0/P1.
+
+Keyboard entry after panel focus has its own default-off `--keyboard-entry-probe` target mode:
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-keyboard --keyboard-entry-probe
+PFV_IMAGE="$IMAGE" PFV_DRI=1 tools/vsession/cvsession.sh \
+    layout-control-keyboard tools/tests/layout-control/scenario-bridge.sh \
+    "$PWD/build/layout-probe/seed-keyboard" 1440x900 180
+python3 tools/tests/layout-control/prepare_seed.py \
+    --check-result vsession-out/layout-control-keyboard --scope keyboard-entry
+```
+
+The bridge branches once the controlled app is active and the focus consumer holds a context that
+remembers it, before any pointer opens the popup. `keyboard_scenario.sh` first removes every panel
+without a probe widget: plasmashell's 'Move keyboard focus between panels' shortcut (Meta+Alt+P)
+focuses the first panel, which would otherwise be the session's default one. It then:
+
+1. presses Meta+Alt+P, so the probe panel becomes the active window as a shell dock with the app
+   still remembered; waits until the consumer holds the context after that activation; presses
+   Space, which the panel's focused control takes to open the popup; and presses Space in the popup
+   to prepare. The provider must prepare the remembered app, `pf.focus.alpha`, never the panel;
+2. closes the popup and quits the app, so that the provider remembers nothing, and repeats the same
+   keys from the desktop: the preparation must be refused with no target. With nothing remembered
+   the popup's activation bridges no generation, so the request is refused as stale before any
+   window is chosen (the native runs show `stale-context`); `target_guard_tests.py` covers that
+   choice refusing a shell popup with nothing remembered.
+
+A popup that opens from the app, or from one of the shell's dock or desktop surfaces, may bridge one
+generation with the app the provider remembers (the handoff above). This mode exercises the dock
+part of that rule natively. `target_guard_tests.py` covers both surfaces, two panels in a row, a
+request from before the panel had focus, a dock the shell does not own, a dock on another output
+and a panel with nothing remembered. The key on the panel waits for the consumer to hold the
+panel's context because the popup's request carries the context the consumer held when its control
+was activated, and an older one is refused as stale. The key in the popup deliberately has no
+settle wait (`receipts.py target-settled`), which also waits out reads and publications: a key lost
+while the shell serves a publication would show here. None has been: in the reproduction's traces
+(target mode, above) the seat has its keyboard from the shell's start, so a key, unlike a pointer
+event, never waits for the shell to bind a new device. `keyboard_entry.py`
+recomputes each step from the raw logs, from a mark set before its shortcut: the panel's activation
+as the shell's dock with the expected app remembered or none, then the popup with nothing activated
+in between, the focus consumer's keyboard preparation after its popup took focus, and the
+provider's first verdict for that request, given in that popup before anything else was activated.
+That verdict decides the request's completion, which restates it (its reason, and a handle only when
+it is ready) and which a frame the consumer accepted must carry. No verdict in the run may name
+anything but the app or no target.
+`keyboard-entry-result.json` is written only after that recomputation, and this scope also requires
+the independent cleanup evidence. A provider without the dock and desktop part of the handoff
+refused the first keyboard preparation as stale, and the case failed there.
+
+This covers one output and one panel with two probe widgets, with keyboard focus given by the
+shell's own shortcut. The menu's arrow keys, Return and Escape belong to P6's menu; this mode does
+not clear G0/P1.
+
+`--check-result` requires the explicit selected-scope receipt, successful inner scenario/session
+codes and independent cleanup qualification. The wrapper's exit code alone is insufficient.
+`reload-result.json` and
+`identity-fence-result.json` record the additional assertions; none of these certifies full G0.
+The silent-retirement scope requires its own receipt and cannot use the first-slice receipt.
+Action completion/timeout behavior, target preparation and existing-tiler integration need their own
+evidence.
+
+The feature-owned cleanup helper captures the original direct shell child, its controller,
+UID/start times, private HOME/runtime and current bus/backend/shell owners before the cases.
+It refuses root, non-container, foreign or symlinked contexts. A later owner cannot replace that
+capture. At successful case ends it rechecks the unique bus owner's PID and opens a
+[process descriptor](https://docs.python.org/3.14/library/os.html#os.pidfd_open), rechecks the
+identity after opening it, and sends one
+[descriptor-bound SIGTERM](https://docs.python.org/3.14/library/signal.html#signal.pidfd_send_signal).
+An exclusive request record is saved before signalling; an interrupted or concurrent attempt
+cannot silently repeat the effect.
+The descriptor wait is bounded; there is no by-PID/group fallback, escalation or retry. Bash,
+the real parent, supplies the actual child wait status. The existing shared EXIT cleanup is
+neither replaced nor suppressed and still runs after an error.
+The shared fixture bus helper prioritizes qdbus's typed stdout method error over auxiliary
+locale stderr; only `NameHasNoOwner` means withdrawal. Other bus failures still fail the run.
+Signal-terminated helper commands remain failures even if they printed that error first.
+
+`cleanup-identity.json`, `cleanup-request.json`, `cleanup-stopped.json` and
+`cleanup-result.json` are separate from
+functional state receipts. Every serialized process copy is type-validated independently;
+numeric equality alone is insufficient. Qualification requires matching records, actual child
+exit0, unchanged bus/backend identities, shell-owner withdrawal, successful inner/outer codes and a
+completed sweep with no residuals or forced SIGKILL. Missing/partial evidence and known fatal
+signatures in retained logs fail, including an abort that occurs despite functional0/0.
+Nonfatal D-Bus/PipeWire warnings and bounded wait-loop assertion failures are not blanket errors;
+this gate does not establish warning-free logs or universal crash freedom.
+
+The original simultaneous-sweep controls reproduce the same normalized Qt D-Bus backtrace with
+zero probe widgets and with the full probe. The affected Qt6.11.2 path matches
+[QTBUG-149316's upstream fix](https://github.com/qt/qtbase/commit/91ec4c85d454802521c76ba861e24b82c9a3b636).
+Shell-first cleanup is a fixture ordering correction, not a patched or tested Qt remedy.
+The original concurrent-sweep failure remains separate negative evidence; its exact dependency
+trigger and frequency remain unproved. See [the blocked queue](../DEFERRED.md).
+
+`lifecycle.py` is the separate, P0-only process-replacement runner:
+
+```sh
+python3 tools/tests/layout-control/lifecycle.py --name layout-control-lc-example \
+    --seed "$PWD/build/layout-probe/seed-example" --image "$IMAGE"
+```
+
+It requires a full 64-digit image ID, a private authorized seed and unused results. Its own
+container has no network or inherited host bus/display, adds no capabilities, and removes KWin's
+file capability only in its disposable overlay before running as `test`. A short fixed Wayland
+socket name avoids the existing harness's doubled-path limit. It never changes `tools/vsession/`.
+For the keyboard-entry probe, the preparation key waits for the focused item in the
+current popup, not just its active window. The checker requires acceptance after that
+key and matches its completion to the public handle returned by the first native
+preparation, even if a later frame has rechecked it as no longer ready.
+
+Both internal entry points require the disposable-container marker before any filesystem or
+D-Bus side effect, not just matching HOME/runtime strings. Owner readiness uses one lookup and
+retries only `NameHasNoOwner`; other bus errors remain failures.
+
+The supervisor owns the private bus independently of KWin. It restarts Plasma, then KWin and its
+shell, retaining the same HOME and bus. The receipt requires one bus UUID, two different backend
+connections and three different shell connections. Each receiver must first trace unknown with
+zero accepted frames, then bind a fresh response, and no receiver of one shell may reappear in a
+later one; saved response fields must exist before the first restart. The replaced backend's alias
+must disappear. These checks use
+[D-Bus GetId and GetNameOwner](https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-get-id),
+not a process name or a generic service Boolean.
+
+Results go to `vsession-out/<name>/`, with explicit `lifecycle-result.json`, per-process logs,
+receiver observations, versions and child exit statuses. Cleanup stops only children it started
+and the container ID created by that invocation; a stop it cannot confirm keeps the ID file and
+fails the run, which reports PASS only after the stop. Container teardown also removes private
+bus-activated services. Missing receipts, changed bus identity or reused connection identities
+fail the run.
+
+A target-mode seed runs the same restarts and adds the target bootstrap to the receipt
+(`"mode": "target"`, check `target-bootstrap`):
+
+```sh
+python3 tools/tests/layout-control/prepare_seed.py --stage build/layout-control-stage \
+    --output build/layout-probe/seed-lc-target --target-probe
+python3 tools/tests/layout-control/lifecycle.py --name layout-control-lc-target \
+    --seed "$PWD/build/layout-probe/seed-lc-target" --image "$IMAGE"
+python3 tools/tests/layout-control/lifecycle.py \
+    --check-result vsession-out/layout-control-lc-target
+```
+
+Each shell's two receivers count only once their frames carry a view context of their own provider
+lifetime with a consumer lease. Leasing only consumers that a complete inventory confirmed is the
+target-mode inventory rule above; this runner does not test it. Their frames carry neither a
+preparation nor a completion, since a fresh receiver has only queried. No two receivers' leases are
+the same; the restarted shell's receivers get later leases in the same provider epoch, and the
+replacement KWin starts a new epoch. Once the first shell has exited, the saved response fields it
+leaves must hold its receivers' leases (a query's saved request carries an empty lease key too, so
+only responses count). The run keeps that configuration as `shell-1-appletsrc`, and the receipt
+records the leases its responses hold. The second shell therefore starts with retained target frames
+in its widgets' configuration. Before the third starts, the first KWin's teardown leaves its offline
+frames, which carry no lease, in those fields, and that restart has no such control. The receivers
+of both restarted shells still first trace unknown and bind only frames addressed to them, with new
+leases. After the container exits, the runner rechecks the run from its files, as `--check-result`
+also does without writing anything: the receivers recorded for each shell must be in its raw log,
+have started unbound, name that shell's backend connection and give the receipt's leases; no receiver
+may appear in two shells, the receipt's saved leases must be those of the kept configuration's
+responses, and each KWin lifetime's log must pass the replay's serialization rules up to its
+teardown, with at least one read and one publication. Stopping drops a queued delayed publication
+and sends the offline frame even while a publication is outstanding, so nothing from the offline
+frame on is replayed. A plain seed's receipt only adds `"mode": "plain"`; a receipt without a mode
+still checks as plain.
+
+In every target-mode restart run so far with the unchanged provider, its first reads after each
+restart still saw the widgets' retained request fields, which name the previous shell's consumers.
+Under the new shell those are new consumers and took the next leases, one per widget whose retained
+request was read first, before the live receivers sent their own requests: two lease numbers skipped
+at every restart. That order was observed, not guaranteed. Two changed providers failed the target
+run: one that recognized consumers by widget instead of by consumer lifetime gave the restarted
+shell's receivers the previous shell's leases ("two receivers got the same lease"), and one whose
+wake-ups started a read while another was running passed in the container and failed the recheck of
+the first KWin's log. Restarting the lease numbering with each shell is not reliably detected: while
+the retained identities take the reused numbers first, the receivers' leases stay distinct and
+later, and only a receiver whose own request reached the first complete read would get a reused one.
+The runner has no input driver or controlled app, so no prepared intent crosses a restart here; a
+refused intent across a provider reload with consumer replacement is the mixed-lifetime mode's case.
+
+Wayland clients can exit when their compositor stops. This runner proves fresh bootstrap after
+real replacement, not that an old widget survives compositor loss or invalidates correctly
+without a retirement frame. Those lifecycle cases remain separate G0 obligations. Ordinary
+missing-system-service warnings in a container are not evidence about the live desktop.
+
 ### Icon positions (M2): `tools/tests/icons/run.sh`
 
 Options: `--stage DIR`, `--name NAME` (default `icons`), `--work DIR`, `--scale S` (default

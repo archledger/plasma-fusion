@@ -273,12 +273,18 @@ function remember(apps, id, rect) {
     return true;
 }
 
-// Whether the native writer refused the provider registration: the facade answers with empty
-// text (and a broken call surfaces "undefined"). A native session must not fall back to the
-// legacy transport the contract retires, so this decides the memory's disable rule.
+// Whether the native writer refused the provider registration. The writer grants a provider a
+// random UUID, which the facade answers as text with its braces (QUuid::toString()); it answers
+// a held provider slot or a busy writer with the null UUID, the facade answers with empty text
+// when there is no writer, and a broken call surfaces "undefined". So only a well-formed UUID
+// other than the null one is a registration (as providerAccepted in
+// tools/tests/layout-control/provider.qml reads it), and anything else disables the memory: a
+// native session must not fall back to the legacy transport the contract retires.
 function providerRefused(token) {
     const text = token === undefined || token === null ? "" : String(token);
-    return text === "" || text === "undefined";
+    const bare = text.startsWith("{") && text.endsWith("}") ? text.slice(1, -1) : text;
+    return !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bare)
+        || bare === "00000000-0000-0000-0000-000000000000";
 }
 
 // What the native path does with a window's identity: "track" binds the window to the writer

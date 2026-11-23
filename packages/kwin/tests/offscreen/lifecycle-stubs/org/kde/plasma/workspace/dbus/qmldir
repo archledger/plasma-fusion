@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Stand-in org.kde.plasma.workspace.dbus module for the offscreen lifecycle (test use only):
+# found before the system module on the harness's import path, so nothing reaches a bus. It is
+# kept out of the shared stubs/, which every offscreen suite reads: the snap script and the
+# switcher load the system module through their copies of FusionTablet, which uses more of it
+# than the stand-in has.
+module org.kde.plasma.workspace.dbus
+singleton SessionBus 1.0 SessionBus.qml
