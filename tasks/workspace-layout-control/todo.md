@@ -23,7 +23,8 @@ budget asks, and nothing until an answer confirms a mode or while the bar's own 
 placement script's layout provider prepares a bar's action on the app its menu was opened from and
 applies a set, Tiled or Floating, through that preparation and the tiler's own start and teardown,
 each request decided once and its completion told in the bar's frames (`cb27199`, `7d70287`), and
-both ran in real sessions (`1d1536a`); #210's fix came first (`403941b`). P6 is next. Read
+both ran in real sessions (`1d1536a`); #210's fix came first (`403941b`). P6 is complete. See P7
+and the final checkpoint below for remaining validation and review. Read
 [plan.md](plan.md) and the accepted
 [specification](../../SPEC-workspace-layout-control.md).
 Existing native task files are untouched.

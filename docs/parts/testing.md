@@ -661,14 +661,16 @@ number repeats it unchanged until the provider handles a newer request for that 
 that frame's own answer is: a conflicting or malformed row at the same number carries it too. The
 preparation remains the per-frame re-check: a later frame can report the target no longer valid, or
 the context unavailable, while the completion still says the request was accepted. A refused
-request's later preparations repeat the outcome the provider stored, which for a stale-context,
-popup-focus or handle-exhaustion refusal is the generic `refused`; the completion keeps the reason
-the request was given. Until the provider handles a request, its frames carry no completion: while
+request's later identical preparations repeat the stored `stale-context` or
+`popup-focus-unconfirmed` refusal, while handle exhaustion leaves the generic `refused` outcome.
+The completion keeps the original decision. Until the provider handles a request, its frames
+carry no completion: while
 the context is unavailable, or while the provider does not know the consumer or its lease. A frame
 for a request older than the newest one the provider has handled for that consumer carries none, and
-neither do validations, queries and retirement frames. A query is never handled, so a replayed row
-of the prepare before it still carries that prepare's completion. The native target verdict records
-the completion it published.
+neither do validations, queries and retirement frames. A newer valid query advances the confirmed
+consumer's request watermark and drops the previous completion. After prepare 2 and query 3, a
+replay of prepare 2 returns `stale-or-conflicting-request` without its old completion. The native
+target verdict records the completion it published.
 
 The default-off `--completion-probe` mode checks this natively in target mode:
 
