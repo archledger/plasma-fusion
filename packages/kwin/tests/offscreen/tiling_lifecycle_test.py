@@ -280,6 +280,11 @@ check((interim_counts or {}).get("createTile") == 2 and (interim_counts or {}).g
       "interim facade: one refused admission, one session started and restored, got %s" % interim_counts)
 retire(interim, "interim facade")
 
+native_stack = run_harness({"nativeStackProbe": True})
+for problem in list(native_stack.property("problems").toVariant() or []):
+    failures.append("native stack: " + str(problem))
+retire(native_stack, "native stack")
+
 # A run against a writer that refuses the provider registration as the fork does while another
 # provider holds its slot or the writer is busy (a null QUuid's text): the memory stays disabled
 # for the session and takes no other transport, and a toggle starts no tree. The harness checks

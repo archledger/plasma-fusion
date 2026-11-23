@@ -734,17 +734,14 @@ Item {
             const others = siblings(id, w);
             remembered = Placement.restoreFor(id, state, saved, screens, others, ignoreList(), rememberSize(), current);
         }
-        // The tiler's managed windows: a new window on the tiled workspace joins the stack,
-        // not the placement memory's restore - and only when the stack really took it: a
-        // window the stack cannot manage (not resizable, a minimum size above any cell it
-        // would get) falls through to the ordinary restore and settle path like any
-        // unmanaged window.
+        // The stack gets the first chance at a new window on its workspace. If the window
+        // cannot join, the ordinary restore still applies unless a newer request superseded
+        // the stack placement.
         // Not a session whose master has left its tile: that session is over, only the
         // notice is still on its way (tiler.vacated), and its stack is about to go back.
         if (tiler.session.active && !tiler.vacated() && tiler.managesDesktop(w) && tiler.addWindow(w, remembered)) {
-            // The settle pass is kept: a window that opened with no record must still be
-            // remembered where it floats (the settle records the saved float, never the
-            // cell it sits at), or its next open would have no placement at all.
+            // Record the saved float for an enrolled member, or the newer geometry if
+            // it superseded the stack request. Neither case needs the open restore.
             if (restoreAllowed) {
                 settling.push(w);
                 settle.restart();
@@ -910,6 +907,10 @@ Item {
         // True while the tiler writes its own placements (the relayout, the float restores):
         // those writes must not read as the user's manual moves.
         property bool placing: false
+        // Geometry notifications can synchronously start a newer pass on the same session.
+        property var stackLayoutPass: null
+        // An opening member can be placed by a nested pass before addWindow() returns.
+        property var pendingStackOpens: ({})
         // internalId -> {float, cell, until, asked}: the stack windows a session gave their
         // floats back, with the cell each had last been given. For staleCellMillis a late
         // answer to that cell is taken back (returnFromStaleCell); for as long as the window
@@ -1768,6 +1769,9 @@ Item {
             if (!session.active) {
                 return;
             }
+            const layoutSession = session;
+            const pass = {};
+            stackLayoutPass = pass;
             const area = Workspace.clientArea(Workspace.MaximizeArea, session.output, session.desktop);
             session.dividerX = masterRightEdge(area);
             // The tile's rectangle as the native layer has it now: where the master stands
@@ -1780,16 +1784,68 @@ Item {
             const result = Tiling.layoutStack(session.stack, area, session.dividerX, gap);
             // The tiler's own writes: while these run, a geometry change is not the user's
             // hand (the manual-move detach reads this).
+            const wasPlacing = placing;
             placing = true;
-            // Place the feasible windows and remember each cell: a later change landing
-            // exactly there is this write arriving (the synchronous one or the client's late
-            // commit of it), not a manual move.
+            try {
+                applyStackLayout(result, layoutSession, pass);
+            } finally {
+                placing = wasPlacing;
+            }
+        }
+
+        function applyStackLayout(result, layoutSession, pass) {
+            const layoutIsCurrent = () => session === layoutSession && stackLayoutPass === pass;
+            const refused = [];
+            // A later change landing on a cell is this write arriving (synchronously or in
+            // the client's commit), not a manual move.
             for (let i = 0; i < result.placed.length; ++i) {
                 const p = result.placed[i];
-                if (Tiling.alive(p.window)) {
-                    p.window.frameGeometry = Qt.rect(p.rect.x, p.rect.y, p.rect.width, p.rect.height);
+                const w = p.window;
+                if (!Tiling.alive(w)) {
+                    continue;
                 }
-                cellRects[String(p.window.internalId)] = p.rect;
+                const id = String(w.internalId);
+                const cell = Qt.rect(p.rect.x, p.rect.y, p.rect.width, p.rect.height);
+                const oldCell = cellRects[id];
+                // A nested relayout or teardown can run after the geometry has changed,
+                // before the facade returns. It needs to know which cell we just asked for.
+                cellRects[id] = p.rect;
+                let answer = 0; // TransientTileController::Result::Accepted
+                if (api && typeof api.placeStackWindow === "function") {
+                    answer = api.placeStackWindow(layoutSession.generation, w, cell, providerToken);
+                    if (answer !== 0) {
+                        log("tiling: a stack placement was refused (" + answer + ")");
+                    }
+                } else {
+                    w.frameGeometry = cell;
+                }
+                if (answer === 6 && pendingStackOpens[id]) {
+                    pendingStackOpens[id].superseded = true;
+                }
+                if (!layoutIsCurrent()) {
+                    return;
+                }
+                if (!Tiling.alive(w)) {
+                    delete cellRects[id];
+                    continue;
+                }
+                if (answer !== 0) {
+                    if (oldCell) {
+                        cellRects[id] = oldCell;
+                    } else {
+                        delete cellRects[id];
+                    }
+                    // A native refusal is not permission to make an unmarked cell write.
+                    // Superseded (6) means a newer request won: equal geometry does not
+                    // prove this tiler still owns it. Other refusals may leave our old cell.
+                    if (answer !== 6 && oldCell && !w.move && !w.resize && Tiling.eligibleForStack(w)
+                            && Tiling.onWorkspace(w, session.desktop, session.activity, session.output)
+                            && Tiling.isOwnCell(oldCell, requestedRect(w) || frameRect(w), landingSlack())) {
+                        result.floated.push(w);
+                    } else {
+                        refused.push(w);
+                    }
+                }
             }
             // A window whose minimum size does not fit its cell stops being managed. One the
             // layout had placed sits at a cell no untoggle can undo, so its saved float goes
@@ -1802,6 +1858,12 @@ Item {
                 if (Tiling.alive(restores[i].window)) {
                     restores[i].window.frameGeometry =
                         Qt.rect(restores[i].rect.x, restores[i].rect.y, restores[i].rect.width, restores[i].rect.height);
+                    if (!layoutIsCurrent()) {
+                        return;
+                    }
+                    if (!Tiling.alive(restores[i].window)) {
+                        continue;
+                    }
                     expectReturn(String(restores[i].window.internalId), restores[i].rect);
                     // The restore's quiet: the starved member leaves the session right
                     // after this, and its client may still commit the old cell configure
@@ -1815,9 +1877,10 @@ Item {
                     }
                 }
             }
-            placing = false;
-            for (let i = 0; i < result.floated.length; ++i) {
-                detachWindow(result.floated[i], false);
+            for (const w of result.floated.concat(refused)) {
+                if (Tiling.alive(w)) {
+                    detachWindow(w, false);
+                }
             }
         }
 
@@ -1837,13 +1900,10 @@ Item {
             }
         }
 
-        // A new window joins the stack; true when it did. True also for a window that arrives
-        // already minimized: it is enrolled as a member-to-be (watched, not stacked - its
-        // restore enrolls it). False leaves the window to the ordinary paths (restore,
-        // settle): the stack only keeps what it can manage, and a candidate the first layout
-        // floats is handed back untouched. The saved float is the remembered placement when
-        // the memory has one (the untoggle returns the app to its remembered spot, as the
-        // memory would have placed it), else the window's current geometry.
+        // True skips the ordinary open restore: the stack enrolled the window (possibly
+        // dormant), or newer intent superseded its stack request. An ineligible or ordinarily
+        // refused addition still falls through to the open restore. The saved float is the
+        // remembered placement when there is one, otherwise the window's current geometry.
         function addWindow(w, remembered) {
             if (!session.active || !w || manages(w) || holds(w)) {
                 return false;
@@ -1851,6 +1911,7 @@ Item {
             if (!managesDesktop(w)) {
                 return false;
             }
+            const id = String(w.internalId);
             // A window that arrives minimized is the same member-to-be the toggle-on scan
             // watches (Tiling.eligibleDormant, the one rule): for it too, a later restore
             // emits no windowAdded - it was there all along - so the watch must go on now or
@@ -1859,7 +1920,7 @@ Item {
             // when the memory has one, as for every new member.
             if (Tiling.eligibleDormant(w)) {
                 const g = remembered || w.frameGeometry;
-                session.savedFloats[String(w.internalId)] = { x: g.x, y: g.y, width: g.width, height: g.height };
+                session.savedFloats[id] = { x: g.x, y: g.y, width: g.width, height: g.height };
                 watchMinimize(w);
                 return true;
             }
@@ -1867,11 +1928,17 @@ Item {
                 return false;
             }
             const g = remembered || w.frameGeometry;
-            session.savedFloats[String(w.internalId)] = { x: g.x, y: g.y, width: g.width, height: g.height };
+            session.savedFloats[id] = { x: g.x, y: g.y, width: g.width, height: g.height };
             session.stack.push(w);
             watchMinimize(w);
-            relayout();
-            return session.stack.indexOf(w) >= 0;
+            const pending = { superseded: false };
+            pendingStackOpens[id] = pending;
+            try {
+                relayout();
+                return pending.superseded || session.stack.indexOf(w) >= 0;
+            } finally {
+                delete pendingStackOpens[id];
+            }
         }
 
         // A stack window the user moved or resized by hand leaves the session: the move is its

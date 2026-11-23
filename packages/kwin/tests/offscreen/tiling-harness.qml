@@ -60,6 +60,7 @@ Item {
     // The facade of a fork build that restores but cannot say what it keeps of a window (no
     // floatingFrame, no settleWindow).
     property bool interimFacade: false
+    property bool nativeStackProbe: false
     // Set by the driver for another run: "released" (runReleased).
     property string scenario: ""
     property var steps: []
@@ -118,6 +119,7 @@ Item {
     // native admission before any stack write) is checkable from that snapshot.
     QtObject {
         id: facade
+        property var placeStackWindow: null
         property bool refuseCreate: false
         property bool refuseAdmit: false
         // The token the mock grants, as the fork writes one (a braced UUID), and what
@@ -3971,6 +3973,153 @@ Item {
             fail("the identity is ready, with its owner (got " + provider.identityReady + ", " + provider.selfOwner + ")");
         }
         expectProvider("the identity granted", providerBefore, 0, {});
+
+        if (nativeStackProbe) {
+            let refuse = false;
+            facade.placeStackWindow = function (generation, window, cell, token) {
+                facadeCalls = facadeCalls.concat([{op: "placeStackWindow", generation: generation,
+                                                    window: String(window.internalId), token: token}]);
+                if (refuse && window === winA) {
+                    return 8;
+                }
+                window.frameGeometry = cell;
+                return 0;
+            };
+            tileShortcut.activated();
+            const cells = calls("placeStackWindow");
+            const admissions = calls("admitTile");
+            const token = String(script.providerToken);
+            if (!token || token !== facade.grantedToken
+                    || cells.length !== 2 || admissions.length !== 1
+                    || cells.some(c => c.generation !== admissions[0].generation
+                                  || c.token !== token || c.token !== admissions[0].token
+                                  || c.window === "master")) {
+                fail("native stack placement did not use the admitted tree and provider");
+            }
+            if (!rectIs(winA.frameGeometry, 704, 34, 736, 429)) {
+                fail("accepted native stack placement did not place A in its cell");
+            }
+            tileShortcut.activated();
+            refuse = true;
+            tileShortcut.activated();
+            if (calls("placeStackWindow").length !== 4
+                    || !rectIs(winA.frameGeometry, 700, 120, 300, 320)
+                    || !rectIs(winB.frameGeometry, 704, 471, 736, 429)) {
+                fail("a refused native stack placement must not fall back to an unmarked cell write");
+            }
+            tileShortcut.activated();
+            refuse = false;
+            let minimizeDuringPlacement = true;
+            facade.placeStackWindow = function (generation, window, cell, token) {
+                if (window.minimized) {
+                    return 7;
+                }
+                window.frameGeometry = cell;
+                if (minimizeDuringPlacement && window === winA) {
+                    minimizeDuringPlacement = false;
+                    winB.minimized = true;
+                }
+                return 0;
+            };
+            tileShortcut.activated();
+            if (!winB.minimized || !rectIs(winA.frameGeometry, 704, 34, 736, 866)) {
+                fail("minimizing B during native placement did not give A the full stack");
+            }
+            winB.minimized = false;
+            if (!rectIs(winA.frameGeometry, 704, 34, 736, 429)
+                    || !rectIs(winB.frameGeometry, 704, 471, 736, 429)) {
+                fail("minimizing B during native placement dropped B from the session");
+            }
+            tileShortcut.activated();
+            let providerRetired = false;
+            facade.placeStackWindow = function (generation, window, cell, token) {
+                if (providerRetired) {
+                    return 8;
+                }
+                window.frameGeometry = cell;
+                if (window === winA) {
+                    providerRetired = true;
+                    winB.minimized = true;
+                }
+                return 0;
+            };
+            tileShortcut.activated();
+            if (!rectIs(winA.frameGeometry, 700, 120, 300, 320)) {
+                fail("refusing a nested layout stranded the cell dispatched by the outer pass");
+            }
+            tileShortcut.activated();
+            winB.minimized = false;
+            let supersede = false;
+            facade.placeStackWindow = function (generation, window, cell, token) {
+                if (supersede && window === winA) {
+                    // Newer ordinary intent can keep exactly the old cell rectangle.
+                    return 6;
+                }
+                window.frameGeometry = cell;
+                return 0;
+            };
+            tileShortcut.activated();
+            supersede = true;
+            winB.minimized = true;
+            if (!rectIs(winA.frameGeometry, 704, 34, 736, 429)) {
+                fail("restoring a superseded stack request overwrote newer geometry");
+            }
+            tileShortcut.activated();
+            winB.minimized = false;
+
+            // Opening a window can reenter the layout before that window reaches its cell.
+            // A native supersession in the inner pass still outranks the remembered restore.
+            const newcomer = mk({internalId: "native-newcomer", resourceClass: "org.fusion.mail",
+                                 desktopFileName: "org.fusion.mail.desktop",
+                                 frameGeometry: Qt.rect(300, 500, 260, 260)});
+            const refusedNewcomer = mk({internalId: "native-refused", resourceClass: "org.fusion.draw",
+                                        desktopFileName: "org.fusion.draw.desktop",
+                                        frameGeometry: Qt.rect(400, 500, 260, 260)});
+            newcomer.desktops = [desktop];
+            refusedNewcomer.desktops = [desktop];
+            newcomer.output = ws.activeScreen;
+            refusedNewcomer.output = ws.activeScreen;
+            facade.entries["org.fusion.mail"] = {x: 110, y: 210, width: 260, height: 260};
+            facade.entries["org.fusion.draw"] = {x: 125, y: 225, width: 260, height: 260};
+            let opening = false;
+            let newerRequested = false;
+            let ordinaryRefused = false;
+            facade.placeStackWindow = function (generation, window, cell, token) {
+                if (window === newcomer) {
+                    newerRequested = true;
+                    window.frameGeometry = Qt.rect(360, 465, 260, 260);
+                    return 6;
+                }
+                if (window === refusedNewcomer) {
+                    ordinaryRefused = true;
+                    return 7;
+                }
+                window.frameGeometry = cell;
+                if (opening && window === winA) {
+                    opening = false;
+                    winB.minimized = true;
+                }
+                return 0;
+            };
+            tileShortcut.activated();
+            opening = true;
+            ws.windows = [newcomer, winB, winA, master];
+            ws.windowAdded(newcomer);
+            if (!winB.minimized || !newerRequested || !rectIs(newcomer.frameGeometry, 360, 465, 260, 260)) {
+                fail("the remembered open restore overwrote a superseding native stack request");
+            }
+            ws.windows = [refusedNewcomer, newcomer, winB, winA, master];
+            ws.windowAdded(refusedNewcomer);
+            if (!ordinaryRefused || !rectIs(refusedNewcomer.frameGeometry, 125, 225, 260, 260)) {
+                fail("an ordinary native refusal must still allow a remembered open restore");
+            }
+            tileShortcut.activated();
+            if (!rectIs(newcomer.frameGeometry, 360, 465, 260, 260)) {
+                fail("the superseding window must remain detached at untoggle");
+            }
+            done = true;
+            return;
+        }
 
         if (legacyFacade) {
             // ---- a facade without restoreWindow: no session, the memory's transport intact ----
