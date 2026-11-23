@@ -619,9 +619,11 @@ class ViewLossFixture:
         pending = bool(self.faults & {"old-read-answers-after-wake", "wake-read-pending",
                                       "verdict-before-wake"})
         if not pending:
-            self.reply(FOCUS, VALIDATED, self.context(FOCUS))
+            original_ready = self.reply(FOCUS, VALIDATED, self.context(FOCUS))
             if "read-has-not-finished" not in self.faults:
                 self.backend.append("qml: layout-probe: read finished\n")
+        if "later-read-without-verdict" in self.faults:
+            self.backend.extend(["qml: layout-probe: read started\n", "qml: layout-probe: read finished\n"])
         self.inventory("baseline")
         if done("baseline"):
             return
@@ -632,6 +634,8 @@ class ViewLossFixture:
                 "consumer": FOCUS, "request": 2, "intent": "validate", "revision": self.revision,
                 "ready": True, "reason": "", "targetClass": APP, "targetAlive": True})
         self.mark("disable")
+        if "in-flight-ready-before-refusal" in self.faults:
+            self.accept(original_ready)
         if pending:
             # The wake's read answers only after the disable mark, before the output goes.
             self.reply(FOCUS, VALIDATED, self.context(FOCUS))
@@ -661,6 +665,8 @@ class ViewLossFixture:
         self.control(OTHER, OUT_B)
         if done("lost"):
             return
+        if "original-ready-after-refusal" in self.faults:
+            self.accept(original_ready)
 
         self.mark("evacuated")
         self.view("wake", "wake")
@@ -817,7 +823,8 @@ class ViewLossFixture:
         self.reply(FOCUS, prepared_reply(fourth), self.context(FOCUS))
         if done("final"):
             return
-        if self.faults & {"ready-in-gap", "accept-after-start-dead", "unexpected-early-readiness"}:
+        if self.faults & {"ready-in-gap", "accept-after-start-dead", "unexpected-early-readiness",
+                          "original-ready-after-refusal"}:
             # A forged receipt: the scope check must still recompute and refuse the run.
             (self.root / "view-loss-result.json").write_text(json.dumps({
                 "schema": 1, "passed": True, "checks": view_loss.CHECKS}))
@@ -865,6 +872,22 @@ class ViewLossCheckerTests(unittest.TestCase):
         self.build("queued-read-answers")
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_baseline_preserves_confirmation_after_a_verdictless_read_finishes(self):
+        self.build("later-read-without-verdict")
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_in_flight_readiness_is_accepted_before_the_loss_refusal(self):
+        self.build("in-flight-ready-before-refusal")
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_original_readiness_cannot_be_reaccepted_after_the_loss_refusal(self):
+        self.build("original-ready-after-refusal")
+        result = self.check()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("accepted readiness lacks its bounded native verdict", result.stderr)
 
     def test_each_step_record_is_exclusive_and_bound_to_its_mark(self):
         self.build(until="baseline")

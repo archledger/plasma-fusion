@@ -500,8 +500,9 @@ modes emit none of this, and the wire packets are unchanged.
 `view-mark-*.json`, written before the native action, and the point where the step was confirmed
 (`view-<step>.json`). Before disabling the output, the baseline step requires a ready native verdict
 for the retained validation from a completed read that started after the last wake. A read in
-flight at the wake cannot qualify, even if its verdict arrived after the wake. A
-required event must carry its own native source, so a broken screens or activity handler cannot
+flight at the wake cannot qualify, even if its verdict arrived after the wake; a later completed
+read without a verdict does not undo one already confirmed. A required event must carry its own
+native source, so a broken screens or activity handler cannot
 hide behind a focus change. Each refusal must match its exact native
 verdict, its actual receipt and accepted memory. The final check recomputes every step from its
 window, requires the windows in order without overlap and audits the whole run. Every generation
@@ -509,8 +510,9 @@ advance appears once, in order, with a known source. Until the first output chan
 original validation may be re-confirmed. Afterwards readiness occurs only for the three explicit
 recovery verdicts, each naming the live app within its own recovery's log span, so a recovered
 handle re-confirmed after a later switch fails. Every accepted ready packet must match the exact
-exchange of one of these verdicts or of a pre-change re-confirmation of the original validation. The
-guarded consumer sends exactly its six explicit requests, the read-only consumer sends no target
+exchange of one of these verdicts or of a pre-change re-confirmation of the original validation
+that the shell accepts before the output-loss refusal. The guarded consumer sends exactly its six
+explicit requests, the read-only consumer sends no target
 intent, and all accepted state keeps one provider lifetime and both leases. The checker writes
 `view-loss-result.json` from its own check list, and only after this full check passes.
 

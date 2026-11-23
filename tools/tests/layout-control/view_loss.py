@@ -313,20 +313,25 @@ def step_baseline(directory: Path, saved: dict, ev: Evidence) -> dict:
 def baseline_read_confirmed(ev: Evidence, wake: int, boot: str, request: int) -> bool:
     # The normal-transport probe logs verdicts during the read, before "read finished".
     # A read already in flight at the wake can emit a verdict before the queued read starts.
-    verdicts = {index for index, row in ev.backend("target") if index > wake
-                and row["consumer"] == boot and row["request"] == request
-                and row["intent"] == "validate" and row["ready"] is True and row["reason"] == ""
-                and row["targetAlive"] is True and row["targetClass"] == APP}
-    reading = ready = confirmed = False
+    verdicts = {
+        index: row["ready"] is True and row["reason"] == ""
+        and row["targetAlive"] is True and row["targetClass"] == APP
+        for index, row in ev.backend("target")
+        if index > wake and row["consumer"] == boot and row["request"] == request
+        and row["intent"] == "validate"
+    }
+    reading = confirmed = False
+    ready = None
     for index, line in enumerate(ev.backend_lines[wake + 1:], wake + 1):
         event = READ_EVENT.fullmatch(line.removesuffix("\n"))
         if event and event[1] == "started":
-            reading, ready = True, False
+            reading, ready = True, None
         elif event:
-            confirmed = reading and ready
+            if reading and ready is not None:
+                confirmed = ready
             reading = False
         elif reading and index in verdicts:
-            ready = True
+            ready = verdicts[index]
     return confirmed and not reading
 
 
@@ -716,16 +721,29 @@ def audit(directory: Path, saved: dict) -> None:
     original = {exchange(row) for index, row in events(backend, "target")
                 if index < loss["kwinLines"] and row["ready"] is True and row["consumer"] == focus
                 and row["request"] == base["envelope"]["request"] and live(row)}
-    bounded = {exchange(row) for _, row in ready} | original
-    for index, row in events(shell, "observation"):
+    bounded = {exchange(row) for _, row in ready}
+    observations = events(shell, "observation")
+    first = base["envelope"]["request"]
+    loss_revision = saved["lost"]["refusalRevision"]
+    loss_refusal = {"intent": "validate", "ready": False, "reason": STALE, "token": ""}
+    loss_accepted = next(
+        (index for index, row in observations
+         if index >= loss["shellLines"] and row["boot"] == focus and row["request"] == first
+         and (packet := row["packet"]) and packet.get("epoch") == base["epoch"]
+         and packet.get("revision") == loss_revision
+         and packet.get("targetContext") is None and packet.get("preparation") == loss_refusal),
+        None,
+    )
+    require(loss_accepted is not None, "missing accepted output loss refusal")
+    for index, row in observations:
         packet = row["packet"]
         preparation = packet.get("preparation") if packet else None
         if (index >= start["shellLines"] and isinstance(preparation, dict)
                 and preparation.get("ready") is not False):
-            require((packet.get("revision"), row["boot"], packet.get("request"),
-                     preparation.get("intent")) in bounded,
+            key = (packet.get("revision"), row["boot"], packet.get("request"),
+                   preparation.get("intent"))
+            require(key in bounded or (index < loss_accepted and key in original),
                     "accepted readiness lacks its bounded native verdict")
-    first = base["envelope"]["request"]
     sent = [row["request"] for index, row in events(shell, "query")
             if index >= start["shellLines"] and row["boot"] == focus]
     require(sent == list(range(first + 1, first + 7)),
