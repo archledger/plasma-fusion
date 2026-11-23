@@ -61,18 +61,11 @@ PY
   return 1
 }
 
-# 1. The holder's preparation was accepted just before this case began.
-completion_subject holder "$focus_boot"
-completion_wait accepted
-
-# 2. A context change: closing the popup moves focus, and the provider publishes again.
-completion_mark context
-pfinput "key esc"
-completion_wait context
-
-# 3. Another consumer's request: the competitor prepares from a menu opened from the app.
-python3 - "$OUT/plasmashell.log" "$OUT/kwin.log" "$focus_boot" \
-  >"$OUT/completion-competitor.txt" <<'PY'
+# The competitor's first observation and control geometry may arrive independently.
+completion_competitor() {
+  for _ in {1..40}; do
+    if python3 - "$OUT/plasmashell.log" "$OUT/kwin.log" "$focus_boot" \
+      2>>"$OUT/completion-competitor-wait.log" <<'PY'
 import json, sys
 latest, controls = {}, {}
 for line in open(sys.argv[1]):
@@ -91,6 +84,26 @@ alpha = [row for row in focus if row["rememberedClass"] == "pf.focus.alpha"
 assert 0 < alpha["x"] < 1440 and 0 < alpha["y"] < 900, alpha
 print(boot, controls[boot]["x"], controls[boot]["y"], alpha["x"], alpha["y"])
 PY
+    then
+      return 0
+    fi
+    sleep 0.1
+  done
+  echo "FAIL: the competitor's observation and focus control were not ready" >&2
+  return 1
+}
+
+# 1. The holder's preparation was accepted just before this case began.
+completion_subject holder "$focus_boot"
+completion_wait accepted
+
+# 2. A context change: closing the popup moves focus, and the provider publishes again.
+completion_mark context
+pfinput "key esc"
+completion_wait context
+
+# 3. Another consumer's request: the competitor prepares from a menu opened from the app.
+completion_competitor >"$OUT/completion-competitor.txt"
 read -r competitor_boot competitor_x competitor_y alpha_x alpha_y \
   <"$OUT/completion-competitor.txt"
 completion_subject competitor "$competitor_boot"

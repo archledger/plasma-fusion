@@ -22,8 +22,10 @@ Item {
     property bool focusProbe: false
     property bool targetProbe: false
     property bool mixedLifetimeProbe: false
+    property bool pipelineProbe: false
     property bool viewLossProbe: false
     property bool keyboardEntryProbe: false
+    property bool twoBarProbe: false
     // Diagnostics for the view-loss case only: decisions never read these references.
     property var viewLossSubject: null
     // Bounded history of native output objects present at start or already reported.
@@ -248,8 +250,14 @@ Item {
                     verdict.preparationToken = preparation.token;
                 }
                 console.info("layout-probe-target", JSON.stringify(verdict));
+                if (probe.twoBarProbe && preparation.ready && Tiling.alive(window)) {
+                    console.info("layout-probe-target-output", JSON.stringify({
+                        consumer: row.consumer, request: row.request, revision: revision + 1,
+                        output: window.output ? String(window.output.name) : ""
+                    }));
+                }
             }
-            if (probe.mixedLifetimeProbe) {
+            if (probe.mixedLifetimeProbe || probe.pipelineProbe) {
                 console.info("layout-probe-published", JSON.stringify({
                     widget: row.id, destination: destination, consumer: row.consumer,
                     request: row.request, epoch: epoch, revision: revision + 1, status: status
@@ -1009,8 +1017,10 @@ Item {
         focusProbe = KWin.readConfig("FocusProbe", false) === true;
         targetProbe = KWin.readConfig("TargetProbe", false) === true;
         mixedLifetimeProbe = KWin.readConfig("MixedLifetimeProbe", false) === true;
+        pipelineProbe = KWin.readConfig("PipelineProbe", false) === true;
         viewLossProbe = targetProbe && KWin.readConfig("ViewLossProbe", false) === true;
         keyboardEntryProbe = targetProbe && KWin.readConfig("KeyboardEntryProbe", false) === true;
+        twoBarProbe = targetProbe && KWin.readConfig("TwoBarProbe", false) === true;
         if (viewLossProbe) {
             viewLossScreens = Workspace.screens.slice();
         }

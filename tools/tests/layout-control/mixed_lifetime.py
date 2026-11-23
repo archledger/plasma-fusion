@@ -402,7 +402,15 @@ def check_mixed(directory: Path) -> None:
     check_replay(directory, stages["after-replay"])
     for label, previous_label in (("after-late", "reloaded"), ("after-replay", "after-late")):
         check_progress(directory, label, previous_label)
-    final = widgets(stages["final"])[replacement_id]["observation"]
+    replayed = widgets(stages["after-replay"])
+    final_widgets = widgets(stages["final"])
+    require(set(final_widgets) == set(replayed) and all(
+        row["query"]["consumer"] == replayed[identifier]["query"]["consumer"]
+        and row["observation"]["packet"]["targetContext"]["consumerLease"]
+        == replayed[identifier]["observation"]["packet"]["targetContext"]["consumerLease"]
+        for identifier, row in final_widgets.items()),
+        "final inventory lost or replaced a live consumer")
+    final = final_widgets[replacement_id]["observation"]
     require(final["request"] > reloaded[replacement_id]["query"]["request"],
             "replacement did not receive a new explicit intent")
     native_preparation(directory, final, stages["after-replay"]["kwinLines"],

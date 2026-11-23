@@ -421,6 +421,7 @@ exact native `consumer-not-current` refusal must reach that consumer. Restoring 
 read-only query is not an automatic consumer retry. Both live receivers must then confirm newer
 genuine responses without lease or request replacement. Finally, actual focused Space input
 through the replacement must produce one new explicit preparation of the controlled application.
+The final native inventory and accepted states must still show both consumers and their leases.
 The qualifier scans the retained accepted-state/outbound history, not only final state; hidden
 query retries, reused leases, wrong application verdicts and mere success flags fail.
 Every accepted packet is checked against the active request timeline, including transient states
@@ -636,7 +637,8 @@ apart from lost ones. Every wake-up of the burst must arrive, at least one must 
 pipeline, and the burst must coalesce into fewer reads than wake-ups. Both consumers must end
 online on their current request with a frame the provider published after the mark: the probe's
 revision counter starts at zero and rises by one per message, so the publication lines' message
-counts bound it. A read or publication line the checker does not recognize fails the check. The
+counts bound it. Each settled frame must also match the provider's own consumer, request, epoch
+and revision record. A read or publication line the checker does not recognize fails the check. The
 settled record keeps the counts of wake-ups, reads, publications and response saves.
 `pipeline-result.json` is written only after that record is recomputed from the raw logs, and
 this scope also requires the independent cleanup evidence.
@@ -684,8 +686,8 @@ The scenario branches after the holder's first accepted preparation, while its p
 open. `completion_scenario.sh` then:
 
 1. closes the popup, a context change;
-2. opens the competitor's menu from the app and prepares there, which is refused as busy while
-   the holder holds the slot;
+2. waits for the competitor's observation and focus control, opens its menu from the app and
+   prepares there, which is refused as busy while the holder holds the slot;
 3. closes that popup;
 4. reopens the holder's menu from the app and creates a virtual desktop while the popup stays
    active, which makes the menu's captured context stale;
@@ -784,8 +786,9 @@ must answer the other bar's refused request, before any context change since the
 other bar must accept a frame from that publication or a later one. The refused request must never
 be answered ready again. This provider repeats the stored `busy` outcome then, and a prepare it
 does not handle afresh is only re-validated, never prepared, so only the new explicit request is
-accepted, with `pf.focus.beta`, in a frame carrying that bar's own view. `two-bar-result.json` is
-written only after every step record is recomputed from the raw logs, and this scope also requires
+accepted, with the native capture of `pf.focus.beta` on that bar's output and a frame carrying its
+own view. Each retirement publication consumes one distinct read. `two-bar-result.json` is
+written only after every step and the later complete log lines are checked, and this scope also requires
 the independent cleanup evidence.
 
 Three changed providers each made the same scenario fail at the step meant to catch them. One that

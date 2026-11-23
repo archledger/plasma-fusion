@@ -352,6 +352,30 @@ class CompletionSeedTests(unittest.TestCase):
 
 
 class CompletionScenarioTests(unittest.TestCase):
+    def test_competitor_collection_retries_until_both_logs_are_ready(self):
+        source = (HERE / "completion_scenario.sh").read_text()
+        self.assertIn("completion_competitor() {", source)
+        start = source.index("completion_competitor() {")
+        function = source[start:source.index("\n}\n", start) + 2]
+        with tempfile.TemporaryDirectory(prefix="pf-completion-wait-") as scratch:
+            for succeeds, expected in ((True, "2"), (False, "40")):
+                with self.subTest(succeeds=succeeds):
+                    result = subprocess.run(
+                        ["bash", "-c", "set -euo pipefail\n"
+                         'tries=0; OUT=$1; focus_boot=holder\n'
+                         'sleep() { :; }\n'
+                         'python3() { cat >/dev/null; ((++tries)); '
+                         'if [[ $mode == wanted && $tries == 2 ]]; then echo "other 5 6 7 8"; '
+                         'else return 1; fi; }\n'
+                         + function + '\n'
+                         'mode=$2; if completion_competitor; then verdict=0; else verdict=1; fi\n'
+                         'printf "%s %s\\n" "$tries" "$verdict"\n',
+                         "test", scratch, "wanted" if succeeds else "missing"],
+                        capture_output=True, text=True, timeout=10, check=True,
+                    )
+                    self.assertEqual(result.stdout.strip(),
+                                     f"other 5 6 7 8\n{expected} 0" if succeeds else f"{expected} 1")
+
     def test_bridge_branches_after_the_first_accepted_preparation(self):
         bridge = (HERE / "scenario-bridge.sh").read_text()
         prepared = bridge.index('target_prepare_request=$(wait_target_reply "$focus_boot" '

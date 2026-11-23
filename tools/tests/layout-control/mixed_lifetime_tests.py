@@ -416,6 +416,19 @@ class MixedLifetimeReceiptTests(unittest.TestCase):
         result = self.run_check()
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_final_snapshot_cannot_drop_the_surviving_consumer(self):
+        def drop_survivor(root):
+            for name in ("mixed-final.json", "mixed-final-inventory.json"):
+                path = root / name
+                value = json.loads(path.read_text())
+                rows = value if isinstance(value, list) else value["widgets"]
+                rows[:] = [row for row in rows if row["id"] != 8]
+                path.write_text(json.dumps(value))
+
+        result = self.run_check(drop_survivor)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("final inventory lost or replaced a live consumer", result.stderr)
+
     def test_scope_does_not_accept_only_a_success_flag(self):
         result = self.run_check(lambda root: (root / "mixed-reloaded.json").unlink())
         self.assertNotEqual(result.returncode, 0)

@@ -140,11 +140,14 @@ def retirement(native: list, publications: list, reads: list, finished: list, co
     prepared it afresh could then grant it, which this provider's stored outcome and
     validate-only re-reads both prevent."""
     holder, other = boots["holder"], boots["other"]
+    consumed = set()
     for line in publications:
         begun = max([index for index in reads if index < line], default=-1)
         require(line < start["kwinLines"]
-                or (begun >= 0 and not any(begun < index < line for index in finished)),
+                or (begun >= 0 and begun not in consumed
+                    and not any(begun < index < line for index in finished)),
                 "a publication after the holder's removal followed no read of its own")
+        consumed.add(begun)
     started = [index for index in reads if index >= start["kwinLines"]]
     require(started, "no read after the holder's bar was removed")
     require(not any(row["consumer"] == holder for index, row in native if index > started[0]),
@@ -236,6 +239,10 @@ def evaluate(directory: Path, name: str, end: dict | None) -> dict:
     # request gets only an answer that cannot decide it.
     require(recovery["completion"]["accepted"] and verdict["targetClass"] == "pf.focus.beta",
             "expected the other bar's new preparation to be accepted with pf.focus.beta")
+    locations = [row["output"] for _, row in events(backend, "target-output")
+                 if row["consumer"] == other and row["request"] == recovery["request"]
+                 and row["revision"] == verdict["revision"]]
+    require(locations == [outputs["other"]], "the captured app is not on the other bar's output")
     frames = accepted_with(observed, other, recovery, start["shellLines"])
     require(frames, "the other bar never accepted a frame carrying its new completion")
     # check_views skips frames without a view, and earlier frames meet its count: the recovery
@@ -261,6 +268,9 @@ def check_two_bar(directory: Path) -> None:
                 "invalid two-bar evidence record")
         require(evaluate(directory, name, record["end"]) == record,
                 f"{name} record does not match its raw evidence")
+    # The stored confirmations delimit the individual steps, not the complete run.
+    require(evaluate(directory, "explicit", None)["other"] == record["other"],
+            "the later evidence changed the explicit recovery")
 
 
 def write_receipt(directory: Path) -> None:

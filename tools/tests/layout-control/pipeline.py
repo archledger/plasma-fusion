@@ -98,10 +98,22 @@ def replay(lines: list, burst_start: int) -> dict:
             "published": published, "counts": counts}
 
 
-def settled_consumers(shell: list, published: dict) -> list:
+def publication_identity(frame: dict) -> tuple:
+    consumer, request, epoch, revision = (
+        frame.get(key) for key in ("consumer", "request", "epoch", "revision")
+    )
+    require(isinstance(consumer, str) and isinstance(epoch, str)
+            and type(request) is int and type(revision) is int,
+            "malformed native publication identity")
+    return consumer, request, epoch, revision
+
+
+def settled_consumers(shell: list, published: dict, backend: list) -> list:
     """Each consumer's last state is online, on its current request, from a frame for it that the
     provider published after the burst mark: above every revision published before it, and no
     higher than any revision published at all."""
+    issued = {publication_identity(row) for _, row in events(backend, "published")
+              if isinstance(row, dict) and row.get("status") == "online"}
     latest = {}
     for _, row in events(shell, "observation"):
         require(isinstance(row, dict) and isinstance(row.get("boot"), str),
@@ -116,6 +128,8 @@ def settled_consumers(shell: list, published: dict) -> list:
                 and published["before"] < packet["revision"] <= published["total"],
                 f"consumer {boot} did not settle online on its current request with a frame"
                 " published after the burst")
+        require(publication_identity(packet) in issued,
+                f"consumer {boot} has no matching native publication")
     return sorted(latest)
 
 
@@ -143,7 +157,7 @@ def evaluate(directory: Path, end: dict | None) -> dict:
             f"expected {burst['wakes']} wakes after the burst mark, found {counts['wakes']}")
     require(counts["busyWakes"] >= 1, "no wake arrived while the pipeline was busy")
     require(counts["reads"] < counts["wakes"], "the burst's wake-ups did not coalesce")
-    boots = settled_consumers(shell[:stop["shellLines"]], state["published"])
+    boots = settled_consumers(shell[:stop["shellLines"]], state["published"], backend[:stop["kwinLines"]])
     return {"counts": counts, "published": state["published"], "boots": boots, "end": stop}
 
 

@@ -224,6 +224,12 @@ class TwoBarRun(CompletionRun):
         if started:
             self.kwin.append("qml: layout-probe: read started\n")
         super().publish(*frames, **options)
+        for revision, frame in enumerate(frames, self.revision - len(frames) + 1):
+            if frame["ready"]:
+                self.kwin.append("qml: layout-probe-target-output " + json.dumps({
+                    "consumer": frame["boot"], "request": frame["request"], "revision": revision,
+                    "output": frame.get("native_output", OUTPUTS[frame["boot"]]),
+                }) + "\n")
         if finished:
             self.kwin.append("qml: layout-probe: read finished\n")
         # A consumer reports its control again after every frame it accepts.
@@ -259,7 +265,8 @@ class TwoBarRun(CompletionRun):
               wrong_class=False, wrong_output=False, recovery_missed=False, drift=False,
               mismatch=False, busy_missed=False, unpublished=False, silent_read=False,
               unread=False, stale_read=False, viewless_recovery=False,
-              advanced_holder=False) -> None:
+              advanced_holder=False, wrong_native_output=False, promoted_after_step=False,
+              double_publication=False) -> None:
         # The other bar's query when the case begins: its first request, or its second after a
         # refresh. Its preparations follow that number.
         first = 2 if refresh else 1
@@ -318,7 +325,7 @@ class TwoBarRun(CompletionRun):
         self.publish(*(() if holder_missing else (holder_row,)),
                      dict(decision, missed=busy_missed))
         self.step("competitor")
-        if in_flight or retired_missed:
+        if in_flight or retired_missed or double_publication:
             # A read already under way at the removal still answers the holder after the mark.
             self.kwin.append("qml: layout-probe: read started\n")
         if stale_read:
@@ -327,6 +334,9 @@ class TwoBarRun(CompletionRun):
             self.kwin.append("qml: layout-probe: read started\n")
             self.kwin.append("qml: layout-probe: read finished\n")
         self.mark("retired")
+        if double_publication:
+            self.publish(held, busy, started=False, finished=False)
+            self.publish(held, busy, started=False)
         if stale_read:
             self.publish(held, busy, started=False, finished=False)
         if in_flight or retired_missed:
@@ -365,11 +375,15 @@ class TwoBarRun(CompletionRun):
         self.mark("explicit")
         recovered = dict(prepare(OTHER, first + 2, ready=True, token=EPOCH + ":2",
                                  completion=accepted(first + 2, EPOCH + ":2")),
-                         **{"class": "pf.focus.alpha" if wrong_class else "pf.focus.beta"})
+                         **{"class": "pf.focus.alpha" if wrong_class else "pf.focus.beta"},
+                         native_output=OUTPUTS[HOLDER if wrong_native_output else OTHER])
         if not viewless_recovery:
             recovered = self.on(recovered, "Virtual-0" if wrong_output else None)
         self.publish(dict(recovered, missed=recovery_missed))
         self.step("explicit")
+        if promoted_after_step:
+            self.publish(dict(busy, ready=True, reason="", token=EPOCH + ":2"))
+            self.flush()
 
 
 class TwoBarCheckerTests(unittest.TestCase):
@@ -437,6 +451,15 @@ class TwoBarCheckerTests(unittest.TestCase):
 
     def test_the_explicit_recovery_must_report_its_own_bars_view(self):
         self.assert_rejected("another bar's view", wrong_output=True)
+
+    def test_a_correct_bar_view_does_not_prove_the_captured_apps_output(self):
+        self.assert_rejected("captured app is not on the other bar", wrong_native_output=True)
+
+    def test_a_reused_read_cannot_correlate_two_retirement_publications(self):
+        self.assert_rejected("no read of its own", double_publication=True)
+
+    def test_the_final_tail_cannot_promote_an_earlier_busy_request(self):
+        self.assert_rejected("promoted", promoted_after_step=True)
 
     def test_the_explicit_recovery_must_carry_its_own_bars_view(self):
         # check_views skips a frame without a view, and the other bar's earlier frames had one.

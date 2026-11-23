@@ -361,6 +361,7 @@ class PipelineRun:
         self.root, self.kwin, self.shell = root, [], []
         self.request = {boot: 1 for boot in BOOTS}
         self.revision = 0
+        self.latest = {}
 
     def flush(self) -> None:
         (self.root / "kwin.log").write_text("".join(self.kwin))
@@ -369,10 +370,9 @@ class PipelineRun:
     def backend(self, text: str) -> None:
         self.kwin.append(f"qml: layout-probe: {text}\n")
 
-    def frame(self, boot: str, request: int) -> dict:
+    def frame(self, boot: str, request: int, *, revision=None) -> dict:
         """A frame as the consumer logs its reception; revisions follow the provider's counter."""
-        self.revision += 1
-        packet = {"consumer": boot, "epoch": EPOCH, "revision": self.revision,
+        packet = {"consumer": boot, "epoch": EPOCH, "revision": self.latest[boot] if revision is None else revision,
                   "status": "online", "capable": True, "refusal": -1, "request": request,
                   "backendOwner": ":1.0", "identityName": "org.plasmafusion.LayoutProbe.p" + EPOCH}
         self.shell.append("qml: layout-probe-received "
@@ -398,6 +398,13 @@ class PipelineRun:
         for _ in range(wakes_while_reading):
             self.backend("wake received")
         self.backend("mailbox rows 2")
+        for boot in BOOTS:
+            self.revision += 1
+            self.latest[boot] = self.revision
+            self.kwin.append("qml: layout-probe-published " + json.dumps({
+                "consumer": boot, "request": self.request[boot], "epoch": EPOCH,
+                "revision": self.revision, "status": "online",
+            }) + "\n")
         self.backend("publication online 2")
         if double:
             self.backend("publication online 2")
@@ -425,7 +432,7 @@ class PipelineRun:
     def build(self, *, wakes=6, overlap=False, unfinished=False, idle_burst=False,
               uncoalesced=False, unsettled=False, double=False, stale_consumers=False,
               concurrent=False, lost=False, late_pre_burst=False, failed_publication=False,
-              unrecognized=False, swapped=False) -> None:
+              unrecognized=False, swapped=False, swapped_revision=False) -> None:
         self.cycle()
         for boot in BOOTS:
             self.settle(boot)
@@ -457,6 +464,10 @@ class PipelineRun:
                 break
             if late_pre_burst:
                 self.accept(boot, late[boot])
+                continue
+            if swapped_revision:
+                other = BOOTS[1] if boot == BOOTS[0] else BOOTS[0]
+                self.accept(boot, self.frame(boot, self.request[boot], revision=self.latest[other]))
                 continue
             if swapped:
                 # Each consumer accepts the other's frame, for the same request number.
@@ -520,6 +531,9 @@ class PipelineCheckerTests(unittest.TestCase):
     def test_consumers_settled_on_each_others_frames_fail(self):
         # Both are on request 1, so only the frame's consumer tells the two exchanges apart.
         self.assert_rejected("did not settle online", swapped=True)
+
+    def test_consumers_cannot_swap_only_their_publication_revisions(self):
+        self.assert_rejected("no matching native publication", swapped_revision=True)
 
     def test_wake_never_followed_by_a_read_fails(self):
         # Coalesced, not lost: every wake-up must be followed by a read.
