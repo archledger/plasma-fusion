@@ -641,6 +641,19 @@ Item {
     // replaying a prepare must not capture a different window or renew an invalidated reference.
     function handleTargetRequest(row: var): var {
         if (row && (row.intent === undefined || row.intent === "query")) {
+            // A query still advances the confirmed consumer's request sequence. It must not
+            // let an older prepare capture the window after the newer request was read.
+            if (row.version === 1 && Number.isInteger(row.id) && row.id > 0
+                    && typeof row.consumer === "string" && Number.isInteger(row.request)
+                    && row.request > 0 && row.request <= 2147483646) {
+                const actor = targetConsumerFor(row.id, row.consumer);
+                if (actor && row.request > actor.request) {
+                    actor.request = row.request;
+                    actor.payload = "";
+                    actor.outcome = "not-prepared";
+                    actor.completion = null;
+                }
+            }
             return null;
         }
         const response = {intent: "invalid", ready: false, reason: "malformed", token: ""};
@@ -719,6 +732,7 @@ Item {
                 || row.desktopId !== context.desktopId
                 || row.activityId !== context.activityId || row.viewOutputName !== context.outputName) {
             response.reason = "stale-context";
+            if (fresh && row.intent === "prepare") actor.outcome = response.reason;
             return response;
         }
         const active = Workspace.activeWindow;
@@ -726,6 +740,7 @@ Item {
                 && (!shellOwnsFocus(active, Tiling.alive(active) ? active.output : null)
                     || active.appletPopup !== true || String(active.output.name) !== row.outputName)) {
             response.reason = "popup-focus-unconfirmed";
+            if (fresh) actor.outcome = response.reason;
             return response;
         }
         if (row.intent === "prepare") {
@@ -859,7 +874,6 @@ Item {
         dbusInterface: "org.kde.PlasmaShell"
         method: "evaluateScript"
         onFinished: value => {
-            probe.replyOwner = probe.readOwner;
             let data;
             try {
                 data = JSON.parse(String(value[0]));
@@ -876,6 +890,8 @@ Item {
                 return;
             }
             probe.recipients = rows;
+            // An unconfirmed snapshot cannot move the previous rows to a different shell.
+            probe.replyOwner = probe.readOwner;
             console.info("layout-probe: mailbox rows", probe.recipients.length);
             probe.queuePublication(probe.recipients, probe.replyOwner);
             probe.finishRead();

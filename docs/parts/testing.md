@@ -172,7 +172,8 @@ The fault is off by default, recorded in the seed's KWin configuration and cover
 hashes. The fault case must prove alias disappearance, unchanged KWin connection, no received
 offline frame, unknown receiver state with a newer query, and recovery with a new provider epoch.
 Normal retirement still requires both cached frames to reach their intended live widgets, but
-those frames cannot keep withdrawn state authoritative: receivers become unknown. A delivery
+those frames cannot keep withdrawn state authoritative: receivers become unknown. An unconfirmed
+read does not retarget the cached recipients to the connection that supplied it. A delivery
 negative control swaps claimed consumers between receivers; the trace records the emitting
 receiver's lifetime separately, so packet claims alone cannot satisfy delivery. The wrong-backend
 injection permits legitimate queued replies to advance state, while asserting that no
@@ -313,8 +314,10 @@ inventory can retire a missing widget or a confirmed replacement consumer. Inven
 on the existing event-driven scans, not an idle polling timer.
 
 The provider retains bounded request/payload/refusal history per current consumer, independently
-of the single prepared slot. Repeating a busy preparation stays refused after the holder
-disappears; a new explicit intent is required. Replacement or reappearance gets a distinct,
+of the single prepared slot. Repeating a refused preparation keeps its original reason, even
+after the holder disappears or the view or focus changes; a new explicit intent is required.
+A newer query from a confirmed consumer also advances its request sequence, so a delayed
+earlier preparation cannot capture a window. Replacement or reappearance gets a distinct,
 monotonically issued lease, so a saved old request cannot revive even if its boot label returns.
 Lease exhaustion refuses rather than wrapping.
 

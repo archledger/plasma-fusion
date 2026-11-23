@@ -243,6 +243,65 @@ process.stdout.write(JSON.stringify({
 """, requests=True)
         self.assertEqual(result, {"first": True, "repeated": False, "targetCleared": True})
 
+    def test_newer_query_fences_delayed_preparation_without_capturing(self):
+        result = self.run_guard("""
+const actor = probe.targetConsumerFor(7, 'current');
+actor.completion = {accepted:true};
+const query = {version:1,id:7,consumer:'current',request:3,intent:'query',outputName:'Virtual-0'};
+const queryReply = probe.handleTargetRequest(query);
+probe.handleTargetRequest({...query,request:1});
+const delayed = probe.handleTargetRequest({version:1,id:7,consumer:'current',request:2,
+    intent:'prepare',consumerLease,outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,
+    viewGeneration:0,desktopId:'desktop-a',activityId:'activity-a',viewOutputName:'Virtual-0'});
+process.stdout.write(JSON.stringify({
+    queryReply, ready:delayed.ready, reason:delayed.reason, request:actor.request,
+    completion:actor.completion, empty:probe.preparedTarget===null
+}));
+""", requests=True)
+        self.assertEqual(result, {"queryReply": None, "ready": False, "reason": "stale-or-conflicting-request",
+                                  "request": 3, "completion": None, "empty": True})
+
+    def test_repeated_prepare_preserves_its_original_context_or_focus_refusal(self):
+        not_popup = "Workspace.activeWindow={...panel,appletPopup:false,dock:true};" \
+            "probe.lastFocusedWindow=Workspace.activeWindow;"
+        for desktop_id, setup, reason in (("desktop-b", "", "stale-context"),
+                                         ("desktop-a", not_popup, "popup-focus-unconfirmed")):
+            with self.subTest(reason=reason):
+                result = self.run_guard(setup + """
+const request = {version:1,id:7,consumer:'current',request:2,intent:'prepare',
+    consumerLease,outputName:'Virtual-0',token:'',viewEpoch:probe.epoch,viewGeneration:0,
+    desktopId:DESKTOP,activityId:'activity-a',viewOutputName:'Virtual-0'};
+const first = probe.handleTargetRequest(request);
+Workspace.activeWindow=panel;
+probe.lastFocusedWindow=panel;
+const repeated = probe.handleTargetRequest(request);
+process.stdout.write(JSON.stringify({first:first.reason,repeated:repeated.reason,ready:repeated.ready}));
+""".replace("DESKTOP", json.dumps(desktop_id)), requests=True)
+                self.assertEqual(result, {"first": reason, "repeated": reason, "ready": False})
+
+    def test_unconfirmed_reader_does_not_reassign_saved_recipients_to_new_shell(self):
+        source = Path(__file__).with_name("provider.qml").read_text()
+        reader = source.split("id: reader\n", 1)[1]
+        body = reader.split("onFinished: value => {\n", 1)[1].split("\n        }\n        onFailed:", 1)[0]
+        result = self.run_guard("""
+const sent=[];
+console.info=()=>{};
+Object.assign(probe, {readOwner:':1.21',replyOwner:':1.20',recipients:[7],targetProbe:true,
+    consumeTargetInventory:data=>data.complete ? data.rows : null,
+    reconcileTargetConsumers:()=>{},
+    queuePublication:(rows,owner)=>sent.push([rows,owner]),finishRead:()=>{}});
+const finished = value => {
+""" + body + """
+};
+finished(['invalid']);
+finished([JSON.stringify({complete:false,rows:[]})]);
+const kept=[probe.recipients,probe.replyOwner];
+finished([JSON.stringify({complete:true,rows:[8]})]);
+process.stdout.write(JSON.stringify({kept,current:[probe.recipients,probe.replyOwner],sent}));
+""")
+        self.assertEqual(result, {"kept": [[7], ":1.20"], "current": [[8], ":1.21"],
+                                  "sent": [[[8], ":1.21"]]})
+
     def test_guarded_validation_binds_the_handle_to_consumer_and_payload(self):
         result = self.run_guard("""
 const prepare = {version:1,id:7,consumer:'current',request:2,intent:'prepare',
