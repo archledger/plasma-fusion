@@ -929,6 +929,8 @@ def in_menu(menu, expression):
     return evaluated(child(menu, "layoutMenuStatus"), expression)
 
 
+accessibility_was_active = QAccessible.isActive()
+QAccessible.setActive(False)
 mfixture, menu = menu_fixture("floating")
 (rows, labels, checks, fills, rings), status_line = parts(menu)
 expect(menu is not None, "the layout menu loads beside the staged clock")
@@ -941,6 +943,14 @@ expect(None not in row_at.values() and row_at["floating"].y() < row_at["tiled"].
        and evaluated(rows["floating"], "Accessible.name") == "Floating" and evaluated(rows["tiled"], "Accessible.name") == "Tiled"
        and evaluated(rows["floating"], "Accessible.checked") is True and evaluated(rows["tiled"], "Accessible.checked") is False,
        "it holds two radio rows, Floating then Tiled, the confirmed mode's checked")
+QAccessible.setActive(True)
+interfaces = [QAccessible.queryAccessibleInterface(rows[mode]) for mode in ("floating", "tiled")
+              if rows[mode] is not None]
+states = [(bool(interface.state().checkable), bool(interface.state().checked))
+          for interface in interfaces if interface is not None]
+expect(QAccessible.isActive() and states == [(True, True), (True, False)],
+       "enabling accessibility on an open menu reports both radio rows and the confirmed check (%s)" % states)
+QAccessible.setActive(accessibility_was_active)
 inset, check_size = in_menu(menu, "m.px(10)"), in_menu(menu, "m.px(16)")
 check_at, label_at = at(checks["floating"], rows["floating"]), at(labels["floating"], rows["floating"])
 expect(check_at is not None and label_at is not None and inset is not None and shown(checks["floating"]) and not shown(checks["tiled"])
@@ -1053,8 +1063,9 @@ on_press = (count(mfixture, "inputs") - inputs, listed(mfixture, "choices")[len(
 QTest.mouseRelease(menu_view, Qt.LeftButton, Qt.NoModifier, centre(rows["tiled"]))
 QTest.qWait(10)
 expect(menu is not None and on_press == (1, []) and listed(mfixture, "choices")[len(choices):] == ["tiled"]
-       and count(mfixture, "inputs") == inputs + 1,
-       "a left press on a row reports one input, and its release chooses that row (%s)" % (on_press,))
+       and count(mfixture, "inputs") == inputs + 1
+       and prop(rows["floating"], "checked") is True and prop(rows["tiled"], "checked") is False,
+       "a left press reports input and its release chooses that row without changing the confirmed check (%s)" % (on_press,))
 inputs, choices = count(mfixture, "inputs"), listed(mfixture, "choices")
 QTest.mouseClick(menu_view, Qt.RightButton, Qt.NoModifier, centre(rows["floating"]))
 QTest.qWait(10)

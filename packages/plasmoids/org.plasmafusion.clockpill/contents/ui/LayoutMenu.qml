@@ -199,7 +199,7 @@ FocusScope {
 
     // A choice: a radio row, checked on the confirmed mode, with no glyph, as next to the check a
     // Floating glyph would read as an empty checkbox.
-    component MenuRow: T.AbstractButton {
+    component MenuRow: T.CheckBox {
         id: row
 
         required property string mode
@@ -215,6 +215,10 @@ FocusScope {
         enabled: !menu.pending && !blocked
         hoverEnabled: true
         focusPolicy: Qt.StrongFocus
+        checked: confirmed
+        // Qt copies the control's check state when accessibility starts. A press proposes a
+        // mode but the provider, not the button's interactive toggle, changes the check.
+        nextCheckState: () => row.checkState
 
         Accessible.role: Accessible.RadioButton
         Accessible.name: text

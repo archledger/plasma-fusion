@@ -720,7 +720,9 @@ pop-up surface that never does. The menu decides nothing: its owner binds
 forwards what it reports.
 
 - Two radio rows, Floating then Tiled (`Accessible.RadioButton`, checkable, the confirmed mode's
-  checked), in a pane named "Dynamic tiling", as the window card's root.
+  checked), in a pane named "Dynamic tiling", as the window card's root. The control and its
+  accessibility state share the provider's confirmed check, including when accessibility starts
+  while the menu is open. Activating a row only requests its mode.
   `focusConfirmed(byKeyboard)` gives the confirmed row the focus as the menu opens, so that a screen
   reader names the mode shown first and one arrow reaches the other choice: with a keyboard focus
   reason, which shows its ring, when the menu was opened by keys or the accessible press action,
