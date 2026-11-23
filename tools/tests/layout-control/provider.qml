@@ -23,6 +23,7 @@ Item {
     property bool targetProbe: false
     property bool mixedLifetimeProbe: false
     property bool viewLossProbe: false
+    property bool keyboardEntryProbe: false
     // Diagnostics for the view-loss case only: decisions never read these references.
     property var viewLossSubject: null
     // Bounded history of native output objects present at start or already reported.
@@ -236,13 +237,17 @@ Item {
                 && actor.completion.request === row.request ? actor.completion : null;
             if (preparation) {
                 const window = probe.preparedTarget ? probe.preparedTarget.window : null;
-                console.info("layout-probe-target", JSON.stringify({
+                const verdict = {
                     consumer: row.consumer, request: row.request, intent: preparation.intent,
                     revision: revision + 1,
                     ready: preparation.ready, reason: preparation.reason,
                     targetClass: Tiling.alive(window) ? String(window.resourceClass) : "",
                     targetAlive: Tiling.alive(window), completion: completion
-                }));
+                };
+                if (probe.keyboardEntryProbe) {
+                    verdict.preparationToken = preparation.token;
+                }
+                console.info("layout-probe-target", JSON.stringify(verdict));
             }
             if (probe.mixedLifetimeProbe) {
                 console.info("layout-probe-published", JSON.stringify({
@@ -1005,6 +1010,7 @@ Item {
         targetProbe = KWin.readConfig("TargetProbe", false) === true;
         mixedLifetimeProbe = KWin.readConfig("MixedLifetimeProbe", false) === true;
         viewLossProbe = targetProbe && KWin.readConfig("ViewLossProbe", false) === true;
+        keyboardEntryProbe = targetProbe && KWin.readConfig("KeyboardEntryProbe", false) === true;
         if (viewLossProbe) {
             viewLossScreens = Workspace.screens.slice();
         }

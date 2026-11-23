@@ -908,6 +908,11 @@ It requires a full 64-digit image ID, a private authorized seed and unused resul
 container has no network or inherited host bus/display, adds no capabilities, and removes KWin's
 file capability only in its disposable overlay before running as `test`. A short fixed Wayland
 socket name avoids the existing harness's doubled-path limit. It never changes `tools/vsession/`.
+For the keyboard-entry probe, the preparation key waits for the focused item in the
+current popup, not just its active window. The checker requires acceptance after that
+key and matches its completion to the public handle returned by the first native
+preparation, even if a later frame has rechecked it as no longer ready.
+
 Both internal entry points require the disposable-container marker before any filesystem or
 D-Bus side effect, not just matching HOME/runtime strings. Owner readiness uses one lookup and
 retries only `NameHasNoOwner`; other bus errors remain failures.

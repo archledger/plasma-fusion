@@ -75,7 +75,8 @@ def decides(row: dict, request: int) -> bool:
         return False
     token = completion["token"]
     handle = 0 < len(token) <= 128 if row["ready"] else token == ""
-    return handle and completion == {"request": request, "intent": "prepare",
+    return handle and row.get("preparationToken") == token and completion == {
+                                     "request": request, "intent": "prepare",
                                      "accepted": row["ready"], "token": token,
                                      "reason": row["reason"]}
 
@@ -106,11 +107,12 @@ def evaluate(directory: Path, label: str, start: dict, end: dict, shell_pid: int
     closed = activations[dock + 2][0] if dock + 2 < len(activations) else len(kwin)
     focused = [index for index, row in events(shell, "popup-focus") if row["boot"] == boot]
     require(bool(focused), f"{label}: the popup never took keyboard focus")
-    keys = [row for index, row in events(shell, "keyboard-query")
+    keys = [(index, row) for index, row in events(shell, "keyboard-query")
             if index > focused[0] and row["boot"] == boot and row["key"] == SPACE
             and row["activeFocus"] is True and row["intent"] == "prepare"]
     require(len(keys) == 1, f"{label}: expected one keyboard preparation after the popup's focus")
-    request = keys[0]["request"]
+    key_index, key_row = keys[0]
+    request = key_row["request"]
     verdicts = [(index, row) for index, row in events(kwin, "target")
                 if row["consumer"] == boot and row["request"] == request]
     require(bool(verdicts) and verdicts[0][1]["intent"] == "prepare",
@@ -129,12 +131,19 @@ def evaluate(directory: Path, label: str, start: dict, end: dict, shell_pid: int
                 and first["targetClass"] == "" and bool(first["reason"]),
                 f"{label}: the keyboard preparation was not refused with no target")
     # Every frame for the request carries the decided completion, unlike its re-checked preparation.
-    accepted = [row for _, row in events(shell, "observation")
-                if row["boot"] == boot and row["phase"] == "online"
+    accepted = [row for index, row in events(shell, "observation")
+                if index > key_index and row["boot"] == boot and row["phase"] == "online"
                 and row["packet"]["request"] == request
                 and isinstance(row["packet"].get("completion"), dict)]
     require(bool(accepted) and accepted[0]["packet"]["completion"] == first["completion"],
             f"{label}: the consumer did not accept the provider's answer")
+
+
+def popup_focused(directory: Path, label: str, boot: str) -> bool:
+    end = line_counts(directory)
+    start = window(directory, label, end)["shellLines"]
+    lines = complete_lines(directory / "plasmashell.log")[start:end["shellLines"]]
+    return any(row["boot"] == boot for _, row in events(lines, "popup-focus"))
 
 
 def never_a_shell_target(directory: Path) -> None:
@@ -167,10 +176,13 @@ def main() -> None:
     try:
         if len(arguments) == 3 and arguments[0] == "mark":
             mark(Path(arguments[1]), arguments[2])
+        elif len(arguments) == 4 and arguments[0] == "popup-focused":
+            require(popup_focused(Path(arguments[1]), arguments[2], arguments[3]),
+                    "the expected popup item has not taken focus in this step")
         elif len(arguments) == 2 and arguments[0] == "receipt":
             write_receipt(Path(arguments[1]))
         else:
-            raise SystemExit("usage: keyboard_entry.py mark DIR LABEL | receipt DIR")
+            raise SystemExit("usage: keyboard_entry.py mark DIR LABEL | popup-focused DIR LABEL BOOT | receipt DIR")
     except (ValueError, OSError, KeyError, TypeError) as error:
         raise SystemExit(f"FAIL: {error}") from None
 

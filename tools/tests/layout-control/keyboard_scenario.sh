@@ -22,6 +22,19 @@ set -euo pipefail
 keyboard_helper="$HOME/.local/lib/layout-control/keyboard_entry.py"
 receipts="$HOME/.local/lib/layout-control/receipts.py"
 keyboard_mark() { python3 "$keyboard_helper" mark "$OUT" "$1" >/dev/null; }
+# An active shell surface can precede focus on its actual keyboard item.
+keyboard_popup_focus() {
+  local step=$1
+  for _ in {1..40}; do
+    if python3 "$keyboard_helper" popup-focused "$OUT" "$step" "$focus_boot" \
+        2>>"$OUT/keyboard-$step-popup-item.log"; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  echo "FAIL: keyboard entry: the popup item never took focus" >&2
+  return 1
+}
 # The provider's newest focus row shows the shell's SURFACE (dock or popup) active, remembering
 # APP or, for "-", nothing.
 keyboard_wait() {
@@ -111,6 +124,7 @@ keyboard_wait dock pf.focus.alpha
 wait_target_settled "$focus_boot" $((generation + 1))
 pfinput "key space"
 keyboard_wait popup pf.focus.alpha
+keyboard_popup_focus entry
 pfinput "key space"
 target_request=$(wait_target_reply "$focus_boot" prepare true "$previous" pf.focus.alpha)
 echo "PASS: keyboard entry after panel focus prepares the remembered app, never the panel"
@@ -128,6 +142,7 @@ keyboard_wait dock -
 wait_target_settled "$focus_boot" $((generation + 1))
 pfinput "key space"
 keyboard_wait popup -
+keyboard_popup_focus refusal
 pfinput "key space"
 target_request=$(wait_target_reply "$focus_boot" prepare false "$target_request" -)
 echo "PASS: keyboard entry without an eligible app refuses safely, never the panel"

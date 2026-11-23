@@ -73,6 +73,7 @@ def verdict(request, ready, target, *, decision=OWN, reason=None):
     return {"consumer": BOOT, "request": request, "intent": "prepare", "revision": 5,
             "ready": ready, "reason": reason or ("" if ready else "stale-context"),
             "targetClass": target, "targetAlive": ready,
+            "preparationToken": "t" if ready else "",
             "completion": completion(request, ready) if decision is OWN else decision}
 
 
@@ -229,13 +230,13 @@ class KeyboardEntryScenarioTests(unittest.TestCase):
             "keyboard_mark entry", capture, "previous=$(keyboard_request)",
             'pfinput "key meta+alt+p"', "keyboard_wait dock pf.focus.alpha",
             'wait_target_settled "$focus_boot" $((generation + 1))', 'pfinput "key space"',
-            "keyboard_wait popup pf.focus.alpha", 'pfinput "key space"',
+            "keyboard_wait popup pf.focus.alpha", "keyboard_popup_focus entry", 'pfinput "key space"',
             'wait_target_reply "$focus_boot" prepare true "$previous" pf.focus.alpha',
             "PASS: keyboard entry after panel focus prepares the remembered app",
             'pfinput "key esc"', "printf 'quit\\n' >&\"$focus_input\"", 'wait "$focus_client"',
             "keyboard_forgotten", "keyboard_mark refusal", capture, 'pfinput "key meta+alt+p"',
             "keyboard_wait dock -", 'wait_target_settled "$focus_boot" $((generation + 1))',
-            'pfinput "key space"', "keyboard_wait popup -", 'pfinput "key space"',
+            'pfinput "key space"', "keyboard_wait popup -", "keyboard_popup_focus refusal", 'pfinput "key space"',
             'wait_target_reply "$focus_boot" prepare false "$target_request" -',
             "PASS: keyboard entry without an eligible app refuses safely",
             'pfinput "key esc"', '"$keyboard_helper" receipt "$OUT"']
@@ -416,6 +417,37 @@ class KeyboardEntryCheckerTests(unittest.TestCase):
             with self.subTest(case=case):
                 with self.assertRaisesRegex(ValueError, "did not accept"):
                     self.check(**{"entry-shell": rows})
+
+    def test_acceptance_before_the_preparation_key_does_not_qualify(self):
+        with self.assertRaisesRegex(ValueError, "did not accept"):
+            self.check(**{"entry-shell": [
+                ("popup-focus", {"boot": BOOT, "screen": "Virtual-0"}),
+                ("observation", accepted(2, True)), ("keyboard-query", key(2)),
+            ]})
+
+    def test_decision_must_name_the_handle_the_native_preparation_returned(self):
+        altered = completion(2, True) | {"token": "other"}
+        with self.assertRaisesRegex(ValueError, "did not decide"):
+            self.check(**{"entry-kwin": [
+                ("focus", dock(APP)), ("focus", popup(APP)),
+                ("target", verdict(2, True, APP, decision=altered)),
+            ], "entry-shell": [
+                ("popup-focus", {"boot": BOOT, "screen": "Virtual-0"}),
+                ("keyboard-query", key(2)), ("observation", accepted(2, False, decision=altered)),
+            ]})
+
+    def test_popup_readiness_is_scoped_to_the_current_step_and_consumer(self):
+        self.output.joinpath("plasmashell.log").write_text(
+            'qml: layout-probe-popup-focus {"boot":"current"}\n')
+        self.output.joinpath("kwin.log").touch()
+        checker().mark(self.output, "refusal")
+        self.assertFalse(checker().popup_focused(self.output, "refusal", BOOT))
+        with self.output.joinpath("plasmashell.log").open("a") as log:
+            log.write('qml: layout-probe-popup-focus {"boot":"other"}\n')
+        self.assertFalse(checker().popup_focused(self.output, "refusal", BOOT))
+        with self.output.joinpath("plasmashell.log").open("a") as log:
+            log.write('qml: layout-probe-popup-focus {"boot":"current"}\n')
+        self.assertTrue(checker().popup_focused(self.output, "refusal", BOOT))
 
     def test_no_verdict_anywhere_names_a_shell_surface(self):
         rows = [("focus", dock("")), ("focus", popup("")), ("target", verdict(3, False, "")),
