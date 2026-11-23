@@ -4066,6 +4066,57 @@ Item {
             }
             tileShortcut.activated();
             winB.minimized = false;
+
+            // Opening a window can reenter the layout before that window reaches its cell.
+            // A native supersession in the inner pass still outranks the remembered restore.
+            const newcomer = mk({internalId: "native-newcomer", resourceClass: "org.fusion.mail",
+                                 desktopFileName: "org.fusion.mail.desktop",
+                                 frameGeometry: Qt.rect(300, 500, 260, 260)});
+            const refusedNewcomer = mk({internalId: "native-refused", resourceClass: "org.fusion.draw",
+                                        desktopFileName: "org.fusion.draw.desktop",
+                                        frameGeometry: Qt.rect(400, 500, 260, 260)});
+            newcomer.desktops = [desktop];
+            refusedNewcomer.desktops = [desktop];
+            newcomer.output = ws.activeScreen;
+            refusedNewcomer.output = ws.activeScreen;
+            facade.entries["org.fusion.mail"] = {x: 110, y: 210, width: 260, height: 260};
+            facade.entries["org.fusion.draw"] = {x: 125, y: 225, width: 260, height: 260};
+            let opening = false;
+            let newerRequested = false;
+            let ordinaryRefused = false;
+            facade.placeStackWindow = function (generation, window, cell, token) {
+                if (window === newcomer) {
+                    newerRequested = true;
+                    window.frameGeometry = Qt.rect(360, 465, 260, 260);
+                    return 6;
+                }
+                if (window === refusedNewcomer) {
+                    ordinaryRefused = true;
+                    return 7;
+                }
+                window.frameGeometry = cell;
+                if (opening && window === winA) {
+                    opening = false;
+                    winB.minimized = true;
+                }
+                return 0;
+            };
+            tileShortcut.activated();
+            opening = true;
+            ws.windows = [newcomer, winB, winA, master];
+            ws.windowAdded(newcomer);
+            if (!winB.minimized || !newerRequested || !rectIs(newcomer.frameGeometry, 360, 465, 260, 260)) {
+                fail("the remembered open restore overwrote a superseding native stack request");
+            }
+            ws.windows = [refusedNewcomer, newcomer, winB, winA, master];
+            ws.windowAdded(refusedNewcomer);
+            if (!ordinaryRefused || !rectIs(refusedNewcomer.frameGeometry, 125, 225, 260, 260)) {
+                fail("an ordinary native refusal must still allow a remembered open restore");
+            }
+            tileShortcut.activated();
+            if (!rectIs(newcomer.frameGeometry, 360, 465, 260, 260)) {
+                fail("the superseding window must remain detached at untoggle");
+            }
             done = true;
             return;
         }

@@ -1915,7 +1915,8 @@ deliberately defers.
   request; the new call does not change master ownership or ordinary layout history. If a
   window minimizes during a placement notification, the newer layout takes over and the
   minimized member stays eligible to rejoin. A refusal during that reentry can return a cell the
-  tiler still owns, but a superseded request leaves the newer geometry alone.
+  tiler still owns, but a superseded request leaves the newer geometry alone, including when a
+  newly opened window has a remembered frame. Other refusals still allow the usual open restore.
 - **Toggle off**: the stack windows return to their saved floats (see "A float given back
   too early" below); the master restores through
   the native explicit restore (the facade's `restoreWindow(master)` — Meta+Backspace's action
