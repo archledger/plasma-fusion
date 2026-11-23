@@ -499,8 +499,10 @@ Results: the acceptance matrix is `acceptance.md`, each of the plan's fourteen r
 suite cases and native runs, with the gaps named. The focused checks are verify-tip's fifteen steps
 on each pushed commit (the builds with their QML lints, the suites, ruff, ShellCheck, the lint
 fixtures and REUSE). The real shell/fork runs are P0's, P5's and P6's, each in an independently
-named container session of the approved image; the settings dialog's native Apply is not run (the
-config suite emulates the dialog's code, as P3 did). Fair arbitration across two bars on one output
+named container session of the approved image. The P7 follow-up ran the real settings dialog
+on the same image: Apply saved an edit on each of General, Calendar and Time zones after a provider
+reload without overwriting the new request or response. Hiding the control through General's
+Apply withdrew its request. Fair arbitration across two bars on one output
 (`p7-arb-2`, 18 checks): each bar prepares in turn, the previous preparation ends on the focus
 change, neither starves, no set is sent and both clocks keep the same mode. The provider's reload
 and disable with the real clock (`p7-reload-1`, 11 checks): the clock goes unknown, the actions go

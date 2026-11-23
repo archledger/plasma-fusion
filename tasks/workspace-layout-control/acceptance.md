@@ -26,6 +26,13 @@ suite and the case; "native" names the run and its evidence. A row that is not s
 | Manual snap/maximize/fullscreen, placement memory | The placement suite (`scenario-placement.sh`); P5's native runs (a set's start and teardown, the old master's restore); the snap geometry suite. | Automated and native (P5) |
 | UI input and constrained layout | `calendar_view_test.py` (dots, calendar, wheel, RTL, touch, large text, the width budget); the P6 native session (the wheel over the control, the menu over the calendar, the status line's side); the width-budget cases. | Automated and native (P6) |
 
+In the P7 follow-up on `0297dd7`, the actual menu tiled an eligible KWrite window from the
+pointer, made no second native start when Tiled was selected again with the keyboard, and
+restored the same window through Floating. Each action received its own provider completion.
+In a separate private session on the same stage, Apply on General, Calendar and Time zones
+saved an edit while preserving the new request and response from a provider reload. Turning
+off the control through General's Apply hid the control and withdrew the request.
+
 ## Not shown, and why
 
 - **Live KWin owner replacement:** G0 item 4 records that no live consumer sees an
@@ -34,5 +41,3 @@ suite and the case; "native" names the run and its evidence. A row that is not s
   not checked there.
 - **An Escape between a choice and its read (T25):** not produced; the provider answers within a
   frame.
-- **A set from the menu:** not produced in the P6 session, which had no app window to tile; P5's
-  native runs show the set path.
