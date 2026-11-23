@@ -907,6 +907,8 @@ Item {
         // True while the tiler writes its own placements (the relayout, the float restores):
         // those writes must not read as the user's manual moves.
         property bool placing: false
+        // Geometry notifications can synchronously start a newer pass on the same session.
+        property var stackLayoutPass: null
         // internalId -> {float, cell, until, asked}: the stack windows a session gave their
         // floats back, with the cell each had last been given. For staleCellMillis a late
         // answer to that cell is taken back (returnFromStaleCell); for as long as the window
@@ -1672,6 +1674,8 @@ Item {
                 return;
             }
             const layoutSession = session;
+            const pass = {};
+            stackLayoutPass = pass;
             const area = Workspace.clientArea(Workspace.MaximizeArea, session.output, session.desktop);
             session.dividerX = masterRightEdge(area);
             // The tile's rectangle as the native layer has it now: where the master stands
@@ -1682,10 +1686,20 @@ Item {
             }
             const gap = tilingStackGap();
             const result = Tiling.layoutStack(session.stack, area, session.dividerX, gap);
-            const refused = [];
             // The tiler's own writes: while these run, a geometry change is not the user's
             // hand (the manual-move detach reads this).
+            const wasPlacing = placing;
             placing = true;
+            try {
+                applyStackLayout(result, layoutSession, pass);
+            } finally {
+                placing = wasPlacing;
+            }
+        }
+
+        function applyStackLayout(result, layoutSession, pass) {
+            const layoutIsCurrent = () => session === layoutSession && stackLayoutPass === pass;
+            const refused = [];
             // Place the feasible windows and remember each cell: a later change landing
             // exactly there is this write arriving (the synchronous one or the client's late
             // commit of it), not a manual move.
@@ -1707,8 +1721,7 @@ Item {
                 } else {
                     w.frameGeometry = cell;
                 }
-                if (session !== layoutSession) {
-                    placing = false;
+                if (!layoutIsCurrent()) {
                     return;
                 }
                 if (!Tiling.alive(w)) {
@@ -1740,6 +1753,12 @@ Item {
                 if (Tiling.alive(restores[i].window)) {
                     restores[i].window.frameGeometry =
                         Qt.rect(restores[i].rect.x, restores[i].rect.y, restores[i].rect.width, restores[i].rect.height);
+                    if (!layoutIsCurrent()) {
+                        return;
+                    }
+                    if (!Tiling.alive(restores[i].window)) {
+                        continue;
+                    }
                     expectReturn(String(restores[i].window.internalId), restores[i].rect);
                     // The restore's quiet: the starved member leaves the session right
                     // after this, and its client may still commit the old cell configure
@@ -1753,9 +1772,10 @@ Item {
                     }
                 }
             }
-            placing = false;
             for (const w of result.floated.concat(refused)) {
-                detachWindow(w, false);
+                if (Tiling.alive(w)) {
+                    detachWindow(w, false);
+                }
             }
         }
 

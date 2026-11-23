@@ -1744,7 +1744,9 @@ deliberately defers.
   not save those temporary cells as ordinary output-layout geometry. A refused call does
   not fall back to an unmarked cell write. Older forks without the method still use the
   existing geometry setter. Restoring a floating frame remains an ordinary geometry
-  request; the new call does not change master ownership or ordinary layout history.
+  request; the new call does not change master ownership or ordinary layout history. If a
+  window minimizes during a placement notification, the newer layout takes over and the
+  minimized member stays eligible to rejoin.
 - **Toggle off**: the stack windows return to their saved floats (see "A float given back
   too early" below); the master restores through
   the native explicit restore (the facade's `restoreWindow(master)` — Meta+Backspace's action

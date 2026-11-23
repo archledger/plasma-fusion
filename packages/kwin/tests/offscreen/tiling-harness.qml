@@ -858,6 +858,29 @@ Item {
                 fail("a refused native stack placement must not fall back to an unmarked cell write");
             }
             tileShortcut.activated();
+            refuse = false;
+            let minimizeDuringPlacement = true;
+            facade.placeStackWindow = function (generation, window, cell, token) {
+                if (window.minimized) {
+                    return 7;
+                }
+                window.frameGeometry = cell;
+                if (minimizeDuringPlacement && window === winA) {
+                    minimizeDuringPlacement = false;
+                    winB.minimized = true;
+                }
+                return 0;
+            };
+            tileShortcut.activated();
+            if (!winB.minimized || !rectIs(winA.frameGeometry, 704, 34, 736, 866)) {
+                fail("minimizing B during native placement did not give A the full stack");
+            }
+            winB.minimized = false;
+            if (!rectIs(winA.frameGeometry, 704, 34, 736, 429)
+                    || !rectIs(winB.frameGeometry, 704, 471, 736, 429)) {
+                fail("minimizing B during native placement dropped B from the session");
+            }
+            tileShortcut.activated();
             done = true;
             return;
         }
