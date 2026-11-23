@@ -509,6 +509,9 @@ built by the lead directly.
   of the bar has `budgetLevel` and `budgetSaving(level)`; the stock menu's full width is measured from
   its menu model (titles in the panel font plus the `menubaritem` margins; measured exactly equal to
   the full view for Konsole, Dolphin and Kate). Nothing is laid out to be judged, so nothing flickers.
+  The budget watches each widget's width at every step, not just its current size hint. When a
+  shorter app name would fit after the bar hid a long one, it can come back without a resize.
+  The staged `width_budget_test.py` in the Fedora build covers that case.
 - **Global menu crash (Plasma 6.7.5)**: the stock appmenu crashes plasmashell when it goes from its
   compact view back to its full view after its menu changed (libplasma
   `AppletQuickItemPrivate::compactRepresentationCheck` reads the full view's size hint). Cause, in
