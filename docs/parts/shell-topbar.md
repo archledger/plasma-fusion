@@ -216,9 +216,9 @@ provider (`wake()`). The clock's `main.qml` owns it:
   on (`showLayoutControl`), and the bar's own layout one that shows it, a horizontal panel outside
   tablet posture (the specification's scope; a clock on the desktop is not the top bar).
   Otherwise the component stays idle, with no request and no wake. The saved request is then
-  withdrawn - at start, when the user hides the control, when the bar's layout does and when it has
-  no output name (`Screen.name` empty) - and the provider woken (`wake()`): an empty `layoutRequest`
-  is no request, so the provider forgets the widget at that read, and no frame, and no save of the
+  withdrawn at start, when the user or the bar's layout hides the control, or when `Screen.name`
+  is empty or exceeds the protocol's 128 code units. The provider is woken (`wake()`): an empty
+  `layoutRequest` is no request, so the provider forgets the widget at that read, and no frame or save of the
   configuration, keeps following a bar that shows nothing. On a change the withdrawal waits for
   whatever made it (`Qt.callLater`): the settings dialog's Apply writes the setting first, then the
   page's copy of the request, and saves.

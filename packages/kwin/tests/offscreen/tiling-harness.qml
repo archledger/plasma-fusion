@@ -1657,8 +1657,12 @@ Item {
                 // A short call with such a start stays under the limit.
                 read();
                 p.reader.finished([readResult(p.readAt - 1000)]);
+                read();
+                tick += 70;
+                p.reader.failed();
                 // The rows alone, without the script's start, are a malformed answer: nothing read.
                 read();
+                tick += 70;
                 p.reader.finished([JSON.stringify(rows)]);
                 if (w.calls !== 4 || p.reading) {
                     fail("time-limit: a read whose frame was told publishes nothing (writes " + w.calls + ")");
@@ -1673,6 +1677,7 @@ Item {
                     fail("time-limit: the session's end goes out (tiled " + tiled(4) + ")");
                 }
                 p.wake.activated();
+                tick += 70;
                 w.finished(["1"]);
             } },
             { name: "the wake's read after it", until: () => p.reading, run: function () {
@@ -1720,6 +1725,7 @@ Item {
                 if (tiled(11) !== true) {
                     fail("time-limit: the session's start goes out (tiled " + tiled(11) + ")");
                 }
+                tick += 70;
                 w.failed();
                 tileShortcut.activated();
                 since = Date.now();
@@ -2796,6 +2802,26 @@ Item {
                 if (!p.active || facade.owned !== master) {
                     fail("set: the later set starts normally after the failed retry");
                 }
+                // A terminal refusal during a transfer is not a rollback to the previous view.
+                focus(away);
+                focus(awayPopup);
+                frames = read([ask(5, "c5", 57, "query"), prep(6, "c6", 100, { outputName: "Virtual-2" })]);
+                if (!frames[5] || frames[5].tiled !== true
+                        || !frames[6] || frames[6].tiled !== false || !completionOf(6)?.target) {
+                    fail("set: before transfer A is tiled and B is ready to prepare from its app");
+                }
+                h6 = completionOf(6)?.handle ?? "";
+                const restores = calls("restoreWindow").length;
+                facade.admitAnswers = [8];
+                frames = read([ask(5, "c5", 57, "query"),
+                               setTo(6, "c6", 101, "tiled", h6, { outputName: "Virtual-2" })]);
+                decided("terminal admission failure on B refuses its set", 6, refusedSet("admission-refused"));
+                if (p.active || facade.owned !== null || p.startPending
+                        || calls("restoreWindow").length !== restores + 1
+                        || !frames[5] || frames[5].tiled !== false
+                        || !frames[6] || frames[6].tiled !== false) {
+                    fail("set: terminal transfer refusal reports A's teardown and leaves both bars Floating");
+                }
             } }
         ];
         stepSince = Date.now();
@@ -2931,7 +2957,8 @@ Item {
         };
         const frameIs = (what, frames, id, completion, prepared) => {
             const f = frames[id];
-            if (!f || canonical(f.completion) !== canonical(completion) || canonical(f.prepared) !== canonical(prepared)) {
+            if (!f || canonical(f.completion) !== canonical(completion)
+                    || (prepared === null ? f.prepared !== undefined : canonical(f.prepared) !== canonical(prepared))) {
                 fail("prepare: " + what + " (got " + canonical(f) + ")");
             }
         };
@@ -3435,8 +3462,12 @@ Item {
                 decided("an exhausted slot serial refuses", 5, refused("unavailable"));
                 holds("an exhausted slot serial takes no slot", null);
                 p.shellSerial = 2147483646;
+                focus(app);
                 owner = ":1.12";
                 read([prep(6, "c6", 3), prep(5, "c5", exhausted)]);
+                if (p.lastEligible !== app || p.lastFocused !== app || p.handoff !== null) {
+                    fail("prepare: replacing the shell retains only the currently focused eligible app");
+                }
                 p.shellPidLookup.finished([shellPid]);
                 if (p.shellPid !== 0 || p.shellSerial !== 2147483646) {
                     fail("prepare: an exhausted shell serial takes no PID (got " + p.shellPid + ", serial "

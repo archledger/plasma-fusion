@@ -2237,8 +2237,9 @@ and the answers it publishes to them.
   any the scripts print (`answerLimit`, 262144 UTF-16 code units) is malformed too, and is not
   parsed at all: the reader's longest is under 200,000 - at most 16 rows copied from requests of
   at most 2048 characters, which JSON.stringify prints again at most six times as long - and the
-  writer's is two numbers. A read that comes back says what it found and how long it took
-  (below). A retirement ends a read in flight: the answers that come after it reach nothing.
+  writer's is two numbers. A successful read says what it found and how long it took (below).
+  Failed calls and malformed receipts are timed from call to answer (round trip), for both reads
+  and publications. A retirement ends a read in flight: the answers that come after it reach nothing.
 - The answers go back the same way. Each request and refusal of the last read gets a frame in
   its clock's `layoutResponse` field (General group), and a publication writes all its frames
   with one `evaluateScript` call on the connection the requests came from. A frame says
@@ -2316,9 +2317,11 @@ and the answers it publishes to them.
   popup's close, the target leaving the view (its desktop, activity or output), turning into no
   eligible app as KWin notifies it (minimized, fullscreen, maximized, tiled, out of the taskbar
   or the window switcher, modal) or closing, the view's change (an output replaced by one of
-  the same name too) and a new shell connection, which also forgets the remembered app, end the
-  preparation (`focus-changed`, `target-departed`, `view-changed`, `shell-replaced`), and its
-  holder is told `ready` false with the reason, at a newer revision, until its next request.
+  the same name too) and a new shell connection end the preparation. On shell replacement the
+  old handoff is discarded and only a currently focused eligible app can seed the next.
+  The holder is told `ready` false with the reason (`focus-changed`, `target-departed`,
+  `view-changed`, `shell-replaced`),
+  at a newer revision, until its next request.
   KWin notifies no change of moveable or resizeable, and a window turning transient is not
   watched; the slot's next check finds those. The holder's next request, however it is
   answered, or a withdrawal frees the slot and ends the preparation's frames; a widget gone from

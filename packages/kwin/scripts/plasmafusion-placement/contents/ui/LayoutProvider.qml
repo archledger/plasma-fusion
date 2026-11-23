@@ -362,11 +362,7 @@ QtObject {
         // running session - is remembered as if its activation had been seen, so a popup opened
         // straight from it hands it off. Nothing else is taken: a popup, the panel or any other
         // window holding focus then stays unseen, and confirms no focus for a prepare.
-        const active = Workspace.activeWindow;
-        if (Tiling.eligibleForMaster(active)) {
-            lastFocused = active;
-            lastEligible = active;
-        }
+        rememberFocusedApp();
         revision = 1;
         // An explicit signature: the plugin then encodes each argument by its letter, so the
         // flags go out as a uint32 with no wrapper type (plasma-workspace components/dbus,
@@ -376,6 +372,13 @@ QtObject {
             iface: "org.freedesktop.DBus", member: "RequestName", signature: "(su)",
             arguments: [identityName, 4]
         });
+    }
+
+    // Rebuild focus memory from the currently active app, never from a shell surface.
+    function rememberFocusedApp(): void {
+        const focused = Workspace.activeWindow;
+        lastFocused = Tiling.eligibleForMaster(focused) ? focused : null;
+        lastEligible = lastFocused;
     }
 
     // RequestName answered: only a primary ownership (1) is the name; its owner is read next.
@@ -449,15 +452,15 @@ QtObject {
             return;
         }
         if (owner !== shellPidOwner) {
-            // Another shell connection: its surfaces are not the old one's, so the slot made under
-            // the old one goes and the remembered app with it.
+            // An old shell's slot and handoff are no longer valid; only an app with current
+            // focus can seed the new shell's first handoff.
             if (shellPidOwner !== "") {
                 if (slot) {
                     invalidate("shell-replaced");
                 }
-                lastEligible = null;
                 handoff = null;
                 missed = "no-target";
+                rememberFocusedApp();
                 shellPid = 0;
                 shellPidOwner = "";
             }
@@ -508,7 +511,7 @@ QtObject {
         if (!reading) {
             return;
         }
-        console.warn("plasmafusion-placement: layout provider: the bars' requests could not be read");
+        report("read", "the bars' requests could not be read", callLength(readAt, NaN), true);
         finishRead();
     }
 
@@ -528,7 +531,7 @@ QtObject {
             ? answer.rows : null;
         const inventory = rows !== null ? inventoryOf(answer) : false;
         if (rows === null || !Number.isFinite(answer.start) || inventory === false) {
-            console.warn("plasmafusion-placement: layout provider: the bars' requests came back malformed");
+            report("read", "the bars' requests came back malformed", callLength(readAt, NaN), true);
             finishRead();
             return;
         }
@@ -569,7 +572,7 @@ QtObject {
         views = resolved;
         settleIntents(accepted, refused, inventory);
         publicationDue = true;
-        report("read", "read " + accepted.length + " request(s), " + refused.length + " refused", length);
+        report("read", "read " + accepted.length + " request(s), " + refused.length + " refused", length, false);
         finishRead();
     }
 
@@ -1154,7 +1157,7 @@ QtObject {
         const answer = parsed(text);
         if (answer === null || !Number.isInteger(answer.written) || answer.written < 0
                 || answer.written > done.messages.length || !Number.isFinite(answer.start)) {
-            console.warn("plasmafusion-placement: layout provider: the bars' layout state came back malformed");
+            report("publication", "the bars' layout state came back malformed", callLength(done.at, NaN), true);
             unconfirmed(done.messages);
             continuePipeline();
             return;
@@ -1172,7 +1175,7 @@ QtObject {
             sent = told;
         }
         report("publication", "published " + done.messages.length + " frame(s), " + answer.written + " written",
-               length);
+               length, false);
         continuePipeline();
     }
 
@@ -1206,10 +1209,14 @@ QtObject {
     // A call that came back is said with its lengths, and one over the limit is said as such, by
     // the length from its script's start when that lies within the call, else by its length from
     // call to answer - each named, as neither is the shell's time exactly.
-    function report(what: string, line: string, length: var): void {
+    function report(what: string, line: string, length: var, failed: bool): void {
         const known = length.fromStart !== null;
-        console.info("plasmafusion-placement: layout provider: " + line + ", in " + length.total + " ms"
-                     + (known ? " (" + length.fromStart + " ms from its script's start)" : ""));
+        const message = "plasmafusion-placement: layout provider: " + line + ", in " + length.total + " ms";
+        if (failed) {
+            console.warn(message + " (round trip)");
+        } else {
+            console.info(message + (known ? " (" + length.fromStart + " ms from its script's start)" : ""));
+        }
         const judged = known ? length.fromStart : length.total;
         if (judged > shellLimit) {
             console.warn("plasmafusion-placement: layout provider: a " + what + " took " + judged
@@ -1227,7 +1234,7 @@ QtObject {
         const done = pending;
         pending = null;
         publishing = false;
-        console.warn("plasmafusion-placement: layout provider: the bars' layout state could not be published");
+        report("publication", "the bars' layout state could not be published", callLength(done.at, NaN), true);
         unconfirmed(done.messages);
         continuePipeline();
     }

@@ -407,7 +407,11 @@ for problem in list(time_limit.property("problems").toVariant() or []):
     failures.append(str(problem))
 journal = messages[before:]
 events = []
-for message in journal:
+failed_round_trips = []
+diagnostic = re.compile(r"plasmafusion-placement: layout provider: the bars' (requests|layout state)"
+                        r" (could not be read|came back malformed|could not be published), in 70 ms"
+                        r" \(round trip\)")
+for index, message in enumerate(journal):
     for kind, pattern, marker in (("read", READ_LINE, "layout provider: read "),
                                   ("published", PUBLISHED_LINE, "layout provider: published ")):
         if marker in message:
@@ -417,13 +421,24 @@ for message in journal:
             events.append(((kind,) + line[2:]) if line else ("unparsed " + kind, message))
     over = OVER_LINE.fullmatch(message)
     if over:
-        events.append(("over " + over.group(1), over.group(3), int(over.group(2))))
+        failed = diagnostic.fullmatch(journal[index - 1]) if index else None
+        if failed:
+            failed_round_trips.append((failed.group(1), failed.group(2), over.group(1),
+                                       over.group(3), int(over.group(2))))
+        else:
+            events.append(("over " + over.group(1), over.group(3), int(over.group(2))))
     if "layout provider: a " in message and "over the 50 ms limit" in message and not over:
         events.append(("unparsed over", message))
     if "the bars' requests came back malformed" in message:
         events.append(("malformed read",))
     if "the bars' layout state came back malformed" in message:
         events.append(("malformed state",))
+check(failed_round_trips == [
+    ("requests", "could not be read", "read", "call", 70),
+    ("requests", "came back malformed", "read", "call", 70),
+    ("layout state", "came back malformed", "publication", "call", 70),
+    ("layout state", "could not be published", "publication", "call", 70),
+], "time-limit: failed and malformed calls are judged by their round trips (%s)" % failed_round_trips)
 kinds = [event[0] for event in events]
 wanted = (["read", "published", "read"]
           + ["read", "over read", "published", "over publication"]

@@ -401,9 +401,9 @@ PlasmoidItem {
         }
     }
     // While the control may not show, or the bar has no output name to ask for, its saved request
-    // is withdrawn - at start, when the user hides it, when the bar's layout does and when the
-    // output name empties - and the provider woken: an empty field is no request, so the provider
-    // forgets the widget at that read, and no frame, and no save of the configuration, keeps
+    // is withdrawn - at start, when the user hides it, when the bar's layout does or when the
+    // output name is outside the protocol's bounds - and the provider woken. An empty field is
+    // no request, so the provider forgets the widget at that read, and no frame or save keeps
     // following a bar that shows nothing. On a change the withdrawal waits for whatever made it:
     // the settings dialog's Apply writes the setting first and then the page's copy of the request,
     // and saves.
@@ -416,7 +416,7 @@ PlasmoidItem {
     }
     onLayoutAllowedChanged: Qt.callLater(root.withdrawLayoutRequest)
     function withdrawLayoutRequest(): void {
-        if (layoutState.outputName === "" && Plasmoid.configuration.layoutRequest !== "") {
+        if (!layoutState.hasEligibleOutput() && Plasmoid.configuration.layoutRequest !== "") {
             Plasmoid.configuration.layoutRequest = "";
             Plasmoid.configuration.writeConfig();
             layoutState.wake();

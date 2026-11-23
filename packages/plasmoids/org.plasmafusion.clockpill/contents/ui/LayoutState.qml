@@ -23,6 +23,9 @@ Item {
 
     // The bar's output by name. A request names it, and a change asks again.
     property string outputName: ""
+    function hasEligibleOutput(): bool {
+        return outputName.length > 0 && outputName.length <= 128;
+    }
     // The saved answer: the clock's layoutResponse field once its schema declares one.
     property string response: ""
     // How long a request waits for its answer, in ms: 100 to 10000, and 10000 for anything else.
@@ -161,7 +164,7 @@ Item {
             console.warn("plasmafusion-clockpill: layout state: no request numbers left");
             return;
         }
-        if (outputName.length === 0 || outputName.length > 128) {
+        if (!hasEligibleOutput()) {
             if (d.outcome !== "idle") {
                 d.request += 1;
             }

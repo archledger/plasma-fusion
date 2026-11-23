@@ -679,8 +679,7 @@ expect(unconfirmed_after(failing) and prop(waiting, "epoch") == "" and len(asked
 changed = ask_waiting("Virtual-0")
 QTest.qWait(DEADLINE // 3)
 waiting.setProperty("deadlineMs", 5000)
-# Within unconfirmed_after()'s wait of five deadlines, so a wait restarted at 5 s would not end in it.
-expect(unconfirmed_after(changed),
+expect(timer is not None and timer.property("interval") == DEADLINE and unconfirmed_after(changed),
        "layout state: a request keeps the deadline it was made with when the owner changes it")
 ask_waiting("Virtual-2")
 expect(timer is not None and timer.property("interval") == 5000,
@@ -2398,6 +2397,24 @@ expect([kind for kind, _ in events] == ["saved", "wake"] and screenless_saved
        and parsed_json(screenless_saved[0]).get("outputName") == "Virtual-0",
        "the clock's wiring: the screen back, the clock asks again (%s)" % events)
 
+events.clear()
+screenless_saved.clear()
+maximum_name = "a" * 128
+if screenless is not None:
+    screenless.setProperty("screenName", maximum_name)
+expect(until(lambda: len(events) == 2) and [kind for kind, _ in events] == ["saved", "wake"]
+       and screenless_saved and parsed_json(screenless_saved[0]).get("outputName") == maximum_name,
+       "the clock's wiring: an eligible output replaces the saved request directly")
+events.clear()
+screenless_saved.clear()
+if screenless is not None:
+    screenless.setProperty("screenName", maximum_name + "b")
+expect(screenless is not None and until(lambda: prop(screenless_layout, "outcome") == "idle")
+       and until(lambda: len(events) == 2) and events == [("saved", ""), ("wake", WAKE)]
+       and screenless_saved == [""]
+       and prop(screenless.property("config"), "layoutRequest") == "",
+       "the clock's wiring: an overlength output withdraws the previous request")
+
 
 def wired_frame(wiring, revision, **fields):
     """A frame answering the wiring fixture's last saved request, from the wired lifetime."""
@@ -2432,8 +2449,7 @@ if menu is not None:
     invoke(menu, "layoutMenuHidden")
 expect(menu is not None and prop(menu_layout, "actionOpen") is False and prop(menu, "layoutMenuRecent") is True,
        "the clock's wiring: the pop-up hiding itself ends the action at once, and the sync keeps the toggle")
-QTest.qWait(200)
-expect(menu is not None and prop(menu, "layoutMenuRecent") is False,
+expect(menu is not None and until(lambda: prop(menu, "layoutMenuRecent") is False),
        "the clock's wiring: the sync over, the toggle is free again")
 if menu is not None:
     invoke(menu, "openLayoutMenu", Q_ARG(str, "pointer"))
