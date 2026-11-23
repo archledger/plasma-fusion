@@ -84,6 +84,19 @@ class LifecycleTargetTests(unittest.TestCase):
     def setUp(self):
         self.runner = runner()
 
+    def test_shell_readiness_retries_only_an_unexported_object(self):
+        absent = subprocess.CalledProcessError(
+            2, "qdbus-qt6", output="Error: org.freedesktop.DBus.Error.UnknownObject\n"
+            "No such object path '/PlasmaShell'\n")
+        missing_method = subprocess.CalledProcessError(1, "qdbus-qt6", stderr="Cannot find method")
+        with mock.patch.object(self.runner, "qdbus", side_effect=[absent, "", "1", "", missing_method]) as call:
+            self.assertFalse(self.runner.desktop_containment_ready(":1.2"))
+            call.assert_called_once_with(":1.2", "/PlasmaShell")
+            self.assertTrue(self.runner.desktop_containment_ready(":1.2"))
+            with self.assertRaises(subprocess.CalledProcessError) as raised:
+                self.runner.desktop_containment_ready(":1.2")
+            self.assertIs(raised.exception, missing_method)
+
     def test_the_seeds_target_flag_selects_target_mode(self):
         with tempfile.TemporaryDirectory() as scratch:
             home = Path(scratch)
@@ -334,6 +347,12 @@ class LifecycleTargetResultTests(unittest.TestCase):
                 for path, text in zip(files, kept):
                     path.write_text(text)
 
+    def test_recorded_receiver_must_be_capable_even_if_the_log_agrees(self):
+        bad, sibling = self.groups[1]
+        self.record(2, [bad | {"packet": bad["packet"] | {"capable": False}}, sibling])
+        with self.assertRaisesRegex(ValueError, "shell-2 receiver"):
+            self.check()
+
     def test_no_receiver_of_an_earlier_shell_reappears_after_the_kwin_restart(self):
         # {A,B}, {C,D}, {A,E}: neighbouring shells differ, yet shell 3 reuses shell 1's A.
         reused = dict(self.groups[2][0], boot="1:0.1")
@@ -444,6 +463,11 @@ class LifecycleTargetResultTests(unittest.TestCase):
         self.assertNotIn("PASS", self.printed.getvalue())
         self.assertEqual(self.cid.read_text(), "f" * 64 + "\n")
         self.assertIn("podman stop exited 125", reported.getvalue())
+        result = subprocess.run([sys.executable, str(LIFECYCLE), "--check-result",
+                                 str(self.cid.with_suffix(""))],
+                                capture_output=True, text=True, timeout=30, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("stop was not confirmed", result.stderr)
 
 
 if __name__ == "__main__":

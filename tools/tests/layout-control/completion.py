@@ -163,6 +163,8 @@ def check_frames(frames: list, native: list, decided: dict) -> None:
     require(len({packet["epoch"] for _, packet in frames}) <= 1,
             "the completion case expects one provider lifetime")
     for _, packet in frames:
+        require(packet.get("receiverBoot") == packet["consumer"],
+                "the frame was received by a different receiver")
         completion = packet.get("completion")
         verdict = published.get((packet["consumer"], packet["revision"]))
         if packet.get("status") != "online" or verdict is None:

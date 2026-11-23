@@ -57,7 +57,8 @@ def target_reply(arguments: list[str]) -> None:
         assert native["targetAlive"] and native["targetClass"] == arguments[7], native
     else:
         assert not native["targetAlive"] and native["targetClass"] == "", native
-        assert preparation["reason"] and preparation["token"] == ""
+        assert preparation["reason"] and preparation["reason"] == native["reason"]
+        assert preparation["token"] == ""
     with (Path(arguments[8]) / f"target-observations-{request}.json").open("w") as output:
         json.dump(observation, output)
     print(request)

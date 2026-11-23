@@ -266,7 +266,7 @@ class TwoBarRun(CompletionRun):
               mismatch=False, busy_missed=False, unpublished=False, silent_read=False,
               unread=False, stale_read=False, viewless_recovery=False,
               advanced_holder=False, wrong_native_output=False, promoted_after_step=False,
-              double_publication=False) -> None:
+              double_publication=False, no_recovery_input=False) -> None:
         # The other bar's query when the case begins: its first request, or its second after a
         # refresh. Its preparations follow that number.
         first = 2 if refresh else 1
@@ -373,6 +373,12 @@ class TwoBarRun(CompletionRun):
         self.context()
         self.publish(*((held,) if holder_again else ()), busy)
         self.mark("explicit")
+        if not no_recovery_input:
+            for event, fields in (("keyboard-query", {"key": 32, "activeFocus": True,
+                                                       "intent": "prepare", "screen": OUTPUTS[OTHER]}),
+                                  ("query", {"deadlineMs": 5000})):
+                self.shell.append(f"qml: layout-probe-{event} " + json.dumps({
+                    "boot": OTHER, "request": first + 2, **fields}) + "\n")
         recovered = dict(prepare(OTHER, first + 2, ready=True, token=EPOCH + ":2",
                                  completion=accepted(first + 2, EPOCH + ":2")),
                          **{"class": "pf.focus.alpha" if wrong_class else "pf.focus.beta"},
@@ -387,6 +393,9 @@ class TwoBarRun(CompletionRun):
 
 
 class TwoBarCheckerTests(unittest.TestCase):
+    def test_late_provider_decision_does_not_prove_explicit_input(self):
+        self.assert_rejected("focused Space", no_recovery_input=True)
+
     def setUp(self):
         scratch = tempfile.TemporaryDirectory(prefix="pf-two-bar-check-")
         self.addCleanup(scratch.cleanup)

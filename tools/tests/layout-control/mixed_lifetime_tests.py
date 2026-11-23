@@ -434,6 +434,40 @@ class MixedLifetimeReceiptTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("mixed-reloaded.json", result.stderr)
 
+    def test_an_intermediate_accepted_frame_must_keep_its_lease(self):
+        def swap_lease(root):
+            stage = json.loads((root / "mixed-reloaded.json").read_text())
+            path = root / "plasmashell.log"
+            lines = path.read_text().splitlines(keepends=True)
+            row = next(item["observation"] for item in stage["widgets"] if item["id"] == 8)
+            context = row["packet"]["targetContext"]
+            for revision, lease in ((20, "f" * 32 + ":99"), (21, context["consumerLease"])):
+                row["revision"] = row["packet"]["revision"] = revision
+                context["consumerLease"] = lease
+                lines.append("qml: layout-probe-observation " + json.dumps(row) + "\n")
+            path.write_text("".join(lines))
+
+        result = self.run_check(swap_lease)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("accepted frame changed its lease", result.stderr)
+
+    def test_native_prepare_before_unknown_snapshot_is_not_missed(self):
+        def prepare_during_withdrawal(root):
+            start = json.loads((root / "mixed-consumers.json").read_text())["kwinLines"]
+            path = root / "kwin.log"
+            lines = path.read_text().splitlines(keepends=True)
+            lines.insert(start, "qml: layout-probe-target {}\n")
+            path.write_text("".join(lines))
+            for name in ("unknown", "reloaded", "after-late", "after-replay", "final", "restored-boundary"):
+                boundary = root / f"mixed-{name}.json"
+                value = json.loads(boundary.read_text())
+                value["kwinLines"] += 1
+                boundary.write_text(json.dumps(value))
+
+        result = self.run_check(prepare_during_withdrawal)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsolicited native preparation", result.stderr)
+
     def test_complete_mixed_functionality_cannot_hide_missing_cleanup(self):
         result = self.run_check(lambda root: (root / "cleanup-result.json").unlink())
         self.assertNotEqual(result.returncode, 0)
@@ -734,7 +768,7 @@ class MixedLifetimeReceiptTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads((root / "mixed-frames.json").read_text()), expected)
             current = json.loads((root / "mixed-reloaded-inventory.json").read_text())
-            script = "const current=" + json.dumps(current) + ";\n" + """
+            script = """
 const writes=[],counts=[];
 const print=value=>counts.push(value);
 const controls=current.map(row=>({
@@ -743,14 +777,27 @@ const controls=current.map(row=>({
                              writes.push({id:row.id,packet:JSON.parse(value)});}
 }));
 const panels=()=>[{widgets:()=>controls}];
-""" + (root / "mixed-inject.js").read_text()
-            script += "\nprocess.stdout.write(JSON.stringify({writes,counts}));\n"
-            result = subprocess.run(["node", "-"], input=script, capture_output=True, text=True,
-                                    timeout=10, check=False)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(json.loads(result.stdout), {
+"""
+            injection = (root / "mixed-inject.js").read_text()
+
+            def execute(rows):
+                code = ("const current=" + json.dumps(rows) + ";\n" + script
+                        + "\nlet error; try {\n" + injection + "\n} catch (e) {error=e.message;}\n"
+                        + "process.stdout.write(JSON.stringify({writes,counts,error}));\n")
+                result = subprocess.run(["node", "-"], input=code, capture_output=True, text=True,
+                                        timeout=10, check=False)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                return json.loads(result.stdout)
+
+            self.assertEqual(execute(current), {
                 "writes": [{"id": row["id"], "packet": row["packet"]} for row in expected],
                 "counts": [3],
+            })
+            for row in current:
+                if row["id"] == expected[0]["id"]:
+                    row["request"]["consumer"] = "new-lifetime"
+            self.assertEqual(execute(current), {
+                "writes": [], "counts": [], "error": "mixed receiver lifetime changed",
             })
 
     def test_frame_generation_never_overwrites_a_previous_injection_record(self):

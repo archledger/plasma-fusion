@@ -539,6 +539,13 @@ class PipelineCheckerTests(unittest.TestCase):
         # Coalesced, not lost: every wake-up must be followed by a read.
         self.assert_rejected("never followed by a read", lost=True)
 
+    def test_idle_wake_starts_a_read_before_a_second_wake(self):
+        lines = ["read started", "read finished",
+                 "wake received", "wake received", "read started", "wake received",
+                 "read finished", "read started", "read finished"]
+        with self.assertRaisesRegex(ValueError, "idle wake"):
+            checker().replay([f"qml: layout-probe: {event}\n" for event in lines], 2)
+
     def test_late_acceptance_of_a_pre_burst_frame_fails(self):
         self.assert_rejected("published after the burst", late_pre_burst=True)
 

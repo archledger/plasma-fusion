@@ -48,9 +48,11 @@ lines = open(sys.argv[1]).readlines()[int(sys.argv[3]):]
 rows = [json.loads(line.split("layout-probe-focus ", 1)[1]) for line in lines
         if line.endswith("\n") and "layout-probe-focus " in line]
 changed = [row for row in rows if row["event"] == "context-changed"]
-assert changed, "no context change since the desktop was created"
+if not changed:
+    sys.exit("no context change since the desktop was created")
 shell = int(open(sys.argv[2]).read())
-assert all(row["activeAppletPopup"] and row["activePid"] == shell for row in changed), changed
+if not all(row["activeAppletPopup"] and row["activePid"] == shell for row in changed):
+    sys.exit(f"the popup did not stay active: {changed}")
 PY
     then
       return 0
@@ -75,13 +77,15 @@ for line in open(sys.argv[1]):
             row = json.loads(line.split(marker, 1)[1])
             rows[row["boot"]] = row
 boots = set(latest) - {sys.argv[3]}
-assert len(boots) == 1, boots
+if len(boots) != 1:
+    sys.exit(f"expected one competitor: {boots}")
 boot = boots.pop()
 focus = [json.loads(line.split("layout-probe-focus ", 1)[1]) for line in open(sys.argv[2])
          if line.endswith("\n") and "layout-probe-focus " in line]
 alpha = [row for row in focus if row["rememberedClass"] == "pf.focus.alpha"
          and row["rememberedCenter"]][-1]["rememberedCenter"]
-assert 0 < alpha["x"] < 1440 and 0 < alpha["y"] < 900, alpha
+if not (0 < alpha["x"] < 1440 and 0 < alpha["y"] < 900):
+    sys.exit(f"app center outside the output: {alpha}")
 print(boot, controls[boot]["x"], controls[boot]["y"], alpha["x"], alpha["y"])
 PY
     then

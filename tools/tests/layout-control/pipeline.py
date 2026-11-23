@@ -59,6 +59,7 @@ def replay(lines: list, burst_start: int) -> dict:
     starts its read at once, and one that arrives while busy must be followed by a later read.
     """
     reading, outstanding, owed = False, 0, False
+    started, idle_wake = False, False
     published = {"before": 0, "total": 0}
     counts = {"wakes": 0, "busyWakes": 0, "reads": 0, "publications": 0, "saves": 0,
               "failedPublications": 0}
@@ -69,14 +70,19 @@ def replay(lines: list, burst_start: int) -> dict:
             require(PIPELINE_LINE.search(text) is None, f"unrecognized pipeline line: {text[:80]}")
             continue
         kind, after = match.group(1), index >= burst_start
+        require(not idle_wake or kind == "read started",
+                "an idle wake did not start a read immediately")
         if kind == "wake received":
             owed = True
+            # Before the first read the provider may still be registering its identity.
+            idle_wake = started and not reading and outstanding == 0
             counts["wakes"] += after
             counts["busyWakes"] += after and (reading or outstanding > 0)
         elif kind == "read started":
             require(not reading, "a read started while another read was running")
             require(outstanding == 0, "a read started while a publication was outstanding")
             reading, owed = True, False
+            started, idle_wake = True, False
             counts["reads"] += after
         elif kind == "read finished":
             require(reading, "a read finished that was not running")

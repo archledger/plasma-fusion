@@ -41,8 +41,11 @@ def block_function(source: str, start: int) -> str:
 
 def connections_handler(target: str, name: str) -> str:
     """One handler from the Connections block bound to this exact target."""
-    source = PROVIDER.read_text()
-    binding = source.index(f"target: {target}\n")
+    source = re.sub(r"/\*.*?\*/", "", PROVIDER.read_text(), flags=re.S)
+    match = re.search(rf"(?m)^[ \t]*target:[ \t]*{re.escape(target)}[ \t]*$", source)
+    if match is None:
+        raise ValueError(f"no active target binding for {target}")
+    binding = match.start()
     start = source.rindex("Connections {", 0, binding)
     # Search only that block: a handler moved elsewhere is not connected to this target.
     block = block_function(source, start)
@@ -278,6 +281,13 @@ globalThis.replies=[first, second];
         copy = Path(scratch.name) / "provider.qml"
         copy.write_text(moved)
         with mock.patch.object(sys.modules[__name__], "PROVIDER", copy):
+            with self.assertRaises(ValueError):
+                connections_handler("Workspace", "onScreensChanged")
+
+    def test_a_commented_target_is_not_a_binding(self):
+        source = PROVIDER.read_text().replace("target: Workspace\n",
+                                             "target: null\n        // target: Workspace\n", 1)
+        with mock.patch.object(Path, "read_text", return_value=source):
             with self.assertRaises(ValueError):
                 connections_handler("Workspace", "onScreensChanged")
 
@@ -619,7 +629,8 @@ class ViewLossFixture:
         pending = bool(self.faults & {"old-read-answers-after-wake", "wake-read-pending",
                                       "verdict-before-wake"})
         if not pending:
-            original_ready = self.reply(FOCUS, VALIDATED, self.context(FOCUS))
+            original_ready = self.reply(FOCUS, VALIDATED, self.context(FOCUS),
+                                        accepted="in-flight-ready-before-refusal" not in self.faults)
             if "read-has-not-finished" not in self.faults:
                 self.backend.append("qml: layout-probe: read finished\n")
         if "later-read-without-verdict" in self.faults:

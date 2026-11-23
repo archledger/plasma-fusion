@@ -501,7 +501,7 @@ process.stdout.write(JSON.stringify({
         }}
         # The provider logs one verdict per published frame, numbered as that frame.
         native = {"consumer": "current", "request": 4, "intent": "validate", "revision": 5,
-                  "ready": False, "targetAlive": False, "targetClass": ""}
+                  "ready": False, "reason": "focus-changed", "targetAlive": False, "targetClass": ""}
         verdicts = [native]
         if fault == "old-state":
             observation["request"] = observation["packet"]["request"] = 3
@@ -515,6 +515,8 @@ process.stdout.write(JSON.stringify({
                                       "targetClass": "pf.focus.alpha"})
         elif fault == "missing-own-verdict":
             native["revision"] = 6
+        elif fault == "wrong-reason":
+            native["reason"] = "stale-context"
         events = [("query", outbound), ("observation", observation)]
         if fault == "out-of-order":
             events.reverse()
@@ -552,6 +554,9 @@ process.stdout.write(JSON.stringify({
 
     def test_the_accepted_revision_needs_its_own_native_verdict(self):
         self.assertNotEqual(self.run_target_checker("missing-own-verdict").returncode, 0)
+
+    def test_the_refusal_reason_must_match_the_native_verdict(self):
+        self.assertNotEqual(self.run_target_checker("wrong-reason").returncode, 0)
 
 
 class TargetSettleTests(unittest.TestCase):

@@ -234,6 +234,19 @@ def evaluate(directory: Path, name: str, end: dict | None) -> dict:
     start = window(directory, "explicit", stop)
     recovery = first_decision(decided, other, start["kwinLines"],
                               "the other bar's new preparation was not decided after its mark")
+    def for_recovery(kind):
+        return [(index, row) for index, row in events(shell, kind)
+                if row["boot"] == other and row["request"] == recovery["request"]]
+
+    keys = for_recovery("keyboard-query")
+    require(len(keys) == 1 and keys[0][0] >= start["shellLines"]
+            and keys[0][1].get("key") == 32 and keys[0][1].get("activeFocus") is True
+            and keys[0][1].get("intent") == "prepare"
+            and keys[0][1].get("screen") == outputs["other"],
+            "the new preparation has no focused Space input after its mark")
+    queries = for_recovery("query")
+    require(len(queries) == 1 and queries[0][0] > keys[0][0],
+            "the recovery request was not sent after its Space input")
     verdict = dict(native)[recovery["index"]]
     # A decision after the mark is for a newer request: each is decided once, and an older
     # request gets only an answer that cannot decide it.
@@ -243,7 +256,7 @@ def evaluate(directory: Path, name: str, end: dict | None) -> dict:
                  if row["consumer"] == other and row["request"] == recovery["request"]
                  and row["revision"] == verdict["revision"]]
     require(locations == [outputs["other"]], "the captured app is not on the other bar's output")
-    frames = accepted_with(observed, other, recovery, start["shellLines"])
+    frames = accepted_with(observed, other, recovery, queries[0][0] + 1)
     require(frames, "the other bar never accepted a frame carrying its new completion")
     # check_views skips frames without a view, and earlier frames meet its count: the recovery
     # itself must carry the other bar's view.

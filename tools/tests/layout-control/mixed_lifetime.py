@@ -296,6 +296,12 @@ def check_exchanges(directory: Path, stages: dict, replacement_id: int) -> None:
     history = sorted((index, kind, row) for kind in ("observation", "query")
                      for index, row in events(lines, kind) if index >= start)
     old_epoch, new_epoch = epoch(stages["consumers"]), epoch(stages["reloaded"])
+    def leases(label):
+        return {row["observation"]["boot"]:
+                row["observation"]["packet"]["targetContext"]["consumerLease"]
+                for row in stages[label]["widgets"]}
+
+    old_leases, new_leases = leases("consumers"), leases("reloaded")
     for index, kind, row in history:
         actor, request = row["boot"], row["request"]
         require(actor in active and type(request) is int, "unknown receiver or invalid request timeline")
@@ -324,14 +330,20 @@ def check_exchanges(directory: Path, stages: dict, replacement_id: int) -> None:
             if index < stages["unknown"]["shellLines"]:
                 require(request == initial[actor] and packet["epoch"] == old_epoch,
                         "accepted state before the provider withdrawal boundary")
+                expected_lease = old_leases[actor]
             else:
                 require(packet["epoch"] == new_epoch, "accepted state from a retired provider")
+                expected_lease = new_leases[actor] if index >= stages["reloaded"]["shellLines"] else None
+            if packet["status"] == "online" and expected_lease is not None:
+                context = packet.get("targetContext")
+                require(isinstance(context, dict) and context.get("consumerLease") == expected_lease,
+                        "accepted frame changed its lease")
             confirmed[actor] = packet["status"] == "online"
     require(len(outgoing) == len(expected) and set(outgoing) == expected,
             "missing or repeated exchanges during replacement/recovery")
     native = events(complete_lines(directory / "kwin.log"), "target")
     require(not [row for index, row in native
-                 if stages["unknown"]["kwinLines"] <= index < stages["reloaded"]["kwinLines"]],
+                 if stages["consumers"]["kwinLines"] <= index < stages["reloaded"]["kwinLines"]],
             "unsolicited native preparation during provider replacement")
 
 

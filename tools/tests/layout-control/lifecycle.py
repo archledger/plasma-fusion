@@ -232,14 +232,14 @@ def check_run(output: Path) -> dict:
             first.setdefault(row["boot"], row)
         shells.append(rows)
         first_by_shell.append(first)
-    if target_bootstrap(shells) != {"leases": receipt["leases"], "epochs": receipt["epochs"]}:
-        raise ValueError("the receipt's leases do not match the receivers' frames")
     # Shells 1 and 2 ran under the first KWin and shell 3 under its replacement. The run bound
     # each receiver to that connection (online_rows), and its files must agree.
     for number, rows in enumerate(shells, 1):
         backend = receipt["backendOwners"][0 if number < 3 else 1]
-        if any(row["packet"].get("backendOwner") != backend for row in rows):
-            raise ValueError(f"a shell-{number} receiver is bound to another backend")
+        for row in rows:
+            require_online_receiver(row, backend, f"a shell-{number} receiver")
+    if target_bootstrap(shells) != {"leases": receipt["leases"], "epochs": receipt["epochs"]}:
+        raise ValueError("the receipt's leases do not match the receivers' frames")
     if not distinct_receivers(shells):
         raise ValueError("a restart reused a receiver")
     for rows, first in zip(shells, first_by_shell):
@@ -330,6 +330,16 @@ def require_unbound(first: dict) -> None:
         raise ValueError("receiver did not bootstrap unknown")
 
 
+def require_online_receiver(row: dict, backend: str, label: str) -> None:
+    packet = row.get("packet") if isinstance(row, dict) else None
+    if (not isinstance(packet, dict) or row.get("phase") != "online"
+            or packet.get("status") != "online" or not isinstance(row.get("boot"), str)
+            or packet.get("consumer") != row["boot"] or packet.get("capable") is not True):
+        raise ValueError(f"{label} is not a capable online receiver for its own frame")
+    if packet.get("backendOwner") != backend:
+        raise ValueError(f"{label} is bound to another backend")
+
+
 def online_rows(log: Path, backend: str) -> list[dict]:
     latest = {}
     first = {}
@@ -343,13 +353,26 @@ def online_rows(log: Path, backend: str) -> list[dict]:
         return []
     for boot, row in latest.items():
         require_unbound(first[boot])
+        require_online_receiver(row, backend, "receiver")
         packet = row["packet"]
-        if (packet["consumer"] != boot
-                or packet["backendOwner"] != backend or packet["capable"] is not True):
-            raise ValueError("receiver did not bind the expected backend")
         if owner_of(packet["identityName"]) != backend:
             raise ValueError("receiver's alias belongs to another connection")
     return list(latest.values())
+
+
+def desktop_containment_ready(shell: str) -> bool:
+    try:
+        # With no method argument, qdbus calls Introspect directly. Its method mode instead
+        # collapses an absent object and an absent method into the same "Cannot find" message.
+        qdbus(shell, "/PlasmaShell")
+    except subprocess.CalledProcessError as error:
+        if (error.returncode == 2 and (error.output or "").splitlines()[:1]
+                == ["Error: org.freedesktop.DBus.Error.UnknownObject"]):
+            return False
+        raise
+    text = qdbus(shell, "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript",
+                 "print(desktops().length);")
+    return text.isdigit() and int(text) > 0
 
 
 def session_probe(name: str) -> None:
@@ -383,9 +406,7 @@ def session_probe(name: str) -> None:
         def shell_ready():
             if process.poll() is not None:
                 raise ValueError(f"{label} exited before shell initialization")
-            text = qdbus(shell, "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript",
-                         "print(desktops().length);")
-            return text.isdigit() and int(text) > 0
+            return desktop_containment_ready(shell)
         wait_until(shell_ready, "desktop containment")
         if create_widgets:
             qdbus(shell, "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript",
@@ -513,7 +534,7 @@ def run_container(seed: Path, output: Path, name: str, image: str) -> None:
                     stopped = False
                     print(f"cleanup: podman stop exited {stop.returncode}; container ID kept in"
                           f" {cid}", file=sys.stderr)
-    if not stopped:
+    if not stopped or cid.exists():
         raise ValueError(f"the container stop was not confirmed; its ID is kept in {cid}")
     if receipt.get("mode", "plain") == "target":
         print("PASS: private-bus process replacement with fresh target contexts and leases"
@@ -537,6 +558,9 @@ def main() -> None:
         if args.check_result is not None:
             if args.name or args.seed or args.image or args.container or args.session:
                 raise ValueError("--check-result takes no other arguments")
+            cid = args.check_result.with_suffix(".cid")
+            if cid.exists():
+                raise ValueError(f"the container stop was not confirmed; its ID is kept in {cid}")
             receipt = check_run(args.check_result)
             print(f"PASS: {receipt.get('mode', 'plain')} process replacement evidence in"
                   f" {args.check_result}")

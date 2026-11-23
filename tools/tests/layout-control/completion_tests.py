@@ -248,8 +248,11 @@ probe.reconcileTargetConsumers({complete: true, widgets: [{id: 8, consumer: 'b'}
 probe.reconcileTargetConsumers({complete: true,
                                 widgets: [{id: 7, consumer: 'a'}, {id: 8, consumer: 'b'}]});
 const returned = publish([old]);
+state.focus = false;
+const renewal = probe.targetConsumerFor(7, 'a').lease;
+const replaced = publish([row(7, 'a', 2, 'prepare', {consumerLease: renewal})]);
 process.stdout.write(JSON.stringify({
-    decided, returned, renewed: probe.targetConsumerFor(7, 'a').lease !== old.consumerLease
+    decided, returned, replaced, renewed: renewal !== old.consumerLease
 }));
 """)
         self.assertTrue(out["decided"]["packets"][0]["completion"]["accepted"])
@@ -257,6 +260,8 @@ process.stdout.write(JSON.stringify({
         returned = out["returned"]["packets"][0]
         self.assertEqual(returned["preparation"]["reason"], "consumer-not-current")
         self.assertIsNone(returned["completion"])
+        self.assertEqual(out["replaced"]["packets"][0]["completion"],
+                         refused(2, "popup-focus-unconfirmed"))
 
     def test_offline_frames_carry_no_completion(self):
         out = self.run_publication("""
@@ -352,6 +357,12 @@ class CompletionSeedTests(unittest.TestCase):
 
 
 class CompletionScenarioTests(unittest.TestCase):
+    def test_completion_validator_rejects_a_swapped_receiver_even_with_valid_delivery(self):
+        frame = {"consumer": "holder", "receiverBoot": "holder", "request": 1,
+                 "revision": 1, "epoch": "c" * 32, "status": "online"}
+        with self.assertRaisesRegex(ValueError, "different receiver"):
+            checker().check_frames([(0, frame | {"receiverBoot": "other"}), (1, frame)], [], {})
+
     def test_competitor_collection_retries_until_both_logs_are_ready(self):
         source = (HERE / "completion_scenario.sh").read_text()
         self.assertIn("completion_competitor() {", source)
