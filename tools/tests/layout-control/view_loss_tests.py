@@ -600,6 +600,9 @@ class ViewLossFixture:
             # A re-confirmation logged just before the mark and accepted just after it.
             late = self.reply(FOCUS, VALIDATED, self.context(FOCUS), accepted=False,
                               alive="accept-after-start-dead" not in self.faults)
+        overlapping = bool(self.faults & {"old-read-answers-after-wake", "queued-read-answers"})
+        if overlapping:
+            self.backend.append("qml: layout-probe: read started\n")
         self.mark("start")
         if late:
             self.accept(late)
@@ -607,17 +610,32 @@ class ViewLossFixture:
             # A read already under way at the mark answers before the wake's own read does.
             self.reply(FOCUS, VALIDATED, self.context(FOCUS))
         self.view("wake", "wake", prepared=True)
-        pending = bool(self.faults & {"wake-read-pending", "verdict-before-wake"})
+        if overlapping:
+            # The pre-wake read produces a valid verdict after the wake but before its own
+            # read finishes. The wake's queued read has started and is not yet complete.
+            self.reply(FOCUS, VALIDATED, self.context(FOCUS))
+            self.backend.append("qml: layout-probe: read finished\n")
+        self.backend.append("qml: layout-probe: read started\n")
+        pending = bool(self.faults & {"old-read-answers-after-wake", "wake-read-pending",
+                                      "verdict-before-wake"})
         if not pending:
             self.reply(FOCUS, VALIDATED, self.context(FOCUS))
+            if "read-has-not-finished" not in self.faults:
+                self.backend.append("qml: layout-probe: read finished\n")
         self.inventory("baseline")
         if done("baseline"):
             return
 
+        if "unexpected-early-readiness" in self.faults:
+            self.revision += 1
+            self.emit(self.backend, "target", {
+                "consumer": FOCUS, "request": 2, "intent": "validate", "revision": self.revision,
+                "ready": True, "reason": "", "targetClass": APP, "targetAlive": True})
         self.mark("disable")
         if pending:
             # The wake's read answers only after the disable mark, before the output goes.
             self.reply(FOCUS, VALIDATED, self.context(FOCUS))
+            self.backend.append("qml: layout-probe: read finished\n")
         self.subject_output = OUT_B
         self.view("target-departed", "window-output", prepared=True)
         listed = OUT_A if "removed-output-listed" in self.faults else OUT_B
@@ -799,7 +817,7 @@ class ViewLossFixture:
         self.reply(FOCUS, prepared_reply(fourth), self.context(FOCUS))
         if done("final"):
             return
-        if self.faults & {"ready-in-gap", "accept-after-start-dead"}:
+        if self.faults & {"ready-in-gap", "accept-after-start-dead", "unexpected-early-readiness"}:
             # A forged receipt: the scope check must still recompute and refuse the run.
             (self.root / "view-loss-result.json").write_text(json.dumps({
                 "schema": 1, "passed": True, "checks": view_loss.CHECKS}))
@@ -834,6 +852,19 @@ class ViewLossCheckerTests(unittest.TestCase):
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("view-loss", result.stdout)
+
+    def test_baseline_cannot_use_a_pre_wake_read_that_answers_after_the_wake(self):
+        with self.assertRaisesRegex(ValueError, "baseline wake"):
+            self.build("old-read-answers-after-wake", until="baseline")
+
+    def test_baseline_waits_until_the_post_wake_read_finishes(self):
+        with self.assertRaisesRegex(ValueError, "baseline wake"):
+            self.build("read-has-not-finished", until="baseline")
+
+    def test_baseline_uses_the_queued_read_after_the_earlier_read_finishes(self):
+        self.build("queued-read-answers")
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_each_step_record_is_exclusive_and_bound_to_its_mark(self):
         self.build(until="baseline")
@@ -982,16 +1013,9 @@ class ViewLossCheckerTests(unittest.TestCase):
                 self.assertIn(message, result.stderr)
 
     def test_only_the_live_original_validation_may_be_ready_before_the_change(self):
-        self.build()
-        lines = (self.root / "kwin.log").read_text().splitlines(keepends=True)
-        disable = json.loads((self.root / "view-mark-disable.json").read_text())
-        before = [index for index, line in enumerate(lines[:disable["kwinLines"]])
-                  if '"ready": true' in line and "layout-probe-target " in line]
-        self.assertTrue(before)
-        self.assertEqual(self.check().returncode, 0)
-        row = json.loads(lines[before[-1]].split("layout-probe-target ", 1)[1])
-        lines[before[-1]] = "qml: layout-probe-target " + json.dumps(row | {"request": 2}) + "\n"
-        (self.root / "kwin.log").write_text("".join(lines))
+        # Keep the baseline's read valid: this extra verdict must fail the whole-run audit,
+        # even though it arrives after the baseline waited and before the output is disabled.
+        self.build("unexpected-early-readiness")
         result = self.check()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("before the view changes", result.stderr)

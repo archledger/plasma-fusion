@@ -35,6 +35,7 @@ SOURCES = frozenset({
 CHECKS = ["roundtrip-native", "guarded-target", "output-loss", "same-name-output",
           "activity-switch", "wrong-view-refusal", "explicit-recovery"]
 LABEL = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+READ_EVENT = re.compile(r"(?:\S+: )?layout-probe: read (started|finished)")
 
 
 def load(directory: Path, name: str):
@@ -281,16 +282,12 @@ def step_baseline(directory: Path, saved: dict, ev: Evidence) -> dict:
             and isinstance(peer_context.get("consumerLease"), str)
             and peer_context["consumerLease"] not in ("", envelope["consumerLease"]),
             "competing consumer lacks its own current read-only context")
-    wakes = [row for row in ev.views() if row["reason"] == "wake"]
+    views = [(index, valid_view(row)) for index, row in ev.backend("view")]
+    wakes = [(index, row) for index, row in views if row["reason"] == "wake"]
     require(bool(wakes), "missing current native view report")
-    view = wakes[-1]
-    # A verdict for the guarded consumer must follow the last wake record, not the record alone:
-    # a ready one logged after the disable mark would fail the loss step although the provider
-    # then refuses the handle. Bound by log position, it may also come from a read already under
-    # way at the wake; the scenario starts none. The audit checks which readiness it may carry.
-    wake = max(index for index, row in ev.backend("view") if row["reason"] == "wake")
-    require(any(index > wake and row["consumer"] == focus for index, row in ev.backend("target")),
-            "no verdict for the guarded consumer follows the baseline wake yet")
+    wake, view = wakes[-1]
+    require(baseline_read_confirmed(ev, wake, focus, envelope["request"]),
+            "no completed validation read for the guarded consumer follows the baseline wake yet")
     names = [screen["name"] for screen in view["screens"]]
     require(len(names) == 2 == len(set(names)) and output in names
             and all(screen["known"] is True for screen in view["screens"]),
@@ -311,6 +308,26 @@ def step_baseline(directory: Path, saved: dict, ev: Evidence) -> dict:
             "activity": context["activityId"], "desktop": context["desktopId"],
             "envelope": envelope, "otherRequest": peer["request"],
             "generation": view["generation"], "shellPid": pid}
+
+
+def baseline_read_confirmed(ev: Evidence, wake: int, boot: str, request: int) -> bool:
+    # The normal-transport probe logs verdicts during the read, before "read finished".
+    # A read already in flight at the wake can emit a verdict before the queued read starts.
+    verdicts = {index for index, row in ev.backend("target") if index > wake
+                and row["consumer"] == boot and row["request"] == request
+                and row["intent"] == "validate" and row["ready"] is True and row["reason"] == ""
+                and row["targetAlive"] is True and row["targetClass"] == APP}
+    reading = ready = confirmed = False
+    for index, line in enumerate(ev.backend_lines[wake + 1:], wake + 1):
+        event = READ_EVENT.fullmatch(line.removesuffix("\n"))
+        if event and event[1] == "started":
+            reading, ready = True, False
+        elif event:
+            confirmed = reading and ready
+            reading = False
+        elif reading and index in verdicts:
+            ready = True
+    return confirmed and not reading
 
 
 def step_lost(directory: Path, saved: dict, ev: Evidence) -> dict:
