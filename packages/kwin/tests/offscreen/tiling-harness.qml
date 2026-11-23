@@ -881,6 +881,41 @@ Item {
                 fail("minimizing B during native placement dropped B from the session");
             }
             tileShortcut.activated();
+            let providerRetired = false;
+            facade.placeStackWindow = function (generation, window, cell, token) {
+                if (providerRetired) {
+                    return 8;
+                }
+                window.frameGeometry = cell;
+                if (window === winA) {
+                    providerRetired = true;
+                    winB.minimized = true;
+                }
+                return 0;
+            };
+            tileShortcut.activated();
+            if (!rectIs(winA.frameGeometry, 700, 120, 300, 320)) {
+                fail("refusing a nested layout stranded the cell dispatched by the outer pass");
+            }
+            tileShortcut.activated();
+            winB.minimized = false;
+            let supersede = false;
+            facade.placeStackWindow = function (generation, window, cell, token) {
+                if (supersede && window === winA) {
+                    // Newer ordinary intent can keep exactly the old cell rectangle.
+                    return 6;
+                }
+                window.frameGeometry = cell;
+                return 0;
+            };
+            tileShortcut.activated();
+            supersede = true;
+            winB.minimized = true;
+            if (!rectIs(winA.frameGeometry, 704, 34, 736, 429)) {
+                fail("restoring a superseded stack request overwrote newer geometry");
+            }
+            tileShortcut.activated();
+            winB.minimized = false;
             done = true;
             return;
         }

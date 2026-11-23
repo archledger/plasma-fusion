@@ -1700,9 +1700,8 @@ Item {
         function applyStackLayout(result, layoutSession, pass) {
             const layoutIsCurrent = () => session === layoutSession && stackLayoutPass === pass;
             const refused = [];
-            // Place the feasible windows and remember each cell: a later change landing
-            // exactly there is this write arriving (the synchronous one or the client's late
-            // commit of it), not a manual move.
+            // A later change landing on a cell is this write arriving (synchronously or in
+            // the client's commit), not a manual move.
             for (let i = 0; i < result.placed.length; ++i) {
                 const p = result.placed[i];
                 const w = p.window;
@@ -1711,11 +1710,14 @@ Item {
                 }
                 const id = String(w.internalId);
                 const cell = Qt.rect(p.rect.x, p.rect.y, p.rect.width, p.rect.height);
-                let placed = true;
+                const oldCell = cellRects[id];
+                // A nested relayout or teardown can run after the geometry has changed,
+                // before the facade returns. It needs to know which cell we just asked for.
+                cellRects[id] = p.rect;
+                let answer = 0; // TransientTileController::Result::Accepted
                 if (api && typeof api.placeStackWindow === "function") {
-                    const answer = api.placeStackWindow(layoutSession.generation, w, cell, providerToken);
-                    placed = answer === 0;
-                    if (!placed) {
+                    answer = api.placeStackWindow(layoutSession.generation, w, cell, providerToken);
+                    if (answer !== 0) {
                         log("tiling: a stack placement was refused (" + answer + ")");
                     }
                 } else {
@@ -1725,15 +1727,19 @@ Item {
                     return;
                 }
                 if (!Tiling.alive(w)) {
+                    delete cellRects[id];
                     continue;
                 }
-                if (placed) {
-                    cellRects[id] = p.rect;
-                } else {
+                if (answer !== 0) {
+                    if (oldCell) {
+                        cellRects[id] = oldCell;
+                    } else {
+                        delete cellRects[id];
+                    }
                     // A native refusal is not permission to make an unmarked cell write.
-                    // Restore an old cell only if its request still belongs to this tiler.
-                    const oldCell = cellRects[id];
-                    if (oldCell && !w.move && !w.resize && Tiling.eligibleForStack(w)
+                    // Superseded (6) means a newer request won: equal geometry does not
+                    // prove this tiler still owns it. Other refusals may leave our old cell.
+                    if (answer !== 6 && oldCell && !w.move && !w.resize && Tiling.eligibleForStack(w)
                             && Tiling.onWorkspace(w, session.desktop, session.activity, session.output)
                             && Tiling.isOwnCell(oldCell, requestedRect(w) || frameRect(w), landingSlack())) {
                         result.floated.push(w);
