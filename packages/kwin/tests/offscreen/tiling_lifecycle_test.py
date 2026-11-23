@@ -222,6 +222,11 @@ check((interim_counts or {}).get("createTile") == 2 and (interim_counts or {}).g
       "interim facade: one refused admission, one session started and restored, got %s" % interim_counts)
 retire(interim, "interim facade")
 
+native_stack = run_harness({"nativeStackProbe": True})
+for problem in list(native_stack.property("problems").toVariant() or []):
+    failures.append("native stack: " + str(problem))
+retire(native_stack, "native stack")
+
 # A third run: the master a native teardown released without restoring it (a removed desktop, a
 # second window of its app, a move of the master). The harness asserts the geometry, the settle
 # answers and the records step by step; the journal lines are checked here.

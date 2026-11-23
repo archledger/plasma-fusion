@@ -1671,6 +1671,7 @@ Item {
             if (!session.active) {
                 return;
             }
+            const layoutSession = session;
             const area = Workspace.clientArea(Workspace.MaximizeArea, session.output, session.desktop);
             session.dividerX = masterRightEdge(area);
             // The tile's rectangle as the native layer has it now: where the master stands
@@ -1681,6 +1682,7 @@ Item {
             }
             const gap = tilingStackGap();
             const result = Tiling.layoutStack(session.stack, area, session.dividerX, gap);
+            const refused = [];
             // The tiler's own writes: while these run, a geometry change is not the user's
             // hand (the manual-move detach reads this).
             placing = true;
@@ -1689,10 +1691,43 @@ Item {
             // commit of it), not a manual move.
             for (let i = 0; i < result.placed.length; ++i) {
                 const p = result.placed[i];
-                if (Tiling.alive(p.window)) {
-                    p.window.frameGeometry = Qt.rect(p.rect.x, p.rect.y, p.rect.width, p.rect.height);
+                const w = p.window;
+                if (!Tiling.alive(w)) {
+                    continue;
                 }
-                cellRects[String(p.window.internalId)] = p.rect;
+                const id = String(w.internalId);
+                const cell = Qt.rect(p.rect.x, p.rect.y, p.rect.width, p.rect.height);
+                let placed = true;
+                if (api && typeof api.placeStackWindow === "function") {
+                    const answer = api.placeStackWindow(layoutSession.generation, w, cell, providerToken);
+                    placed = answer === 0;
+                    if (!placed) {
+                        log("tiling: a stack placement was refused (" + answer + ")");
+                    }
+                } else {
+                    w.frameGeometry = cell;
+                }
+                if (session !== layoutSession) {
+                    placing = false;
+                    return;
+                }
+                if (!Tiling.alive(w)) {
+                    continue;
+                }
+                if (placed) {
+                    cellRects[id] = p.rect;
+                } else {
+                    // A native refusal is not permission to make an unmarked cell write.
+                    // Restore an old cell only if its request still belongs to this tiler.
+                    const oldCell = cellRects[id];
+                    if (oldCell && !w.move && !w.resize && Tiling.eligibleForStack(w)
+                            && Tiling.onWorkspace(w, session.desktop, session.activity, session.output)
+                            && Tiling.isOwnCell(oldCell, requestedRect(w) || frameRect(w), landingSlack())) {
+                        result.floated.push(w);
+                    } else {
+                        refused.push(w);
+                    }
+                }
             }
             // A window whose minimum size does not fit its cell stops being managed. One the
             // layout had placed sits at a cell no untoggle can undo, so its saved float goes
@@ -1719,8 +1754,8 @@ Item {
                 }
             }
             placing = false;
-            for (let i = 0; i < result.floated.length; ++i) {
-                detachWindow(result.floated[i], false);
+            for (const w of result.floated.concat(refused)) {
+                detachWindow(w, false);
             }
         }
 

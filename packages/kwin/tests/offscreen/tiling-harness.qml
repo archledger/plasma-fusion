@@ -52,6 +52,7 @@ Item {
     // The facade of a fork build that restores but cannot say what it keeps of a window (no
     // floatingFrame, no settleWindow).
     property bool interimFacade: false
+    property bool nativeStackProbe: false
     // Set by the driver for another run: "released" (runReleased).
     property string scenario: ""
     property var steps: []
@@ -100,6 +101,7 @@ Item {
     // native admission before any stack write) is checkable from that snapshot.
     QtObject {
         id: facade
+        property var placeStackWindow: null
         property bool refuseCreate: false
         property bool refuseAdmit: false
         // The native admission can land the window on the tile before it returns (a client
@@ -824,6 +826,41 @@ Item {
             return;
         }
         const desktop = firstDesktop;
+
+        if (nativeStackProbe) {
+            let refuse = false;
+            facade.placeStackWindow = function (generation, window, cell, token) {
+                facadeCalls = facadeCalls.concat([{op: "placeStackWindow", generation: generation,
+                                                    window: String(window.internalId), token: token}]);
+                if (refuse && window === winA) {
+                    return 8;
+                }
+                window.frameGeometry = cell;
+                return 0;
+            };
+            tileShortcut.activated();
+            const cells = calls("placeStackWindow");
+            const admissions = calls("admitTile");
+            if (cells.length !== 2 || admissions.length !== 1
+                    || cells.some(c => c.generation !== admissions[0].generation
+                                  || c.token !== "harness-token" || c.window === "master")) {
+                fail("native stack placement did not use the admitted tree and provider");
+            }
+            if (!rectIs(winA.frameGeometry, 704, 34, 736, 429)) {
+                fail("accepted native stack placement did not place A in its cell");
+            }
+            tileShortcut.activated();
+            refuse = true;
+            tileShortcut.activated();
+            if (calls("placeStackWindow").length !== 4
+                    || !rectIs(winA.frameGeometry, 700, 120, 300, 320)
+                    || !rectIs(winB.frameGeometry, 704, 471, 736, 429)) {
+                fail("a refused native stack placement must not fall back to an unmarked cell write");
+            }
+            tileShortcut.activated();
+            done = true;
+            return;
+        }
 
         if (legacyFacade) {
             // ---- a facade without restoreWindow: no session, the memory's transport intact ----
