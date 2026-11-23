@@ -296,6 +296,7 @@ def check_exchanges(directory: Path, stages: dict, replacement_id: int) -> None:
     history = sorted((index, kind, row) for kind in ("observation", "query")
                      for index, row in events(lines, kind) if index >= start)
     old_epoch, new_epoch = epoch(stages["consumers"]), epoch(stages["reloaded"])
+
     def leases(label):
         return {row["observation"]["boot"]:
                 row["observation"]["packet"]["targetContext"]["consumerLease"]
@@ -327,16 +328,21 @@ def check_exchanges(directory: Path, stages: dict, replacement_id: int) -> None:
             require(type(packet["request"]) is int
                     and packet["consumer"] == actor and packet["request"] == request == active[actor]
                     and identity in sent, "accepted packet does not match the active request timeline")
-            if index < stages["unknown"]["shellLines"]:
+            withdrawn = index >= stages["unknown"]["shellLines"]
+            if not withdrawn:
                 require(request == initial[actor] and packet["epoch"] == old_epoch,
                         "accepted state before the provider withdrawal boundary")
                 expected_lease = old_leases[actor]
             else:
                 require(packet["epoch"] == new_epoch, "accepted state from a retired provider")
-                expected_lease = new_leases[actor] if index >= stages["reloaded"]["shellLines"] else None
-            if packet["status"] == "online" and expected_lease is not None:
+                expected_lease = new_leases[actor]
+            if packet["status"] == "online":
                 context = packet.get("targetContext")
-                require(isinstance(context, dict) and context.get("consumerLease") == expected_lease,
+                # A replacement can answer before its target context is ready. Once it names
+                # a lease, it must be the one the reloaded snapshot confirms, not an old lease.
+                unbound = withdrawn and index < stages["reloaded"]["shellLines"] and context is None
+                require(unbound or (isinstance(context, dict) and context.get("epoch") == packet["epoch"]
+                                    and context.get("consumerLease") == expected_lease),
                         "accepted frame changed its lease")
             confirmed[actor] = packet["status"] == "online"
     require(len(outgoing) == len(expected) and set(outgoing) == expected,

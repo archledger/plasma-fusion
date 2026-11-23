@@ -237,7 +237,8 @@ process.stdout.write(JSON.stringify({records,packets:messages.map(row=>JSON.pars
 
 class MixedLifetimeReceiptTests(unittest.TestCase):
     def fixture(self, root, *, survivor_lease_changed=False, replacement_retry=False,
-                unsolicited_prepare=False, early_recovery=False, defer_recovery=None):
+                unsolicited_prepare=False, early_recovery=False, defer_recovery=None,
+                bootstrap=None):
         write_cleanup_fixture(root)
         old, new = "a" * 32, "b" * 32
         shell, backend, live, accepted = [], [], {}, {}
@@ -258,6 +259,7 @@ class MixedLifetimeReceiptTests(unittest.TestCase):
             return body
 
         def packet(body, epoch, revision, lease, preparation=None):
+            revision += int(epoch == new and bootstrap is not None)
             return {"consumer": body["consumer"], "request": body["request"], "epoch": epoch,
                     "revision": revision, "backendOwner": ":1.0",
                     "identityName": "org.plasmafusion.LayoutProbe.p" + epoch,
@@ -285,6 +287,8 @@ class MixedLifetimeReceiptTests(unittest.TestCase):
 
         def online(identifier, body, epoch, revision, lease, preparation=None):
             value = packet(body, epoch, revision, lease, preparation)
+            if lease is None:
+                value["targetContext"] = None
             if preparation:
                 verdict(value)
             published(identifier, value)
@@ -292,7 +296,7 @@ class MixedLifetimeReceiptTests(unittest.TestCase):
             accepted[body["consumer"]] = accepted.get(body["consumer"], 0) + 1
             observation = {"boot": body["consumer"], "request": body["request"], "phase": "online",
                            "packet": value, "accepted": accepted[body["consumer"]],
-                           "epoch": epoch, "revision": revision}
+                           "epoch": epoch, "revision": value["revision"]}
             emit("observation", observation)
             live[identifier] = {"id": identifier, "request": body}
             return observation
@@ -332,17 +336,20 @@ class MixedLifetimeReceiptTests(unittest.TestCase):
         if unsolicited_prepare:
             verdict(packet(survivor_fresh, new, 1, new + ":1",
                            prepared | {"token": new + ":1"}))
-        online(8, survivor_fresh, new, 1, new + ":1")
-        online(9, replacement_fresh, new, 2, new + ":2")
+        if bootstrap is not None:
+            online(8, survivor_fresh, new, 0, old + ":2" if bootstrap == "stale-lease" else None)
+        rebound_survivor = online(8, survivor_fresh, new, 1, new + ":1")
+        rebound_replacement = online(9, replacement_fresh, new, 2, new + ":2")
         capture("reloaded", [8, 9])
         frames = [
             {"kind": "retained-consumer", "id": 9, "receiver": "replacement", "packet": retired["packet"]},
             {"kind": "retired-consumer-fence", "id": 9, "receiver": "replacement",
              "packet": retired["packet"] | {
                  "request": 2, "epoch": new, "identityName": "org.plasmafusion.LayoutProbe.p" + new,
-                 "revision": 1002}},
+                 "revision": rebound_replacement["revision"] + 1000}},
             {"kind": "retired-provider-fence", "id": 8, "receiver": "survivor",
-             "packet": survivor["packet"] | {"request": survivor_fresh["request"], "revision": 2001}},
+             "packet": survivor["packet"] | {"request": survivor_fresh["request"],
+                                            "revision": rebound_survivor["revision"] + 2000}},
         ]
         save("mixed-frames.json", frames)
         for frame in frames:
@@ -398,12 +405,14 @@ class MixedLifetimeReceiptTests(unittest.TestCase):
         (root / "scenario.log").write_text("scenario rc=0\nsession rc=0\n")
 
     def run_check(self, fault=None, *, survivor_lease_changed=False, replacement_retry=False,
-                  unsolicited_prepare=False, early_recovery=False, defer_recovery=None):
+                  unsolicited_prepare=False, early_recovery=False, defer_recovery=None,
+                  bootstrap=None):
         with tempfile.TemporaryDirectory(prefix="pf-mixed-check-") as scratch:
             root = Path(scratch)
             self.fixture(root, survivor_lease_changed=survivor_lease_changed,
                          replacement_retry=replacement_retry, unsolicited_prepare=unsolicited_prepare,
-                         early_recovery=early_recovery, defer_recovery=defer_recovery)
+                         early_recovery=early_recovery, defer_recovery=defer_recovery,
+                         bootstrap=bootstrap)
             if fault:
                 fault(root)
             return subprocess.run(
@@ -414,6 +423,15 @@ class MixedLifetimeReceiptTests(unittest.TestCase):
 
     def test_combined_scope_requires_correlated_raw_evidence_and_clean_teardown(self):
         result = self.run_check()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_new_epoch_before_reload_snapshot_must_not_carry_a_retired_lease(self):
+        result = self.run_check(bootstrap="stale-lease")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("accepted frame changed its lease", result.stderr)
+
+    def test_new_epoch_can_be_online_before_it_has_a_context(self):
+        result = self.run_check(bootstrap="unbound")
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_final_snapshot_cannot_drop_the_surviving_consumer(self):
