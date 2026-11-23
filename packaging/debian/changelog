@@ -1,3 +1,12 @@
+plasma-fusion (0.8.1-1) unstable; urgency=medium
+
+  * The full profile on Fedora 44 moves to the KWin fork's v6.8.3-pf1.
+  * A profile choice on a fresh Fedora install, and a switch from the
+    stock profile that replaces the six packages.
+  * The window scripts treat a destroyed window as gone.
+
+ -- Wisbendji Fimerlus <archledger236@gmail.com>  Tue, 17 Nov 2026 20:00:00 +0000
+
 plasma-fusion (0.8.0-1) unstable; urgency=medium
 
   * The full profile on Fedora 44: Plasma Fusion with the pinned KWin

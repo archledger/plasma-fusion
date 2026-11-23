@@ -2,12 +2,14 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 """fulltest.sh against a stand-in VM: the full profile's lane passes on a system that behaves as
-the installer promises (fresh and switch), and a system that does not fails the run, stops the VM
-and keeps the overlay. The faults, one test each: a dry run that changes something; a set that is
+the installer promises (fresh, switch and update), and a system that does not fails the run,
+stops the VM and keeps the overlay. The faults, one test each: a dry run that changes something;
+a set that is
 half the fork, not locked, not the metapackage's build (by version, or by the repository it came
 from: #197), or whose restore record is wrong; a repository that is there and switched off; a set
 that holds without the lock; a lock list that cannot be read; a status that does not see the fork
-or carries a note; no new session after the logout, or no desktop after it; an idle navigation
+or carries a note; no new session after the logout, or no desktop after it; a start-up that does
+not end (still activating or deactivating), or whose state cannot be read; an idle navigation
 effect; a journal that cannot be read; a switcher that does not switch, or lands on no test
 window; a tiler without a session; a restore whose plan names another KWin, that leaves the fork
 or the repository, or takes the packages; in switch mode a record directory that is not root's
@@ -17,12 +19,17 @@ newer one: #198; the decoration's compares with the installed KDecoration and no
 #194) or on the full profile but the decoration part's; on a newer stock KWin no navigation
 rebuild note, or a navigation effect that gives the capability as its reason; a fallback that is
 not one; a crash; an uninstall that leaves the lock or a package, or the theme; a VM that does not
-come up; a plan that enables another Copr project than the stamped one. Not every check of the
-lane has a fault: its plumbing (the copies
-into the VM, a collector that cannot count) and the plan's wording are covered by the passing
-runs only. Of the stamp, the tests check the Copr project it is given (the live one by default, a
-candidate's own when named: issue #178) and that the lock check leaves out that project's
-repository by its exact id."""
+come up; a plan that enables another Copr project than the stamped one. In update mode (from the
+last release's full profile, the live project's, to a candidate's): a move that leaves the live
+project, enables no candidate project or takes the lock; an update plan that keeps the lock or
+installs apart, or whose dry run changes something; an update in two transactions, that leaves
+the KWin packages or the lock at the old pin, loses the restore record, takes the six from the
+live project or ends at another pin than the stamp's; a lock that does not hold after it; a login
+after it in safe mode; and a stamp without a pin. Not every check of the lane has a fault: its
+plumbing (the copies into the VM, a collector that cannot count), the plan's wording and update's
+check that its transaction is a new one are covered by the passing runs only. Of the stamp, the
+tests check the Copr project it is given (the live one by default, a candidate's own when named:
+issue #178) and that the lock check leaves out that project's repository by its exact id."""
 import os
 from pathlib import Path
 import shutil
@@ -42,24 +49,31 @@ put() { mkdir -p "$S"; echo "$2" >"$S/$1"; }
 bump() { local n; n=$(($(get "$1" 0) + 1)); put "$1" "$n"; echo "$n"; }
 echo "$cmd" >>"$PF_VM_HOME/calls"
 STOCK=${FAKE_STOCK:-6.8.2-3.fc44} PIN=6.8.2-3.fc44.pf3 META=0.8.0-1.fc44 RELEASED=0.7.0-1.fc44
+# The last release's full profile, where update starts: its pin (FAKE_OLD_PIN: the same as the
+# candidate's, a release without a new fork tag), its fork tag and the live project it came from.
+OLD_PIN=${FAKE_OLD_PIN:-6.8.1-1.fc44.pf2} OLD_TAG=v6.8.1-pf2
+LIVE_ID=copr:copr.fedorainfracloud.org:archledger:plasma-fusion-full
+updated() { [ "$(get updated no)" = yes ]; }
 # The upstream version of an EVR; FAKE_STOCK newer than the pin's is Fedora's KWin past the pin (#198).
 up() { local e=${1#*:}; echo "${e%%-*}"; }
 SIX="plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation plasma-fusion-quicklook plasma-fusion-copytext"
 facts() {
-  local installed p kwin=$STOCK six=none full=no
+  local installed p kwin=$STOCK six=none full=no meta=$META pin=$PIN tag=v6.8.2-pf3
   installed=$(get installed stock)
   case $installed in
     six) six=$RELEASED ;;
     full) kwin=$PIN six=$META full=yes ;;
+    released-full) kwin=$OLD_PIN six=$RELEASED full=yes meta=$RELEASED pin=$OLD_PIN tag=$OLD_TAG ;;
     restored) six=$META ;;
   esac
+  [ "$FAULT" = update-old-kwin ] && [ "$installed" = full ] && updated && kwin=$OLD_PIN
   [ "$FAULT" = restore-keeps-fork ] && [ "$installed" = restored ] && kwin=$PIN
   [ "$FAULT" = restore-takes-six ] && [ "$installed" = restored ] && six=none
   [ "$FAULT" = six-old ] && [ "$installed" = full ] && six=$RELEASED
   for p in kwin kwin-common kwin-libs; do
     if [ "$FAULT" = half-fork ] && [ "$p" = kwin-common ]; then echo "pkg $p $STOCK"; else echo "pkg $p $kwin"; fi
   done
-  if [ "$full" = yes ]; then echo "pkg plasma-fusion-full $META"; else echo "pkg plasma-fusion-full none"; fi
+  if [ "$full" = yes ]; then echo "pkg plasma-fusion-full $meta"; else echo "pkg plasma-fusion-full none"; fi
   for p in $SIX; do
     if [ "$FAULT" = uninstall-keeps-package ] && [ "$installed" = gone ] && [ "$p" = plasma-fusion-settings ]; then
       echo "pkg $p $META"
@@ -73,21 +87,52 @@ facts() {
   repo=$(printf '%s\n' "${1:-}" | sed -n 's/.*full-guest\.sh facts \([^ ]*\).*/\1/p')
   case $installed in
     full) from="copr:copr.fedorainfracloud.org:${repo%%/*}:${repo#*/}"
-          [ "$FAULT" != six-from-stock ] || from=$stock_id ;;
+          [ "$FAULT" != six-from-stock ] || from=$stock_id
+          [ "$FAULT" != update-from-live ] || ! updated || from=$LIVE_ID ;;
+    released-full) from=$LIVE_ID ;;
     six | restored) from=$stock_id ;;
     *) from= ;;
   esac
   [ -z "$from" ] || for p in $SIX; do echo "from $p $from"; done
+  # rpm's transaction ids: the stock system's, the stock profile's, the release's --full, a --full
+  # or an update (the KWin packages stay where the pin does not move), the restore, the uninstall.
+  local tk=100 ts=''
+  case $installed in
+    six) ts=150 ;;
+    released-full) tk=200 ts=200 ;;
+    full) tk=300 ts=300
+      if updated && { [ "$OLD_PIN" = "$PIN" ] || [ "$FAULT" = update-old-kwin ]; }; then tk=200; fi
+      ;;
+    restored) tk=400 ts=300 ;;
+    gone) tk=500 ;;
+  esac
+  # update-split: the metapackage with the KWin it pulls, the six packages in a transaction apart.
+  local tm=$ts
+  [ "$FAULT" != update-split ] || ! updated || ts=301
+  for p in kwin kwin-common kwin-libs; do echo "tid $p $tk"; done
+  [ "$full" != yes ] || echo "tid plasma-fusion-full $tm"
+  [ -z "$ts" ] || for p in $SIX; do echo "tid $p $ts"; done
   if [ "$FAULT" = locklist-failed ] && [ "$installed" = restored ]; then echo "locklist failed"; else echo "locklist ok"; fi
   if [ "$full" = yes ]; then
+    local lockpin=$kwin
+    [ "$FAULT" != update-old-lock ] || ! updated || lockpin=$OLD_PIN
+    # move-drops-lock: the move takes the lock away, and the update puts it back.
+    if [ "$(get lockless no)" = no ] || updated; then
+      for p in kwin kwin-common kwin-libs; do
+        [ "$FAULT" = no-lock ] && [ "$p" = kwin-libs ] || echo "lock $p $lockpin"
+      done
+    fi
     for p in kwin kwin-common kwin-libs; do
-      [ "$FAULT" = no-lock ] && [ "$p" = kwin-libs ] || echo "lock $p $PIN"
+      if [ "$FAULT" = update-record-lost ] && updated; then :
+      elif [ "$FAULT" = record-wrong ] && [ "$p" = kwin ]; then echo "record $p 6.8.1-1.fc44"; else echo "record $p $STOCK"; fi
     done
-    for p in kwin kwin-common kwin-libs; do
-      if [ "$FAULT" = record-wrong ] && [ "$p" = kwin ]; then echo "record $p 6.8.1-1.fc44"; else echo "record $p $STOCK"; fi
-    done
-    echo "pin $PIN"; echo "tag v6.8.2-pf3"; echo "recordfile yes"
-    if [ "$FAULT" = repo-disabled ]; then echo "repo disabled"; else echo "repo enabled"; fi
+    echo "pin $pin"; echo "tag $tag"; echo "recordfile yes"
+    # The projects the VM has, once update's steps say (the release's --full, the move); before
+    # that the stamped project is the one it has.
+    if [ "$FAULT" = repo-disabled ]; then echo "repo disabled"
+    elif [ -s "$S/enabled" ]; then
+      case " $(get enabled '') " in *" $repo "*) echo "repo enabled" ;; *) echo "repo no" ;; esac
+    else echo "repo enabled"; fi
   else
     [ "$FAULT" = uninstall-leaves-lock ] && [ "$installed" = gone ] && echo "lock kwin $PIN"
     echo "recordfile no"
@@ -97,9 +142,13 @@ facts() {
 status() {
   local installed running deco
   installed=$(get installed stock) running=$(get running stock)
+  local fullnow=no
+  case $installed in full | released-full) fullnow=yes ;; esac
   echo "Plasma Fusion 0.8.0 (/usr/share/plasma-fusion)"
   if [ "$installed" = full ]; then
     echo "  profile: full (the maintained KWin fork, pinned at $PIN, fork tag v6.8.2-pf3)"
+  elif [ "$installed" = released-full ]; then
+    echo "  profile: full (the maintained KWin fork, pinned at $OLD_PIN, fork tag $OLD_TAG)"
   else
     echo "  profile: stock (the distribution's KWin)"
   fi
@@ -108,16 +157,16 @@ status() {
     echo "    thumbnail source lifecycle: version 1"
     echo "    offscreen opacity: version 1"
     echo "    transient tiling (dynamic tiling): yes"
-    if [ "$installed" != full ] && [ "$FAULT" = status-by-hand ]; then
+    if [ "$fullnow" != yes ] && [ "$FAULT" = status-by-hand ]; then
       echo "  note: this KWin advertises the fork's capabilities without the full profile (a fork installed by hand)"
-    elif [ "$installed" != full ]; then
+    elif [ "$fullnow" != yes ]; then
       echo "  note: the full profile is not installed and the running KWin still advertises the fork's capabilities:"
       echo "        log out and in (the KWin on the disk was put there after this session's KWin started, as after --full-restore)"
     fi
     [ "$FAULT" != status-note ] || [ "$installed" != full ] || echo "  note: run 'plasma-fusion update' to apply this version's settings"
   else
     echo "  the running KWin's capabilities: none of the fork's (every feature uses its stock fallback)"
-    if [ "$installed" = full ]; then
+    if [ "$fullnow" = yes ]; then
       echo "  note: the full profile is installed and the running KWin advertises none of its capabilities:"
       echo "        log out and in (the session still runs the KWin from before the profile)"
     fi
@@ -128,7 +177,7 @@ status() {
   # Fedora's and moves with stock KWin; the navigation part's holds the KWin it was built for,
   # compared with the running one.
   case $(get installed stock) in
-    six | full | restored)
+    six | full | released-full | restored)
       deco=${FAKE_DECO_BUILT:-$(up "$PIN")}
       [ "$deco" = "$(up "$STOCK")" ] ||
         echo "  note: the decoration part was built against $deco, the installed KDecoration is $(up "$STOCK"): update or rebuild that package" ;;
@@ -142,7 +191,15 @@ status() {
   if [ "$FAULT" = restored-stale-build ] && [ "$installed" = restored ] && [ "$running" != fork ]; then
     echo "  note: the navigation part was built against 6.8.1, KWin is $(up "$STOCK"): update or rebuild that package"
   fi
-  echo "  switched off: nothing"
+  # The release (from before #199) recorded no KWin version: on a stock KWin of another version
+  # than its pin, its login is in safe mode. After an update the new installer has recorded it.
+  if [ "$installed" = released-full ] && [ "$(up "$STOCK")" != "$(up "$OLD_PIN")" ]; then
+    echo "  switched off: the navigation part, the decoration part (why: kwin $(up "$STOCK") -> $(up "$OLD_PIN"))"
+  elif [ "$FAULT" = update-safe-mode ] && [ "$installed" = full ] && updated; then
+    echo "  switched off: the navigation part (why: kwin $(up "$OLD_PIN") -> $(up "$PIN"))"
+  else
+    echo "  switched off: nothing"
+  fi
 }
 case "$cmd" in
   start) printf overlay >"$PF_VM_HOME/vms/$name/run.qcow2" ;;
@@ -200,8 +257,26 @@ case "$cmd" in
       *'install.sh --full-restore --yes'*) put installed restored ;;
       *'install.sh uninstall --yes'*) put installed gone ;;
       *'install-stock.sh --yes'*) put installed six ;;
+      *'install-release.sh --full --yes'*) put installed released-full; put enabled archledger/plasma-fusion-full ;;
+      *'copr remove archledger/plasma-fusion-full '*)
+        target=$(printf '%s\n' "$*" | sed -n 's/.*copr enable \([^ ]*\) .*/\1/p')
+        case $FAULT in
+          move-leaves-live) put enabled "archledger/plasma-fusion-full $target" ;;
+          move-no-enable) put enabled - ;;
+          move-drops-lock) put enabled "$target"; put lockless yes ;;
+          *) put enabled "$target" ;;
+        esac ;;
+      *'install.sh update --dry-run'*)
+        [ "$FAULT" != update-dry-changes ] || { put installed full; put updated yes; }
+        [ "$FAULT" = update-plan-no-unlock ] ||
+          echo "  sudo dnf -y versionlock delete kwin kwin-common kwin-libs   (the pin goes first: it would hold KWin at the old fork)"
+        echo "  sudo dnf -y upgrade --refresh $SIX plasma-fusion-full   (the metapackage pulls the new pin)"
+        [ "$FAULT" != update-plan-apart ] || echo "  sudo dnf -y install plasma-fusion-extra   (new in this release)"
+        echo "  sudo dnf -y versionlock add kwin kwin-common kwin-libs   (the pin again, at the new fork)"
+        echo "  plasma-fusion update   (as you, in this session; it backs up first)" ;;
+      *'install.sh update --yes'*) put installed full; put updated yes ;;
       *'org.kde.Shutdown logout'*)
-        case $(get installed stock) in full) put running fork ;; *) put running stock ;; esac ;;
+        case $(get installed stock) in full | released-full) put running fork ;; *) put running stock ;; esac ;;
       *tty1_session*)
         if [ "$FAULT" = no-session ]; then echo 1; else bump session; fi ;;
       *'pgrep -u pf -x kwin_wayland >/dev/null'*)
@@ -221,7 +296,7 @@ case "$cmd" in
         if [ "$FAULT" = crash ] && [ "$n" = 1 ]; then echo 1; else echo 0; fi ;;
       *LookAndFeelPackage*)
         case $(get installed stock) in
-          six | full | restored) echo "LookAndFeelPackage=org.plasmafusion.dark.desktop" ;;
+          six | full | released-full | restored) echo "LookAndFeelPackage=org.plasmafusion.dark.desktop" ;;
           gone)
             if [ "$FAULT" = theme-kept ]; then
               echo "LookAndFeelPackage=org.plasmafusion.dark.desktop"
@@ -231,6 +306,15 @@ case "$cmd" in
           *) echo "LookAndFeelPackage=org.kde.breeze.desktop" ;;
         esac ;;
       *'date +%s'*) echo 100 ;;
+      *'is-active plasma-ksplash.service'*)
+        n=$(bump splashprobe)
+        case $FAULT in
+          splash-stuck) echo activating ;;
+          splash-deactivating) echo deactivating ;;
+          splash-unreadable) exit 1 ;;
+          splash-unreadable-once) if [ "$n" = 1 ]; then exit 1; else echo inactive; fi ;;
+          *) echo inactive ;;
+        esac ;;
       *'grep -m 1 "^PF_VERSION="'*) echo "PF_VERSION='0.7.0'" ;;
       *) exit 0 ;;
     esac ;;
@@ -243,7 +327,8 @@ while [ $# -gt 1 ]; do
   case $1 in --full-repo) repo=$2; shift ;; esac
   shift
 done
-printf "PF_VERSION='0.8.0'\nPF_FULL_FEDORA='44'\nPF_FULL_REPO='%s'\nPF_FULL_PIN='6.8.2-3.fc44.pf3'\n" "$repo" >"$1"
+# FAKE_STAMP_PIN: another pin than the project's builds have (empty: none at all).
+printf "PF_VERSION='0.8.0'\nPF_FULL_FEDORA='44'\nPF_FULL_REPO='%s'\nPF_FULL_PIN='%s'\n" "$repo" "${FAKE_STAMP_PIN-6.8.2-3.fc44.pf3}" >"$1"
 '''
 KEYS = r'''#!/usr/bin/env python3
 import sys
@@ -373,6 +458,126 @@ class FullLaneTest(unittest.TestCase):
                                     text=True, env={**os.environ, "PF_VM_HOME": directory})
             self.assertEqual(result.returncode, 2)
             self.assertFalse((Path(directory) / "results").exists())
+
+    # ---- update: from the last release's full profile to a candidate's (ADR 0001's round) ----
+    CAND = {"PF_FULL_REPO": "archledger/plasma-fusion-full-candidates"}
+
+    def test_update_passes_and_moves_the_pin_in_one_transaction(self):
+        result, calls = self.run_lane("none", "update", env_extra=self.CAND)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("FAIL", result.stdout)
+        self.assertIn("done test (full profile, update)", result.stdout)
+        # The release, from the live project, at its own pin; its safe mode logged, not checked.
+        self.assertIn("ok   kwin is the pinned fork: 6.8.1-1.fc44.pf2", result.stdout)
+        self.assertIn("ok   plasma-fusion comes from the full profile's repository: "
+                      "copr:copr.fedorainfracloud.org:archledger:plasma-fusion-full", result.stdout)
+        self.assertIn("the release's login check: switched off: the navigation part", result.stdout)
+        self.assertIn("ok   the release's project is gone: no", result.stdout)
+        # The update: the new pin, locked, from the candidate's project, in one transaction.
+        self.assertIn("ok   the plan: the lock off, one upgrade, the lock on", result.stdout)
+        self.assertIn("ok   one rpm transaction took the update (10 packages); others: (none)", result.stdout)
+        self.assertIn("ok   kwin is locked at the pin: 6.8.2-3.fc44.pf3", result.stdout)
+        self.assertIn("ok   plasma-fusion comes from the full profile's repository: "
+                      "copr:copr.fedorainfracloud.org:archledger:plasma-fusion-full-candidates", result.stdout)
+        self.assertIn("ok   the restore record keeps the stock kwin: 6.8.2-3.fc44", result.stdout)
+        self.assertIn("ok   the login check switched nothing off", result.stdout)
+        # Back by uninstall on the full system, as in switch.
+        self.assertIn("plasma-fusion-full is gone: none", result.stdout)
+        self.assertNotIn("--full-restore", result.stdout)
+        self.assertFalse(self.preserved)
+
+    def test_update_without_a_new_pin_leaves_the_kwin_packages(self):
+        # A release without a new fork tag: the six and the metapackage move, the KWin packages
+        # stay in the transaction they came with.
+        env = {**self.CAND, "FAKE_OLD_PIN": "6.8.2-3.fc44.pf3"}
+        result, _ = self.run_lane("none", "update", env_extra=env)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("ok   one rpm transaction took the update (7 packages); others: (none)", result.stdout)
+        self.assertIn("ok   kwin-libs stays as it was (the pin did not move): 200", result.stdout)
+
+    def test_update_from_the_live_project_is_refused_before_a_vm_starts(self):
+        # The live project holds the release the round starts from, and the published installer
+        # would update nothing: update needs a candidate's project and this tree's installer.
+        for env in ({}, {"PF_FULL_REPO": "archledger/plasma-fusion-full"},
+                    {**self.CAND, "PF_PUBLIC": "1"}):
+            with self.subTest(env=env), tempfile.TemporaryDirectory() as directory:
+                result = subprocess.run(["bash", str(HERE / "fulltest.sh"), "test", "update"], capture_output=True,
+                                        text=True, env={**os.environ, "PF_VM_HOME": directory, "PF_PUBLIC": "", **env})
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertFalse((Path(directory) / "results").exists())
+
+    def test_update_s_dry_run_that_changes_something(self):
+        self.rejected("update-dry-changes", "FAIL: the dry run", "update", self.CAND)
+
+    def test_update_plan_that_keeps_the_lock(self):
+        result = self.rejected("update-plan-no-unlock", "FAIL: the dry run", "update", self.CAND)
+        self.assertIn("FAIL the plan: the lock off, one upgrade, the lock on: 'upgrade --refresh,versionlock add'",
+                      result.stdout)
+
+    def test_update_plan_that_installs_apart(self):
+        result = self.rejected("update-plan-apart", "FAIL: the dry run", "update", self.CAND)
+        self.assertIn("FAIL the plan: the lock off, one upgrade, the lock on", result.stdout)
+
+    def test_update_in_two_transactions(self):
+        result = self.rejected("update-split", "FAIL: the full profile's packages after the update", "update", self.CAND)
+        self.assertIn("FAIL one rpm transaction took the update (10 packages); others: 'plasma-fusion plasma-fusion-decoration",
+                      result.stdout)
+
+    def test_update_that_leaves_kwin_at_the_old_pin(self):
+        result = self.rejected("update-old-kwin", "FAIL: the full profile's packages after the update", "update", self.CAND)
+        self.assertIn("FAIL kwin is the pinned fork: '6.8.1-1.fc44.pf2', expected '6.8.2-3.fc44.pf3'", result.stdout)
+        self.assertIn("FAIL one rpm transaction took the update (10 packages); others: 'kwin kwin-common kwin-libs'",
+                      result.stdout)
+
+    def test_update_that_leaves_the_lock_at_the_old_pin(self):
+        result = self.rejected("update-old-lock", "FAIL: the full profile's packages after the update", "update", self.CAND)
+        self.assertIn("FAIL kwin is locked at the pin: '6.8.1-1.fc44.pf2'", result.stdout)
+
+    def test_update_that_loses_the_restore_record(self):
+        result = self.rejected("update-record-lost", "FAIL: the full profile's packages after the update", "update",
+                               self.CAND)
+        self.assertIn("FAIL the restore record keeps the stock kwin: '', expected '6.8.2-3.fc44'", result.stdout)
+
+    def test_update_from_the_release_s_project(self):
+        result = self.rejected("update-from-live", "FAIL: the full profile's packages after the update", "update",
+                               self.CAND)
+        self.assertIn("FAIL plasma-fusion comes from the full profile's repository: "
+                      "'copr:copr.fedorainfracloud.org:archledger:plasma-fusion-full'", result.stdout)
+
+    def test_move_that_leaves_the_release_s_project(self):
+        result = self.rejected("move-leaves-live", "FAIL: the move to the candidate's project", "update", self.CAND)
+        self.assertIn("FAIL the release's project is gone: 'enabled', expected 'no'", result.stdout)
+        self.assertNotIn("installer: update --dry-run", result.stdout)
+
+    def test_update_to_another_pin_than_this_tree_s(self):
+        # The project's builds pin another fork than the tree's spec: the update ends there.
+        result = self.rejected("none", "FAIL: the full profile's packages after the update", "update",
+                               {**self.CAND, "FAKE_STAMP_PIN": "6.8.3-1.fc44.pf1"})
+        self.assertIn("FAIL the metapackage's record names this tree's pin: '6.8.2-3.fc44.pf3', expected '6.8.3-1.fc44.pf1'",
+                      result.stdout)
+
+    def test_update_whose_lock_does_not_hold(self):
+        result = self.rejected("lock-loose", "FAIL: the full profile's packages after the update", "update", self.CAND)
+        self.assertIn("FAIL a sync to the distribution's KWin finds nothing to do", result.stdout)
+
+    def test_update_with_a_stamp_without_a_pin_stops_before_a_vm_starts(self):
+        result, calls = self.run_lane("none", "update", env_extra={**self.CAND, "FAKE_STAMP_PIN": ""})
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("FAIL: the stamped installer names no pin to update to", result.stdout)
+        self.assertNotIn("start", calls)
+
+    def test_move_that_does_not_enable_the_candidate_s_project(self):
+        result = self.rejected("move-no-enable", "FAIL: the move to the candidate's project", "update", self.CAND)
+        self.assertIn("FAIL the candidate's project is enabled: 'no', expected 'enabled'", result.stdout)
+
+    def test_move_that_takes_the_lock(self):
+        result = self.rejected("move-drops-lock", "FAIL: the move to the candidate's project", "update", self.CAND)
+        self.assertIn("FAIL the move changed no package, lock or record (07-packages.txt and 06-packages.txt differ)",
+                      result.stdout)
+
+    def test_update_whose_login_is_in_safe_mode(self):
+        result = self.rejected("update-safe-mode", "FAIL: status on the full profile", "update", self.CAND)
+        self.assertIn("FAIL the login check switched nothing off", result.stdout)
 
     def test_dry_run_that_changes_something(self):
         self.rejected("dry-changes", "FAIL: the dry run")
@@ -542,6 +747,27 @@ class FullLaneTest(unittest.TestCase):
     def test_uninstall_that_leaves_the_lock(self):
         result = self.rejected("uninstall-leaves-lock", "FAIL: the uninstall")
         self.assertIn("FAIL kwin is not locked", result.stdout)
+
+    def test_start_up_that_does_not_end(self):
+        # The splash still up: the session's start-up has not ended, and no check runs in it.
+        result = self.rejected("splash-stuck", "FAIL: the session's start-up did not end (the splash still activating after 90 s)")
+        self.assertNotIn("screenshot 01-stock", result.stdout)
+
+    def test_start_up_that_is_still_ending(self):
+        # Only inactive or failed is the end: a splash still deactivating is not.
+        result = self.rejected("splash-deactivating", "FAIL: the session's start-up did not end (the splash still deactivating after 90 s)")
+        self.assertNotIn("screenshot 01-stock", result.stdout)
+
+    def test_start_up_state_that_cannot_be_read(self):
+        # No state read is no end of the start-up: the lane does not go on.
+        result = self.rejected("splash-unreadable", "FAIL: the session's start-up state could not be read")
+        self.assertNotIn("screenshot 01-stock", result.stdout)
+
+    def test_start_up_state_read_again_after_a_failed_probe(self):
+        # A probe that failed once (ssh, the user's service manager) is no end: the next one is.
+        result, _ = self.run_lane("splash-unreadable-once")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("FAIL", result.stdout)
 
     def test_vm_that_does_not_come_up(self):
         self.rejected("wait", "FAIL: the VM did not come up")

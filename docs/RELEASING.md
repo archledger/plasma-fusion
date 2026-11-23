@@ -29,7 +29,7 @@ key in the AUR package's `validpgpkeys` and the installer.
    each project needs the tag before a candidate or the release is built in it. In the live
    project the new KWin waits: the current metapackage requires the old pin exactly, and the
    version lock holds every full-profile machine at the old one. The spec's `%global kwin_full_pin`
-   is the builds' exact EVR (the same in both projects: `6.8.2-3.fc44.pf5`);
+   is the builds' exact EVR (the same in both projects: `6.8.3-1.fc44.pf1`);
    `packaging/check-version.sh` checks its shape and `packaging/check-full-profile.sh` the
    gates with it. Both need `rpmspec`: run them in a Fedora container.
 
@@ -66,7 +66,9 @@ users, and a candidate there would reach them: its version sorts above the last 
   `sudo dnf copr enable archledger/plasma-fusion-full-candidates fedora-44-x86_64`) and updates
   with the candidate's `install.sh update`. That must be one dnf transaction (the KWin packages,
   the metapackage and the six packages together), ending with the version lock at the new pin:
-  ADR 0001's security-cadence round.
+  ADR 0001's security-cadence round. `PF_FULL_REPO=archledger/plasma-fusion-full-candidates
+  tools/tests/release-vm/fulltest.sh fedora44lane update` runs it, with these steps and checks
+  (docs/parts/release-tests.md).
 
 Then the depth features' check on the merged commit's HOME tree, on the test host and on the
 Plasma beta container (`tools/tests/depth/run.sh`, docs/parts/testing.md "Depth features"): window

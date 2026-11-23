@@ -1317,8 +1317,11 @@ without a session. `python3 packages/navigation-cpp/tests/test_runtime.py` check
 and missing/unreadable logs.
 
 Teardown (`vsession.sh`). At the end of the scenario, or at its time limit (the scenario shell gets
-SIGTERM; `timeout` stops everything 30 s later), every process of the session except KWin, the
-processes that started it and its children (the bus daemon, Xwayland) gets SIGTERM while KWin
+SIGTERM; `timeout` stops everything 30 s later), plasmashell gets up to 5 s to exit before its
+private D-Bus peers are stopped. Stopping them together led to a D-Bus assertion and an abort
+during plasmashell exit (#217); a stuck shell still falls through to the general sweep. Then every
+process of the session except KWin, the processes that started it and their children (the session
+bus daemon, Xwayland) gets SIGTERM while KWin
 still runs, SIGKILL after 5 s, and the sweep repeats for services the bus started meanwhile.
 Before, the portal frontend re-activated `xdg-desktop-portal-kde` after KWin had gone, and the
 new instance aborted with a core dump (4 of 27 dock runs). The sweep selects processes by their

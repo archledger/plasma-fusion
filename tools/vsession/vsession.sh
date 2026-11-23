@@ -55,11 +55,11 @@
 # first output), pfv_lock (lock-capable sessions only).
 #
 # Teardown: when the scenario ends, or at TIMEOUT (the scenario shell then gets SIGTERM; a hard
-# stop follows 30 s later), every process of the session except KWin's own (the processes that
-# started KWin, the bus daemon, KWin's children such as Xwayland) gets SIGTERM while KWin still
-# runs, SIGKILL after 5 s, and the sweep repeats for services the bus started meanwhile. A Qt
-# service started after KWin had gone aborts with a core dump: the portal frontend re-activated
-# xdg-desktop-portal-kde that way. out/teardown.log lists what was stopped.
+# stop follows 30 s later), let the private plasmashell exit first, while its D-Bus peers are
+# still running. Then every process of the session except KWin's own (the processes that started
+# KWin, the session bus daemon, KWin's children such as Xwayland) gets SIGTERM while KWin still
+# runs, SIGKILL after 5 s, and the sweep repeats for services the bus started meanwhile.
+# out/teardown.log lists what was stopped.
 set -u
 NAME=${1:?name}; SCENARIO=${2:?scenario}; SIZE=${3:-1440x900}; TMO=${4:-240}
 # Sessions live on disk (/var/tmp): a HOME with the Fusion stage holds ~25k files, and /tmp is a
@@ -185,6 +185,7 @@ pfv_teardown() {
   local IFS=$' \t\n'
   trap '' TERM
   local p st pid round t left names c
+  local -a shells=()
   # this shell and its ancestors: KWin, dbus-run-session, timeout, vsession.sh, ...
   PFV_KEEP=$$; p=$PPID
   while [ "${p:-1}" -gt 1 ]; do
@@ -192,6 +193,24 @@ pfv_teardown() {
     read -r st 2>/dev/null <"/proc/$p/stat" || break
     st=${st##*) }; read -r -a st <<<"$st"; p=${st[1]}
   done
+  # Stopping plasmashell and its private peers together can disconnect it from D-Bus during its
+  # exit and cause an abort (#217). Select shells through the same runtime fence as the sweep,
+  # including a shell that the scenario restarted. A stuck shell falls through to that sweep.
+  pfv_pids
+  for pid in "${PFV_PIDS[@]}"; do
+    read -r c 2>/dev/null <"/proc/$pid/comm" || continue
+    [ "$c" != plasmashell ] || shells+=("$pid")
+  done
+  if [ ${#shells[@]} -gt 0 ]; then
+    echo "$EPOCHREALTIME plasmashell SIGTERM ${shells[*]}" >>"$OUT/teardown.log"
+    kill -TERM "${shells[@]}" 2>/dev/null
+    for ((t = 0; t < 25; t++)); do
+      left=()
+      for pid in "${shells[@]}"; do pfv_alive "$pid" && left+=("$pid"); done
+      [ ${#left[@]} -gt 0 ] || break
+      sleep 0.2
+    done
+  fi
   for round in 1 2 3 4; do
     pfv_pids
     [ ${#PFV_PIDS[@]} -gt 0 ] || break

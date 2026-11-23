@@ -234,25 +234,19 @@ Item {
         return child.applet?.plasmoid?.pluginName === "org.kde.plasma.panelspacer"
             && child.applet.plasmoid.configuration.expanding === true;
     }
-    function saving(applet: Item, at: int): real {
-        return applet && typeof applet.budgetSaving === "function" ? applet.budgetSaving(at) : 0;
-    }
     // A widget's width at budget level `at` (the menu: full or compact).
     function widthAt(c: var, at: int, menuFull: bool): real {
         if (menuApplet && c.applet === menuApplet) {
             const spacing = panelLayout ? panelLayout.columnSpacing : 0;
             return spacing + (menuFull ? Math.max(0, menuEstimate + menuCorrection) : compactMenuWidth);
         }
-        const now = c.applet && c.applet.budgetLevel !== undefined ? c.applet.budgetLevel : level;
-        return c.hint + saving(c.applet, now) - saving(c.applet, at);
+        return c.widths[at] ?? c.hint;
     }
 
     // What the result depends on, read in one binding so that a change re-evaluates: the
-    // children and their hints, the window width, the pill's width and its savings at every step,
-    // the menu estimate and the posture. A saving can change while the pill's width does not: at
-    // step 7 the layout control takes no room whether it shows a mode or not, but only one that
-    // shows a mode takes room at the steps below. The other widgets' savings are not read: one
-    // that changes while their hints do not waits for the next change here.
+    // children's widths at every step, the window width, the pill's width and savings,
+    // the menu estimate and the posture. A collapsed widget's current width can stay the
+    // same while the width it would need at another step changes.
     readonly property var snapshot: {
         const layout = panelLayout;
         if (!layout || !clock.Window.window) {
@@ -263,7 +257,18 @@ Item {
             if (!child.visible || child.isAppletContainer !== true) {
                 continue;
             }
-            children.push({ "item": child, "applet": child.applet ?? null, "hint": hint(child), "spacer": isExpandingSpacer(child) });
+            const applet = child.applet ?? null;
+            const shown = hint(child);
+            const widths = [];
+            if (applet && typeof applet.budgetSaving === "function") {
+                const now = applet.budgetLevel !== undefined ? applet.budgetLevel : level;
+                const full = shown + applet.budgetSaving(now);
+                for (let at = 0; at <= maxLevel; ++at) {
+                    widths.push(full - applet.budgetSaving(at));
+                }
+            }
+            children.push({ "item": child, "applet": applet, "hint": shown,
+                            "widths": widths, "spacer": isExpandingSpacer(child) });
         }
         const savings = [];
         for (let at = 0; at <= maxLevel; ++at) {

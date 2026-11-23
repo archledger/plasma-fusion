@@ -195,7 +195,7 @@ jobs:
             python3 packages/kwin/tests/offscreen/tiling_lifecycle_test.py \
             "$RUNNER_TEMP/snap-stage/.local/share/kwin"
 
-      - name: Hidden switcher thumbnail lifetime (offscreen Qt)
+      - name: Switcher keys and hidden thumbnail lifetime (offscreen Qt)
         run: |
           set -euo pipefail
           python3 packages/kwin/tests/native-thumbnail/test_check_connections.py
@@ -204,6 +204,9 @@ jobs:
           python3 packages/navigation-cpp/tests/test_runtime.py
           mkdir -p "$RUNNER_TEMP/thumbnail-packages"
           ln -s "$RUNNER_TEMP/snap-stage/.local/share/kwin/tabbox" "$RUNNER_TEMP/thumbnail-packages/switcher"
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/kwin/tests/offscreen/keytest.py "$RUNNER_TEMP/thumbnail-packages"
           QT_QPA_PLATFORM=offscreen dbus-run-session \
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/kwin/tests/offscreen/thumbnail_lifetime_test.py "$RUNNER_TEMP/thumbnail-packages"
@@ -433,6 +436,9 @@ jobs:
           QT_QPA_PLATFORM=offscreen dbus-run-session \
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.clockpill/tests/calendar_view_test.py "$RUNNER_TEMP/calendar-stage"
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.clockpill/tests/width_budget_test.py "$RUNNER_TEMP/calendar-stage"
           QT_QPA_PLATFORM=offscreen dbus-run-session \
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.clockpill/tests/calendar_config_test.py
