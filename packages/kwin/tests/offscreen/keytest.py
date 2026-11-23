@@ -4,45 +4,67 @@
 """Offscreen check: a key sent the way KWin sends it (to the first QQuickWindow below the
 switcher object) right after the switcher is shown, before any frame, reaches the switcher.
 
-    QT_QPA_PLATFORM=offscreen python3 keytest.py [PACKAGES_KWIN_DIR]
+    QT_QPA_PLATFORM=offscreen python3 keytest.py PACKAGES_KWIN_DIR
 
-PACKAGES_KWIN_DIR defaults to packages/kwin of this checkout (test use only).
+PACKAGES_KWIN_DIR is a staged harness directory whose switcher entry points to
+STAGE/.local/share/kwin/tabbox. The source tree does not contain the shared QML blocks.
 """
-import os, sys
-from PySide6.QtCore import QTimer, QUrl, QEvent, Qt, QCoreApplication
+import argparse
+from pathlib import Path
+import sys
+
+from PySide6.QtCore import QCoreApplication, QEvent, QTimer, Qt, QUrl
 from PySide6.QtGui import QGuiApplication, QKeyEvent
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 
-REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-OFF = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, OFF)
-from render import I18n  # noqa: E402
+from render import I18n
 
-pkgroot = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(REPO, "packages", "kwin")
+parser = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
+parser.add_argument("packages_kwin_dir", type=Path, help="staged harness directory (switcher/<id>)")
+pkgroot = parser.parse_args().packages_kwin_dir.resolve()
+ui = pkgroot / "switcher/org.plasmafusion.switcher/contents/ui"
+if not (ui / "main.qml").is_file() or not (ui / "FusionMetrics.qml").is_file():
+    parser.error("expected a staged switcher; build kwin with tools/build.sh and point "
+                 "PACKAGES_KWIN_DIR/switcher at STAGE/.local/share/kwin/tabbox")
+here = Path(__file__).resolve().parent
 app = QGuiApplication(sys.argv[:1])
 engine = QQmlApplicationEngine()
-engine.addImportPath(os.path.join(OFF, "stubs"))
+engine.addImportPath(str(here / "stubs"))
 i18n = I18n()
 engine.rootContext().setContextObject(i18n)
 for k, v in dict(count=5, otherDesktop=2, allDesktops=True, current=1, dark=True).items():
     engine.rootContext().setContextProperty(k, v)
-engine.rootContext().setContextProperty("packagesRoot", pkgroot)
-engine.load(QUrl.fromLocalFile(os.path.join(OFF, "switcher-harness.qml")))
-root = engine.rootObjects()[0]
-sw = root.property("switcher")
+engine.rootContext().setContextProperty("packagesRoot", str(pkgroot))
+engine.load(QUrl.fromLocalFile(str(here / "switcher-harness.qml")))
+roots = engine.rootObjects()
+if not roots:
+    raise SystemExit("switcher harness did not load")
+sw = roots[0].property("switcher")
+if sw is None:
+    raise SystemExit("staged switcher did not instantiate")
 item = sw.property("item")
 
 
 def send(label):
     w = sw.findChild(QQuickWindow)
+    if w is None or item is None:
+        print(f"{label}: switcher window or focus item is missing", file=sys.stderr)
+        return False
     before = item.property("showAll")
     QCoreApplication.sendEvent(w, QKeyEvent(QEvent.KeyPress, Qt.Key_A, Qt.NoModifier, "a"))
     QCoreApplication.sendEvent(w, QKeyEvent(QEvent.KeyRelease, Qt.Key_A, Qt.NoModifier, "a"))
     after = item.property("showAll")
-    print(f"{label}: key went to {w.title()!r}; showAll {before} -> {after}: {'handled' if after != before else 'LOST'}")
+    handled = after != before
+    print(f"{label}: key went to {w.title()!r}; showAll {before} -> {after}: {'handled' if handled else 'LOST'}")
+    return handled
 
 
-send("before the first frame")
-QTimer.singleShot(1500, lambda: (send("card shown"), app.quit()))
-app.exec()
+def finish():
+    second = send("card shown")
+    app.exit(0 if first and second else 1)
+
+
+first = send("before the first frame")
+QTimer.singleShot(1500, finish)
+sys.exit(app.exec())
