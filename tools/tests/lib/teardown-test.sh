@@ -15,8 +15,9 @@
 # that with the strict-mode IFS idiom. Use a multiple of 3 rounds to run all three equally.
 # The shell holds long-lived session processes and a stream of short-lived ones that their parents
 # reap at once, all marked with the session's XDG_RUNTIME_DIR as a real session's are. A round
-# passes when the shell exits 0, teardown.log ends with "done; left: none", the ERR trap never ran
-# and the long-lived processes are gone. Two final checks call cleanup in the middle of a scenario,
+# passes when the shell exits 0, the stand-in plasmashell stops before the first general sweep,
+# teardown.log ends with "done; left: none", the ERR trap never ran and the long-lived processes
+# are gone. Two final checks call cleanup in the middle of a scenario,
 # with and without errtrace: the scenario's options, ERR and TERM traps and IFS must survive it.
 #
 #   teardown-test.sh [--rounds N] [--work DIR]
@@ -61,6 +62,7 @@ STRICT_IFS="$PREAMBLE; IFS=\$'\\n\\t'"
 rm -rf "$WORK"
 mkdir -p "$WORK"
 touch "$WORK/.teardown-test"
+ln -s "$(command -v bash)" "$WORK/plasmashell"
 failed=0
 rounds_run=0
 mid_run=0
@@ -85,11 +87,22 @@ for ((round = 1; round <= ROUNDS; round++)); do
     # Each lives about as long as the sweep takes to list the session processes, so some are
     # listed and then gone before they are read or stopped.
     for _ in {1..12}; do XDG_RUNTIME_DIR=$PFV/run bash -c "while :; do sleep 0.02; done" & done
+    XDG_RUNTIME_DIR=$PFV/run "$3" -c '"'"'
+      stopped=$1
+      trap '"'"'"'"'"'"'"'"'sleep 0.4; : >"$stopped"; exit'"'"'"'"'"'"'"'"' TERM
+      : >"$2"
+      while :; do sleep 0.02; done
+    '"'"' fake-plasmashell "$PFV/shell-stopped" "$PFV/shell-ready" &
+    shell_pid=$!
     sleep 0.3
+    read -r comm <"/proc/$shell_pid/comm"
+    [[ $comm == plasmashell && -f $PFV/shell-ready ]]
     jobs -p >"$PFV/jobs.pid"
-  ' teardown-session "$FUNCS" "$preamble" >"$PFV/session.log" 2>&1 || rc=$?
+  ' teardown-session "$FUNCS" "$preamble" "$WORK/plasmashell" >"$PFV/session.log" 2>&1 || rc=$?
   last=
+  first=
   if [ -f "$PFV/out/teardown.log" ]; then
+    first=$(head -n 1 "$PFV/out/teardown.log")
     last=$(tail -n 1 "$PFV/out/teardown.log")
   fi
   left=
@@ -102,7 +115,9 @@ for ((round = 1; round <= ROUNDS; round++)); do
   else
     left=" <no jobs.pid: the session shell did not start its processes>"
   fi
-  if [ "$rc" = 0 ] && [[ $last == *" done; left: none" ]] && [ ! -s "$PFV/err.log" ] \
+  if [ "$rc" = 0 ] && [[ $first == *" plasmashell SIGTERM "* && $last == *" done; left: none" ]] \
+    && [ -f "$PFV/shell-stopped" ] && [ ! -s "$PFV/err.log" ] \
+    && ! grep -Eq ' round [0-9]+ SIGTERM .*:plasmashell([[:space:]]|$)' "$PFV/out/teardown.log" \
     && [ -z "$left" ]; then
     rm -rf "$PFV"
   else
@@ -111,8 +126,8 @@ for ((round = 1; round <= ROUNDS; round++)); do
     if [ -f "$PFV/err.log" ]; then
       err_runs=$(wc -l <"$PFV/err.log")
     fi
-    echo "round $round ($kind): shell exit $rc, last teardown line '${last:-<no teardown.log>}'," \
-      "ERR trap runs $err_runs, still running:${left:- none}"
+    echo "round $round ($kind): shell exit $rc, first line '${first:-<no teardown.log>}'," \
+      "last '${last:-<no teardown.log>}', ERR trap runs $err_runs, still running:${left:- none}"
     # A failed teardown leaves its processes: stop them here so nothing outlives the test.
     for pid in $left; do
       if [[ $pid =~ ^[0-9]+$ ]]; then
