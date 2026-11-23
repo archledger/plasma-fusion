@@ -3883,7 +3883,9 @@ Item {
                 tileShortcut.activated();
             } },
             { name: "the toggle answered", until: () => strandedSuccessor ? !!winA.tile : admitsOfA().length >= 1 + script.admitRetryLimit, run: function () {
-                const answers = JSON.stringify(admitsOfA().map(c => c.token === facade.grantedToken));
+                if (admitsOfA().some(c => c.token !== facade.grantedToken)) {
+                    fail("stranded: every admission uses the current provider token");
+                }
                 if (strandedSuccessor) {
                     if (!winA.tile || calls("admitTile").length !== 1) {
                         fail("stranded: the window is admitted at the first toggle (admissions " + calls("admitTile").length + ")");
