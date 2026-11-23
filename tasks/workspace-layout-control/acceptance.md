@@ -12,7 +12,7 @@ suite and the case; "native" names the run and its evidence. A row that is not s
 | Case | Evidence | Status |
 |---|---|---|
 | Cold start or shell restart with old saved fields | `calendar_backend_test.py`'s lifetime and restart cases; `tools/tests/layout-control/lifecycle.py` (P0's `lc-restart1`, `lc-restart3`, `restart-proof`); the backend suite's `unconfirmed` and late-answer cases. The bar starts unknown and asks afresh; a saved request is withdrawn or replaced, never replayed. | Automated and native (P0) |
-| Stock/absent/disabled/refused backend | `calendar_backend_test.py`'s refused, absent and disabled cases; P0's `refused-backend` run; P7's `p7-reload-1` run showed the real clock go unknown, hide the control and remove the actions when the placement script was unloaded. | Automated and native for refused/disabled; stock acceptance pending |
+| Stock/absent/disabled/refused backend | `calendar_backend_test.py`'s refused, absent and disabled cases; P0's `refused-backend` run; P7's `p7-reload-1` run showed the real clock go unknown, hide the control and remove the actions when the placement script was unloaded. With the same staged packages in `pf213-stock-stock-24e24cc` and `pf213-stock-fork-24e24cc`, the loaded placement script answered on both builds. The control and actions stayed hidden on stock and were available on the fork. | Automated and native (P0, P7) |
 | Existing shortcut on/off | The provider's shortcut (`Plasma Fusion: Refresh Layout Controls`) and the tiling shortcut; P5's native runs with the shortcut on and off; the backend suite's `cancelled` case. | Automated and native (P5) |
 | Floating requested on B while A is tiled | `calendar_backend_test.py`'s action cases (a Floating set on one view leaves another view's mode); P5's native runs (a set on one view, the other unchanged). | Automated and native (P5) |
 | Tiled transfer A→B with B refused | `calendar_backend_test.py`'s transfer and refusal cases; P5's native runs (a transfer decided at once, a refused set with its reason); #212's old-stack-size finding is recorded, not fixed here. | Automated and native (P5) |
@@ -28,7 +28,6 @@ suite and the case; "native" names the run and its evidence. A row that is not s
 
 ## Not shown, and why
 
-- **Stock-KWin acceptance:** P7's open item; the private acceptance run needs the owner's approval.
 - **Live KWin owner replacement:** G0 item 4 records that no live consumer sees an
   `org.kde.KWin` owner change. The shell restart and provider reload are covered separately above.
 - **A screen reader:** the approved image has none (no `orca`), so the announcement's naming was

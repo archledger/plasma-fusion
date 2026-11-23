@@ -96,9 +96,8 @@ Dependencies: G0. Likely files: `placement/main.qml`, a feature-owned provider c
       The probe's transport (`64ec9ab`, `4eb907e`, `f6e47c7`), stricter where G0's findings and the
       reviews asked: every request version-checked, reads only from a unique shell connection. A
       refused registration never reports capable (`9d7c42a`; shown offscreen and natively in the
-      recheck), nor does the legacy lane (`05e3631`; by reading the code alone, as the offscreen
-      stand-in always has the fork's API), and a provider that is not capable answers `capable`
-      false. The absent backend's native run, on a stock-KWin image, is P7's.
+      recheck), nor does the legacy lane (`05e3631`, confirmed in P7 on stock KWin). A
+      provider that is not capable answers `capable` false.
 - [x] Meet the conditions in [g0-decisions.md](g0-decisions.md), among them: publish only for a
       new request or changed state, keep the read/publish pipeline bounded and serialized,
       version-check every request, keep a single publisher and keep the alias an identity-only
@@ -480,7 +479,7 @@ Dependencies: P6 and source review. Likely files: the G0 scenario/seed fixtures 
       page while a frame arrives, which P3 emulated from the dialog's code.
 - [x] Include fair arbitration across bars and a mixed shell/KWin replacement matrix, which
       testing.md listed as G0 work, and an absent backend on a stock-KWin image, moved from G0
-      item 3; building that image needs the owner's approval ([g0-decisions.md](g0-decisions.md)).
+      item 3 ([g0-decisions.md](g0-decisions.md)).
 - [x] Preserve evidence, screenshots, versions/OIDs and limits; no new script error/crash or
       native restoration/placement-memory regression in the tested scenarios.
 - [x] Measure the publications' cost on real hardware, a physical disk rather than a container's
@@ -506,8 +505,12 @@ config suite emulates the dialog's code, as P3 did). Fair arbitration across two
 change, neither starves, no set is sent and both clocks keep the same mode. The provider's reload
 and disable with the real clock (`p7-reload-1`, 11 checks): the clock goes unknown, the actions go
 away and the control hides, then it answers again when the script is enabled. The KWin owner
-replacement is G0 item 4's documented limit (no live consumer sees it); the stock-KWin image is not
-run, as it needs the owner's approval. The evidence is the proof manifest
+replacement is G0 item 4's documented limit (no live consumer sees it). On Fedora 44 with Plasma
+6.8.3 and Qt 6.11.2, the real clock and placement script from 24e24cc answered on stock KWin
+6.8.3-1.fc44 (`unavailable`, no actions, control hidden). The same staged packages answered
+`floating` on 6.8.3-1.fc44.pf1 (actions available, control visible). Both scenarios passed and the
+process sweep left none. Both also reproduced the separate plasmashell teardown abort (#217).
+The other evidence is the proof manifest
 (`build/layout-probe/p6-s4/proof-manifest.json`), the sessions' checks and screenshots, and the
 recorded versions. The branch changes the clock, the part pages and the task files; no native fork,
 packaging, CI or unrelated change is in it, and the live backgrounds, captive portals and

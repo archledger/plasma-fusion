@@ -164,8 +164,9 @@ complete feature rather than the transport.
 
 The absent-backend unit cases run `registerNative()`'s branches against a fake `Workspace`. They
 cannot show that the whole provider script loads, and that consumers settle on `unsupported`, on
-a KWin without the fork, which is every installation without it. P0 makes no image change, so
-that run waits for P7, and building a stock-KWin test image needs the owner's approval then.
+a KWin without the fork, which is every installation without it. P0 deferred the native run to
+P7. P7 reused an existing stock image and verified the real clock's `unavailable` state
+([acceptance matrix](acceptance.md)).
 
 ## 4. Final native sweep
 
