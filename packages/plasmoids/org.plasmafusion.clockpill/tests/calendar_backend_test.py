@@ -2445,30 +2445,50 @@ if menu is not None:
     menu_control.setProperty("visible", False)
 expect(menu is not None and prop(menu_layout, "actionOpen") is False,
        "the clock's wiring: the control hiding ends the action at once (S11)")
+
+def menu_requested(intent, after):
+    request = parsed_json(prop(menu_config, "layoutRequest"))
+    return request.get("intent") == intent and request.get("request", 0) > after
+
+
+prepare_written = prepared = set_written = awaiting = received = False
 if menu is not None:
     menu_control.setProperty("visible", True)
     invoke(menu, "openLayoutMenu", Q_ARG(str, "keys"))
+    previous = parsed_json(prop(menu_config, "layoutRequest")).get("request", 0)
     invoke(menu_layout, "input")
-    menu_config.setProperty("layoutResponse", json.dumps(wired_frame(
-        menu, 2, completion={"intent": "prepare", "result": "done", "handle": WIRED + ":1:1", "target": True},
-        prepared={"handle": WIRED + ":1:1", "ready": True})))
-    until(lambda: prop(menu_layout, "actionState") == "prepared")
-    invoke(menu_layout, "choose", Q_ARG(str, "tiled"))
-    invoke(menu_layout, "close", Q_ARG(bool, True))
-    invoke(menu, "layoutMenuHidden")
-    menu_config.setProperty("layoutResponse", json.dumps(wired_frame(
-        menu, 3, completion={"intent": "set", "result": "refused", "reason": "stale-context"})))
-    QTest.qWait(50)
-expect(menu is not None and prop(menu_layout, "actionReason") == "" and prop(menu, "announcements") == [],
+    prepare_written = until(lambda: menu_requested("prepare", previous))
+    if prepare_written:
+        menu_config.setProperty("layoutResponse", json.dumps(wired_frame(
+            menu, 2, completion={"intent": "prepare", "result": "done", "handle": WIRED + ":1:1", "target": True},
+            prepared={"handle": WIRED + ":1:1", "ready": True})))
+        prepared = until(lambda: prop(menu_layout, "actionState") == "prepared")
+    if prepared:
+        previous = parsed_json(prop(menu_config, "layoutRequest"))["request"]
+        invoke(menu_layout, "choose", Q_ARG(str, "tiled"))
+        set_written = until(lambda: menu_requested("set", previous))
+    if set_written:
+        invoke(menu_layout, "close", Q_ARG(bool, True))
+        invoke(menu, "layoutMenuHidden")
+        awaiting = prop(menu_layout, "actionState") == "awaiting"
+        menu_config.setProperty("layoutResponse", json.dumps(wired_frame(
+            menu, 3, completion={"intent": "set", "result": "refused", "reason": "stale-context"})))
+        received = until(lambda: prop(menu_layout, "outcome") == "answered"
+                         and prop(menu_layout, "actionState") == "idle"
+                         and prop(menu_layout, "revision") == 3)
+expect(prepare_written and prepared and set_written and awaiting and received
+       and prop(menu_layout, "actionReason") == "" and prop(menu, "announcements") == [],
        "the clock's wiring: Escape after a choice, then the pop-up hiding, then a stale-context refusal, stays silent (B3)")
+busy = False
 if menu is not None:
     invoke(menu, "openLayoutMenu", Q_ARG(str, "keys"))
+    previous = parsed_json(prop(menu_config, "layoutRequest")).get("request", 0)
     invoke(menu_layout, "input")
-    QTest.qWait(20)
-    menu_config.setProperty("layoutResponse", json.dumps(wired_frame(
-        menu, 4, completion={"intent": "prepare", "result": "refused", "reason": "busy"})))
-    QTest.qWait(50)
-expect(menu is not None and prop(menu, "announcements") == ["busy||true"],
+    if until(lambda: menu_requested("prepare", previous)):
+        menu_config.setProperty("layoutResponse", json.dumps(wired_frame(
+            menu, 4, completion={"intent": "prepare", "result": "refused", "reason": "busy"})))
+        busy = until(lambda: prop(menu_layout, "revision") == 4)
+expect(busy and prop(menu, "announcements") == ["busy||true"],
        "the clock's wiring: a presented reason is announced once, worded for the menu while it is open")
 expect('visible: root.layoutMenuShown && layoutMenuLoader.status === Loader.Ready' in source
        and 'root.layoutMenuHidden()' in source,
