@@ -1287,19 +1287,24 @@ Item {
             // A set's retry (P5) first checks what its start needs still holds - its target, its
             // view's existence, the provider's lifetime and the shell connection the set came
             // from - and is refused with what failed.
-            const check = pending.invoked.check;
-            const trouble = typeof check === "function" ? check() : "";
-            if (trouble !== "") {
-                pendingStart = null;
-                if (typeof pending.invoked.outcome === "function") {
-                    pending.invoked.outcome("refused", trouble);
+            let trouble = "";
+            try {
+                const check = pending.invoked.check;
+                trouble = typeof check === "function" ? check() : "";
+                if (trouble === "") {
+                    start(pending.invoked);
                 }
-                return;
+            } catch (error) {
+                log("tiling: the queued start failed: " + error);
+                trouble = "unavailable";
+                admitRetry.stop();
             }
-            start(pending.invoked);
             // A start that scheduled nothing new has ended the matter either way.
-            if (pendingStart === pending) {
+            if (trouble !== "" || pendingStart === pending) {
                 pendingStart = null;
+            }
+            if (trouble !== "" && typeof pending.invoked.outcome === "function") {
+                pending.invoked.outcome("refused", trouble);
             }
         }
 
@@ -1442,28 +1447,27 @@ Item {
                     return;
                 }
                 const gen = result.generation;
-                const key = appIdOf(w);
-                // The place the native layer admits the window from is the one the memory has
-                // for its app: this window's, from here on (recordForAdmission). Not a window
-                // the native layer still has a record for: a release left it where it stands
-                // and nobody has returned it (this script was not there, or could not), its
-                // admission answers busy, and where it stands is nobody's choice. A rectangle
-                // says nothing about that - a window the user put on the tile's own rectangle
-                // floats there. A fork build that cannot say (no floatingFrame) gets no
-                // record at all.
-                if (typeof api.floatingFrame === "function" && !nativeKeeps(w)) {
-                    root.recordForAdmission(w);
-                }
                 let admitResult = -1;
-                admitting = w;
                 try {
+                    const key = appIdOf(w);
+                    // The place the native layer admits the window from is the one the memory has
+                    // for its app: this window's, from here on (recordForAdmission). Do not record a
+                    // window the native layer still has a record for: where it stands after release
+                    // is nobody's choice, and admission answers busy. A fork build without
+                    // floatingFrame cannot distinguish this from a window the user placed there.
+                    if (typeof api.floatingFrame === "function" && !nativeKeeps(w)) {
+                        root.recordForAdmission(w);
+                    }
+                    admitting = w;
                     admitResult = api.admitTile(gen, w, key, providerToken);
                 } finally {
                     admitting = null;
+                    // An unaccepted attempt owns no session to release its tree, even if it threw.
+                    if (admitResult !== 0) {
+                        api.releaseTile(gen);
+                    }
                 }
                 if (admitResult !== 0) { // 0 = Accepted
-                    // The tree goes whatever follows: a later attempt creates its own.
-                    api.releaseTile(gen);
                     // A retry keeps what the start was given, a set's outcome and check too.
                     const retry = Object.assign({}, invoked,
                                                 { window: w, desktop: desktop, activity: activity,

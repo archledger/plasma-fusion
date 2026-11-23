@@ -2363,7 +2363,9 @@ and the answers it publishes to them.
   activates the old master on the way, then the prepared app is focused), or which view is
   current: the set lays out the view it captured, as the shortcut does, and a switch the user
   makes during the retries stands. A retry that fails its checks refuses the set with what failed,
-  and a press of the shortcut meanwhile refuses it `cancelled`. A completion a failed publication
+  an exception clears the pending retry and refuses it `unavailable`, and a press of the shortcut
+  meanwhile refuses it `cancelled`. A tree created for an unaccepted admission is released even
+  if the admission throws. A completion a failed publication
   did not deliver goes out with the next one, and the retirement ends the lifetime before any
   later outcome, so none follows it.
 - In a real session (P5 slice 3, 2026-11-22): fresh containers of the test image

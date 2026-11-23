@@ -161,7 +161,7 @@ Item {
         // How many more settle questions find the window's geometry unsettled: the client
         // has that many configures left to answer.
         property int unsettledAnswers: 0
-        // The next admissions' answers, in order (none left: accepted).
+        // The next admissions' answers, in order (none left: accepted, "throw": exception).
         property var admitAnswers: []
         // The window on the tile and the key it was admitted under. KWin's Window.tile is the
         // transient leaf for as long as the window is owned, through full screen and back.
@@ -371,6 +371,9 @@ Item {
             if (admitAnswers.length > 0) {
                 const answer = admitAnswers[0];
                 admitAnswers = admitAnswers.slice(1);
+                if (answer === "throw") {
+                    throw new Error("admission failed unexpectedly");
+                }
                 if (answer !== 0) {
                     return answer;
                 }
@@ -2767,6 +2770,30 @@ Item {
                     fail("set: Tiled in the gap starts the session with the prepared app (owned "
                          + (facade.owned ? facade.owned.internalId : null) + ", trees "
                          + (calls("createTile").length - creates) + ", active " + p.active + ")");
+                }
+                h = prepareFrom(5, "c5", 51, winA, popup);
+                read([setTo(5, "c5", 52, "floating", h)]);
+                decided("Floating ends the session before the failed retry", 5, doneSet);
+                h = prepareFrom(5, "c5", 53, master, popup);
+                facade.admitAnswers = [7, "throw"];
+                admits = calls("admitTile").length;
+                read([setTo(5, "c5", 54, "tiled", h)]);
+                pending("the first admission declined and left a retry pending", 5);
+            } },
+            { name: "admission throws on a retry", until: () => calls("admitTile").length === admits + 2,
+              run: function () {
+                decided("a throwing retry answers the set with unavailable", 5, refusedSet("unavailable"));
+                const attempted = calls("admitTile").slice(-1)[0];
+                const released = calls("releaseTile").slice(-1)[0];
+                if (p.startPending || p.active || facade.treeAlive || facade.owned !== null
+                        || released.generation !== attempted.generation) {
+                    fail("set: a throwing retry drops pending state and releases its own generation");
+                }
+                h = prepareFrom(5, "c5", 55, master, popup);
+                read([setTo(5, "c5", 56, "tiled", h)]);
+                decided("a later set is admitted after the exception", 5, doneSet);
+                if (!p.active || facade.owned !== master) {
+                    fail("set: the later set starts normally after the failed retry");
                 }
             } }
         ];

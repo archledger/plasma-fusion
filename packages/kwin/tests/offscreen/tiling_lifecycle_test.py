@@ -517,8 +517,8 @@ retire(prepare_run, "prepare")
 # tiler did). Each set whose start is retried is said under way once and decided once later -
 # five done (three of them beside another payload or a query under their identity), and one each
 # cancelled by the shortcut, refused for a target gone, for an admission refused for good, for its
-# desktop removed, for its activity removed, for its output unplugged and under a new shell - and
-# nothing throws.
+# desktop removed, for its activity removed, for its output unplugged, under a new shell, and
+# for a throwing admission. No exception escapes the retry handler.
 before = len(messages)
 set_run = run_harness({"scenario": "set"})
 for problem in list(set_run.property("problems").toVariant() or []):
@@ -527,8 +527,9 @@ journal = messages[before:]
 under_way = sum("layout provider: a set (" in message and ") is under way" in message for message in journal)
 later = sorted(message.split("layout provider: a set ", 1)[1] for message in journal
                if "layout provider: a set is done" in message or "layout provider: a set was refused, " in message)
-check(under_way == 12 and later == ["is done"] * 5 + ["was refused, admission-refused", "was refused, cancelled",
+check(under_way == 13 and later == ["is done"] * 5 + ["was refused, admission-refused", "was refused, cancelled",
                                                        "was refused, shell-replaced", "was refused, target-departed",
+                                                       "was refused, unavailable",
                                                        "was refused, view-changed", "was refused, view-changed",
                                                        "was refused, view-changed"],
       "set: each retried set is under way once and decided once later, got %s under way and %s" % (under_way, later))
