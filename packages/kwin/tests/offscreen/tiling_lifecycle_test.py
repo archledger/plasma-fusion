@@ -392,8 +392,7 @@ retire(unconfirmed_run, "unconfirmed")
 # publication answered at once, and a read whose owner lookup took 70 ms, measured from its own
 # call; two whose script ran from the call's start for 70 ms - over the 50 ms limit by their
 # length from that start, said right after their lines - two that waited 70 ms but whose script
-# started just before the answer - not over, their length from that start no longer than the
-# harness took to hand the answer in (waits) - and two whose start lies outside the call, so their
+# started 1 ms before the answer, not over - and two whose start lies outside the call, so their
 # 70 ms from call to answer puts them over; a short one of those is not over; then a malformed
 # read and five malformed publications - the first with a wake during it - each said once and
 # each followed by the read that sends the frame again, one the shell wrote none of, which the
@@ -406,7 +405,6 @@ before = len(messages)
 time_limit = run_harness({"scenario": "time-limit"})
 for problem in list(time_limit.property("problems").toVariant() or []):
     failures.append(str(problem))
-waits = [int(wait) for wait in (time_limit.property("waits").toVariant() or [])]
 journal = messages[before:]
 events = []
 for message in journal:
@@ -439,18 +437,16 @@ wanted = (["read", "published", "read"]
 check(kinds == wanted, "time-limit: the calls' lines and the limit's, in order, got %s" % events)
 if kinds == wanted:
     def at_once(event):
-        return event[2] is not None and event[1] < 50
+        return event[1:] == (0, 0)
 
     def held(event, over):
-        return event[1] >= 70 and event[2] is not None and event[2] >= 70 and over[1:] == ("script's start", event[2])
+        return event[1:] == (70, 70) and over[1:] == ("script's start", 70)
 
-    # From the start a step gave its script, the length is at most the time the harness took to
-    # hand the answer in: about 1 ms, more only when the process stalled in between.
-    def waited(event, wait):
-        return event[1] >= 70 and event[2] is not None and 1 <= event[2] <= wait
+    def waited(event):
+        return event[1:] == (70, 1)
 
     def outside(event, over):
-        return event[1] >= 70 and event[2] is None and over[1:] == ("call", event[1])
+        return event[1:] == (70, None) and over[1:] == ("call", 70)
 
     for index in (0, 1, 2, 16, 18, 20, 22, 24, 25, 26, 27, 28, 33, 34):
         check(at_once(events[index]), "time-limit: a call answered at once, from its own call, has its length from"
@@ -458,12 +454,13 @@ if kinds == wanted:
     check(held(events[3], events[4]) and held(events[5], events[6]),
           "time-limit: a call whose script ran 70 ms is over the limit by its length from that start (%s)"
           % (events[3:7],))
-    check(len(waits) == 2 and waited(events[7], waits[0]) and waited(events[8], waits[1]),
-          "time-limit: a call that only waited 70 ms is not over the limit (%s, %s)" % (events[7:9], waits))
+    check(waited(events[7]) and waited(events[8]),
+          "time-limit: a call with 70 ms elapsed but only 1 ms from script start stays under the limit (%s)"
+          % (events[7:9],))
     check(outside(events[9], events[10]) and outside(events[11], events[12]),
           "time-limit: a start outside the call leaves the length from call to answer to decide (%s)"
           % (events[9:13],))
-    check(events[13][2] is None and events[13][1] < 50,
+    check(events[13][1:] == (0, None),
           "time-limit: a short call whose start lies outside it is not over the limit (%s)" % (events[13],))
 thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
 check(not thrown, "time-limit: nothing threw, got %s" % thrown)

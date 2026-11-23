@@ -99,6 +99,8 @@ QtObject {
     // the provider cannot make shorter. So the limit is watched, not guaranteed: each call's
     // lengths are said, and one over the limit is said as such (report()).
     readonly property int shellLimit: 50
+    // The shell's script timestamps are on this wall clock. Offscreen tests can advance it.
+    property var wallClock: () => Date.now()
 
     // What the bars ask for, read from the shell (the layout probe's P0 transport): a bar's
     // clock saves its request in a field of its own and wakes the provider through a shortcut
@@ -492,7 +494,7 @@ QtObject {
     function readFrom(owner: string): void {
         reader.service = owner;
         reader.arguments = [readerScript];
-        readAt = Date.now();
+        readAt = wallClock();
         reader.call();
     }
 
@@ -1035,7 +1037,7 @@ QtObject {
         if (messages.length === 0) {
             return;
         }
-        pending = { messages: messages, at: Date.now() };
+        pending = { messages: messages, at: wallClock() };
         publishing = true;
         write(replyOwner, messages);
     }
@@ -1197,7 +1199,7 @@ QtObject {
     // answer. KWin and the shell read the same system clock; a start outside the call means the
     // clock moved between their readings, and there is no second length (null).
     function callLength(at: real, start: real): var {
-        const answered = Date.now();
+        const answered = wallClock();
         return { total: answered - at, fromStart: start >= at && start <= answered ? answered - start : null };
     }
 

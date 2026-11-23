@@ -65,10 +65,6 @@ Item {
     property var steps: []
     property int stepIndex: 0
     property var problems: []
-    // The time-limit run's calls that waited (runTimeLimit): how long each one's answer took to
-    // hand in, from the start the step gave its script to the provider's return - the most its
-    // length from that start can be, however long the process stalled in between.
-    property var waits: []
     property var facadeCalls: []
     // The facade's read-only calls, apart: the runs' exact facadeCalls lists stay as they are.
     property var readCalls: []
@@ -1584,6 +1580,8 @@ Item {
         }
         const p = provider;
         const w = p.writer;
+        let tick = 1000000;
+        p.wallClock = () => tick;
         if (p.shellLimit !== 50) {
             fail("time-limit: a read or publication may hold the shell 50 ms (got " + p.shellLimit + ")");
         }
@@ -1591,23 +1589,23 @@ Item {
         p.identityLookup.finished([":1.42"]);
         p.shellLookup.finished([":1.9"]);
         const rows = [{ id: 1, consumer: "c1", request: 1, version: 1, intent: "query", outputName: "Virtual-1" }];
+        const readResult = (start = tick) => readAnswer(rows, start);
+        const writeResult = (written, start = tick) => writeAnswer(written, start);
         // A read and its publication, each answered at once.
-        p.reader.finished([readAnswer(rows)]);
+        p.reader.finished([readResult()]);
         if (w.calls !== 1) {
             fail("time-limit: the read's answer goes out (writes " + w.calls + ")");
             done = true;
             return;
         }
-        w.finished([writeAnswer(1)]);
+        w.finished([writeResult(1)]);
         // A read starts at once (nothing is in flight); a toggle moves the state, and its
         // publication goes out at the end of the turn.
         const read = () => {
             p.wake.activated();
             p.shellLookup.finished([":1.9"]);
         };
-        const readFor = ms => p.reading && Date.now() - p.readAt >= ms;
-        const publishedFor = (calls, ms) => w.calls === calls && p.pending !== null
-            && Date.now() - p.pending.at >= ms;
+        const published = calls => w.calls === calls && p.pending !== null;
         const tiled = index => {
             const got = framesOf(p, index, [1]);
             return got[1] ? got[1].tiled : null;
@@ -1617,45 +1615,48 @@ Item {
         p.wake.activated();
         let since = Date.now();
         steps = [
-            { name: "a read whose owner lookup took 70 ms", until: () => Date.now() - since >= 70, run: function () {
+            { name: "a read whose owner lookup took 70 ms", run: function () {
+                tick += 70;
                 p.shellLookup.finished([":1.9"]);
-                p.reader.finished([readAnswer(rows)]);
+                p.reader.finished([readResult()]);
                 read();
             } },
             // The read's script ran from the moment the call went out: 70 ms of the shell's time.
-            { name: "a read that held the shell", until: () => readFor(70), run: function () {
-                p.reader.finished([readAnswer(rows, p.readAt)]);
+            { name: "a read that held the shell", until: () => p.reading, run: function () {
+                tick += 70;
+                p.reader.finished([readResult(p.readAt)]);
                 tileShortcut.activated();
             } },
-            { name: "a publication that held the shell", until: () => publishedFor(2, 70), run: function () {
-                w.finished([writeAnswer(1, p.pending.at)]);
+            { name: "a publication that held the shell", until: () => published(2), run: function () {
+                tick += 70;
+                w.finished([writeResult(1, p.pending.at)]);
                 read();
             } },
             // The scripts started just before they answered: the calls waited while the shell was
             // busy, and that time was not spent on them.
-            { name: "a read that waited", until: () => readFor(70), run: function () {
-                const start = Date.now() - 1;
-                p.reader.finished([readAnswer(rows, start)]);
-                harness.waits = harness.waits.concat([Date.now() - start]);
+            { name: "a read that waited", until: () => p.reading, run: function () {
+                tick += 70;
+                p.reader.finished([readResult(tick - 1)]);
                 tileShortcut.activated();
             } },
-            { name: "a publication that waited", until: () => publishedFor(3, 70), run: function () {
-                const start = Date.now() - 1;
-                w.finished([writeAnswer(1, start)]);
-                harness.waits = harness.waits.concat([Date.now() - start]);
+            { name: "a publication that waited", until: () => published(3), run: function () {
+                tick += 70;
+                w.finished([writeResult(1, tick - 1)]);
                 read();
             } },
             // A start before the call went out, or after its answer: the clocks disagree, and the
             // length from call to answer decides.
-            { name: "a read whose start is not in the call", until: () => readFor(70), run: function () {
-                p.reader.finished([readAnswer(rows, p.readAt - 1000)]);
+            { name: "a read whose start is not in the call", until: () => p.reading, run: function () {
+                tick += 70;
+                p.reader.finished([readResult(p.readAt - 1000)]);
                 tileShortcut.activated();
             } },
-            { name: "a publication whose start is not in the call", until: () => publishedFor(4, 70), run: function () {
-                w.finished([writeAnswer(1, Date.now() + 1000)]);
+            { name: "a publication whose start is not in the call", until: () => published(4), run: function () {
+                tick += 70;
+                w.finished([writeResult(1, tick + 1000)]);
                 // A short call with such a start stays under the limit.
                 read();
-                p.reader.finished([readAnswer(rows, p.readAt - 1000)]);
+                p.reader.finished([readResult(p.readAt - 1000)]);
                 // The rows alone, without the script's start, are a malformed answer: nothing read.
                 read();
                 p.reader.finished([JSON.stringify(rows)]);
@@ -1676,10 +1677,10 @@ Item {
             } },
             { name: "the wake's read after it", until: () => p.reading, run: function () {
                 p.shellLookup.finished([":1.9"]);
-                p.reader.finished([readAnswer(rows)]);
+                p.reader.finished([readResult()]);
                 // Answers that count more frames than they carried, fewer than none or something
                 // that is no number, or that leave out the start, confirm nothing either.
-                const malformed = [writeAnswer(2), writeAnswer(-1), JSON.stringify({ start: Date.now(), written: "1" }),
+                const malformed = [writeResult(2), writeResult(-1), JSON.stringify({ start: tick, written: "1" }),
                                    JSON.stringify({ written: 1 })];
                 for (let i = 0; i < malformed.length; ++i) {
                     if (w.calls !== 6 + i || tiled(5 + i) !== false) {
@@ -1688,24 +1689,24 @@ Item {
                     }
                     w.finished([malformed[i]]);
                     read();
-                    p.reader.finished([readAnswer(rows)]);
+                    p.reader.finished([readResult()]);
                 }
                 if (w.calls !== 10 || tiled(9) !== false) {
                     fail("time-limit: the session's end goes out once more (writes " + w.calls + ")");
                 }
                 // The shell found none of the publication's widgets (0 written): its frame is not
                 // confirmed, and the next read sends it again.
-                w.finished([writeAnswer(0)]);
+                w.finished([writeResult(0)]);
                 read();
-                p.reader.finished([readAnswer(rows)]);
+                p.reader.finished([readResult()]);
                 if (w.calls !== 11 || tiled(10) !== false) {
                     fail("time-limit: a frame the shell did not write goes out again with the next read (writes " + w.calls
                          + ", tiled " + tiled(10) + ")");
                 }
                 // Told at last, and confirmed: the next read sends nothing.
-                w.finished([writeAnswer(1)]);
+                w.finished([writeResult(1)]);
                 read();
-                p.reader.finished([readAnswer(rows)]);
+                p.reader.finished([readResult()]);
                 if (w.calls !== 11 || p.publishing || p.reading) {
                     fail("time-limit: a frame the shell confirmed is not sent again (writes " + w.calls + ")");
                 }
@@ -1729,7 +1730,7 @@ Item {
                     fail("time-limit: the session's end goes out after its start's publication failed (writes " + w.calls
                          + ", tiled " + tiled(12) + ")");
                 }
-                w.finished([writeAnswer(1)]);
+                w.finished([writeResult(1)]);
                 tileShortcut.activated();
             } },
             { name: "a malformed answer for a session's start", until: () => w.calls === 14, run: function () {
@@ -1746,21 +1747,21 @@ Item {
                     fail("time-limit: the session's end goes out after its start's publication was answered malformed"
                          + " (writes " + w.calls + ", tiled " + tiled(14) + ")");
                 }
-                w.finished([writeAnswer(1)]);
+                w.finished([writeResult(1)]);
                 tileShortcut.activated();
             } },
             // An answer longer than any the writer prints (answerLimit) is malformed before it is
             // parsed, though it is a count with its start under the padding JSON allows: it
             // confirms nothing, and the next read sends the frame again.
             { name: "an answer over the limit", until: () => w.calls === 16, run: function () {
-                w.finished([writeAnswer(1) + " ".repeat(262144)]);
+                w.finished([writeResult(1) + " ".repeat(262144)]);
                 read();
-                p.reader.finished([readAnswer(rows)]);
+                p.reader.finished([readResult()]);
                 if (w.calls !== 17 || tiled(16) !== true) {
                     fail("time-limit: an answer over the limit confirms nothing, and the next read sends the frame again"
                          + " (writes " + w.calls + ", tiled " + tiled(16) + ")");
                 }
-                w.finished([writeAnswer(1)]);
+                w.finished([writeResult(1)]);
                 p.retire();
             } }
         ];
