@@ -6,7 +6,7 @@ name, and the centred pill with workspace dots, date and time. The global menu b
 the stock `org.kde.plasma.appmenu` widget. Plasma 6 applets, QML only, GPL-2.0-or-later.
 
 Status: built, checked offline and in private virtual sessions on the ThinkPad, dark and light.
-Last edited 2026-09-29.
+Last edited 2026-11-22.
 
 ## Files
 
@@ -25,6 +25,9 @@ Last edited 2026-09-29.
 | `.../org.plasmafusion.clockpill/contents/ui/WorkspaceDots.qml` | dots / current bar, clicks, keys, tooltips |
 | `.../org.plasmafusion.clockpill/contents/ui/WidthBudget.qml` | the top bar's width budget (ADAPTIVE 5.1), run by the clock pill |
 | `.../org.plasmafusion.clockpill/contents/ui/CalendarView.qml` | month view of the pop-up |
+| `.../org.plasmafusion.clockpill/contents/ui/LayoutState.qml` | the bar's workspace layout state, the clock's side of the layout transport, and the layout menu's action |
+| `.../org.plasmafusion.clockpill/contents/ui/LayoutControl.qml` | the workspace layout control in the pill, read only unless its owner makes it interactive |
+| `.../org.plasmafusion.clockpill/contents/ui/LayoutMenu.qml` | the layout menu the control opens: the Floating and Tiled choices and a status line |
 | `.../org.plasmafusion.clockpill/contents/ui/Chevron.qml`, `FusionText.qml` | 16 px stroke chevron, text helper |
 | `.../org.plasmafusion.clockpill/contents/code/formats.js` | locale-aware date and time formats |
 | `tools/build.d/70-topbar.sh` | checks the metadata and config XML, copies both packages to `$STAGE/.local/share/plasma/plasmoids/` |
@@ -60,6 +63,7 @@ No configuration is needed; the defaults are the board values.
 |---|---|---|
 | `showWorkspaces` | true | dots; hidden anyway while there is only one workspace |
 | `wheelSwitchesWorkspaces` | true | scrolling over the pill switches workspaces (wraps when KWin's navigation wraps); a page scroll still turning as the pointer passes over the pill is ignored (`FusionWheelGuard`, shared-blocks.md) |
+| `showLayoutControl` | true | the dynamic tiling control (Floating or Tiled for the current workspace), which appears only once the placement script confirms that tiling is available there; the control itself comes in P4 (`tasks/workspace-layout-control/todo.md`), and the tiling shortcut works either way. Off, the bar's layout state stays idle, with no request and no wake, and its saved request is withdrawn. Settings: "Workspaces: Show the dynamic tiling control" |
 | `showDate` | true | date before the time |
 | `dateFormat` | `auto` | `auto`: weekday, day, month in the order of the region's long date, without year and commas (en_GB "Mon 28 Sept", en_US "Mon Sep 28", de_DE "Mo. 28. Sept.", es_ES "lun 28 de sept", ja_JP "9月28日 (月)"); `custom` uses `customDateFormat` |
 | `customDateFormat` | `ddd d MMM` | QLocale format |
@@ -74,7 +78,9 @@ No configuration is needed; the defaults are the board values.
 | `menuPolicy` | `centre` | when the budget compacts the global menu: `centre` (whenever the pill cannot stay centred with the full menu, ADAPTIVE 5.1) or `overlap` (only when the bar would otherwise overlap; the pill may leave the middle) |
 | `menuSearch` | `false` | show the global menu's Search entry. Off because Plasma's applet (6.7.5 and 6.8.3) crashes when you type in it after the active app rebuilt a submenu (Chrome's History does): it keeps pointers to deleted menu items. A KDE bug ([526561](https://bugs.kde.org/show_bug.cgi?id=526561)), reproduced with a stock panel on 6.7.5 and 6.8.3; analysis and the upstream drafts in the appmenu crash record of 2026-10-02 (the maintainer's records). Arrowing right past the last menu skips the hidden entry and wraps to the first menu. The rebuilt plasma-workspace of `packaging/patches/plasma-workspace` (its README) carries the fix and names the action `appmenu-guarded`: the entry is shown there whatever the key says, and hidden again when a Fedora update replaces the rebuild. Settings: "Global menu: Show the Search entry" |
 | `menuCompacted` | false | internal: the budget compacted the global menu (and may switch it back) |
-| `debugAction` | "" | testing only: `dump-bar:TAG` logs the bar's widgets, the pill's offset and the budget step |
+| `debugAction` | "" | testing only: `dump-bar:TAG` logs the bar's widgets, the pill's offset and the budget step; `dump-layout:TAG` the bar's workspace layout state |
+| `layoutRequest` | "" | internal: the clock's query to the placement script's layout provider ([Workspace layout state](#workspace-layout-state-layoutstateqml)), which the provider reads through desktop scripting |
+| `layoutResponse` | "" | internal: the provider's answer, written through desktop scripting; a saved answer alone never counts. Declared, it makes each frame the provider writes cost the shell a save of the widget's configuration ([kwin.md](kwin.md#the-layout-providers-state), what a call costs the shell) |
 
 Formats follow the region settings (`LC_TIME` / KDE Region & Language). The time zone is the
 system one.
@@ -121,7 +127,9 @@ QT_QPA_PLATFORM=offscreen dbus-run-session --config-file=packages/kwin/tests/off
 Native adapter checks cover week start, missing providers, year rollover and leap day; view checks
 cover click/keyboard selection and touch targets. Real PIM integration was verified in an isolated
 Fedora VM with synthetic timed/all-day/recurring events, provider/resource settings and the native
-event editor. The backend keeps pending editor calls alive when the popup loses focus.
+event editor. The backend keeps pending editor calls alive when the popup loses focus. The view
+checks also cover the adapter's lifetime: it unloads when the popup closes, stays loaded while a
+call it made is running, and unloads with no binding loop.
 
 ### `org.plasmafusion.appname`
 
@@ -174,6 +182,7 @@ event editor. The backend keeps pending editor calls alive when the popup loses 
   dot: `org.kde.KWin /KWin setCurrentDesktop(N)`; click the current one or Enter: Overview
   (`kglobalaccel /component/kwin invokeShortcut Overview`). Keyboard: Tab to the dots, Left/Right,
   Home/End.
+- The workspace layout control between the dots and the date ("Workspace layout control" below).
 - Date Manrope 13 px `wght` 700, time Space Grotesk 13 px `wght` 600 (no SemiBold instance in the
   font; the axis gives the real 600). Missing fonts fall back to the Plasma UI font.
 - Centring (horizontal panels only; on the desktop or in a vertical panel the pill stays in its
@@ -194,6 +203,632 @@ event editor. The backend keeps pending editor calls alive when the popup loses 
   click or Enter on the date, or the widget's global shortcut; closes on focus loss.
 - Context menu: "Adjust Date and Time…" (kcm_clock), "Configure Virtual Desktops…".
 - Vertical panels are not designed for (the pill is wider than a vertical panel).
+
+### Workspace layout state (`LayoutState.qml`)
+
+The clock's side of the workspace layout transport, whose other side is the placement script's
+layout provider ([kwin.md](kwin.md#the-layout-providers-state)); the pill's layout control shows
+it (below). The component's owner passes the saved answer in (`response`), saves each request it
+is asked to (`requested`), may shorten the requests' deadline (`deadlineMs`) and may wake the
+provider (`wake()`). The clock's `main.qml` owns it:
+
+- It asks for its window's output (`Screen.name`) while the control may show: the user's setting
+  on (`showLayoutControl`), and the bar's own layout one that shows it, a horizontal panel outside
+  tablet posture (the specification's scope; a clock on the desktop is not the top bar).
+  Otherwise the component stays idle, with no request and no wake. The saved request is then
+  withdrawn at start, when the user or the bar's layout hides the control, or when `Screen.name`
+  is empty or exceeds the protocol's 128 code units. The provider is woken (`wake()`): an empty
+  `layoutRequest` is no request, so the provider forgets the widget at that read, and no frame or save of the
+  configuration, keeps following a bar that shows nothing. On a change the withdrawal waits for
+  whatever made it (`Qt.callLater`): the settings dialog's Apply writes the setting first, then the
+  page's copy of the request, and saves.
+- It binds `response` to the configuration's `layoutResponse`, and writes each request to
+  `layoutRequest` and saves the configuration (`writeConfig()`) before the component wakes the
+  provider: desktop scripting reads the saved configuration, not the property map.
+- A request with no answer taken by its deadline is said once in the shell's log, "no layout answer
+  was taken in time; the mode is unknown until one is": no placement script, stock KWin, a Kiosk
+  policy that refuses the shell's scripting, or an answer whose check failed. A late answer still
+  counts. The testing hook `dump-layout:TAG` (`debugAction`) logs the state.
+
+- A request is a version-1 `query` for the bar's output (`outputName`, 1 to 128 characters):
+  `{version, intent, consumer, request, outputName}`, or one of the layout action's intents, a
+  `prepare` or a `set` ("The layout action" below). The consumer is drawn fresh for each instance
+  (an MD5 of a timestamp and random numbers), and requests are numbered from 1. The component asks
+  at its start and whenever the output changes - never on a view change, which the provider pushes
+  itself - and with no output it asks nothing (`outcome` idle). Each ask retires the request that
+  was out, going idle among them, so no answer to it, late or being checked, counts. Once the owner
+  has saved the request, it wakes the provider
+  (`kglobalaccel /component/kwin invokeShortcut "Plasma Fusion: Refresh Layout Controls"`), which
+  reads only when woken.
+- An answer counts only as the provider's version-1 frame for this instance's consumer and current
+  request, of at most 4096 characters: an epoch of 32 lower-case hex digits, the identity name
+  `org.plasmafusion.LayoutProvider.p` and that epoch, a backend owner that is a unique connection
+  name, an integer revision up to 2147483646, and online - with `capable`, `tiled`, which needs both
+  capability and a view, and a `view` that is null or names the requested output with a desktop of 1
+  to 128 characters and an activity of at most 128, possibly empty - or online with a refusal of 1
+  to 64 characters, or offline, with nothing capable, no view and nothing tiled. Such a frame is
+  then checked on the session bus, one at a time: the owner of `org.kde.KWin` must be the frame's
+  backend owner, and for an online frame that connection must also own the identity name. A lookup
+  that fails ends the check and confirms nothing, and nothing that comes after the component is
+  gone, a reply or a request queued just before, touches it. An offline frame comes as its lifetime
+  releases that name, so it counts only from the lifetime the request is bound to, on that
+  lifetime's connection. Of the frames that come while one is checked, only the newest of one
+  lifetime waits.
+- The first answer accepted binds the request to its lifetime. A newer revision from it is taken,
+  among them a frame the provider pushes for a view change with no request of its own; an older or
+  equal one is not, but for an intent's first frame, which may come at the revision shown ("The
+  layout action" below). A frame from another lifetime makes the bar ask again, as revisions do not
+  carry over between lifetimes, and so does the bound lifetime's offline frame. A new query starts
+  unknown and from no revision, so its answer may come at the revision the last one had. That holds
+  for queries only: an intent keeps the answer held until its own first frame or its deadline
+  ("The layout action" below).
+- A lifetime can also go with no frame, when its script or KWin stops without one. The component
+  watches the session bus's `NameOwnerChanged` through the workspace plugin's `SignalWatcher` (the
+  same at plasma-workspace 6.7.5 and 6.8.3), with no polling. The bound lifetime's connection holds
+  its identity name and `org.kde.KWin`, so once either changes hands - released, or handed straight
+  to another connection - the bar is unknown and asks again, and whichever provider comes next reads
+  the saved request. A watch of whether a name is held, the plugin's `DBusServiceWatcher`, would
+  miss the handover: that is one change, naming both owners. The watch hears every name change on
+  the session bus, as the plugin's match names no name, and each costs the component two
+  comparisons.
+- A check needs one rule of its own. Its lookups share the session connection with the watch, and
+  the bus says an owner changed before it answers any lookup made after it, so a change before a
+  lookup fails it, and one after the check's answer is taken finds the lifetime bound. But a check
+  looks up KWin's owner first and the identity name's last. KWin's name moving from the frame's
+  owner between the two would let the check take a lifetime KWin no longer has, so a move of KWin's
+  name from the owner of the frame being checked also makes the bar ask again, which retires the
+  request the check would answer. A move said just before the check began counts as well, as
+  asking again is always safe. Each lookup gives the plugin its signature, so no introspection
+  round trip comes first.
+- The component reports `outcome` - idle, pending, unconfirmed, answered, or refused with `refusal`
+  its reason - apart from the state an answer gives: `capable`, `view`, `tiled`, `epoch` and
+  `revision`. `mode` follows the answer held: unknown until an answer is accepted, unavailable when
+  the provider cannot tile or KWin has no such output, and otherwise floating or tiled. For a query
+  it agrees with `outcome`, as a query drops the answer it replaces. A saved answer alone is never
+  state: an earlier instance's answer names that instance's consumer.
+- Each request has a deadline, `deadlineMs`: 100 to 10000 ms, and 10000 for any other value,
+  which starts as the request is made. A request keeps the deadline it was made with, and a change
+  applies from the next request. Past it with no answer, the outcome is unconfirmed and the mode
+  is unknown, but the request stays out: nothing is cancelled, renumbered or asked again, and a
+  late answer still counts, as in P0's transport (`tasks/workspace-layout-control/g0-receipt.md`,
+  item 9). That covers an answer that does not come - a Kiosk policy that refuses the shell's
+  scripting, no placement script, stock KWin, a wake that fails - and a check whose lookup fails,
+  which leaves the request pending. A new request starts its own deadline, so the one it replaces
+  cannot end it, and an answer or going idle ends the wait. The read-only control below shows
+  nothing while a query is pending, as the mode it showed no longer applies and nothing is confirmed
+  yet; the pending state of the specification's item 7 follows an explicit request, P6's. Once
+  unconfirmed the bar shows no control that looks as if it works (item 8), as nothing has been said
+  of its view.
+
+Tests: `tests/calendar_backend_test.py`, run as above, also checks the layout state against
+stand-ins on its private bus - `org.kde.KWin` and the lifetimes' identity names on its own
+connection or a second one, and kglobalaccel's component recording the wakes. It covers the request
+and the wake after it, the answer an earlier instance was given, a reply or a queued request after
+the component is gone, the malformed forms, the bus checks with KWin's name unowned or moved among
+them, revision order and the frames that wait, an output KWin does not have, a refusal, another
+lifetime, offline frames from the bound lifetime and from others, a frame checked as its request
+moves on, and going idle. It also covers a provider lost with no frame: the bound identity name or
+KWin's name released, and KWin's name handed straight to another connection (one change, recorded),
+against names that change hands with nothing bound, or nothing of the bound lifetime, and a name
+released after the component is gone. For the check's rule, KWin's name is handed on in the same
+turn as a frame arrives - before the check's first lookup or between its two, which the test cannot
+tell apart - against a move from another owner during a check and one after it. The deadline is
+checked with a short one, timed from just before the step that asks: a request with no answer ends
+unconfirmed, with nothing asked again; a late answer counts; an answer before the deadline, or going
+idle, ends the wait; a new request gets a full deadline of its own, and keeps it when the owner
+changes `deadlineMs`; a failed check, or a wake that fails with kglobalaccel gone from the bus,
+leaves the request to its deadline, with nothing asked again; a deadline outside 100 to 10000 ms
+gives the timer 10 s; and one that would end after the component is gone touches nothing. Its
+layout-state checks go on after a failure, so that one run shows them all.
+It runs `main.qml`'s wiring - the block between its `BEGIN layout state` and `END layout state`
+lines - unchanged in a fixture that supplies the configuration and the screen, as the launcher's
+opening test runs `main.qml`'s blocks: the request saved before the wake, the answer through
+`layoutResponse`, a hidden control leaving the state idle and withdrawing the saved request with
+one save and then a wake, and shown again asking again, another screen asking for its output, the
+`dump-layout` hook, and of all the outcomes only a request with no answer taken by its deadline
+said, once. Three more fixtures start with a configuration already set: hidden with a request
+saved earlier (withdrawn with one save and one wake), hidden with none (nothing saved, no wake),
+and shown with one (nothing withdrawn, the clock's own request its one save). A fourth replays the
+settings dialog's Apply in one turn - the setting written false, the page's copy of the request
+written back, the configuration saved - and the request must still end withdrawn. Three start in
+tablet posture, on a vertical panel and outside a panel (nothing asked; a request saved earlier
+withdrawn with one save and one wake), and one meets tablet posture coming (idle, withdrawn, then
+woken) and going (asking again); one loses its screen and gets it back the same way. The control's
+place in the width budget is checked at every step against a stand-in control: its level, and the
+width it gives up, none while it shows no mode.
+`runDebugAction`, outside the block, is checked as text for its `dump-layout` and
+`dump-layout-menu` branches, and the fixtures must log nothing but the dumps and the one unanswered
+line. The pill's short date at the width budget's step 4 runs through `main.qml`'s own binding in
+eight regions: the day and the month in the region's order, without the year and what joined it to
+them.
+
+The menu's wiring runs in the same fixture: the control's request opens the action and keeps the
+way it was opened; the pop-up hiding itself ends the action at once, and the sync keeps the
+press-then-click toggle from reopening it; Escape closes it; the control hiding ends it at once
+(S11); Escape after a choice, then the pop-up hiding, then a `stale-context` refusal stays silent
+(B3); a presented reason is announced once, worded for the menu while it is open, and an empty one
+is not announced. The pop-up's and the menu's bindings are checked as text.
+
+### The layout action (`LayoutState.qml`)
+
+The layout menu's Floating and Tiled choices (P6 of `tasks/workspace-layout-control/todo.md`)
+reach the provider's prepared target and desired mode
+([kwin.md](kwin.md#the-layout-providers-state)) through the layout state, which makes every
+decision. The layout menu and the pill's interactive control ("Workspace layout control" and "The
+layout menu" below) forward the user's input to it and bind to the action's state; `main.qml` wires
+them to it ("The wiring in main" below), and the bar sends queries only until the user opens the
+menu.
+
+- `open()` freezes the action's context from the answer the bar holds - its lifetime (`epoch`), its
+  `view` (`desktopId`, `activityId`) and the output - and sends nothing, so a menu opened and closed
+  again holds nothing of the provider's. It returns false and changes nothing unless the action is
+  idle with actions available: while a set is awaited, the control's activation is ignored.
+  `input()` is the menu's first counted input, a navigation or choosing key or a press on a row: it
+  sends the prepare, which takes the provider's one prepared slot - one for all the bars, so that
+  while one holds it a prepare from any other is refused `busy` - and an open menu alone never holds
+  it. `choose(mode)` is the user's choice, `tiled` or `floating`: queued with a prepare while
+  nothing is prepared, sent as a set once prepared. Re-selecting the mode shown sends a set too,
+  which the provider makes a no-op: the authority decides, not a mode that may lag it.
+  `close(dismissed)` says the menu closed, `dismissed` when the user closed it (Escape, or a press
+  on the control).
+- `actionsAvailable` holds while a mode shows, tiled or floating, and the answering lifetime has not
+  refused the intents (below). `actionOpen` holds from `open()` until the action ends; the menu
+  shows only then. `actionState` is `idle` (no action, or one that ended with nothing awaited),
+  `open` (nothing in flight: the next input prepares), `preparing` (the prepare is out with no
+  frame), `prepared` (the prepare is done and its newest frame says ready), `setting` (the set is
+  out, the menu still open) or `awaiting` (the action has ended, its set awaited before its
+  deadline). `actionChoice` is the choice queued or sent, kept until the next request so that an
+  outcome shown after it is worded for its mode; `actionPending` holds while a choice is queued or
+  a set is out. `actionHandle` and `actionTarget` are the done prepare's handle and whether it found
+  an app to tile, held only while prepared. `tiledBlocked` holds while prepared with no target on a
+  floating view; on a tiled view Tiled needs none. `actionReason` is what the menu's status line or
+  the pill presents, or empty: a provider's reason, or the bar's own `unconfirmed` (no answer by the
+  deadline), `interrupted` (the menu closed by itself before its set was read) and `malformed` (a
+  frame without the intent's fields).
+- `actionOutcome(reason, mode)` is emitted whenever a row of the table below presents a reason,
+  with the mode it concerns (`actionChoice` at that moment, empty for none), and with an empty
+  reason when a done set clears a notice. It comes after every other change of its event, so that
+  a handler sees the action as the row leaves it; the clock's handler will be the only one to
+  announce it.
+- Callers. Each input, frame or deadline decides first and then changes each property at most
+  once - the action's properties, `mode` and `outcome` among them - so that a binding never sees a
+  value the event does not leave; no property passes through one. Which property changes first is
+  not settled, though: inside the change handler of one property the others may not have followed
+  yet, so a handler acts on the property whose change it handles, or on `actionOutcome()`, which
+  comes last and may read them all. A handler that runs inside the layout state's own change - the
+  menu's hide, as `actionOpen` or `actionsAvailable` turns false, or the control's, as the mode
+  stops showing - only calls `close(false)`. That call always meets an ended action and changes
+  nothing: every event ends the action before the mode or the actions go (a frame whose mode leaves
+  nothing to act on, a refusal, a deadline, asking again), and records how the menu closed before
+  `actionOpen` changes.
+- The intents carry exactly the keys the provider's reader copies: a prepare
+  `{version, intent, consumer, request, outputName, epoch, view: {desktopId, activityId}}`, a set
+  `{version, intent, consumer, request, outputName, mode, handle}`. They share the queries'
+  numbering, deadline and save-then-wake path, and each clears the frame waiting for its check.
+- An intent keeps the answer the bar holds, so the mode stays on screen while it is out, until its
+  first frame is taken - which may come at the revision shown, as a done prepare moves none, but
+  not below it, and is taken once, as every later frame needs a newer revision - or until its
+  deadline. Past the deadline with no frame the mode is unknown and the control hides, as for a
+  query: an intent the provider never read would otherwise keep a view's mode past a desktop switch
+  or a press of the shortcut. The request stays out, and a late frame from the bound lifetime shows
+  the mode again. The deadline belongs to the request, not to the action: it drops the kept mode
+  whether the action is still waiting, has ended, or has been opened again meanwhile. `outcome`
+  keeps its meaning for every request - pending until its first frame, answered or refused then,
+  unconfirmed past its deadline with no frame - while `mode` follows the answer held.
+- Which frames count. Every frame of the current request gives the mode. Its completion and
+  preparation count only on the action's own request while the action waits for them (preparing,
+  prepared, setting and awaiting: only the action's requests lead there, and any other request ends
+  the action first), and for a set's first completion after its deadline, in idle or in the action
+  that sent the set: an action opened after the deadline takes it for the mode only. A completion
+  counts once, from the first frame that carries one: every later frame of the request carries it
+  again, and each desktop switch publishes the request anew. The one later field that counts is a
+  prepared action's `prepared.ready`. On the action's own request the intent's fields must be as
+  the provider adds them: a prepare's completion naming the prepare, `result` `done` or `refused`
+  with a reason of 1 to 64 characters, a done prepare's handle of at most 128 characters beginning
+  with the frame's epoch and a colon, a boolean `target` with a reason when false, and on a done
+  prepare's frame `prepared` with that handle, a boolean `ready` and a reason when not ready (on a
+  refused prepare's frame, which the provider gives none, a `prepared` is only checked for that
+  form); a set's frames carry a completion naming the set only once it is decided, and never
+  `prepared`.
+- Refused intents. An own frame refused at frame level while the action waits for it (preparing,
+  setting, awaiting) ends the action with that reason, and the bar asks again with a query, which
+  starts unknown as every query does. `intent`, `version` and `malformed` leave the lifetime without
+  actions until another lifetime answers: such a provider would refuse every further choice the same
+  way, and a control that kept offering them would look as if it worked. An own frame without the
+  intent's fields does the same and presents `malformed`: dropping it would leave the bar to the
+  deadline whenever that provider answers so, and taking it as not ready would fail every further
+  choice. `output` leaves the actions available, as the query is refused the same way. So a provider
+  older than P5 costs one failed try before the control turns read-only. Once the action has ended,
+  a frame refused at frame level for its intent - still the current request - asks again in the same
+  way and marks the lifetime for the same reasons, but presents nothing, and an action opened since
+  then ends, as nothing is left to act on (T16a). So does such a frame for an open action's own
+  intent after its decision, so that the bar asks again rather than leave the mode unknown; P5 never
+  sends one, as it refuses a request at frame level from the request's content alone, and so from
+  its first frame on. In prepared, and for an open action's own set still undecided past its
+  deadline, such a frame gives the mode only, and the action ends through T34 with no reason
+  presented and no query. Each lifetime left without actions is said once in the shell's log, naming
+  the side that failed: "the provider refused the bar's prepare (or set) at frame level with" the
+  reason, or "the provider sent a frame for the bar's prepare (or set) that lacked the intent's
+  fields", then "the layout actions are off for its lifetime" and its epoch. No intent goes to a
+  lifetime so marked, so nothing repeats the line.
+- The frame's mode comes first: a frame whose mode leaves nothing to act on ends the action (T34)
+  before its completion counts, so no set goes out on a frame that hides the control, and a set
+  already out is then awaited, its completion in that frame included. That end is no close by the
+  user, whatever an earlier action's close was.
+
+The table: q is the queued choice; an own frame is a frame of the request the action sent last,
+while it is the current request. "Ready" means the newest accepted frame of the prepare says
+`prepared.ready: true`, and a sendable q is Floating, or Tiled with a target or on a tiled view.
+"Presents" sets `actionReason` and emits `actionOutcome()` with it; a row that presents nothing
+clears `actionReason` only when it changes the state, and every request sent clears it. A next
+state of `idle` or `awaiting` ends the action (`actionOpen` false): every end drops q and records
+how the menu closed, once, before the change is notified - the change hides the menu, whose hide
+calls `close(false)` at once, possibly from inside the call or the frame that ended the action, and
+that call must meet the ended action. Only `close(true)` records the user's close; afterwards only
+T22 changes the record, and the move from `awaiting` to `idle` keeps it.
+
+| # | In | Event | Next | Sends | Presents |
+|---|---|---|---|---|---|
+| T1 | idle | `open()`, actions available | open | nothing | nothing; `open()` is true |
+| T2 | any other, or idle without actions | `open()` | unchanged | nothing | nothing; `open()` is false |
+| T3 | open | `input()` | preparing | prepare | nothing |
+| T4 | open | `choose(m)` | preparing, q = m | prepare | nothing |
+| T5 | open | an accepted frame of the current request names a view other than the frozen one: the frame that moved the action into open included, the newest accepted frame on entering open through T31, and the frames T35 and T35a take | idle | nothing | nothing |
+| T6 | preparing | `choose(m)` with no q | preparing, q = m | nothing | nothing |
+| T7 | preparing | own frame: done and ready, q sendable | setting | set (q) | nothing |
+| T8 | preparing | own frame: done and ready, no q | prepared | nothing | the prepare's reason, when Tiled is blocked |
+| T9 | preparing | own frame: done and ready, q Tiled, Tiled blocked | prepared, q dropped | nothing | the prepare's reason |
+| T10 | preparing | own frame: done, not ready, `focus-changed` or `target-departed` | open, q dropped | nothing | nothing |
+| T11 | preparing, prepared | own frame: not ready, `view-changed` or `shell-replaced` | idle | nothing | nothing |
+| T12 | preparing | own frame: refused `busy`, `unavailable`, `conflicting-request` or `stale-request` | open, q dropped | nothing | the reason |
+| T12a | preparing | own frame: refused for a reason not in T12, T13 or T14 | open, q dropped | nothing | the reason |
+| T13 | preparing | own frame: refused `popup-focus-unconfirmed` | open, q dropped | nothing | nothing |
+| T14 | preparing | own frame: refused `stale-context` | idle | nothing | the reason |
+| T15 | preparing, prepared, setting, awaiting | own frame without the intent's fields as the provider adds them | idle; no actions for the lifetime | query | `malformed` |
+| T16 | preparing, setting, awaiting | own frame refused at frame level | idle; `intent`, `version`, `malformed` as T15, `output` not | query | the reason |
+| T16a | idle, open | a frame refused at frame level for the current intent, whose action has ended, or for an open action's own intent after its decision (which P5 never sends) | unchanged; `intent`, `version`, `malformed` mark the lifetime as T15, `output` not; an open action then ends through T34 if nothing is left to act on | query | nothing |
+| T17 | preparing | the prepare's deadline, no frame, no q | idle; the mode unknown | nothing | `unconfirmed` |
+| T17a | preparing | the prepare's deadline, no frame, q queued | idle, q dropped; the mode unknown | nothing | `unconfirmed` |
+| T17b | idle, open | the deadline of the current request, an intent with no frame accepted | unchanged; the mode unknown, so open ends through T34 | nothing | nothing |
+| T18 | prepared | `choose(m)`, m sendable | setting | set (m) | nothing |
+| T19 | prepared | own frame: not ready, `focus-changed` or `target-departed` | open | nothing | nothing |
+| T19a | preparing, prepared | own frame: not ready for a reason not in T10, T11 or T19 | open, q dropped | nothing | nothing |
+| T20 | open, preparing, prepared | `close(d)` | idle, the close's kind recorded | nothing | nothing |
+| T21 | setting | `close(d)` | awaiting, the close's kind recorded | nothing | nothing |
+| T22 | awaiting, or idle with the action's set unread, the close recorded not the user's | `close(true)` | unchanged, the close now the user's | nothing | nothing |
+| T22a | idle, awaiting | any other `close(d)`, the nested `close(false)` that follows every end of the action among them | unchanged | nothing | nothing |
+| T23 | setting, awaiting | own frame without a completion | unchanged; the set read | nothing | nothing |
+| T24 | setting, awaiting | own completion `done` | idle | nothing | clears a notice |
+| T25 | awaiting | first own frame: refused `stale-context` or `focus-changed` | idle | nothing | nothing after `close(true)`; `interrupted` after `close(false)` |
+| T26 | setting | own frame: refused `stale-context`, `focus-changed` or `target-departed` | open | nothing | the reason |
+| T27 | setting, awaiting | own frame: refused `view-changed` or `shell-replaced` | idle | nothing | the reason |
+| T28 | setting | own frame: refused for any other reason | open | nothing | the reason |
+| T29 | awaiting | own frame: refused for a reason not in T25 or T27 | idle | nothing | the reason |
+| T30 | setting, awaiting | the set's deadline, no frame | idle; the mode unknown | nothing | `unconfirmed` |
+| T31 | setting, awaiting | the set's deadline, frames without a completion | open from setting, idle from awaiting | nothing | `unconfirmed` |
+| T32 | idle, or open in the action that sent the set | the first frame carrying the set's completion, after the set's deadline, while the set is the current request | idle on done, else unchanged | nothing | done clears the notice; a refusal its reason, a first frame refused `stale-context` or `focus-changed` as T25 |
+| T33 | any but idle | the bar asks again: another lifetime, the bound offline frame, a name or output change, going idle | idle | a query (none going idle) | `unconfirmed` when a set was out |
+| T34 | open, preparing, prepared, setting | actions become unavailable | idle, or awaiting from setting with the close recorded not the user's | nothing | nothing |
+| T35 | any | a frame of a request the action did not send: a query's, or an earlier action's, including a late completion of a set reaching an action opened after it | unchanged | nothing | nothing; the mode only |
+| T35a | any | any other frame of the current request: a later frame once its completion is taken, a frame of an ended action's prepare, an own frame no row above takes | unchanged | nothing | nothing; the mode only |
+| T36 | any | `input()` outside open; `choose()` in idle, with q, while setting or awaiting, or for a blocked Tiled | unchanged | nothing | nothing (ignored) |
+
+- Where an action is left. A preparation that ended with `focus-changed`, `target-departed` or
+  another reason that does not end the view (T10, T19, T19a), a silent `popup-focus-unconfirmed`
+  (T13) and a prepare refused for another reason (T12, T12a) leave it open: the next input prepares
+  again, and nothing is retried without one. A done prepare can arrive already not ready, and then a
+  queued choice is dropped silently. After the action ends the state is `awaiting` while a set is
+  out before its deadline (T21, T34), and `idle` otherwise; a queued choice, Escape and then the
+  handle arriving sends nothing (T20, T35a).
+- The menu's close before the set is read. The focus change that closes the menu ends the
+  preparation and empties the provider's slot, so a set read after it is refused `stale-context`, or
+  `focus-changed` when KWin did not announce the change, in its first frame. T25 keys on the close,
+  not the reason: after the user's close nothing is presented, after any other "Interrupted, try
+  again". With the menu still open, those reasons say that the workspace changed (T26). So the menu
+  does not close on a choice: it stays open until the provider has read the set, or until the user
+  or KWin closes it, and a done set ends the action (T24), as a done Tiled gives the app focus,
+  which hides the menu.
+- T5 compares two of the provider's views, the frozen one and the frame's, on every accepted frame
+  while the action is open, over T35 and T35a; otherwise the next prepare would be refused
+  `stale-context` and a second notice would follow the first. A reason the moving frame's row
+  presented stays presented. T31 enters open on a deadline, not a frame, so there T5 checks the
+  newest accepted frame.
+- A prepare that times out presents `unconfirmed` with or without a choice queued (T17, T17a): the
+  menu closes with the unknown mode, so the pill says it is not confirmed if the control shows again
+  in time. A late completion is the set's first after its deadline and counts until the bar's next
+  request, not after (T32): the provider tells a request no longer read nothing, and the bar takes
+  only its current request's frames. A late done clears the notice. A set's frames without a
+  completion come while the tiler retries its start; the mode follows them, and the set ends
+  unconfirmed at its deadline (T31), after which a new choice is a new intent that prepares again,
+  not a retry.
+- The mode always comes from the frames' `tiled`, never from a completion.
+
+Tests: `tests/calendar_backend_test.py`, run as above, also runs the action against the real
+component on its private bus, each case with a bar of its own answered by one lifetime, with the
+fields the provider adds to an intent's frames. It has a case for each outcome of each row of the
+table, and one for each outcome where a row has several: T2 in every state of the action and with
+the mode unknown or unavailable; T11 and T19a in preparing, on the first frame, and in prepared, on
+a later one; T15 for each missing or malformed field in each state it lists, the five kinds of a
+set's frame both while setting and while awaited; T16 for each reason, and a prepared action's frame
+refused at frame level, which gives the mode only; T16a in idle after Escape, in idle past the
+prepare's deadline, with the menu opened again and in an open action after its own prepare's
+refusal, each with a reason that marks the lifetime and with `output`, and an open action's own set
+still undecided past its deadline, which T16a does not take; T17 and T17a; T20 from open, preparing
+and prepared, with nothing sent after; T22 in awaiting and in idle past a set's deadline; T22a in
+awaiting and after a done set; T25 for both reasons after both kinds of close; T31 from setting and
+from awaiting; T32 done and refused in idle and in open, a late first frame refused `stale-context`
+after either kind of close, and in idle once a menu opened since has closed; T33 with a set out,
+with none, and going idle; T34 from each state, with the close it records; T35 for a late
+completion, done or refused, reaching a menu opened after the set's deadline, which stays open; and
+T36 for each call it ignores. Beyond the rows it checks the nested `close(false)` from inside the
+user's close, through the change of `actionOpen`, and the closes that the menu's and the control's
+hiding will make from inside a done set's end, a frame that takes the actions away from a setting
+action with the set refused in it (after an earlier action the user closed), a set's deadline, a
+refusal at frame level and another lifetime's frame: the state moves once and the row presents its
+own outcome; an open action ended before its actions go, `actionOpen` false already as
+`actionsAvailable` turns false, in T15, T16 and T16a (with the menu opened again, and after T12);
+the change signals of every action property, `mode` and `outcome`, at most one each, in T3, T4, T7,
+T8 with an app to tile and on a frame that turns the view tiled, T18, T15 from prepared with a
+reason shown, and a frame and a deadline that each move the action into open and end it (T26 or T31,
+then T5); a completion presented once, after T8, T25, T27, T28, T29 and T32; T5 on the frame that
+moved the action into open, on the newest frame when a deadline did, and on a query's frame naming
+another desktop or activity; the exact keys and numbering of a prepare and a set, each saved before
+its wake; the mode kept while an intent waits, its first frame taken at the revision shown, once,
+but not below it, and not kept out by a frame of the request it replaced still waiting for its
+check; a fresh query's first frame at revision 0 not taken; a prepare sent after a set's deadline,
+whose late frame is no late set; actions coming back with another lifetime; the handle emptied on
+every way out of prepared; the choice and the reason kept until the next request, a prepare or a
+query, which clears them, and the reason cleared by a change of state that presents nothing; the
+mode never taken from a completion; and that the cases log exactly one line for each lifetime left
+without actions, in the cases that leave one, and nothing else.
+
+### Workspace layout control (`LayoutControl.qml`)
+
+The control that shows the bar's workspace layout state (P4 of
+`tasks/workspace-layout-control/todo.md`) and, once its owner makes it interactive, opens the
+layout menu (P6, "The layout menu" below). Its owner passes in the state's `mode`, the window's
+metrics and the pill's text colour, and sets `level`:
+
+- It shows only a mode an answer confirmed: tiled, a glyph of the window frame and its divider with
+  the label "Tiled"; floating, the frame alone with "Floating". Unknown and unavailable show nothing
+  and take no room, at every level. A query pending, past its deadline or refused, a provider that
+  cannot tile and an output KWin does not have look alike, as nothing that looks as if it worked
+  may appear without the placement script's word (the specification's items 7 and 8).
+- `level` 0 shows the glyph and its label, 1 the glyph alone, whose accessible name still says the
+  mode, and 2 nothing. For the width budget, `fullWidth` and `compactWidth` are the widths at 0 and
+  1 whatever the mode and level, and `available` says whether a mode shows. The label's box is as
+  wide as the wider of the two labels, so a change of mode never changes the pill's width, as with
+  the time's box.
+- No board draws it, and its values are the boards': the glyph 14 px (the LiveChips board's glyph
+  size) on the 24-unit grid of the boards' line glyphs, stroked 1.8 with round caps and joins as the
+  shell boards' line icons; 6 px to the label (a LiveChips chip's own gap after its glyph); the
+  label in Manrope 13 px 600 (the pill's text size, and the weight of the TabletSnap board's
+  window-card rows); glyph and label in the pill's text colour. The glyphs are the Icons board's
+  Snap symbol without its last stroke. Text goes through the metrics' `font()` and sizes through
+  `px()`, so large text scales them. The label's alignment is set, so that a mirrored layout keeps
+  it against its glyph: one left unset follows the text's own direction. The presentation awaits the
+  owner's review of the screenshots at the read-only checkpoint.
+- It is read only, as P4 made it, unless its owner sets `interactive`, which the clock is to do
+  only while the layout actions are available (`actionsAvailable`, "The layout action" above), and
+  does not yet: no build ships a control that takes focus and clicks with nothing behind them, and a
+  provider that refuses the intents leaves this same control. Read only, it offers no action. It
+  takes no keyboard focus and no click, and a wheel turned over it reaches the pill, which switches
+  workspaces. Its accessible role is static text, named "Dynamic tiling: Tiled" or "Dynamic tiling:
+  Floating", with no press action for assistive technology; its tooltip and accessible description
+  say whether the dynamic tiler arranges the workspace's windows. It draws without animation. Turned
+  read only again, it gives up the keyboard focus it held. Its press action is connected only while
+  it is interactive: Qt goes on offering a press action once one has been connected, so after that
+  it stays listed, doing nothing.
+- Interactive, it is a drop-down button, as every opener in the bar (`Accessible.ButtonDropDown`,
+  with the same name), and a Tab stop while it shows a mode, between the dots and the date. It asks
+  its owner for the menu with `menuRequested(by)`, saying how: `pointer` for a left press then
+  release, `keys` for a press of Return, Enter, Space or Select while it has focus, never an
+  auto-repeat (the repeats are taken and go no further), and `accessibility` for its accessible
+  press action, so that the menu can give its row a focus reason that shows the ring only for the
+  keyboard. It decides nothing: its owner opens the menu, or does not while a set is awaited. A
+  press while `menuOpen` (the menu open, or closed a moment ago) is the user's close,
+  `menuDismissed()`, and the click after it asks for nothing, the date's toggle. It takes no arrow
+  and no Escape: the panel turns arrows into Tab and Backtab and leaves on Escape. Its pointer area
+  sits inside its tooltip area, as the date's, exists only while it is interactive, and takes only
+  the left button and no wheel, so a right click still opens the widget's context menu and the
+  wheel still switches workspaces; nothing under it takes its click.
+- Its looks while interactive stay within its width. Focused: the Fusion ring, 2 px in the focus
+  colour with a 2 px gap outside it (the Controls board), round as the pill. With its menu open
+  (`menuOpen`): the opener's look the pill takes while the calendar is open, the accent at 35 % with
+  an inset 1 px edge (the QuickSettings board's open status pill), as a capsule of the pill's height
+  reaching half the pill's padding past each side, and no tooltip, as the date has none over the
+  calendar. A choice awaited with the menu closed (`pending`): the glyph and label at 0.7, as quick
+  settings dims a busy row's status, and "Waiting for an answer" as its tooltip and description,
+  with no animation. Its owner passes the window's `accent` (`FusionAccent`) for the ring and the
+  opener's look.
+- `outcomeText(reason, mode, inMenu)` words the layout action's outcomes, so that the menu's status
+  line and the pill say the same; `mode` is the mode the outcome concerns, empty for a prepare with
+  no choice queued, and `inMenu` words an unconfirmed outcome for the open menu or for the pill.
+  "No app window to tile": `no-target` with no choice or Tiled (a prepare done without an app to
+  tile, or a Tiled set), `not-eligible` with Tiled. "Focus an app window first": `focus-changed`
+  with no choice or Tiled, a prepare that found no app to hand off. "Busy, try again": `busy`. "The
+  workspace changed": `stale-context`, `target-departed`, `view-changed`, `shell-replaced`, and
+  `focus-changed` with Floating. "Interrupted, try again": `interrupted`. "Couldn't tile this
+  workspace": `tree-refused`, `admission-refused` and `unavailable` with Tiled. "Cancelled":
+  `cancelled`. "No answer yet" in the menu and "Not confirmed" in the pill: `unconfirmed`. "Couldn't
+  change the layout": anything else, Floating's `unavailable`, the frame-level refusals and
+  `malformed` among them. An outcome carries no intent, so with Tiled a prepare and a set that share
+  a reason share its text: `focus-changed` reads as a prepare's, the case the menu shows after a
+  Tiled choice made first (a Tiled set refused so is one read as the menu closes), and `unavailable`
+  as a Tiled set's, which a prepare refused so with Tiled queued reads too.
+- `notify(reason, mode)` shows an outcome, worded so, in its tooltip and accessible description for
+  5 s, quick settings' refused-state time; an empty reason, a done set's, clears it at once. A
+  choice awaited takes precedence. Neither the control nor the menu announces anything: the clock's
+  handler of `actionOutcome()` is the one announcer, so that a reason is said once.
+- It does not compare an answer's view with the bar's own. The placement script is the only
+  authority for the view, and on a desktop switch the bar's own desktop and the provider's frame for
+  the new view arrive separately, so a comparison would disagree for a moment on every switch,
+  whichever came first, and hide the control. An answer that a failed or malformed publication
+  leaves standing stays until a later publication reaches the bar, the limit of P2's fourth item.
+- In the pill (`main.qml`) it sits after the workspace dots, or first with one workspace (the
+  specification's item 1), one pill padding from its neighbours. The width budget turns it to its
+  glyph alone at step 4, with the short date, and hides it at step 7, with the dots, so the steps
+  keep their order (`WidthBudget.qml`): it gives up its label's room, then its width and one pill
+  padding. Where the bar's own layout hides it - tablet posture, a vertical panel, a clock outside
+  a panel - the layout state is idle, so its mode is unknown and it shows nothing. At step 7 the
+  state keeps asking: the budget counts the control's room only while it shows a mode, so idling
+  the state there would free that room, let the budget step back and show the control again, in a
+  loop. A bar that narrow keeps receiving frames. The testing hook `dump-pill:TAG` (`debugAction`)
+  logs where the pill's parts sit, the step, the control's level and mode, and its measures. The
+  budget evaluates again when one of the clock's savings changes while the pill's width does not:
+  at step 7 a control that stops showing a mode lets it step back, and a new query there moves the
+  bar down until its answer comes, then back up, as below step 7.
+
+Tests: `tests/calendar_view_test.py`, run on a stage as in the calendar's regression checks above,
+loads the staged control beside the shared `FusionMetrics`. It checks both modes' glyph, label,
+accessible name and tooltip; unknown and unavailable showing nothing and taking no room; the
+compact and hidden levels; the width, which a change of mode keeps; sizes and text through the
+metrics, and the label not in the display family; the colour; the layout as drawn in either
+direction - the gap between glyph and label, the label's box, the two filling the control, and the
+label's alignment toward its glyph; a wheel and a click reaching what is behind it, and nothing of
+it handling a click itself; and nothing taking focus. Its control checks go on after a failure, so
+that one run shows them all. A stand-in bar around the staged `WidthBudget.qml` checks that the
+budget evaluates again when a saving changes while the pill keeps its width: the control showing
+no mode at step 7, and a saving that only the steps below give up. Those read-only checks run on
+the read-only control unchanged; a read-only control also offers no press action.
+
+The interactive control and the menu run in windows of their own, as the menu has its pop-up, with
+the window made active before its keys and the pointer moved off the control after each press:
+offscreen, a window that loses the activation drops its active focus item, and a Plasma tooltip
+window takes the activation as it shows. For the interactive control the suite checks the
+drop-down role and name; a Tab stop at both levels that show a mode and none where none shows; the
+ring's width, gap, colour and shape; each opening key asking once with `keys` and going no
+further, an auto-repeat asking nothing and going no further either, and arrows and Escape reaching
+its parent; the accessible press action asking with `accessibility`; a press then release asking
+once, on the release, with `pointer`, with nothing under it taking the click; a press with the menu
+open making the user's close, on the press, and the click after it asking nothing; the opener's
+look, its colours and geometry within the width, and no tooltip while the menu is open; a right
+click and a wheel passing it; the pending look at 0.7 at once, no wider, with its text;
+`outcomeText()` for each text over the reasons and modes it words, `focus-changed` with Tiled
+included; the notice's 5 s, its text, its replacement worded for its own mode, its end and its
+clearing by an empty outcome; no announcement in the source; and the control turned read only
+again, P4's in every check, its focus gone and its pending look, opener's look and notice hidden.
+
+### The layout menu (`LayoutMenu.qml`)
+
+The menu the layout control opens (P6), the Floating and Tiled choices for the bar's view and a
+status line for their outcome. `main.qml` shows it in an applet pop-up of its own, as the provider
+accepts a prepare only while a focused shell applet pop-up holds the focus, and a Qt menu would be a
+pop-up surface that never does. The menu decides nothing: its owner binds
+`mode`, `tiledBlocked`, `choice` (the layout state's `actionChoice`), `pending` (`actionPending`),
+`status` (the outcome, worded by the control's `outcomeText()`), `touch` and `location`, and
+forwards what it reports.
+
+- Two radio rows, Floating then Tiled (`Accessible.RadioButton`, checkable, the confirmed mode's
+  checked), in a pane named "Dynamic tiling", as the window card's root. The control and its
+  accessibility state share the provider's confirmed check, including when accessibility starts
+  while the menu is open. Activating a row only requests its mode.
+  `focusConfirmed(byKeyboard)` gives the confirmed row the focus as the menu opens, so that a screen
+  reader names the mode shown first and one arrow reaches the other choice: with a keyboard focus
+  reason, which shows its ring, when the menu was opened by keys or the accessible press action,
+  and with a mouse reason for the pointer. The row's focus is taken first, as a row focused already
+  would keep the reason it had.
+- Up and Down move between the rows and wrap, and Home and End go to the first and the last, over
+  the menu's own two rows rather than the window's focus chain; Tab and Backtab go through Qt's Tab
+  chain, which in the pop-up's window holds the rows alone, and wrap there. A disabled row is
+  skipped. Return, Enter, Space and Select choose (`chosen(mode)`), on a press and never on an
+  auto-repeat; they are taken, repeated or not, so that the button's own Space handling does not
+  click as well. Escape asks to close (`closeRequested()`, the user's close). A left press on a row
+  reports the input and its release chooses; hover only highlights. The confirmed mode's row
+  chooses too, as the provider decides, and the menu stays open on a choice.
+- `inputReported()` comes for each press of Up, Down, Home, End, Tab, Backtab, Return, Enter, Space
+  or Select, and each left press on a row; the first prepares. None comes for an auto-repeat (the
+  Space that opened the menu can repeat into it), Escape, hover or the window becoming active.
+- Tiled blocked (`tiledBlocked`): the Tiled row is disabled, in the disabled text colour, and its
+  description gives the reason the status line shows. A disabled row hands the active focus to its
+  scope, the menu, not to the other row (Qt 6.11's `QQuickItem`), so the menu gives it to the next
+  enabled row, Floating, itself, with a keyboard reason, once the rows have settled: the end of a
+  wait and Tiled's block can come in one event in either order (T9). The menu says nothing of the
+  reason; its owner announces it.
+- A choice awaited (`pending`): both rows are disabled, the chosen row's label gains "…", and its
+  description says "Waiting for an answer"; Escape still closes. The menu holds the focus meanwhile,
+  and the row that had it takes it back as the rows are enabled again, with no ring until the next
+  key, as Qt gives it back with no keyboard reason.
+- The status line, while `status` is not empty: 11.5 px in the Controls board's secondary text,
+  wrapping, the board menu's 6 px from the rows, on the side away from the bar, from `location`:
+  under the rows in a top bar, above them in a bottom bar. A line that appears so grows the pop-up
+  away from the bar and moves no row under the pointer; that the pop-up keeps its edge at the bar is
+  for a real session to show.
+- No board draws the menu, and its values are the boards' (the owner judges the presentation on
+  real sessions' screenshots). The rows are the Controls board's menu rows: 32 px high, radius 8,
+  padding 0 10, Manrope 13 px, 1 px apart; with `touch`, the TabletPairs board's touch menu, 44 px,
+  padding 0 12, 14.5 px at 600. The confirmed row has the accent's soft fill (18 % dark, 12 %
+  light), weight 700 and the Gestures board's 16 px check at the trailing edge, in the selected text
+  colour, as the settings module's drop-down draws its chosen option. Hover is the ink at 7 %, as on
+  the window card's rows, so that it does not read as the confirmed row. Keyboard focus is a 2 px
+  ring in the focus colour on the row's own edge, as the window card's, since a ring outside a row
+  would cover its neighbour; it leaves out the Controls board's 2 px gap. Disabled text is text3. No
+  row has a glyph, as next to the check a Floating glyph would read as an empty checkbox. The width
+  is the board menu's 236 px (touch 250) through the metrics, fixed: large text widens it, but "…"
+  and a reason never do, and long texts wrap, a row growing by its label's extra lines. It mirrors
+  right to left. It has its own `FusionMetrics` and `FusionAccent`, as the pop-up is a window of its
+  own, and the pop-up's dialog frame stands for the board menu's frame and padding.
+
+Tests: `tests/calendar_view_test.py`, as above, loads the staged menu in a window of its own and
+checks the named pane; the two radio rows in order, their names and the confirmed one checked, for
+either mode; the check on the confirmed row alone, its size and place; the confirmed row's fill and
+weight and its check's colour; the rows' height, radius, spacing, label inset and font, and the
+menu's width, through the metrics; hover's tint on another row, the confirmed row's fill kept, and
+no input from hover; the confirmed row focused with a keyboard reason and its ring, with a mouse
+reason and none, and again with a mouse reason after the keys; the row's ring on its own edge; Down
+and Up wrapping, End and Home, and Tab and Backtab wrapping through the Tab chain, each with the
+ring; one input per counted press, none for an auto-repeat or for Escape, which asks to close; each
+choosing key choosing once, Space not twice, and a press then release on a row; a right click doing
+nothing; a blocked Tiled row skipped by every moving key, in the disabled colour with its reason as
+description; Floating taking the focus with a keyboard reason when the focused Tiled row is
+blocked, and when a wait ends with Tiled blocked in either order; the pending rows disabled with
+"…" and their descriptions at the same width, taking no press or key, with Escape still closing;
+the status line's text, size and colour under the rows in a top bar with no row moved, above them
+in a bottom bar with each row's distance from the bar's side kept, a long status wrapping at the
+same width and no room taken when empty; a long label wrapping and its row growing; the touch rows;
+right to left; and no announcement in the source.
+
+### The wiring in main (`main.qml`)
+
+`main.qml` binds and forwards; the decisions are the layout state's. Inside the `BEGIN layout state`
+block, so that the backend test's fixture runs it with a stand-in pop-up and control:
+
+- `layoutMenuShown` is `layoutState.actionOpen && layoutControl.visible`, and the menu's pop-up is
+  bound to it. A handler on the control's `visible` calls `layoutState.close(false)` at once when
+  the control hides (S11): a hidden control cannot be pressed, so no sync is needed there.
+- `layoutMenuHidden()`, which the pop-up's own hide calls, calls `layoutState.close(false)` at once
+  and restarts a 150 ms sync, as the calendar's. The layout state must learn of the close at once:
+  a set's refusal can come within those 150 ms, and T25 must see the close first. The hide also
+  follows every end of the action the layout state makes itself, so this call is then the nested
+  `close(false)` of B3, which meets an ended action and changes nothing (T22a).
+- `layoutMenuRecent` is `layoutState.actionOpen || layoutMenuSync.running`, the control's
+  `menuOpen`: the pop-up hides itself on a press on the panel, possibly before the control sees
+  that press, and the lingering flag keeps the press-then-click toggle from opening the menu again
+  on the click.
+- `openLayoutMenu(by)` calls `layoutState.open()`, keeps `by` for the pop-up's focus reason, and
+  starts the first-open timing (D20).
+- The handler of `actionOutcome(reason, mode)` is the only announcer: it hands the reason and the
+  mode to the control's notice, and for a reason that is not empty it announces
+  `outcomeText(reason, mode, inMenu)` through `announceLayout(text)`, which calls
+  `Accessible.announce()` on the menu while it is open and on the pill otherwise (D10). The pill is
+  always shown, while the control is hidden in exactly the rows that announce with the menu closed
+  (T15, T16, T17, T17a, T30, T33), where the mode is unknown. A ready prepare that finds no
+  target because focus changed says "Focus an app window first"; a set refused on focus change
+  says "The workspace changed" unless the menu closed before the set was read (T25).
+
+Outside the block: the menu's `AppletPopup` (`visible: layoutMenuShown && the loader is ready`; on
+show, `requestActivate()` and the menu's `focusConfirmed(byKeyboard)` with `by` not `pointer`; on
+hide, `layoutMenuHidden()`), its synchronous `Loader` and the menu's bindings (`mode`,
+`tiledBlocked`, `choice`, `pending`, `status` worded by the control's `outcomeText()`, `touch` and
+`location`), and its signals (the input to `layoutState.input()`, the choice to
+`layoutState.choose()`, Escape to `layoutState.close(true)`). The pop-up's activation resets the
+row's focus reason to the window's, so `onActiveChanged` applies `focusConfirmed(byKeyboard)` again
+once it is active: a keyboard opening keeps its ring (D12, checked natively). A `Connections` on the
+pop-up's `onFrameSwapped` logs the first open's time once, as the calendar's (D20). The control is
+`interactive` only while `layoutState.actionsAvailable` (D19), takes `menuOpen` and `pending`, and
+forwards `menuRequested(by)` and `menuDismissed()`. `Plasmoid.status` is raised while either pop-up
+is open (D17). The testing hooks `dump-layout:TAG` and `dump-layout-menu:TAG` log the action's
+public fields and the menu's rows' positions, its status and the status line's side.
 
 ## Global menu (stock `org.kde.plasma.appmenu`)
 
@@ -254,6 +889,23 @@ The layout places it right after the app name with its defaults (`compactView=fa
   scripting while General was open survived Apply there. The Kirigami notice "Created graphical
   object was not placed in the graphics scene" stays (see Remains). The calendar providers' own
   pages (KDE's) are not checked.
+- Settings pages and the layout control's keys (P3): `tests/calendar_config_test.py` opens and
+  applies each of the three pages as the dialog does at plasma-desktop v6.7.5 and v6.8.3 alike:
+  `open()` passes every key of the configuration as `cfg_<key>`, KConfig's map listing each default
+  as `<key>Default` (KConfig 6.32, `KConfigPropertyMap`), and Apply calls the page's `saveConfig()`,
+  then copies back every `cfg_` property the page declares. A stand-in for `org.kde.plasma.plasmoid`
+  hands the pages the configuration. Each page takes all 20 keys and defaults and writes nothing as
+  it opens; while it is open the clock's request, the provider's answer and, where the page does not
+  edit it, `showLayoutControl` change, and Apply leaves each as it now is. On the General page the
+  checkbox shows the saved choice, Apply writes the user's, and with the workspace dots off it stays
+  enabled and shown. It runs as the specification's command (`QT_QPA_PLATFORM=offscreen
+  dbus-run-session --config-file=packages/kwin/tests/offscreen/session-bus.conf -- python3
+  packages/plasmoids/org.plasmafusion.clockpill/tests/calendar_config_test.py`), the Calendar page's
+  provider checks after these. A field written while a page is open, as `menuCompacted` already
+  can be, leaves the dialog's change check (`isConfigurationChanged()`) seeing a difference once
+  anything on the page changes, so Apply can stay enabled after an edit is undone; Apply then
+  writes the values as they are. A page that cannot load fails the run, as the dialog opens each
+  of them: a module it imports missing or misspelled alike.
 - `test/hovertest.py`: a hover-enabled MouseArea loses hover to a ToolTipArea child on top; both
   widgets therefore put the tooltip area outside the mouse areas (proven Plasma pattern).
 - ThinkPad virtual sessions (prefix `tb-`, 1440 x 900, private HOME and D-Bus; scenarios in
@@ -273,6 +925,19 @@ The layout places it right after the app name with its defaults (`compactView=fa
   `calendar-popup-{dark,light}.png`, `appmenu-light-hover-contrast.png`, `offscreen/`,
   `offscreen-{dark,light}.txt`, `dbuscalls.txt`, `vsession/tb-4`, `tb-5`, `tb-6` (full screenshots and logs),
   `test/` (harness, scenarios).
+- P6's layout menu in a private session on the approved image (KWin 6.8.3-1.fc44.pf1, Qt 6.11.2;
+  `tools/vsession/cvsession.sh`, a top bar with the clock pill as the only panel, the placement
+  script enabled as the Fusion setup leaves it): the provider answers (mode floating, actions
+  available); a click on the control opens the action and the menu; Escape closes it and the panel
+  leaves keyboard navigation (D13); Meta+Alt+P then Return opens the menu with the confirmed row
+  focused and its ring shown, and a second keyboard opening after Escape shows the ring again (the
+  pop-up's activation resets the focus reason, so `onActiveChanged` applies it again); the menu
+  opens over the calendar, whose press hid it, and the prepare then finds no target (`no-target`,
+  "No app window to tile") with Tiled blocked; the wheel over the control still switches
+  workspaces; the first open's first frame came 22 ms after the request (D20); a reason shows in
+  the status line under the rows in a top bar, and the menu grows away from the bar. The image has
+  no screen reader, so the announcement's naming was not checked there. The scenario is
+  build-only; the screenshots are the D14 review's.
 
 ## Deviations from the boards
 
@@ -445,7 +1110,12 @@ the lead directly.
   because `translation` is still 0 when the handler turns active.
 - `Plasmoid.CanFillArea`.
 - **Width budget hooks** for TOP-2: `compactLevel` (1: the short date, 2: the time only) and `hideDots`
-  (the dots hide; Overview still switches workspaces).
+  (the dots hide; Overview still switches workspaces). Since P4 also `layoutLevel` and
+  `layoutSaving` ("Workspace layout control" above). The short date is the region's short date
+  without the year and what joined it to the day or the month (en_US "11/21", en_GB "21/11"), but
+  a dot right after either stays (de_DE "21.11.", ko_KR "11. 21."), also where the region writes
+  none (ru_RU "21.11."): the short format does not tell the two apart. A custom date format sets
+  only the full date.
 - **Accent and Motion**: the open pill (accent at 35 %, 1 px edge), today's disc (`accent.fill` with its
   text colour) and the focus rings follow the user's accent; the pill's colour, the dots' width and
   colour animate with `Motion` tokens.
@@ -509,6 +1179,8 @@ built by the lead directly.
   of the bar has `budgetLevel` and `budgetSaving(level)`; the stock menu's full width is measured from
   its menu model (titles in the panel font plus the `menubaritem` margins; measured exactly equal to
   the full view for Konsole, Dolphin and Kate). Nothing is laid out to be judged, so nothing flickers.
+  Since P4, step 4 also turns the workspace layout control to its glyph alone, and step 7 hides it
+  ("Workspace layout control" above).
   The budget watches each widget's width at every step, not just its current size hint. When a
   shorter app name would fit after the bar hid a long one, it can come back without a resize.
   The staged `width_budget_test.py` in the Fedora build covers that case.

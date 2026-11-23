@@ -41,6 +41,20 @@ function shortDateFormat(locale, longFormat) {
     return f.length > 0 ? f : "ddd d MMM";
 }
 
+// The width budget's short date (step 4): the day and the month of the region's short date
+// format, in its order and with its separators, without the year and the separator that joined
+// it to them ("M/d" in en_US, "dd/MM" in en_GB, "MM/dd" in ja_JP). A short format glues the year
+// to the day or the month, which shortDateFormat's whole-token trim cannot take apart. A dot
+// right after the day or the month stays: German "dd.MM." and Korean "M. d." write one there.
+function numericDateFormat(shortFormat) {
+    // A year first goes with what follows it up to the first field ("yyyy/MM/dd"); a year last
+    // with what precedes it back to the last field, but for a dot right after that field, and
+    // with what follows it ("d.M.yy.", a quoted suffix). Every Qt short format puts its year
+    // first or last, and none quotes text holding d, M or y.
+    return shortFormat.replace(/^[^dM]*y+[^dM]*/, "")
+        .replace(/([dM])(\.?)[^dM]*y+[^dM]*$/, "$1$2");
+}
+
 // The calendar header's date: the long date without the weekday ("28 September 2026").
 function longDateWithoutWeekday(longFormat) {
     let f = longFormat.replace(/d{4}/g, " ");

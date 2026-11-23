@@ -4,7 +4,7 @@ Status: built, checked offline and in private virtual sessions on the ThinkPad (
 1440x900); reviewed and fixed (see "Review" at the end). KWIN-2 (2026-09-30) changed the switcher's
 windows and previews, the flyout's side and layouts, the picker's backdrop, and added the
 screen-change and touchpad handling: see "KWIN-2" at the end, which replaces the older text where
-they differ. Last edited 2026-09-30.
+they differ. Last edited 2026-11-22.
 
 ## What it is
 
@@ -493,7 +493,14 @@ holding the record until then. A facade without the question (an older fork) nev
 either: those windows keep their records in the session cache. When the
 writer refuses the provider registration — or the facade exists but answers nothing — the
 memory stays disabled for the session — a native
-session must not bypass the sole native writer. The native lane runs only on the fork's KWin;
+session must not bypass the sole native writer. The writer grants a random UUID, which the
+facade answers as text with its braces; it refuses with the null UUID while another provider
+holds its slot or it is busy, and the facade answers with empty text when there is no writer at
+all. Only a well-formed UUID other than the null one counts as a registration
+(`Placement.providerRefused`, the rule `providerAccepted` in
+`tools/tests/layout-control/provider.qml` applies). The dynamic tiler is off with the memory:
+its shortcut starts no session while the memory has not loaded.
+The native lane runs only on the fork's KWin;
 the session scenarios in CI exercise the stock and backport lanes, which take the legacy
 transport, and the node suite drives the registration, identity-binding, refused-binding,
 event-sequence and reconciliation rules (`packages/kwin/tests/placement.test.js`). On stock KWin or older forks
@@ -1048,7 +1055,10 @@ Offline (laptop):
    the memory has the window's own place), the native
    `treeChanged`
    teardown (floats back, no release of an ended tree, the next toggle lays out again) and a
-   refused tree (no admission, no geometry write); two runs (`scenario: "unload"`) make the
+   refused tree (no admission, no geometry write); a run (`scenario: "refused-provider"`) has the
+   writer refuse the provider registration with the fork's null UUID (the memory never loads;
+   2.5 s after a toggle, past the script's 2 s timers, the writer has had no other call, read-only
+   ones included, and no shell script call went out); two runs (`scenario: "unload"`) make the
    script as KWin makes a declarative script - its own context with the `KWin` property,
    owned with the component and the root object by one object (`KWinScript`) - and unload it
    the same way, the context first, past the memory's quiet second: once in a live session,
@@ -1099,6 +1109,158 @@ Offline (laptop):
    in its restore hook), an ignored app's live join records nothing, and a reflow-starved
    member's late cell commit is quieted by the float restore. Mutation-checked: skipping
    `admitTile`, skipping the untoggle's `releaseTile` and ignoring the teardown each fail it.
+   Every run also follows the script's layout provider (see "The layout provider's state"):
+   its revisions run 1, 2, ..., one per change and each a real one, and no two runs share its
+   lifetime label. The default run checks it at every toggle, untoggle and native teardown (a
+   live join, a refused tree and a refused admission move nothing; the press on another
+   desktop ends one session and reports the new one on the invoked desktop), the facade
+   without `restoreWindow` and the refused registration stay incapable (the latter keeping no
+   token), the unload runs see it go offline once, before the teardown, a run
+   (`scenario: "late-memory"`) has the writer answer the memory's first read with nothing
+   (incapable until the read retry finds the memory) and one (`scenario: "provider-rules"`)
+   checks the provider's own rules without the script. Its identity name is checked against a
+   stand-in `org.kde.plasma.workspace.dbus` (`tests/offscreen/lifecycle-stubs/`, on this suite's
+   import path alone and found before the system module, so nothing reaches a bus; any other
+   offscreen suite gets the system module): every run asks for it once, without queueing; the
+   default run grants it and sees the owner read only then; the unload runs see the
+   retirement release it once; and the provider-rules run refuses it, answers a bus error, an
+   owner that cannot be read or is no unique name, and retires before the answer and before
+   the owner's - none makes an identity, and the driver reads each refusal from the journal once.
+   A run (`scenario: "read-pipeline"`) drives the read side on the real script: the wake
+   shortcut, named and with no key, toggles nothing; no read before the identity is ready, one
+   when it is, for the shell's owner, and none more for the wakes before it; three wakes during a
+   read make one later read; the read goes to the shell's unique connection only. The harness
+   runs the reader script itself against fake panels as the shell would - 16 of 17 widgets, a
+   request of 2048 characters kept and one of 2049 dropped, malformed JSON, out-of-range
+   consumers and requests and other applets' widgets skipped, only the intents' fields copied (the
+   epoch and the view's two ids, a set's mode and handle, nothing else), a hostile consumer label
+   intact, and an inventory of the clock's widgets with the empty fields, incomplete past 16 - and
+   the provider's own checks keep the version-1 queries and refuse the rest with their reasons, a
+   prepare without its frozen context as `malformed`.
+   An owner that is no unique connection, a failed lookup, a failed read and eight malformed
+   answers - not JSON, a bare list of rows, rows without the script's start or with a start that
+   is no number, 17 rows, an inventory with no rows or with rows that are no list, and a
+   well-formed answer with a new request one character longer than `answerLimit` - each end the
+   read and keep the requests and refusals, while an answer exactly that long is read as any
+   other, and the reader's longest answer found (16 requests of 2048 characters, each a list of
+   `1e20`s, which it prints as 21 digits each: about 142,400 characters) fits the limit; after a
+   retirement nothing is read, they stay, and the shell's late answers reach neither them nor the
+   journal. The driver counts the journal's lines.
+   A run (`scenario: "publication"`) drives the publication side on the real script, with a
+   second output on the session's desktop and activity. The first read's five rows - two
+   requests on the session's output, one on the second output, one for an output KWin does not
+   have, one refused - get one call on the read's connection, whose script, run against fake
+   panels as the shell would, writes each clock widget's response field (General group) with
+   exactly the frame wanted, a hostile consumer label intact and no raw line separator in the
+   code. A wake and a state change during that publication wait for it; its answer that the
+   shell wrote four of the five confirms none, so the toggle then goes to all five, tiling only
+   the two on the session's view; a read with nothing new writes nothing; an untoggle during a
+   read goes out at the read's end; a widget no longer read is forgotten and, read again, told
+   again alone; a new request is answered alone, at the same revision; a failed publication
+   lets the wake during it read and writes its frame again; another shell is told everything,
+   and a toggle then goes to the two widgets on the session's view and never to the one on the
+   second output. With the session on, each view change - as KWin
+   signals it, with no read - goes out at once, at a newer revision, to the bars it changes: the
+   session's output on another desktop (no bar there tiled; a request after it is answered
+   alone), the desktop back while a read is out (the read, back in the same turn, answers with
+   the stored view at its revision, and the change follows at a newer one), the activity
+   switched with the second output on a desktop of its own in one turn (one step; no bar on the
+   other activity tiled; `currentDesktopForScreen`), the activity back, the second output
+   unplugged (no view) and plugged back; a signal that changes no bar's view moves nothing, nor
+   does a change of an output whose only bar has left the read, which is told the view as it is
+   when it comes back; a request that names another output is resolved for it. Off and on in
+   one turn tell nothing, and two changes in one turn go out once. The retirement, with that
+   publication still outstanding and a state change and a view change queued before it, moves
+   the revision, sends the offline frame to all five, then releases the name; neither queued
+   change nor a view change after it moves or publishes anything, and the late answers - the
+   outstanding publication's among them - reach nothing.
+   The refused-provider run reads one request and gets an online answer that is not capable,
+   and the unload rows check that the name goes last, after the offline state's revision, with
+   no frame when no request was read. The driver counts each publication's line with its frames,
+   what the shell wrote and its length, the failed one's and the offline frames' once each, and
+   finds no call there over the time limit.
+   A run (`scenario: "unconfirmed"`) has two bars on the session's view: the session's start goes
+   out to both and fails, and the session's end, which brings each bar's frame back to what the
+   shell confirmed last, goes out to both, as the failed publication confirmed neither.
+   A run (`scenario: "prepare"`) drives P5's prepared target on a provider of its own, the shell's
+   popups, panel, desktop and a dialog of its own, a foreign popup and one of PID 0 as fake
+   windows with the fork's kinds and PIDs. Before the shell's PID is known a PID-0 popup is not
+   the shell's, a prepare is refused `unavailable`, a query's frame beside it as it was, and the
+   PID is asked of the bus beside the read; a prepare without its frozen context - a view missing
+   among them - is `malformed` at each bound, one on the bounds is taken, and an incapable
+   provider refuses. A popup opened from the app then prepares the app as its target, decided
+   once: read again, nothing new; the popup activated again, no change; another payload,
+   `conflicting-request`; a lower number, `stale-request`, which frees the slot and ends the
+   preparation. Another widget's prepare is `busy` and stays so once the slot is free, and a new
+   consumer on a widget is handled afresh; another lifetime's epoch, a desktop or activity that is
+   not current and an unknown output are `stale-context`; an app, a foreign popup, the shell's
+   popup on another output, the panel and a popup whose activation went unseen confirm no focus.
+   With no app remembered (a dialog of the shell's clears it), from another popup or with the app
+   on another output there is no target, nor when the app was minimized or left the view after
+   its popup opened; from the panel or the desktop while the app is remembered there is; another
+   widget's `set` naming the holder's handle is `stale-context`, a set without its mode and handle
+   is `malformed` at each bound, and an unknown intent is refused `intent`; `unavailable` comes
+   before `busy`, and `busy` before an unconfirmed focus. The completion rides a newer state frame.
+   A focus change, the popup closing, the target leaving the view or turning into no eligible app
+   (eleven ways, closing among them), a desktop or activity switch, the output replaced by one of
+   the same name and a new shell connection (which forgets the app) each end the preparation, told
+   at a newer revision. The shared-popup trade-off is pinned: a prepare while another popup from the
+   same app holds focus is prepared, and the next focus change frees the slot. A failed, incomplete
+   or inconsistent read (an empty widget it does not list, a row's widget missing or empty, a row
+   twice) keeps the slot; the holder's next request (a refused `set`, a malformed one, one older
+   than the preparation, a query reusing its number) and a withdrawal free it and end its
+   preparation's frames, with no revision step, and so does a widget gone. A PID answered for a
+   connection no longer read from is not kept; both serials refuse when exhausted; a later lifetime
+   refuses the saved prepare and a saved set `stale-context` before it knows the shell's PID,
+   prepares under its own epoch and, retired holding the slot, keeps nothing prepared; a lifetime
+   started while the app holds focus prepares it from a popup opened from it, and one started
+   while a popup holds focus takes nothing of it (`popup-focus-unconfirmed`); a tiler that throws
+   refuses the set `unavailable` and the read finishes; the offline frames carry nothing of an
+   intent. The driver counts each fresh decision's line and each end's reason.
+   A run (`scenario: "set"`) drives P5's desired mode on the real script, its provider and tiler
+   together: Tiled from floating, decided at once with the prepared app admitted as the master and
+   focused, a re-read starting nothing and the same request with another handle refused
+   `conflicting-request`; Tiled again with no target, a no-op; a set whose popup lost focus unseen,
+   refused `focus-changed`; one naming another lifetime's handle, and the holder's for another
+   output, `stale-context`; an incapable provider, `unavailable`, the slot freed; another widget's
+   set under the holder's consumer label, `stale-context`, the holder's slot kept; Floating on the
+   tiled view, which ends the session, and with none, which changes nothing; Tiled with no target on
+   an untiled view, `no-target`; a refused tree; a completion that a failed publication did not
+   deliver, carried by the next. Then Floating on the other output, which leaves this output's
+   session alone, and the transfer there whose first admission is refused 7 while the old master's
+   restore takes focus: it starts on its retry, the prepared app focused after the first attempt and
+   nothing moving focus after it; inside the retry window a re-read starts nothing and another
+   widget's set is `busy`, freeing its slot; the decided set read again keeps its completion, and a
+   newer state frame (the activity switched) carries it. A desktop switch of the user's inside a
+   retry window, after which the start takes the captured desktop and the switch stands; the
+   shortcut cancelling a set's retry (`cancelled`) and then tiling as it always does; retries whose
+   target was minimized (`target-departed`, told with a frame of its own, as no state changed),
+   whose desktop or activity was removed or whose output was unplugged (`view-changed`) and that
+   came after a new shell connection (`shell-replaced`); and an admission refused after its retries
+   (`admission-refused`). A retried set's outcome reaches that set read again as it was and nothing
+   else under its identity: another handle read meanwhile stays `conflicting-request`, a query
+   reusing its number gets no completion, and a set of its identity handled afresh, once another
+   consumer replaced the record, keeps its `stale-context`. Tiled between the master's release and
+   the tree's end (`vacated`) is handled as on an untiled view: refused `no-target` with no target,
+   and with one the vacated teardown taken and the session started with the prepared app. The
+   driver checks that each retried set is said under way once and decided once later.
+   A run (`scenario: "time-limit"`) drives a controlled clock against decision 1's limit: a read and a
+   publication answered at once, and a read whose owner lookup took 70 ms, measured from its own
+   call; a read and a publication whose script ran from the call's start for 70 ms, each said over
+   the 50 ms limit with its length from that start; two that waited 70 ms but whose script started
+   1 ms before the answer, not over, so substituting the full call duration cannot pass; two whose
+   start lies outside the call, over with their 70 ms
+   from call to answer, and a short one of those, not over; then a read answered with its rows alone
+   and publications answered with a bare count (a wake during it reads after it), a count above
+   their frames, below zero or no number, and no start - each malformed, said once and confirming
+   nothing, so the next read sends the frame again - and one the shell wrote none of (0 written),
+   sent again too, until one is confirmed, after which a read sends nothing; then a session
+   started and ended twice, its start's publication failed once and answered malformed once:
+   each end goes out, though its frame says what the shell confirmed last; then an answer longer
+   than `answerLimit` - a count and its start, padded - malformed too, after which the next read
+   sends the frame again. The driver reads the lines and their order from the journal. Every run's
+   setup returns the engine's one stand-in Workspace to its declared outputs and desktops,
+   whatever an earlier run left (a second display, a desktop of an output's own).
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
 bus, 1440x900). Seeds: `packages/kwin/tests/vsession/make-seed.sh STAGE_HOME SEED dark|light`
@@ -1702,7 +1864,13 @@ deliberately defers.
   shortcut moves the tiling to another output). The tiler releases the tree and tries the
   same view again every 50 ms, at most 8 times; every other refusal, and the last attempt's,
   stands. Pressing the shortcut again drops a start that is still being retried. The native
-  interface itself retries nothing.
+  interface itself retries nothing. A bar's set (P5, the layout provider's state below) reaches
+  the same start through `tiler.applyMode`, with the view the bar's menu was prepared for, the
+  app the menu was opened from and an outcome that every end of the start calls once - started,
+  or refused `not-eligible`, `tree-refused`, `admission-refused` (its code in the journal) or
+  `unavailable` - a retried start's once its retry ends; each retry first checks again what the
+  set's start needs (its target, its view's existence, the provider's lifetime and shell), and
+  a press of the shortcut during the retry tells the set it was cancelled.
   The native layer admits a window only from the place the memory has for its app
   (`NATIVE-TILING-CONTRACT.md`, the admission's steps 2 and 3), and the two differ whenever
   the app's last record was another window's: on hardware the master's app had opened a
@@ -1760,7 +1928,11 @@ deliberately defers.
 - **Native teardown**: the facade forwards `treeChanged`; a change with no live tree is
   session-end — the stack floats restore, the session clears. This covers master close,
   output removal, desktop removal, provider retirement, key conflict, a manual quick-tile or
-  move of the master, and output transfer — every native path at once, for free. The
+  move of the master, and output transfer — every native path at once, for free. Adding,
+  removing or rescaling an output ends the session, whichever output it is on: KWin then
+  re-checks the position of every window (`Workspace::rearrange()`, whenever any output's
+  area changes), and that releases the master (#211; the order seen in a native run, the path
+  read in the fork's code). The
   controller keeps a tree whose window has left it; the facade ends that tree, which is what
   turns a release of the master into this signal. A release that is not the explicit restore
   (a removed desktop or output, a second window of the master's app, a move of the master,
@@ -1865,7 +2037,9 @@ deliberately defers.
   untoggle's explicit restore would find no record it owns, and nobody would settle the one
   the release left. The press is that native teardown, taken now: the stack goes back, the
   master is returned and its record settled as after any native release, and the vacated
-  tree is released. The same when the script goes in that moment.
+  tree is released. The same when the script goes in that moment, and when a bar's Tiled set
+  with a prepared app comes then: the view is tiled no more, so the set is handled as on an
+  untiled view, and one with no app is refused `no-target` (see "The layout provider's state").
 - **Live**: new eligible windows on the tiled workspace join the stack (a window with a
   remembered placement keeps it as its saved float: the untoggle returns the app to its
   remembered spot, as the memory would have placed it); a window the stack
@@ -1962,6 +2136,7 @@ deliberately defers.
 | Plasma Fusion: Tile Focus Master | focus the master |
 | Plasma Fusion: Tile Focus Next | next in the cycle (master → stack → master) |
 | Plasma Fusion: Tile Focus Previous | previous in the cycle |
+| Plasma Fusion: Refresh Layout Controls | the bars ask for a read of their requests; it needs no key ("The layout provider's state") |
 
 ### Config (`kwinrc [Script-plasmafusion-placement]`)
 
@@ -1994,12 +2169,311 @@ reference is still a window (`alive`). Every guard of the script on a window ref
 `deleted` outside it: a reference to a destroyed window reads "not deleted" (#182). The eligibility predicates (`eligibleForMaster`, `eligibleForStack`) mirror
 the snap script's `usable()` guards and leave out a window that keeps itself off the taskbar
 or the window switcher (`userWindow`: the XWayland Video Bridge's invisible window took a
-stack cell on hardware). The QML path is covered too:
+stack cell on hardware). The layout provider leans on `eligibleForMaster` too: a window that is
+not normal (a shell's popup, dock or desktop), a closing window or none is never the app a bar's
+menu acts on. The QML path is covered too:
 `tests/offscreen/tiling_lifecycle_test.py` loads this `main.qml` under the stand-in KWin
 module with a mock `TransientTilingApi` and drives the native admission, the stack geometry
 writes, the untoggle, the native teardown and a refused tree (see the Tests list). The mock
 and the stand-in `Workspace` answer only what the compositor answers: a call the mock takes
 and KWin does not is a failure only hardware shows.
+
+### The layout provider's state
+
+The bars' layout controls (the workspace layout control, `SPEC-workspace-layout-control.md`)
+are to learn from this script whether supported tiling is available and whether a session is
+on for their view; the script stays the only authority. `contents/ui/LayoutProvider.qml` keeps
+that state for it, the lifetime's identity name on the session bus, the requests the bars send
+and the answers it publishes to them.
+
+- `capable` is the native verdict while online, and false while offline. The script binds the
+  verdict (`nativeCapable`): the writer accepted the registration (`nativeWriter`), the memory
+  loaded from it (`loaded`, late if the read retry finds it) and the tiler's facade is complete
+  (`tiler.apiAvailable`). The legacy lane, a refused registration and a facade without
+  `restoreWindow` never report ready.
+- `active` and the session's view as a bar names one - `desktopId`, `activityId`,
+  `outputName` - come from the tiler (`tiler.reportSession`) at the end of a start and right
+  after each reset, the untoggle's and the native teardown's. The view is the session's own:
+  the one the shortcut was invoked on.
+- `revision` is 1 once the script has started (`start()`, at the end of
+  `Component.onCompleted`), then moves once per change of the above, of `online`, of a bar's
+  own view (`views`, below), at the end of a holder's preparation or with a set's completion
+  decided after its read (below), and never otherwise: a relayout, a live join, a refused tree
+  or a refused admission move nothing.
+- `online` lasts from `start()` until `retire()`, which `Component.onDestruction` calls right
+  after it sets `going`: the provider goes offline once, with no capability or session left,
+  before the teardown's untoggle, which moves it no more and reads nothing of KWin for it.
+- `label` is drawn fresh for each instance (the MD5 of a timestamp and four random numbers, as
+  the layout probe draws its own). It owes nothing to the native token, which the provider is
+  never given; a refused registration keeps no token either (`providerToken` is cleared).
+- The identity name, `org.plasmafusion.LayoutProvider.p` and the label, is the layout probe's
+  transport from P0: a fence between provider lifetimes, not authentication, with no object
+  exported. `start()` asks for it whatever the capability, without queueing (`RequestName`
+  with flag 4, through `org.kde.plasma.workspace.dbus` with an explicit `(su)` signature, so
+  the plugin sends the flags as a uint32: its source is the same at plasma-workspace 6.7.5 and
+  6.8.3, and a 6.8.3 session granted the name); once it is granted, its owner - this
+  connection, KWin's - is read (`GetNameOwner`), and only a unique connection name makes the
+  identity ready and is kept as its owner (`selfOwner`, set before `identityReady`, so whatever
+  reacts to the flag finds the owner). `retire()` releases it (`ReleaseName`) with the name it
+  stored, last - after the offline frame (below) - dropping a request still pending, so nothing
+  of a torn-down context is looked up and a late answer reaches nothing. A name not granted, or
+  an owner that cannot be read, is said once and leaves the lifetime without an identity; none
+  of it moves the revision.
+- The requests come the probe's way too. A bar's clock (`org.plasmafusion.clockpill`) saves its
+  request in its `layoutRequest` field (General group) and wakes the provider with "Plasma Fusion:
+  Refresh Layout Controls", a shortcut with no key; the clock's pill sends queries (P4), and the
+  intents (below) are for P6's menu. The provider reads once its identity is ready - the requests
+  saved before this lifetime are read too - and once per wake, one read at a time (the wakes during
+  a read make one more read after it): it looks up the shell's owner (`GetNameOwner` of
+  `org.kde.plasmashell`) and reads every clock's request from that unique connection with one shell
+  script call (`evaluateScript`). The script reads at most 16 widgets and requests of at most 2048
+  characters, keeps only a consumer label of 1 to 128 characters and a request number of 1 to
+  2147483646, copies only `consumer`, `request`, `version`, `intent`, `outputName`, `epoch`, the
+  view's `desktopId` and `activityId` (which a prepare names), `mode` and `handle` (which a set
+  names), and carries widget data as JSON, never as code; with the rows it says when it started and
+  which clock widgets it saw (`widgets`), those whose request field is empty (`empty`, a withdrawn
+  request) and whether there were more than it reads (`truncated`). The provider checks every row
+  again: a version-1 `query`, `prepare` or `set` for a named output is a request (`requests`), a
+  prepare only with its frozen context, an `epoch` of 1 to 64 characters and a view whose desktop id
+  has 1 to 128 and whose activity id at most 128, a set only with a `mode`, tiled or floating, and a
+  `handle` of 1 to 128 characters; any other row with a well-formed identity is refused before any
+  action, with its reason - `version`, `intent`, `output`, or `malformed` for a prepare or set
+  without those fields (`refusals`); a row without one is dropped. A read that finds no shell - no
+  owner, or one that is no unique connection - ends quietly; one the shell fails or answers
+  malformed (the start missing, or an inventory that is no list of at most 16 widgets naming only
+  those as empty, or rows that name a widget twice, one it does not list or one it lists as empty,
+  among them) is said once; either keeps the last requests and refusals. An answer longer than
+  any the scripts print (`answerLimit`, 262144 UTF-16 code units) is malformed too, and is not
+  parsed at all: the reader's longest is under 200,000 - at most 16 rows copied from requests of
+  at most 2048 characters, which JSON.stringify prints again at most six times as long - and the
+  writer's is two numbers. A successful read says what it found and how long it took (below).
+  Failed calls and malformed receipts are timed from call to answer (round trip), for both reads
+  and publications. A retirement ends a read in flight: the answers that come after it reach nothing.
+- The answers go back the same way. Each request and refusal of the last read gets a frame in
+  its clock's `layoutResponse` field (General group), and a publication writes all its frames
+  with one `evaluateScript` call on the connection the requests came from. A frame says
+  `version` 1, the `consumer` and `request` it answers, the provider's lifetime - `epoch` (the
+  label), `identityName` and `backendOwner` (the identity's owner, KWin's connection, which a
+  bar checks against the bus) - and the state's `revision` and `status` (`online`); then
+  `capable`, `view` - the bar's view as the provider resolves it from the bar's output: that
+  output's current desktop (`currentDesktopForScreen`), the current activity and the output's
+  name, or null for an output KWin does not have - and `tiled`, whether a session tiles that
+  view. A refused request's frame carries `refused` and its reason instead of the state. No
+  window, title or token travels; the frames go as JSON data, the two line separators an older
+  engine does not take raw in a string escaped. A provider that is not capable answers all the
+  same, with `capable` false: the bars learn it from the authority rather than from a deadline,
+  for one frame per new request. A widget is written again only when what its frame says
+  changes - a new request, a state change, its view, another shell connection - when it comes
+  back to the read after leaving it (the record keeps only the widgets read) or when the shell
+  did not confirm its last frame (below), so a read that finds nothing new publishes only those
+  (decision 1). One publication at a time, never during a read: a state change waits for the
+  end of its turn and for the pipeline - the changes of one turn go out once, and ones that end
+  where they began tell nothing - and the wakes during a publication make one read after it.
+  The writer script prints how many frames it wrote and when it started. A publication that
+  comes back is said once, with its frames, how many the shell wrote and how long it took
+  (below), and confirms its frames only with a count of all it carried: fewer - a widget not
+  found, and the answer does not say which - confirms none. Neither does a failed one, said
+  once, nor one answered malformed - without the start, with a count it cannot have, or longer
+  than `answerLimit` - said once too: the shell may have written their frames all the same (a
+  script that failed after its writes, a call answered past the bus's timeout), so each widget a
+  publication did not confirm is written again with the next one, whatever its frame says then,
+  and a state that came back to what was last confirmed is told too. The retirement moves the
+  revision, sends the offline frame (`status` offline, nothing capable or tiled) to every request
+  and refusal it kept, then releases the name; nothing that answers after it reaches anything.
+- Each request's view is resolved when the request is read - a widget's first request, or one
+  that names another output; a request renewed for the same output keeps its view - and kept
+  (`views`, only for the widgets read): a frame carries the kept view, never a newer one than
+  its revision. A change of a desktop, the activity or the outputs - `currentDesktopChanged`,
+  which KWin sends for every output whose desktop changed (with or without desktops per output,
+  the same at 6.7.5 and 6.8.3), `currentActivityChanged`, `screensChanged` - resolves them all
+  again, once per turn, and when one differs moves the revision: the bars whose view changed
+  are told at once, at the newer revision, with no read. A change no bar's view sees moves
+  nothing, and nothing is watched offline.
+- The prepared target (P5): a bar's menu prepares its action, and what it acts on stays inside
+  KWin, in the provider's one slot. The provider follows focus (`windowActivated`): it remembers
+  the last eligible app (`Tiling.eligibleForMaster`), which a shell surface keeps and any other
+  window clears, and a shell applet popup activated straight from that app, or from a shell dock
+  or desktop surface on its output while the app is remembered, hands the app off; each focus
+  change replaces the handoff. It starts from the app that holds focus when the provider starts
+  (the script enabled or reloaded in a running session), as if that activation had been seen; a
+  popup or any other window holding focus then is not taken, and its activation stays unseen.
+  A surface is the shell's only with the shell's PID, which the bus
+  gives for the connection read from (`GetConnectionUnixProcessID`, looked up beside the read
+  once per connection; each connection with a PID takes the next shell serial), on the output
+  meant, as an applet popup, dock or desktop window that is not a normal window: a class or app
+  id proves nothing, and with no PID known nothing is the shell's (the layout probe's rule,
+  `testing.md`). A `prepare` names the frozen context of the answer its bar holds, `epoch` and
+  `view` (`desktopId`, `activityId`), and is decided once, refused in this order:
+  `stale-context` when the epoch is not this lifetime's or the view not the output's now, so a
+  prepare saved under another lifetime is stale whatever else holds; `unavailable` while the
+  provider is not capable or knows no PID for that connection; `busy` while another widget holds
+  the slot; `popup-focus-unconfirmed` unless a verified shell applet popup on the bar's output
+  holds focus and its activation was seen. Otherwise the slot is taken for the bar's view with a
+  handle, `<epoch>:<shell serial>:<slot serial>` (both serials monotonic for the lifetime,
+  refusing on exhaustion), and with the handoff's app as its target when that app is eligible
+  and on the view; never another window: with none the completion says `target` false and why,
+  `no-target` or `focus-changed`. Any shell applet popup on the bar's output opened straight from
+  the app passes, not only the bar's own, because the frames carry no focus state - carrying it
+  would write every bar at each focus change: nothing wrong follows, but with two clocks on one
+  output a slow prepare can leave the other's `busy` until the next focus change. Per widget one
+  record decides each request identity once: the same identity and payload read again gets the
+  recorded completion and nothing is done again, another payload is refused
+  `conflicting-request`, a lower number `stale-request`, and a new consumer replaces the record.
+  A request's frames add its `completion` (`intent`, `result` done or refused, `reason`,
+  `handle`, `target`), carried by every later frame for that request, and the holder's frames
+  `prepared` (`handle`, `ready`, `reason`); a query's frames stay as they were, the offline
+  frames carry neither, and nothing prepared outlives the lifetime. A later focus change or the
+  popup's close, the target leaving the view (its desktop, activity or output), turning into no
+  eligible app as KWin notifies it (minimized, fullscreen, maximized, tiled, out of the taskbar
+  or the window switcher, modal) or closing, the view's change (an output replaced by one of
+  the same name too) and a new shell connection end the preparation. On shell replacement the
+  old handoff is discarded and only a currently focused eligible app can seed the next.
+  The holder is told `ready` false with the reason (`focus-changed`, `target-departed`,
+  `view-changed`, `shell-replaced`),
+  at a newer revision, until its next request.
+  KWin notifies no change of moveable or resizeable, and a window turning transient is not
+  watched; the slot's next check finds those. The holder's next request, however it is
+  answered, or a withdrawal frees the slot and ends the preparation's frames; a widget gone from
+  a complete inventory frees it as `consumer-retired`, told to no bar and with no revision step,
+  and drops its record; a failed, malformed or incomplete read keeps both. A `set` acts on a
+  preparation (below).
+- Desired mode (P5): a `set` - `mode` `tiled` or `floating` and the `handle` its prepare's
+  completion gave - acts only through the slot that handle names, its widget's for the output the
+  set names, under this lifetime and shell, and as its holder's next request ends that preparation
+  whatever follows; a set with an older request number than the preparation's frees it as any other
+  request does. It is decided once per request identity and refused, in this order: `stale-context`
+  when the handle names no such slot (another lifetime's or shell's, an ended or consumed one,
+  another widget's) or the set names another output; `unavailable` when the provider cannot act and
+  `busy` while the tiler retries a start, the shortcut's or another set's - both free the slot, and
+  the menu prepares again on its next input; or the reason the preparation no longer holds, its
+  popup's focus included, checked again as the set is handled (so a change KWin does not notify is
+  found here). Otherwise the set consumes the slot and the script's tiler applies it
+  (`tiler.applyMode`, which the provider is given as `applier`; it is never given the tiler or its
+  token): Floating ends the session on the prepared view, or changes nothing, done either way; Tiled
+  leaves a view already tiled as it is - re-selecting is no toggle, and needs no target - and
+  otherwise moves the one session there as the shortcut's transfer does, the session elsewhere
+  ending first, reported, then the start with the prepared app as the master, refused `no-target`
+  with no app; focus goes to the app right after the first attempt, and a refusal leaves the old
+  session ended. A view whose master has left its tile, its session's end still queued (`vacated`),
+  is tiled no more: Tiled is handled there as on an untiled view, the vacated teardown taken now as
+  a press takes it. A tiler that throws refuses the set `unavailable`, unless it had already
+  answered it, and the read goes on. The completion is the tiler's outcome - `done`, or refused
+  `not-eligible`, `tree-refused`, `admission-refused` or `unavailable` - decided at once or, when
+  the admission is retried, once the retry ends: until then the frames carry none and a re-read does
+  nothing. The decision is recorded only if the original record is still current. It comes, at a
+  newer revision, to the frames of that exact set read again, and every later frame for it carries
+  it. A set handled afresh after the original record was replaced keeps its own answer even when
+  its payload is identical. A conflicting payload keeps `conflicting-request`, and a query reusing
+  the set's number carries no completion.
+  Each retry checks again only what its start needs - the target, the captured view's existence
+  (its output, desktop and activity), the lifetime and the shell connection the set came from, as
+  the reads know it: another one read since refuses it `shell-replaced`, while a shell gone with
+  none read yet does not, as the start uses nothing of the shell and the next shell's bars ask
+  afresh. It does not check the focus, which the transfer moves itself (the old master's restore
+  activates the old master on the way, then the prepared app is focused), or which view is
+  current: the set lays out the view it captured, as the shortcut does, and a switch the user
+  makes during the retries stands. A retry that fails its checks refuses the set with what failed,
+  an exception clears the pending retry and refuses it `unavailable`, and a press of the shortcut
+  meanwhile refuses it `cancelled`. A tree created for an unaccepted admission is released even
+  if the admission throws. A completion a failed publication
+  did not deliver goes out with the next one, and the retirement ends the lifetime before any
+  later outcome, so none follows it.
+- In a real session (P5 slice 3, 2026-11-22): fresh containers of the test image
+  `localhost/pf-layout-probe:f44-pf1-20261121` (KWin 6.8.3-1.fc44.pf1, plasma-workspace 6.8.3,
+  Qt 6.11.2), the desktop installed from slice 2's stage, and a scenario in the place of P6's menu.
+  It hid the clock's control, so the clock withdrew its request and stayed idle; saved `query`,
+  `prepare` and `set` requests in the clock's `layoutRequest` field through the shell's scripting;
+  woke the provider with its shortcut; and judged the frames in `layoutResponse` against KWin's own
+  state. The clock's calendar is the surface a prepare needs: in KWin's window list an applet popup
+  of the shell's process (the PID the bus gives for the shell's connection), not a normal window, on
+  the bar's output, opened with the pointer or, with the clock alone in the only bar and its
+  workspace dots hidden, with Space once Meta+Alt+P had given the bar focus. A prepare from it took
+  the app it was opened from, straight or through the bar's dock surface, and the popup kept focus
+  and the preparation held through the request's save and the publication, each a reload of the
+  clock's configuration. A set Tiled made the app the master and gave it focus, which closed the
+  calendar. From the tiled master, which is no eligible app, a prepare had no target, re-selecting
+  Tiled changed nothing and Floating ended the session; the set read again was not applied again;
+  with no app a set Tiled was refused `no-target`. A set's transfer, from a session on another
+  desktop of the same output and from one on the other output, was decided at once - its start took
+  the first admission - and left focus on the prepared app. On the way the old master's restore
+  activated the old master, and under KWin's default activation policy (`SwitchToOtherDesktop`) the
+  current desktop did not change: a KWin script recording activations and desktop changes, and
+  KWin's `currentChanged` signal on the bus, recorded no change of it, each having recorded the
+  user's own desktop switch first in the runs between two desktops. After the transfer away from a
+  desktop not shown, the old stack window kept the stack cell's size at its old position, as after
+  the shortcut's own transfer, which ends the session through the same `untoggle()` (#212). On
+  slice 1's provider and tiler, which refuse a set `intent`, the main variant failed each of its
+  four sets and each check that needed one to have acted, and passed the rest, the set read again
+  among them. Not shown here: a retried start (its checks, `busy` during it, `cancelled`), as every
+  set here was decided at once; the real menu's focus order (P6); two controls on one output; `busy`
+  between two bars; hardware timing; and XWayland apps.
+- In a real session (P6 slice 4, 2026-11-22): the same image and a top bar with the clock pill as
+  the only panel, the placement script enabled as the Fusion setup leaves it, and P6's menu in
+  place of the scenario. The provider answered the bar's query (mode floating, actions available);
+  a click on the control opened the menu, and the menu's first input prepared. With the calendar
+  open first, the press on the control hid it, and the prepare was done with no target
+  (`no-target`, the menu's "No app window to tile") and the preparation then ended `focus-changed`,
+  as section 6 of P6's design expected; Tiled was blocked. One publication took 69 ms from its
+  script's start to its answer, over the 50 ms limit, on the first prepare after the calendar
+  closed; the others stayed under it. The menu's first frame came 22 ms after the request. Not
+  shown: a set from the menu (the session had no app window to tile), and the retried start.
+- Decision 1's time limit: the shell serves a script call on its main thread and takes no input
+  until the call answers - in the G0 click reproduction a click sent meanwhile arrived when the call
+  ended - so a read or a publication should keep the shell at most 50 ms (`shellLimit`), which
+  leaves a click that comes at the worst moment well within the tenth of a second in which a
+  response still feels immediate. Each script says when it started, and each call that comes back is
+  said with two lengths: from the call to its answer, an upper bound of the shell's time on it, and
+  from the script's start to the answer. The second leaves out the time the call waited and the
+  script engine's setup before the script - together 1 to 7 ms over the 303 calls of the one-output
+  diagnostic sessions, but up to 46 ms in the two-output sessions and once 125 ms - and still counts
+  any delay before KWin handled the answer: it is the closer of the two, not a bound. A call over
+  the limit by the second, or by the first when there is no second, is also said, on a line of its
+  own, with the length it was judged by. A start outside the call means the clock moved between
+  KWin's reading and the shell's, both of the same system clock, and leaves only the first length. A
+  call the shell never answers fails at the bus's own timeout (KWin's `DBusCall`, 25 s), and the
+  pipeline goes on.
+- What a call costs the shell, and why the limit is watched rather than guaranteed: the scripts' own
+  statements are small and bounded - one script, at most 16 widgets read or written, widget data as
+  JSON; 0 to 1 ms in a test session - and a read, which writes nothing, took 0 to 3 ms from its
+  script's start. A publication also has the shell save its widget configuration to disk. The shell
+  reloads each widget written once the script is done, before it answers (plasma-workspace 6.8.3,
+  `Widget::~Widget`), and a reload reparses the configuration, syncing it first when it has pending
+  changes (libplasma 6.8.3's `Applet::configChanged`, KConfig 6.32's `reparseConfiguration`, through
+  `QSaveFile`, whose `commit` syncs to disk in Qt 6.11): one save per publication while the clock's
+  schema does not declare the response field. Once it declares it - as P3 must, for
+  `Plasmoid.configuration` to carry the frames - the shell's `writeConfig` saves the schema at every
+  write (`Applet::writeConfig`, KConfig's `KCoreConfigSkeleton::save`): one save per frame. In P1's
+  test sessions - containers whose storage is podman's overlay on ext4 on an NVMe SSD (as read on
+  2026-11-22; that it was the same during P1's runs is an inference), with pills not yet wired to
+  the provider - publications of 16 frames took a median of 5 to 8 ms from the script's start
+  undeclared and 21 to 26 ms declared, of one frame 2 and 3 ms. Undeclared, most runs also had a few
+  calls of 52 to 332 ms, with one frame as with sixteen; declared, six runs had none over 50 ms. On
+  real hardware (P7, 2026-11-22: a ThinkPad X13 Yoga Gen 4, Core i5-1335U, WD SN740 NVMe under btrfs
+  with zstd compression; KWin 6.8.3-1.fc44.pf1, plasma-workspace 6.8.3, Qt 6.11.2), in private
+  sessions of the provider and clock as committed at 56f7359, 20 desktop switches a run, an idle
+  machine met the reading accepted for decision 1 - every one-frame publication and the median of
+  sixteen frames under the limit: the 180 timed publications of 16 frames took a median of 34 ms
+  from the script's start (p95 43 ms, the longest 60 ms, 3 over 50 ms), and the 120 timed of one
+  frame a median of 5 ms (the longest 16 ms; with the 6 at start-up, all 126 under the limit), about
+  2 ms a frame, where a save of the 14 KB configuration file on its own - written, synced and
+  renamed - took a median of 0.5 ms. Load takes that margin away: with one busy loop per logical CPU
+  every publication of 16 frames was over the limit, at a median of 240 ms, and those of one frame
+  took at most 40 ms; the four publications of 16 frames that met a 256 MiB copy synced to the same
+  disk took 162 to 187 ms. With a probe in the shell - a QML `Timer`, which follows the animation
+  timer - a stall of its main thread covered each of the containers' 20 long undeclared calls from
+  its script's start to its answer; declared, with sixteen bars, the probe's ticks were 41 to 55 ms
+  apart around about half the publications, from just before the call; and on the device they were
+  42 to 67 ms apart around nearly every idle publication of 16 frames, from its script's start to
+  its answer. In the declared runs and on the device the gaps mostly ended some 16 ms after the
+  answer, so whether the shell was still busy then or the probe ticked late was not isolated. With
+  no publication the same desktop switches gave no gap over 40 ms, nor did one frame on the device,
+  and KWin's own probe there saw none over 40 ms. What in the shell's handling takes that long was
+  not isolated: the test image has no tracer, and none ran in the device's sessions. The provider
+  keeps the saves to what the schema asks - a writer that reloaded each widget itself would save
+  once per widget, which doubled a publication's median cost - publishes only for a new request, a
+  changed state or a frame the shell did not confirm, and says each call over the limit; it cannot
+  make the shell's saves shorter, and does not time the retirement's offline frames, whose answer
+  reaches nothing.
 
 ### What it rides
 

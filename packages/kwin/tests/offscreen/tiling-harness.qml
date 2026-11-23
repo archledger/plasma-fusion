@@ -18,13 +18,21 @@
     maximized, settled at the next toggle - and the admission's retries.
     A third (scenario: "unload") unloads the script mid-session as KWin unloads a declarative
     script: the driver makes it in a context of its own and deletes that context first
-    (KWinScript in tiling_lifecycle_test.py).
+    (KWinScript in tiling_lifecycle_test.py). Another (scenario: "refused-provider") has the
+    writer refuse the provider registration with the fork's null UUID, and one
+    ("late-memory") has it answer the memory's first read with nothing; "provider-rules"
+    checks the layout provider's own rules without the script, and "time-limit" the shell's
+    time its reads and publications take, as decision 1 bounds it. Every run follows the
+    script's layout provider (LayoutProvider.qml) - online, capable, the session and its view,
+    one revision per change - and the driver checks that order and that no two runs share a
+    lifetime label.
     Context properties from the driver: packagesRoot (a directory holding
     scripts/plasmafusion-placement), config prefill through the KWin context object.
 */
 
 import QtQuick
 import org.kde.kwin as KWinStubs
+import org.kde.plasma.workspace.dbus as DBusStubs
 
 Item {
     id: harness
@@ -59,6 +67,14 @@ Item {
     property int stepIndex: 0
     property var problems: []
     property var facadeCalls: []
+    // The facade's read-only calls, apart: the runs' exact facadeCalls lists stay as they are.
+    property var readCalls: []
+    // The script's layout provider (LayoutProvider.qml), its states as they moved - the one
+    // it started with, then one entry per revision - and its lifetime label (trackProvider;
+    // the driver checks the order and that no two runs share a label).
+    property var provider: null
+    property var providerStates: []
+    property string providerLabel: ""
     property var snapshot: ({})
     property var script: null
     property var tileShortcut: null
@@ -94,9 +110,11 @@ Item {
         return fakeWindow.createObject(harness, over);
     }
 
-    // The mock facade: every method the script can call, each one recorded in facadeCalls, and
-    // no method the fork's facade does not have (kwin src/scripting/transienttilingapi.h) - a
-    // call the mock answers and the compositor cannot is a failure only hardware would show.
+    // The mock facade: every method the script can call, each one recorded - in facadeCalls, or
+    // in readCalls for the read-only ones (floatingFrame, windowBinding, snapshot, hasTree,
+    // masterWindowRect) - and no method the fork's facade does not have (kwin
+    // src/scripting/transienttilingapi.h) - a call the mock answers and the compositor cannot is
+    // a failure only hardware would show.
     // createTile also snapshots the stack windows' geometry at call time - invariant 8 (the
     // native admission before any stack write) is checkable from that snapshot.
     QtObject {
@@ -104,6 +122,14 @@ Item {
         property var placeStackWindow: null
         property bool refuseCreate: false
         property bool refuseAdmit: false
+        // The token the mock grants, as the fork writes one (a braced UUID), and what
+        // registerProvider answers: that token, or the fork's refusal (scenario
+        // "refused-provider").
+        readonly property string grantedToken: "{5d3c9a1e-7b2f-4c6d-8e9a-0b1c2d3e4f5a}"
+        property string providerAnswer: grantedToken
+        // How many snapshot() calls the writer leaves unanswered, as at load time before its
+        // snapshot is ready (scenario "late-memory").
+        property int snapshotSilences: 0
         // The native admission can land the window on the tile before it returns (a client
         // whose size already fits needs no configure): the mock then moves the window inside
         // admitTile.
@@ -133,7 +159,7 @@ Item {
         // How many more settle questions find the window's geometry unsettled: the client
         // has that many configures left to answer.
         property int unsettledAnswers: 0
-        // The next admissions' answers, in order (none left: accepted).
+        // The next admissions' answers, in order (none left: accepted, "throw": exception).
         property var admitAnswers: []
         // The window on the tile and the key it was admitted under. KWin's Window.tile is the
         // transient leaf for as long as the window is owned, through full screen and back.
@@ -217,7 +243,7 @@ Item {
             let result = 0;
             if (!held) {
                 result = 1;
-            } else if (token !== "harness-token") {
+            } else if (token !== grantedToken) {
                 result = 2;
             } else if (held.provider !== undefined && held.provider !== token && !successorSettle) {
                 result = 2; // a fork that keeps the record to the provider that admitted the window
@@ -239,12 +265,13 @@ Item {
         }
         // The record's floating frame, owned or released; null without a record.
         function floatingFrame(w) {
+            harness.readCalls = harness.readCalls.concat([{ op: "floatingFrame" }]);
             const f = floatings[String(window(w).internalId)];
             return f ? Qt.rect(f.x, f.y, f.width, f.height) : Qt.rect(0, 0, 0, 0);
         }
         function registerProvider(item) {
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "registerProvider" }]);
-            return "harness-token";
+            return providerAnswer;
         }
         function trackWindow(w, key) {
             harness.facadeCalls = harness.facadeCalls.concat([{ op: "trackWindow", window: String(w.internalId), key: key }]);
@@ -267,6 +294,7 @@ Item {
             return true;
         }
         function windowBinding(w) {
+            harness.readCalls = harness.readCalls.concat([{ op: "windowBinding" }]);
             const key = tracked[String(w.internalId)];
             return key === undefined ? "" : key;
         }
@@ -279,9 +307,22 @@ Item {
             }
             return 0; // Accepted
         }
-        function snapshot() { return { entries: entries }; }
-        function hasTree() { return treeAlive; }
-        function masterWindowRect() { return masterRect; }
+        function snapshot() {
+            harness.readCalls = harness.readCalls.concat([{ op: "snapshot" }]);
+            if (snapshotSilences > 0) {
+                snapshotSilences -= 1;
+                return null;
+            }
+            return { entries: entries };
+        }
+        function hasTree() {
+            harness.readCalls = harness.readCalls.concat([{ op: "hasTree" }]);
+            return treeAlive;
+        }
+        function masterWindowRect() {
+            harness.readCalls = harness.readCalls.concat([{ op: "masterWindowRect" }]);
+            return masterRect;
+        }
         // A record the native layer keeps of a window, which the script under test knows
         // nothing of: a release left the window where it stands before the script was loaded.
         function keepRecord(w, floating) {
@@ -328,6 +369,9 @@ Item {
             if (admitAnswers.length > 0) {
                 const answer = admitAnswers[0];
                 admitAnswers = admitAnswers.slice(1);
+                if (answer === "throw") {
+                    throw new Error("admission failed unexpectedly");
+                }
                 if (answer !== 0) {
                     return answer;
                 }
@@ -469,10 +513,102 @@ Item {
             property var requestedGeometry: null
             signal maximizedAboutToChange(int mode)
             signal maximizedChanged()
+            // The window's process and its kind, as the fork's Window has them (window.h at
+            // v6.8.3-pf1: pid, appletPopup, dock, desktopWindow): the layout provider counts a
+            // shell surface only by the shell's PID and one of the three kinds (P5).
+            property int pid: 0
+            property bool appletPopup: false
+            property bool dock: false
+            property bool desktopWindow: false
+            // Out of the taskbar or the window switcher, as the fork's Window notifies them
+            // (skipTaskbarChanged, skipSwitcherChanged): an app that leaves either is no target.
+            property bool skipTaskbar: false
+            property bool skipSwitcher: false
         }
     }
 
     Component.onCompleted: {
+        if (scenario === "publication") {
+            try {
+                runPublication();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
+        if (scenario === "time-limit") {
+            try {
+                runTimeLimit();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
+        if (scenario === "unconfirmed") {
+            try {
+                runUnconfirmed();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
+        if (scenario === "read-pipeline") {
+            try {
+                runReadPipeline();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
+        if (scenario === "set") {
+            try {
+                runSet();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
+        if (scenario === "prepare") {
+            try {
+                runPrepare();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
+        if (scenario === "provider-rules") {
+            try {
+                runProviderRules();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
+        if (scenario === "late-memory") {
+            try {
+                runLateMemory();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
+        if (scenario === "refused-provider") {
+            try {
+                runRefusedProvider();
+            } catch (e) {
+                fail("harness threw: " + e);
+                done = true;
+            }
+            return;
+        }
         if (scenario === "stranded") {
             try {
                 runStranded();
@@ -584,12 +720,17 @@ Item {
     // The view and the three windows, before any script.
     function setupView() {
         const ws = KWinStubs.Workspace;
+        // The stand-in Workspace is the engine's: every run starts from its declared outputs and
+        // desktops, whatever an earlier run left (a second display, a desktop of an output's own).
+        ws.screens = Qt.binding(() => [ws.activeScreen]);
+        ws.outputDesktops = ({});
         // The view: desktop {id: 11}, activity "a", the stub's single screen.
         const desktop = { id: 11 };
         firstDesktop = desktop;
         ws.desktops = [desktop];
         ws.currentDesktop = desktop;
         ws.currentActivity = "a";
+        ws.activities = ["a", "b"];
         // A 133% output, as the ThinkPad's: the frames KWin lands are not the whole-pixel cells.
         ws.activeScreen = { name: "Virtual-1", geometry: Qt.rect(0, 0, 1440, 900), devicePixelRatio: 4 / 3 };
         const older = legacyFacade ? facadeWithoutRestore() : interimFacade ? facadeWithoutRestore(["restoreWindow"]) : null;
@@ -641,7 +782,2954 @@ Item {
             fail("the Tile Workspace shortcut was not registered");
             return "";
         }
+        trackProvider();
         return masterKey;
+    }
+
+    // The layout provider the script made: its states are recorded from now on, one entry
+    // per revision, and its label kept for the driver.
+    function trackProvider() {
+        for (let i = 0; i < script.data.length; ++i) {
+            if (script.data[i] && script.data[i].objectName === "layoutProvider") {
+                provider = script.data[i];
+            }
+        }
+        if (!provider) {
+            fail("the script made a layout provider");
+            return;
+        }
+        follow(provider);
+    }
+
+    function follow(made) {
+        provider = made;
+        providerLabel = made.label;
+        const take = () => { providerStates = providerStates.concat([providerState()]); };
+        take();
+        made.revisionChanged.connect(take);
+    }
+
+    function providerState() {
+        return provider ? { revision: provider.revision, online: provider.online, capable: provider.capable,
+                            active: provider.active, desktopId: provider.desktopId,
+                            activityId: provider.activityId, outputName: provider.outputName,
+                            views: JSON.stringify(provider.views === undefined ? null : provider.views),
+                            preparations: JSON.stringify(provider.preparations === undefined ? null
+                                                         : provider.preparations),
+                            // A set decided after its read moves the revision with its completion
+                            // alone (P5).
+                            completions: JSON.stringify(provider.requests === undefined ? null
+                                                        : provider.requests.map(r => [r.id, r.request,
+                                                            r.completion === undefined ? null : r.completion])) } : null;
+    }
+
+    // The provider moved `moves` revisions since the state `before` and now reads `fields`.
+    function expectProvider(what, before, moves, fields) {
+        const now = providerState();
+        if (!now || !before) {
+            fail(what + ": the script's layout provider is there");
+            return;
+        }
+        if (now.revision !== before.revision + moves) {
+            fail(what + ": the provider's revision moved " + (now.revision - before.revision) + " time(s), not " + moves);
+        }
+        for (const field in fields) {
+            if (now[field] !== fields[field]) {
+                fail(what + ": the provider's " + field + " is " + JSON.stringify(now[field])
+                     + ", not " + JSON.stringify(fields[field]));
+            }
+        }
+    }
+
+    // A provider's RequestName calls on the stand-in session bus. One engine runs every
+    // scenario, so a run's own are those for its provider's name.
+    function identityRequests(p) {
+        return DBusStubs.SessionBus.calls.filter(c => c.message.member === "RequestName" && c.message.arguments
+                                                 && c.message.arguments[0] === p.identityName);
+    }
+
+    // One RequestName, as the layout probe asks for its own name: for the name the lifetime
+    // label makes, to the bus itself, without queueing (flag 4), with an explicit signature so
+    // the plugin sends the flags as a uint32. The pending reply, for the test to answer.
+    function expectIdentityRequest(what, p) {
+        if (p.identityName !== "org.plasmafusion.LayoutProvider.p" + p.label) {
+            fail(what + ": the identity name is the prefix and the lifetime label (got " + p.identityName + ")");
+        }
+        const requests = identityRequests(p);
+        if (requests.length !== 1) {
+            fail(what + ": one RequestName for the identity name (got " + requests.length + ")");
+            return null;
+        }
+        const m = requests[0].message;
+        if (m.service !== "org.freedesktop.DBus" || m.path !== "/org/freedesktop/DBus" || m.iface !== "org.freedesktop.DBus"
+                || m.signature !== "(su)" || m.arguments.length !== 2 || m.arguments[1] !== 4) {
+            fail(what + ": RequestName goes to the bus without queueing, (su) with flag 4 (got " + JSON.stringify(m) + ")");
+        }
+        return requests[0].reply;
+    }
+
+    // A lifetime label that owes nothing to the native token (P0's probe once derived it from
+    // the token, so every refused lifetime shared one).
+    function expectOwnLabel(what, token) {
+        const bare = token.replace(/^\{|\}$/g, "");
+        if (!/^[0-9a-f]{32}$/.test(providerLabel) || providerLabel === Qt.md5(token) || providerLabel === Qt.md5(bare)) {
+            fail(what + ": the provider's label is its own, not the token's (got " + providerLabel + ")");
+        }
+    }
+
+    // The layout provider's reader script as plasmashell runs it: `panels()` and `print()` are
+    // the shell's, each panel lists its widgets by applet id, and a widget reads its saved
+    // config. Fakes stand in for them; the script's printed answer, parsed, or as printed with
+    // `raw`.
+    function runReaderScript(script, panelWidgets, raw) {
+        let printed = null;
+        const panelsFake = () => panelWidgets.map(widgets => ({
+            widgets: type => widgets.filter(w => w.type === type).map(w => ({
+                id: w.id, currentConfigGroup: [],
+                readConfig: function (key, fallback) {
+                    return JSON.stringify(this.currentConfigGroup) === JSON.stringify(["General"]) && key === "layoutRequest"
+                        ? w.text : fallback;
+                }
+            }))
+        }));
+        (new Function("panels", "print", script))(panelsFake, text => { printed = text; });
+        return printed === null ? null : raw ? printed : JSON.parse(printed);
+    }
+
+    function query(consumer, request, extra) {
+        return JSON.stringify(Object.assign({ consumer: consumer, request: request, version: 1, intent: "query",
+                                              outputName: "Virtual-1" }, extra || {}));
+    }
+
+    // The shell's answers as the provider's scripts print them: what the reader found or how
+    // many frames the writer wrote, and when the script started in the shell - now, unless the
+    // test gives the time.
+    function readAnswer(rows, start) {
+        return JSON.stringify({ start: start === undefined ? Date.now() : start, rows: rows });
+    }
+
+    function writeAnswer(written, start) {
+        return JSON.stringify({ start: start === undefined ? Date.now() : start, written: written });
+    }
+
+    // The layout provider's writer script as plasmashell runs it: each panel lists its widgets
+    // by applet id, and a widget writes its config in the group it was given. Fakes stand in
+    // for them; what the script printed, and every write it made.
+    function runWriterScript(script, panelWidgets) {
+        let printed = null;
+        const writes = [];
+        const panelsFake = () => panelWidgets.map(widgets => ({
+            widgets: type => widgets.filter(w => w.type === type).map(w => ({
+                id: w.id, currentConfigGroup: [],
+                writeConfig: function (key, value) {
+                    writes.push({ id: w.id, group: JSON.stringify(this.currentConfigGroup), key: key, value: value });
+                }
+            }))
+        }));
+        (new Function("panels", "print", script))(panelsFake, text => { printed = text; });
+        return { printed: printed, writes: writes };
+    }
+
+    // A value as JSON with its keys sorted at every level, to compare frames whatever order
+    // their fields were made in.
+    function canonical(value) {
+        if (value === null || value === undefined || typeof value !== "object") {
+            return JSON.stringify(value === undefined ? null : value);
+        }
+        if (Array.isArray(value)) {
+            return "[" + value.map(canonical).join(",") + "]";
+        }
+        return "{" + Object.keys(value).sort().map(key => JSON.stringify(key) + ":" + canonical(value[key])).join(",") + "}";
+    }
+
+    // The frames the writer's call `index` carries, by widget, as the shell stores them when
+    // the clock's widgets `ids` are on a panel.
+    function framesOf(p, index, ids) {
+        const frames = {};
+        if (!p.writer || index >= p.writer.callLog.length) {
+            return frames;
+        }
+        const run = runWriterScript(p.writer.callLog[index][0],
+                                    [ids.map(id => ({ type: "org.plasmafusion.clockpill", id: id }))]);
+        for (const write of run.writes) {
+            frames[write.id] = JSON.parse(write.value);
+        }
+        return frames;
+    }
+
+    // The frame an online provider sends a row: the version, the request it answers, the
+    // provider's lifetime and the state's order, then `fields` (the state, or the refusal).
+    function frameWanted(p, row, fields) {
+        return Object.assign({ version: 1, consumer: row.consumer, request: row.request, epoch: p.label,
+                               identityName: p.identityName, backendOwner: ":1.42", revision: p.revision,
+                               status: "online" }, fields);
+    }
+
+    // The publication side of the layout provider's pipeline, on the real script: each request
+    // and refusal the last read found is answered in its clock's response field, by one shell
+    // script call on the connection the requests came from; a frame says whether a session tiles
+    // the bar's own view - its output, that output's current desktop, the current activity - and
+    // no other; a widget is written again only when what its frame says changes - a new request,
+    // a state change, its view, a new shell, or its return to the read - or when the shell did not
+    // confirm its last frame, and never during a read or another publication, the wakes and state
+    // changes meanwhile waiting and coalescing; a publication the shell wrote short, or a failed
+    // one, confirms none of its frames and lets the pipeline go on; the retirement sends the
+    // offline frame to every request and refusal it kept, then releases the name.
+    function runPublication() {
+        if (setup() === "") {
+            done = true;
+            return;
+        }
+        const ws = KWinStubs.Workspace;
+        const p = provider;
+        const w = p.writer;
+        if (!w || w.calls !== 0 || !p.capable) {
+            fail("publication: a capable provider whose writer has written nothing yet (writer " + (w ? w.calls : "none")
+                 + ", capable " + p.capable + ")");
+            done = true;
+            return;
+        }
+        // A second output, on the same desktop and activity: a bar there shares everything with
+        // the session's view but its output.
+        const second = { name: "Virtual-2", geometry: Qt.rect(1440, 0, 1440, 900), devicePixelRatio: 1 };
+        ws.screens = [ws.activeScreen, second];
+        const otherDesktop = { id: 12 };
+        const thirdDesktop = { id: 13 };
+        DBusStubs.SessionBus.answer(expectIdentityRequest("publication", p), [{ value: 1 }]);
+        p.identityLookup.finished([":1.42"]);
+        p.shellLookup.finished([":1.9"]);
+        const hostile = "q\"'\\\n</s>${x}\u2028\u2029";
+        const rows = [
+            { id: 1, consumer: "c1", request: 1, version: 1, intent: "query", outputName: "Virtual-1" },
+            { id: 3, consumer: hostile, request: 3, version: 1, intent: "query", outputName: "Virtual-1" },
+            { id: 5, consumer: "c5", request: 5, version: 1, intent: "query", outputName: "Gone-1" },
+            { id: 12, consumer: "c12", request: 12, version: 2, intent: "query", outputName: "Virtual-1" },
+            { id: 21, consumer: "c21", request: 21, version: 1, intent: "query", outputName: "Virtual-2" }
+        ];
+        // The rows as the clocks hold them now: a later step renews one request at a time.
+        const current = rows.map(row => Object.assign({}, row));
+        const renew = (id, request) => {
+            current.find(row => row.id === id).request = request;
+        };
+        const retarget = (id, request, outputName) => {
+            Object.assign(current.find(row => row.id === id), { request: request, outputName: outputName });
+        };
+        const now = () => readAnswer(current);
+        const row = id => current.find(entry => entry.id === id);
+        if (w.calls !== 0) {
+            fail("publication: nothing is published before the read comes back (writes " + w.calls + ")");
+        }
+        p.reader.finished([now()]);
+        // One publication, right after the read, to the connection the requests came from.
+        if (w.calls !== 1 || w.service !== ":1.9" || w.path !== "/PlasmaShell" || w.dbusInterface !== "org.kde.PlasmaShell"
+                || w.method !== "evaluateScript" || w.callLog[0].length !== 1) {
+            fail("publication: the read's answers go out by evaluateScript on the connection the requests came from (got "
+                 + w.calls + " " + w.service + " " + w.path + " " + w.dbusInterface + " " + w.method + ")");
+            done = true;
+            return;
+        }
+        // The writer script, run as the shell runs it: the clock's widgets only, each in the General
+        // group's response field, the frames carried as data (no raw line separator in the code).
+        const script = w.callLog[0][0];
+        if (/[\u2028\u2029]/.test(script)) {
+            fail("publication: the writer script carries no raw line separator: the frames travel as data");
+        }
+        const clock = "org.plasmafusion.clockpill";
+        const run = runWriterScript(script, [
+            [{ type: clock, id: 1 }, { type: "org.kde.plasma.digitalclock", id: 3 }, { type: clock, id: 3 }],
+            [{ type: clock, id: 5 }, { type: clock, id: 12 }, { type: clock, id: 99 }, { type: clock, id: 21 }]
+        ]);
+        const general = JSON.stringify(["General"]);
+        const targets = run.writes.map(write => [write.id, write.group, write.key]);
+        let printed = null;
+        try {
+            printed = JSON.parse(run.printed);
+        } catch (e) {
+            printed = null;
+        }
+        if (JSON.stringify(targets) !== JSON.stringify([[1, general, "layoutResponse"], [3, general, "layoutResponse"],
+                                                       [5, general, "layoutResponse"], [12, general, "layoutResponse"],
+                                                       [21, general, "layoutResponse"]])
+                || !printed || printed.written !== 5 || !Number.isFinite(printed.start)) {
+            fail("publication: the clock's widgets that asked are written, each in its response field, and counted, with"
+                 + " the time the script started (got " + JSON.stringify(targets) + ", printed " + run.printed + ")");
+        }
+        // Each frame: the version, the request it answers, the provider's lifetime, the state's
+        // order and the state - the capability, the bar's view as the provider resolves it from
+        // the bar's output (none for an output it does not know) and whether a session tiles it;
+        // a refusal carries its reason instead of the state. Nothing else.
+        const view = { desktopId: "11", activityId: "a", outputName: "Virtual-1" };
+        const secondView = { desktopId: "11", activityId: "a", outputName: "Virtual-2" };
+        const first = {};
+        for (const write of run.writes) {
+            first[write.id] = JSON.parse(write.value);
+        }
+        const wanted = {
+            1: frameWanted(p, rows[0], { capable: true, view: view, tiled: false }),
+            3: frameWanted(p, rows[1], { capable: true, view: view, tiled: false }),
+            5: frameWanted(p, rows[2], { capable: true, view: null, tiled: false }),
+            12: frameWanted(p, rows[3], { refused: "version" }),
+            21: frameWanted(p, rows[4], { capable: true, view: secondView, tiled: false })
+        };
+        for (const id of [1, 3, 5, 12, 21]) {
+            if (canonical(first[id]) !== canonical(wanted[id])) {
+                fail("publication: the frame for widget " + id + " (got " + canonical(first[id]) + ", not "
+                     + canonical(wanted[id]) + ")");
+            }
+        }
+        const atFirst = p.revision;
+        // While it is outstanding a wake reads nothing and a state change publishes nothing.
+        p.wake.activated();
+        if (p.shellLookup.calls !== 1) {
+            fail("publication: no read starts while a publication is outstanding (lookups " + p.shellLookup.calls + ")");
+        }
+        tileShortcut.activated();
+        if (!p.active || p.revision !== atFirst + 1) {
+            fail("publication: the toggle started a session (active " + p.active + ", revision " + p.revision + ")");
+        }
+        const all = [1, 3, 5, 12, 21];
+        const ids = frames => JSON.stringify(Object.keys(frames).sort());
+        // A session on Virtual-1 tiles widgets 1 and 3's view, never 21's on Virtual-2.
+        const sessionTold = got => ids(got) === JSON.stringify(["1", "3"]) && got[1].tiled === true && got[3].tiled === true;
+        let since = Date.now();
+        // The revision before a view change, for the step that checks it moved once.
+        let atView = 0;
+        steps = [
+            { name: "a state change waits for the publication", until: () => Date.now() - since >= 100, run: function () {
+                if (w.calls !== 1) {
+                    fail("publication: a state change waits for the outstanding publication (writes " + w.calls + ")");
+                }
+                // The shell says it wrote four of the five: the count is said with the publication,
+                // and as the answer does not say which widget was not found, none of the five is
+                // confirmed.
+                w.finished([writeAnswer(4)]);
+                // Then the session goes out, once the publication answered, to all five: the bars
+                // on the session's view tiled, the one on the other output not.
+                const got = framesOf(p, 1, all);
+                if (w.calls !== 2 || ids(got) !== JSON.stringify(["1", "12", "21", "3", "5"])
+                        || canonical(got[1]) !== canonical(frameWanted(p, rows[0], { capable: true, view: view, tiled: true }))
+                        || canonical(got[3]) !== canonical(frameWanted(p, rows[1], { capable: true, view: view, tiled: true }))
+                        || canonical(got[5]) !== canonical(frameWanted(p, rows[2], { capable: true, view: null, tiled: false }))
+                        || canonical(got[12]) !== canonical(frameWanted(p, rows[3], { refused: "version" }))
+                        || canonical(got[21]) !== canonical(frameWanted(p, rows[4], { capable: true, view: secondView,
+                                                                                     tiled: false }))) {
+                    fail("publication: a publication the shell wrote four of five of confirms none, so the session goes to"
+                         + " all five once it answered, tiled only on the session's view (writes " + w.calls + ", got "
+                         + canonical(got) + ")");
+                }
+                since = Date.now();
+            } },
+            { name: "the wake waits for every publication", until: () => Date.now() - since >= 100, run: function () {
+                if (p.shellLookup.calls !== 1) {
+                    fail("publication: the wake waits while a publication is outstanding (lookups " + p.shellLookup.calls + ")");
+                }
+                w.finished([writeAnswer(5)]);
+            } },
+            { name: "the wake's read", until: () => p.shellLookup.calls === 2, run: function () {
+                // The same requests and the same state: nothing is written again.
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([now()]);
+                if (w.calls !== 2 || p.reading || p.publishing) {
+                    fail("publication: a read that finds nothing new publishes nothing (writes " + w.calls + ")");
+                }
+                p.wake.activated();
+            } },
+            { name: "a state change during a read", until: () => p.shellLookup.calls === 3, run: function () {
+                p.shellLookup.finished([":1.9"]);
+                // The read is in flight: the untoggle waits for its end.
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "the read's end releases it", until: () => Date.now() - since >= 100, run: function () {
+                if (w.calls !== 2) {
+                    fail("publication: a state change waits for the read in flight (writes " + w.calls + ")");
+                }
+                p.reader.finished([now()]);
+                const got = framesOf(p, 2, all);
+                if (w.calls !== 3 || ids(got) !== JSON.stringify(["1", "3"]) || got[1].tiled !== false || got[3].tiled !== false) {
+                    fail("publication: the untoggle goes out at the read's end, to the widgets it changes (writes " + w.calls
+                         + ", got " + canonical(got) + ")");
+                }
+                w.finished([writeAnswer(2)]);
+                p.wake.activated();
+            } },
+            { name: "a widget that left the read", until: () => p.shellLookup.calls === 4, run: function () {
+                // Widget 5 is not read (its request went): nothing to tell, and its record goes.
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([readAnswer(current.filter(entry => entry.id !== 5))]);
+                if (w.calls !== 3 || p.sent[5] !== undefined || p.sent[1] === undefined) {
+                    fail("publication: a widget no longer read is told nothing and forgotten (writes " + w.calls + ", record "
+                         + JSON.stringify(Object.keys(p.sent)) + ")");
+                }
+                p.wake.activated();
+            } },
+            { name: "a widget that came back", until: () => p.shellLookup.calls === 5, run: function () {
+                // Read again, it is told again, and alone.
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([now()]);
+                const got = framesOf(p, 3, all);
+                if (w.calls !== 4 || ids(got) !== JSON.stringify(["5"])
+                        || canonical(got[5]) !== canonical(frameWanted(p, rows[2], { capable: true, view: null, tiled: false }))) {
+                    fail("publication: a widget read again is told again, alone (writes " + w.calls + ", got " + canonical(got) + ")");
+                }
+                w.finished([writeAnswer(1)]);
+                p.wake.activated();
+            } },
+            { name: "a new request", until: () => p.shellLookup.calls === 6, run: function () {
+                p.shellLookup.finished([":1.9"]);
+                renew(1, 2);
+                p.reader.finished([now()]);
+                // Answered alone, with the state as it stands (the revision has not moved).
+                const got = framesOf(p, 4, all);
+                if (w.calls !== 5 || ids(got) !== JSON.stringify(["1"])
+                        || canonical(got[1]) !== canonical(frameWanted(p, row(1), { capable: true, view: view, tiled: false }))) {
+                    fail("publication: a new request is answered alone, with the state as it stands (writes " + w.calls
+                         + ", got " + canonical(got) + ")");
+                }
+                // A wake during it, then the publication fails: what it carried is no longer taken
+                // as told, and the pipeline goes on - the wake's read follows, and writes the frame
+                // again.
+                p.wake.activated();
+                w.failed();
+                if (p.publishing) {
+                    fail("publication: a failed publication ends");
+                }
+            } },
+            { name: "the read after a failed publication", until: () => p.shellLookup.calls === 7, run: function () {
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([now()]);
+                if (w.calls !== 6 || ids(framesOf(p, 5, all)) !== JSON.stringify(["1"])) {
+                    fail("publication: what a failed publication said is written again (writes " + w.calls + ")");
+                }
+                w.finished([writeAnswer(1)]);
+                p.wake.activated();
+            } },
+            { name: "a new shell", until: () => p.shellLookup.calls === 8, run: function () {
+                // Another shell connection was told nothing: every frame goes to it.
+                p.shellLookup.finished([":1.10"]);
+                p.reader.finished([now()]);
+                if (w.calls !== 7 || w.service !== ":1.10" || ids(framesOf(p, 6, all)) !== JSON.stringify(["1", "12", "21", "3", "5"])) {
+                    fail("publication: a new shell is told every frame (writes " + w.calls + " to " + w.service + ")");
+                }
+                w.finished([writeAnswer(5)]);
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "the toggle", until: () => w.calls === 8 || Date.now() - since >= 300, run: function () {
+                const got = framesOf(p, 7, all);
+                if (w.calls !== 8 || !sessionTold(got)) {
+                    fail("publication: the toggle is told to the bars on its view, not to the one on another output (writes "
+                         + w.calls + ", got " + canonical(got) + ")");
+                }
+                w.finished([writeAnswer(2)]);
+                // The session's output switches to another desktop (the session stays where it
+                // was), as KWin says it - a signal for that output: the bars there are told at once,
+                // at a newer revision, with no read.
+                atView = p.revision;
+                ws.outputDesktops = { "Virtual-1": otherDesktop };
+                ws.currentDesktopChanged();
+                since = Date.now();
+            } },
+            { name: "a desktop switch on the session's output", until: () => w.calls === 9 || Date.now() - since >= 300, run: function () {
+                const got = framesOf(p, 8, all);
+                if (w.calls !== 9 || p.shellLookup.calls !== 8 || p.revision !== atView + 1 || ids(got) !== JSON.stringify(["1", "3"])
+                        || got[1].tiled !== false || got[3].tiled !== false || got[1].view.desktopId !== "12"
+                        || got[3].view.desktopId !== "12" || got[1].revision !== p.revision) {
+                    fail("publication: a desktop switch on the session's output is told at once, at a newer revision, to the"
+                         + " bars there, none tiled (writes " + w.calls + ", lookups " + p.shellLookup.calls + ", revision "
+                         + p.revision + " after " + atView + ", got " + canonical(got) + ")");
+                }
+                w.finished([writeAnswer(2)]);
+                // Then widget 3 asks again: its answer alone - the others were told already.
+                renew(3, 4);
+                p.wake.activated();
+            } },
+            { name: "a request after the drift", until: () => p.shellLookup.calls === 9, run: function () {
+                p.shellLookup.finished([":1.10"]);
+                p.reader.finished([now()]);
+                const got = framesOf(p, 9, all);
+                if (w.calls !== 10 || ids(got) !== JSON.stringify(["3"]) || got[3].request !== 4 || got[3].view.desktopId !== "12"
+                        || got[3].revision !== p.revision) {
+                    fail("publication: after the drift a new request is answered alone, the drift told already (writes "
+                         + w.calls + ", got " + canonical(got) + ")");
+                }
+                w.finished([writeAnswer(1)]);
+                // A signal that changes no bar's view moves nothing.
+                atView = p.revision;
+                ws.currentDesktopChanged();
+                since = Date.now();
+            } },
+            { name: "a signal that changes nothing", until: () => Date.now() - since >= 200, run: function () {
+                if (p.revision !== atView || w.calls !== 10) {
+                    fail("publication: a signal that changes no bar's view moves nothing (revision " + p.revision + " after "
+                         + atView + ", writes " + w.calls + ")");
+                }
+                // Widget 1 asks again; its read will cross a view change.
+                renew(1, 3);
+                p.wake.activated();
+            } },
+            { name: "a read that crosses a view change", until: () => p.shellLookup.calls === 10, run: function () {
+                p.shellLookup.finished([":1.10"]);
+                // The desktop comes back while the read is out, and the read comes back in the same
+                // turn, before the change is resolved: the answer carries the view as the state tells
+                // it - the stored one, at the revision it goes with - never a newer one.
+                atView = p.revision;
+                ws.outputDesktops = ({});
+                ws.currentDesktopChanged();
+                p.reader.finished([now()]);
+                const got = framesOf(p, 10, all);
+                if (w.calls !== 11 || ids(got) !== JSON.stringify(["1"]) || got[1].request !== 3 || got[1].view.desktopId !== "12"
+                        || got[1].revision !== atView) {
+                    fail("publication: a read that crosses a view change answers with the view its revision tells (writes "
+                         + w.calls + ", got " + canonical(got) + ")");
+                }
+                w.finished([writeAnswer(1)]);
+                since = Date.now();
+            } },
+            { name: "the crossed change goes out", until: () => w.calls === 12 || Date.now() - since >= 300, run: function () {
+                // Then the change: 1 and 3 back on the session's view, at a newer revision.
+                const got = framesOf(p, 11, all);
+                if (w.calls !== 12 || p.revision !== atView + 1 || ids(got) !== JSON.stringify(["1", "3"]) || got[1].tiled !== true
+                        || got[3].tiled !== true || got[1].view.desktopId !== "11" || got[1].revision !== p.revision) {
+                    fail("publication: the view change a read crossed goes out after it, at a newer revision (writes " + w.calls
+                         + ", revision " + p.revision + " after " + atView + ", got " + canonical(got) + ")");
+                }
+                w.finished([writeAnswer(2)]);
+                // The activity switched and the second output on a desktop of its own, in one turn:
+                // one step, one publication.
+                atView = p.revision;
+                ws.currentActivity = "b";
+                ws.outputDesktops = { "Virtual-2": otherDesktop };
+                ws.currentDesktopChanged();
+                since = Date.now();
+            } },
+            { name: "two view changes in one turn", until: () => w.calls === 13 || Date.now() - since >= 300, run: function () {
+                const got = framesOf(p, 12, all);
+                if (w.calls !== 13 || p.revision !== atView + 1 || ids(got) !== JSON.stringify(["1", "21", "3"])
+                        || [1, 3, 21].some(id => got[id].tiled !== false || got[id].view.activityId !== "b")
+                        || got[1].view.desktopId !== "11" || got[21].view.desktopId !== "12") {
+                    fail("publication: two view changes in one turn go out once - a bar on the session's output and desktop"
+                         + " but another activity is not tiled, the second output on its own desktop (writes " + w.calls
+                         + ", revision " + p.revision + " after " + atView + ", got " + canonical(got) + ")");
+                }
+                w.finished([writeAnswer(3)]);
+                // The activity back: 1 and 3 are on the session's view again.
+                atView = p.revision;
+                ws.currentActivity = "a";
+                since = Date.now();
+            } },
+            { name: "the activity back", until: () => w.calls === 14 || Date.now() - since >= 300, run: function () {
+                // 1 and 3 on the session's view again; 21 on its output's own desktop
+                // (currentDesktopForScreen).
+                const got = framesOf(p, 13, all);
+                if (w.calls !== 14 || p.revision !== atView + 1 || ids(got) !== JSON.stringify(["1", "21", "3"])
+                        || got[1].tiled !== true || got[3].tiled !== true
+                        || canonical(got[21]) !== canonical(frameWanted(p, row(21), {
+                            capable: true, view: { desktopId: "12", activityId: "a", outputName: "Virtual-2" }, tiled: false }))) {
+                    fail("publication: the activity back tiles the session's view again, each bar on its own output's desktop"
+                         + " (writes " + w.calls + ", got " + canonical(got) + ")");
+                }
+                w.finished([writeAnswer(3)]);
+                // The second output unplugged: its bar's view is gone.
+                atView = p.revision;
+                ws.screens = [ws.activeScreen];
+                since = Date.now();
+            } },
+            { name: "an output unplugged", until: () => w.calls === 15 || Date.now() - since >= 300, run: function () {
+                const got = framesOf(p, 14, all);
+                if (w.calls !== 15 || p.revision !== atView + 1 || ids(got) !== JSON.stringify(["21"]) || got[21].view !== null
+                        || got[21].tiled !== false) {
+                    fail("publication: an output unplugged leaves its bar with no view, told at once (writes " + w.calls + ", got "
+                         + canonical(got) + ")");
+                }
+                w.finished([writeAnswer(1)]);
+                // Plugged back, on its own desktop still: told again.
+                atView = p.revision;
+                ws.screens = [ws.activeScreen, second];
+                since = Date.now();
+            } },
+            { name: "an output plugged back", until: () => w.calls === 16 || Date.now() - since >= 300, run: function () {
+                const got = framesOf(p, 15, all);
+                if (w.calls !== 16 || p.revision !== atView + 1 || ids(got) !== JSON.stringify(["21"]) || !got[21].view
+                        || got[21].view.desktopId !== "12" || got[21].view.outputName !== "Virtual-2") {
+                    fail("publication: an output plugged back gives its bar its view again (writes " + w.calls + ", got "
+                         + canonical(got) + ")");
+                }
+                w.finished([writeAnswer(1)]);
+                // Widget 21 leaves the read (its request went).
+                p.wake.activated();
+            } },
+            { name: "a widget that left the read, its output moved", until: () => p.shellLookup.calls === 11, run: function () {
+                p.shellLookup.finished([":1.10"]);
+                p.reader.finished([readAnswer(current.filter(entry => entry.id !== 21))]);
+                if (w.calls !== 16 || !p.views || p.views[21] !== undefined) {
+                    fail("publication: a widget no longer read is told nothing, and its view is forgotten (writes " + w.calls
+                         + ", views " + JSON.stringify(Object.keys(p.views || {})) + ")");
+                }
+                // Its output moves to a third desktop: no view that is kept changed, so nothing moves.
+                atView = p.revision;
+                ws.outputDesktops = { "Virtual-2": thirdDesktop };
+                ws.currentDesktopChanged();
+                since = Date.now();
+            } },
+            { name: "a change no kept view sees", until: () => Date.now() - since >= 200, run: function () {
+                if (p.revision !== atView || w.calls !== 16) {
+                    fail("publication: a change of an output no kept request is on moves nothing (revision " + p.revision
+                         + " after " + atView + ", writes " + w.calls + ")");
+                }
+                // Widget 21 is read again: its view is resolved now - the third desktop.
+                p.wake.activated();
+            } },
+            { name: "the widget back", until: () => p.shellLookup.calls === 12, run: function () {
+                p.shellLookup.finished([":1.10"]);
+                p.reader.finished([now()]);
+                const got = framesOf(p, 16, all);
+                if (w.calls !== 17 || ids(got) !== JSON.stringify(["21"]) || got[21].view.desktopId !== "13") {
+                    fail("publication: a widget read again is told its view as it is now, not the one it left with (writes "
+                         + w.calls + ", got " + canonical(got) + ")");
+                }
+                w.finished([writeAnswer(1)]);
+                // Widget 1's panel moved to the second output: its next request names it.
+                retarget(1, 4, "Virtual-2");
+                p.wake.activated();
+            } },
+            { name: "a request for another output", until: () => p.shellLookup.calls === 13, run: function () {
+                p.shellLookup.finished([":1.10"]);
+                p.reader.finished([now()]);
+                // Resolved for the output it names now: the second output's view, not tiled.
+                const got = framesOf(p, 17, all);
+                if (w.calls !== 18 || ids(got) !== JSON.stringify(["1"]) || canonical(got[1]) !== canonical(frameWanted(p, row(1), {
+                        capable: true, view: { desktopId: "13", activityId: "a", outputName: "Virtual-2" }, tiled: false }))) {
+                    fail("publication: a request that names another output is resolved for it (writes " + w.calls + ", got "
+                         + canonical(got) + ")");
+                }
+                w.finished([writeAnswer(1)]);
+                // Off and on in one turn: nothing new to tell (every view stays as it was told).
+                tileShortcut.activated();
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "off and on in one turn", until: () => Date.now() - since >= 200, run: function () {
+                if (w.calls !== 18) {
+                    fail("publication: changes that end where they began tell nothing (writes " + w.calls + ")");
+                }
+                // The session's end and the capability lost in one turn: one publication, of the
+                // state both left.
+                tileShortcut.activated();
+                p.nativeCapable = false;
+                since = Date.now();
+            } },
+            { name: "two changes in one turn", until: () => w.calls > 18 || Date.now() - since >= 300, run: function () {
+                const got = framesOf(p, 18, all);
+                if (w.calls !== 19 || ids(got) !== JSON.stringify(["1", "21", "3", "5"]) || got[1].capable !== false
+                        || got[1].tiled !== false || got[5].capable !== false || got[21].capable !== false
+                        || got[1].revision !== p.revision) {
+                    fail("publication: two changes in one turn go out once, as they left the state (writes " + w.calls
+                         + ", got " + canonical(got) + ")");
+                }
+                since = Date.now();
+            } },
+            { name: "the retirement", until: () => Date.now() - since >= 100, run: function () {
+                if (w.calls !== 19 || !p.publishing) {
+                    fail("publication: one publication for two changes in one turn, still outstanding (writes " + w.calls + ")");
+                }
+                // With that publication outstanding, and a state change and a view change right
+                // before it, the retirement ends the one and drops the others: it moves the revision,
+                // sends the offline frame to every request and refusal it kept, on the connection
+                // they came from - whatever is in flight there - then releases the name.
+                const order = [];
+                p.revisionChanged.connect(() => {
+                    if (!p.online) {
+                        order.push("revision");
+                    }
+                });
+                w.callsChanged.connect(() => order.push("frame"));
+                p.identityRelease.callsChanged.connect(() => order.push("release"));
+                tileShortcut.activated();
+                ws.outputDesktops = { "Virtual-1": otherDesktop };
+                ws.currentDesktopChanged();
+                p.retire();
+                if (JSON.stringify(order) !== JSON.stringify(["revision", "frame", "release"])) {
+                    fail("publication: the retirement moves the revision, then sends the offline frame, then releases the name"
+                         + " (got " + JSON.stringify(order) + ")");
+                }
+                const got = framesOf(p, 19, all);
+                for (const kept of current) {
+                    const offline = { version: 1, consumer: kept.consumer, request: kept.request, epoch: p.label,
+                                      identityName: p.identityName, backendOwner: ":1.42", revision: p.revision,
+                                      status: "offline", capable: false, view: null, tiled: false };
+                    if (canonical(got[kept.id]) !== canonical(offline)) {
+                        fail("publication: the offline frame for widget " + kept.id + " (got " + canonical(got[kept.id])
+                             + ", not " + canonical(offline) + ")");
+                    }
+                }
+                if (w.calls !== 20 || w.service !== ":1.10" || p.publishing) {
+                    fail("publication: the offline frame goes out once, where the requests came from, and ends the"
+                         + " publication in flight (writes " + w.calls + " to " + w.service + ", publishing " + p.publishing + ")");
+                }
+                // Offline, the views are watched no more: neither the view change queued before the
+                // retirement nor one after it moves or publishes anything.
+                atView = p.revision;
+                ws.outputDesktops = ({});
+                ws.currentDesktopChanged();
+                since = Date.now();
+            } },
+            { name: "after the retirement", until: () => Date.now() - since >= 200, run: function () {
+                // The change queued before the retirement and the view change after it published
+                // nothing, and late answers - the outstanding publication's among them - reach
+                // nothing.
+                if (w.calls !== 20 || p.revision !== atView) {
+                    fail("publication: neither a change queued before the retirement nor a view change after it moves or"
+                         + " publishes anything (writes " + w.calls + ", revision " + p.revision + " after " + atView + ")");
+                }
+                w.finished([writeAnswer(4)]);
+                w.failed();
+                p.shellLookup.failed();
+                p.reader.finished([now()]);
+                p.wake.activated();
+                if (w.calls !== 20 || p.shellLookup.calls !== 13 || p.publishing || p.reading) {
+                    fail("publication: after the retirement nothing is published or read (writes " + w.calls + ", lookups "
+                         + p.shellLookup.calls + ")");
+                }
+                // The stand-in Workspace is the engine's: its outputs, desktops and activity as the
+                // later runs expect them.
+                ws.screens = Qt.binding(() => [ws.activeScreen]);
+                ws.outputDesktops = ({});
+                ws.currentActivity = "a";
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
+
+    // A publication the shell did not confirm, carrying two bars, on the real script: both bars
+    // are on the session's view, the session's start goes out to both and fails, and the
+    // session's end - which brings each bar's frame back to what the shell confirmed last - goes
+    // out to both, as the failed publication confirmed neither (unconfirmed() forgets every
+    // widget a publication carried, not only one). The driver checks the lines.
+    function runUnconfirmed() {
+        if (setup() === "") {
+            done = true;
+            return;
+        }
+        const p = provider;
+        const w = p.writer;
+        DBusStubs.SessionBus.answer(expectIdentityRequest("unconfirmed", p), [{ value: 1 }]);
+        p.identityLookup.finished([":1.42"]);
+        p.shellLookup.finished([":1.9"]);
+        const rows = [{ id: 1, consumer: "c1", request: 1, version: 1, intent: "query", outputName: "Virtual-1" },
+                      { id: 3, consumer: "c3", request: 3, version: 1, intent: "query", outputName: "Virtual-1" }];
+        // The frames the writer's call `index` carries, by widget, or null unless it carries both.
+        const both = index => {
+            const got = framesOf(p, index, [1, 3]);
+            return JSON.stringify(Object.keys(got).sort()) === JSON.stringify(["1", "3"]) ? got : null;
+        };
+        p.reader.finished([readAnswer(rows)]);
+        const first = both(0);
+        if (w.calls !== 1 || !first || first[1].tiled !== false || first[3].tiled !== false) {
+            fail("unconfirmed: the read's answers go out to both bars, untiled (writes " + w.calls + ")");
+            done = true;
+            return;
+        }
+        // Both frames confirmed; a session starts, and its publication goes out at the end of
+        // the turn.
+        w.finished([writeAnswer(2)]);
+        tileShortcut.activated();
+        let since = Date.now();
+        steps = [
+            { name: "the session's start, to both bars", until: () => w.calls === 2, run: function () {
+                const got = both(1);
+                if (!got || got[1].tiled !== true || got[3].tiled !== true) {
+                    fail("unconfirmed: the session's start goes out to both bars (got " + canonical(framesOf(p, 1, [1, 3]))
+                         + ")");
+                }
+                // The publication fails, and the session ends at once.
+                w.failed();
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "the session's end to both bars", until: () => w.calls === 3 || Date.now() - since >= 300,
+              run: function () {
+                const got = both(2);
+                if (w.calls !== 3 || !got || got[1].tiled !== false || got[3].tiled !== false) {
+                    fail("unconfirmed: the session's end goes out to both bars the failed publication carried, though each"
+                         + " frame says what the shell confirmed last (writes " + w.calls + ", got "
+                         + canonical(framesOf(p, 2, [1, 3])) + ")");
+                }
+                w.finished([writeAnswer(2)]);
+                p.retire();
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
+
+    // Decision 1's time limit, on the real script: a shell script call keeps the shell from its
+    // input until it answers, so each read and publication says how long it took from call to
+    // answer and from its script's start; a call over the limit is said as such, once, with the
+    // length it was judged by. A call that only waited while the shell was busy is not over it,
+    // nor a read whose owner lookup was slow; a start the call does not contain leaves the length
+    // from call to answer to decide. A publication's answer without its start, with a count it
+    // cannot have or longer than any the writer prints, confirms nothing and lets the pipeline go
+    // on, so the frame goes out again, and so does one with fewer frames written than it carried.
+    // A failed or malformed publication may have been written all the same, so what it carried
+    // goes out again even when the state has come back to what was last confirmed. The driver
+    // checks the lines, the harness what moved.
+    function runTimeLimit() {
+        if (setup() === "") {
+            done = true;
+            return;
+        }
+        const p = provider;
+        const w = p.writer;
+        let tick = 1000000;
+        p.wallClock = () => tick;
+        if (p.shellLimit !== 50) {
+            fail("time-limit: a read or publication may hold the shell 50 ms (got " + p.shellLimit + ")");
+        }
+        DBusStubs.SessionBus.answer(expectIdentityRequest("time-limit", p), [{ value: 1 }]);
+        p.identityLookup.finished([":1.42"]);
+        p.shellLookup.finished([":1.9"]);
+        const rows = [{ id: 1, consumer: "c1", request: 1, version: 1, intent: "query", outputName: "Virtual-1" }];
+        const readResult = (start = tick) => readAnswer(rows, start);
+        const writeResult = (written, start = tick) => writeAnswer(written, start);
+        // A read and its publication, each answered at once.
+        p.reader.finished([readResult()]);
+        if (w.calls !== 1) {
+            fail("time-limit: the read's answer goes out (writes " + w.calls + ")");
+            done = true;
+            return;
+        }
+        w.finished([writeResult(1)]);
+        // A read starts at once (nothing is in flight); a toggle moves the state, and its
+        // publication goes out at the end of the turn.
+        const read = () => {
+            p.wake.activated();
+            p.shellLookup.finished([":1.9"]);
+        };
+        const published = calls => w.calls === calls && p.pending !== null;
+        const tiled = index => {
+            const got = framesOf(p, index, [1]);
+            return got[1] ? got[1].tiled : null;
+        };
+        // A read whose owner lookup takes 70 ms: its length starts with its own call, which goes
+        // out once the owner is known.
+        p.wake.activated();
+        let since = Date.now();
+        steps = [
+            { name: "a read whose owner lookup took 70 ms", run: function () {
+                tick += 70;
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([readResult()]);
+                read();
+            } },
+            // The read's script ran from the moment the call went out: 70 ms of the shell's time.
+            { name: "a read that held the shell", until: () => p.reading, run: function () {
+                tick += 70;
+                p.reader.finished([readResult(p.readAt)]);
+                tileShortcut.activated();
+            } },
+            { name: "a publication that held the shell", until: () => published(2), run: function () {
+                tick += 70;
+                w.finished([writeResult(1, p.pending.at)]);
+                read();
+            } },
+            // The scripts started just before they answered: the calls waited while the shell was
+            // busy, and that time was not spent on them.
+            { name: "a read that waited", until: () => p.reading, run: function () {
+                tick += 70;
+                p.reader.finished([readResult(tick - 1)]);
+                tileShortcut.activated();
+            } },
+            { name: "a publication that waited", until: () => published(3), run: function () {
+                tick += 70;
+                w.finished([writeResult(1, tick - 1)]);
+                read();
+            } },
+            // A start before the call went out, or after its answer: the clocks disagree, and the
+            // length from call to answer decides.
+            { name: "a read whose start is not in the call", until: () => p.reading, run: function () {
+                tick += 70;
+                p.reader.finished([readResult(p.readAt - 1000)]);
+                tileShortcut.activated();
+            } },
+            { name: "a publication whose start is not in the call", until: () => published(4), run: function () {
+                tick += 70;
+                w.finished([writeResult(1, tick + 1000)]);
+                // A short call with such a start stays under the limit.
+                read();
+                p.reader.finished([readResult(p.readAt - 1000)]);
+                read();
+                tick += 70;
+                p.reader.failed();
+                // The rows alone, without the script's start, are a malformed answer: nothing read.
+                read();
+                tick += 70;
+                p.reader.finished([JSON.stringify(rows)]);
+                if (w.calls !== 4 || p.reading) {
+                    fail("time-limit: a read whose frame was told publishes nothing (writes " + w.calls + ")");
+                }
+                // The session ends; its publication goes out at the end of the turn.
+                tileShortcut.activated();
+            } },
+            // An answer that is a bare count confirms nothing, and the pipeline goes on: the wake
+            // that came during it reads after it, and that read sends the frame again.
+            { name: "a malformed answer with a wake during it", until: () => w.calls === 5, run: function () {
+                if (tiled(4) !== false) {
+                    fail("time-limit: the session's end goes out (tiled " + tiled(4) + ")");
+                }
+                p.wake.activated();
+                tick += 70;
+                w.finished(["1"]);
+            } },
+            { name: "the wake's read after it", until: () => p.reading, run: function () {
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([readResult()]);
+                // Answers that count more frames than they carried, fewer than none or something
+                // that is no number, or that leave out the start, confirm nothing either.
+                const malformed = [writeResult(2), writeResult(-1), JSON.stringify({ start: tick, written: "1" }),
+                                   JSON.stringify({ written: 1 })];
+                for (let i = 0; i < malformed.length; ++i) {
+                    if (w.calls !== 6 + i || tiled(5 + i) !== false) {
+                        fail("time-limit: the session's end goes out again after each malformed answer (writes " + w.calls
+                             + ", tiled " + tiled(5 + i) + ")");
+                    }
+                    w.finished([malformed[i]]);
+                    read();
+                    p.reader.finished([readResult()]);
+                }
+                if (w.calls !== 10 || tiled(9) !== false) {
+                    fail("time-limit: the session's end goes out once more (writes " + w.calls + ")");
+                }
+                // The shell found none of the publication's widgets (0 written): its frame is not
+                // confirmed, and the next read sends it again.
+                w.finished([writeResult(0)]);
+                read();
+                p.reader.finished([readResult()]);
+                if (w.calls !== 11 || tiled(10) !== false) {
+                    fail("time-limit: a frame the shell did not write goes out again with the next read (writes " + w.calls
+                         + ", tiled " + tiled(10) + ")");
+                }
+                // Told at last, and confirmed: the next read sends nothing.
+                w.finished([writeResult(1)]);
+                read();
+                p.reader.finished([readResult()]);
+                if (w.calls !== 11 || p.publishing || p.reading) {
+                    fail("time-limit: a frame the shell confirmed is not sent again (writes " + w.calls + ")");
+                }
+                // A session starts; its publication goes out at the end of the turn.
+                tileShortcut.activated();
+            } },
+            // A publication the shell did not confirm - failed, or answered malformed - may have
+            // been written all the same: what it carried is no longer taken as told, so the
+            // session's end goes out though its frame says what the shell confirmed last.
+            { name: "a failed publication of a session's start", until: () => w.calls === 12, run: function () {
+                if (tiled(11) !== true) {
+                    fail("time-limit: the session's start goes out (tiled " + tiled(11) + ")");
+                }
+                tick += 70;
+                w.failed();
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "the session's end after a failed publication", until: () => w.calls === 13 || Date.now() - since >= 300,
+              run: function () {
+                if (w.calls !== 13 || tiled(12) !== false) {
+                    fail("time-limit: the session's end goes out after its start's publication failed (writes " + w.calls
+                         + ", tiled " + tiled(12) + ")");
+                }
+                w.finished([writeResult(1)]);
+                tileShortcut.activated();
+            } },
+            { name: "a malformed answer for a session's start", until: () => w.calls === 14, run: function () {
+                if (tiled(13) !== true) {
+                    fail("time-limit: the session's start goes out again (tiled " + tiled(13) + ")");
+                }
+                w.finished(["1"]);
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "the session's end after a malformed answer", until: () => w.calls === 15 || Date.now() - since >= 300,
+              run: function () {
+                if (w.calls !== 15 || tiled(14) !== false) {
+                    fail("time-limit: the session's end goes out after its start's publication was answered malformed"
+                         + " (writes " + w.calls + ", tiled " + tiled(14) + ")");
+                }
+                w.finished([writeResult(1)]);
+                tileShortcut.activated();
+            } },
+            // An answer longer than any the writer prints (answerLimit) is malformed before it is
+            // parsed, though it is a count with its start under the padding JSON allows: it
+            // confirms nothing, and the next read sends the frame again.
+            { name: "an answer over the limit", until: () => w.calls === 16, run: function () {
+                w.finished([writeResult(1) + " ".repeat(262144)]);
+                read();
+                p.reader.finished([readResult()]);
+                if (w.calls !== 17 || tiled(16) !== true) {
+                    fail("time-limit: an answer over the limit confirms nothing, and the next read sends the frame again"
+                         + " (writes " + w.calls + ", tiled " + tiled(16) + ")");
+                }
+                w.finished([writeResult(1)]);
+                p.retire();
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
+
+    // The read side of the layout provider's pipeline, on the real script: a dedicated wake
+    // shortcut with no key; one read once the identity is ready and for each later wake, the
+    // wakes during a read coalesced into one later read; the shell's owner looked up first and
+    // the requests read from it; the shell side bounded and copying only what P1 needs, the
+    // provider checking every row again with its version, intent and output; an answer longer
+    // than any the scripts print malformed before it is parsed, the reader's longest within it.
+    function runReadPipeline() {
+        if (setup() === "") {
+            done = true;
+            return;
+        }
+        const p = provider;
+        const clock = "org.plasmafusion.clockpill";
+        // The wake: a shortcut of its own, needing no key, that toggles nothing.
+        if (!p.wake || p.wake.name !== "Plasma Fusion: Refresh Layout Controls" || p.wake.sequence !== ""
+                || typeof p.wake.text !== "string" || p.wake.text.length === 0) {
+            fail("read-pipeline: the wake is the shortcut \"Plasma Fusion: Refresh Layout Controls\", with no key");
+            done = true;
+            return;
+        }
+        // Before the identity is ready a wake reads nothing; once it is, one read starts.
+        p.wake.activated();
+        p.wake.activated();
+        if (p.shellLookup.calls !== 0 || calls("createTile").length !== 0) {
+            fail("read-pipeline: a wake before the identity is ready reads nothing and toggles nothing");
+        }
+        DBusStubs.SessionBus.answer(expectIdentityRequest("read-pipeline", p), [{ value: 1 }]);
+        p.identityLookup.finished([":1.42"]);
+        if (JSON.stringify(p.shellLookup.callLog) !== JSON.stringify([["org.kde.plasmashell"]])
+                || p.shellLookup.method !== "GetNameOwner") {
+            fail("read-pipeline: one read once the identity is ready, starting with the shell's owner (got "
+                 + JSON.stringify(p.shellLookup.callLog) + ")");
+        }
+        // The read goes to the shell's unique connection.
+        p.shellLookup.finished([":1.9"]);
+        const r = p.reader;
+        if (r.calls !== 1 || r.service !== ":1.9" || r.path !== "/PlasmaShell" || r.dbusInterface !== "org.kde.PlasmaShell"
+                || r.method !== "evaluateScript" || r.callLog[0].length !== 1) {
+            fail("read-pipeline: the requests are read with evaluateScript on the shell's unique connection (got "
+                 + r.calls + " " + r.service + " " + r.path + " " + r.dbusInterface + " " + r.method + ")");
+            done = true;
+            return;
+        }
+        // The shell side, run as plasmashell runs it: at most 16 widgets, at most 2048
+        // characters, a well-formed consumer and request, the clock's widgets only, and only
+        // the fields P1 needs; widget data travels as JSON, never as code.
+        const script = r.callLog[0][0];
+        // A request of exactly 2048 characters: the default outputName ("Virtual-1") replaced by
+        // a pad that makes up the rest.
+        const wide = query("c-wide", 7);
+        const pad = "x".repeat(2048 - wide.length + "Virtual-1".length);
+        const exact = query("c-wide", 7, { outputName: pad });
+        const hostile = "q\"'\\\n</s>${x}";
+        const read = runReaderScript(script, [
+            [{ type: clock, id: 1, text: query("c1", 1) },
+             { type: "org.kde.plasma.digitalclock", id: 2, text: query("c2", 2) },
+             { type: clock, id: 3, text: query(hostile, 3, { title: "not copied", token: "not copied" }) },
+             { type: clock, id: 4, text: "{not json" },
+             { type: clock, id: 5, text: query("", 5) },
+             { type: clock, id: 6, text: query("c".repeat(129), 6) },
+             { type: clock, id: 7, text: query("c7", 0) },
+             { type: clock, id: 8, text: query("c8", 2147483647) },
+             { type: clock, id: 9, text: query("c9", 1.5) },
+             { type: clock, id: 10, text: exact },
+             { type: clock, id: 11, text: exact + " " }],
+            [{ type: clock, id: 12, text: query("c12", 12, { version: 2 }) }]
+        ]);
+        // With what it found, the script says when it started.
+        if (!read || !Number.isFinite(read.start)) {
+            fail("read-pipeline: the shell side says when its script started (got " + JSON.stringify(read) + ")");
+        }
+        const rows = read ? read.rows : null;
+        if (exact.length !== 2048) {
+            fail("read-pipeline: the test's exact request is 2048 characters (got " + exact.length + ")");
+        }
+        const ids = rows ? rows.map(row => row.id) : null;
+        if (JSON.stringify(ids) !== JSON.stringify([1, 3, 10, 12])) {
+            fail("read-pipeline: the shell side keeps the clock's well-formed requests of at most 2048 characters (got "
+                 + JSON.stringify(ids) + ")");
+        }
+        const third = rows ? rows.find(row => row.id === 3) : null;
+        if (!third || third.consumer !== hostile || JSON.stringify(Object.keys(third).sort())
+                !== JSON.stringify(["consumer", "id", "intent", "outputName", "request", "version"])) {
+            fail("read-pipeline: a row carries the consumer as sent and only the fields P1 needs (got " + JSON.stringify(third) + ")");
+        }
+        const many = [];
+        for (let i = 1; i <= 17; ++i) {
+            many.push({ type: clock, id: 100 + i, text: query("m" + i, i) });
+        }
+        const boundedRead = runReaderScript(script, [many.slice(0, 9), many.slice(9)]);
+        const bounded = boundedRead ? boundedRead.rows : null;
+        if (!bounded || bounded.length !== 16 || bounded[15].id !== 116) {
+            fail("read-pipeline: the shell side reads at most 16 widgets (got " + (bounded ? bounded.length : null) + ")");
+        }
+        // With its rows the shell side says which widgets it saw (P5): the clock's only, and that
+        // the 17th went unread, so the inventory is not complete.
+        if (!read || JSON.stringify(read.widgets) !== JSON.stringify([1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+                || JSON.stringify(read.empty) !== "[]" || read.truncated !== false) {
+            fail("read-pipeline: the shell side lists every clock widget it saw, none empty, the inventory complete (got "
+                 + JSON.stringify(read ? [read.widgets, read.empty, read.truncated] : null) + ")");
+        }
+        if (!boundedRead || !Array.isArray(boundedRead.widgets) || boundedRead.widgets.length !== 16
+                || boundedRead.widgets[15] !== 116 || boundedRead.truncated !== true) {
+            fail("read-pipeline: past 16 widgets the inventory says it is not complete (got "
+                 + JSON.stringify(boundedRead ? [boundedRead.widgets, boundedRead.truncated] : null) + ")");
+        }
+        // A withdrawn request (an empty field) is listed as such; an unreadable one only as seen. A
+        // prepare carries its frozen context - the epoch, and the view as its two scalars - and
+        // nothing else; a set its mode and handle (P5), and nothing else.
+        const prepareText = JSON.stringify({ consumer: "c21", request: 21, version: 1, intent: "prepare",
+                                             outputName: "Virtual-1", epoch: "e1", title: "not copied",
+                                             view: { desktopId: "11", activityId: "a", token: "not copied" } });
+        const setText = JSON.stringify({ consumer: "c24", request: 24, version: 1, intent: "set",
+                                         outputName: "Virtual-1", mode: "tiled", handle: "e1:1:1", title: "not copied" });
+        const inventoryRead = runReaderScript(script, [[{ type: clock, id: 20, text: "" },
+                                                        { type: "org.kde.plasma.digitalclock", id: 22, text: "" },
+                                                        { type: clock, id: 21, text: prepareText },
+                                                        { type: clock, id: 23, text: "{not json" },
+                                                        { type: clock, id: 24, text: setText }]]);
+        if (!inventoryRead || JSON.stringify(inventoryRead.widgets) !== JSON.stringify([20, 21, 23, 24])
+                || JSON.stringify(inventoryRead.empty) !== JSON.stringify([20]) || inventoryRead.truncated !== false) {
+            fail("read-pipeline: the inventory lists the clock's widgets and the empty field (got "
+                 + JSON.stringify(inventoryRead) + ")");
+        }
+        const prepareRow = inventoryRead ? inventoryRead.rows.find(row => row.id === 21) : null;
+        if (!prepareRow || JSON.stringify(Object.keys(prepareRow).sort())
+                !== JSON.stringify(["consumer", "epoch", "id", "intent", "outputName", "request", "version", "view"])
+                || JSON.stringify(Object.keys(prepareRow.view || {}).sort()) !== JSON.stringify(["activityId", "desktopId"])
+                || prepareRow.epoch !== "e1" || prepareRow.view.desktopId !== "11" || prepareRow.view.activityId !== "a") {
+            fail("read-pipeline: a prepare's row carries its epoch and view's two scalars, nothing else (got "
+                 + JSON.stringify(prepareRow) + ")");
+        }
+        const setRow = inventoryRead ? inventoryRead.rows.find(row => row.id === 24) : null;
+        if (!setRow || JSON.stringify(Object.keys(setRow).sort())
+                !== JSON.stringify(["consumer", "handle", "id", "intent", "mode", "outputName", "request", "version"])
+                || setRow.mode !== "tiled" || setRow.handle !== "e1:1:1") {
+            fail("read-pipeline: a set's row carries its mode and handle, nothing else (got " + JSON.stringify(setRow) + ")");
+        }
+        // The longest answer a script call may return (answerLimit), sized from the reader's own:
+        // 16 requests of 2048 characters, each a list of 1e20s under a field the reader copies as
+        // it is (`mode`), which JSON.stringify prints as 21 digits each - far longer than the
+        // requests it was read from, and still within the limit.
+        const limit = 262144;
+        const opener = "{\"consumer\":\"c\",\"request\":1,\"mode\":[";
+        const tens = Array.from({ length: 402 }, () => "1e20").join(",");
+        const longest = opener + tens + "]" + " ".repeat(2048 - opener.length - tens.length - 2) + "}";
+        const widest = runReaderScript(script, [Array.from({ length: 16 }, (_, i) => ({ type: clock, id: 201 + i,
+                                                                                         text: longest }))], true);
+        if (p.answerLimit !== limit || longest.length !== 2048 || widest === null || JSON.parse(widest).rows.length !== 16
+                || widest.length <= 16 * 2048 || widest.length > p.answerLimit) {
+            fail("read-pipeline: the reader's longest answer, longer than its requests, fits the limit of " + limit
+                 + " on an answer (got " + (widest ? widest.length : null) + " for requests of " + longest.length
+                 + ", limit " + p.answerLimit + ")");
+        }
+        // The answer: the provider checks every row again; a query of version 1 for a named
+        // output is a request, anything else with a well-formed identity a refusal, kept with its
+        // reason; a row with no well-formed identity is dropped.
+        const answerRows = [
+            { id: 1, consumer: "c1", request: 1, version: 1, intent: "query", outputName: "Virtual-1" },
+            { id: 3, consumer: hostile, request: 3, version: 1, intent: "query", outputName: "Virtual-1" },
+            { id: 12, consumer: "c12", request: 12, version: 2, intent: "query", outputName: "Virtual-1" },
+            { id: 13, consumer: "c13", request: 13, intent: "query", outputName: "Virtual-1" },
+            { id: 14, consumer: "c14", request: 14, version: 1, intent: "prepare", outputName: "Virtual-1" },
+            { id: 15, consumer: "c15", request: 15, version: 1, intent: "query", outputName: "" },
+            { id: 16, consumer: "c16", request: 16, version: 1, intent: "query", outputName: "o".repeat(129) },
+            { id: 17, consumer: "", request: 17, version: 1, intent: "query", outputName: "Virtual-1" },
+            { id: 18, consumer: "c18", request: 0, version: 1, intent: "query", outputName: "Virtual-1" }
+        ];
+        const answer = () => readAnswer(answerRows);
+        r.finished([answer()]);
+        // The read's answers go out at once (the publication run checks them); answered here, so
+        // the pipeline goes on.
+        if (p.writer.calls !== 1) {
+            fail("read-pipeline: the read's answers go out once (writes " + p.writer.calls + ")");
+        }
+        p.writer.finished([writeAnswer(7)]);
+        const requests = JSON.stringify(p.requests.map(q => [q.id, q.consumer, q.request, q.outputName]));
+        if (requests !== JSON.stringify([[1, "c1", 1, "Virtual-1"], [3, hostile, 3, "Virtual-1"]])) {
+            fail("read-pipeline: the version-1 queries for a named output are the requests (got " + requests + ")");
+        }
+        const refusals = JSON.stringify(p.refusals.map(q => [q.id, q.reason]));
+        // Row 14, a prepare without the frozen context a prepare must name (P5), is malformed.
+        if (refusals !== JSON.stringify([[12, "version"], [13, "version"], [14, "malformed"], [15, "output"], [16, "output"]])) {
+            fail("read-pipeline: every other row with a well-formed identity is refused with its reason (got " + refusals + ")");
+        }
+        let since = Date.now();
+        // What a read that ends without an answer must keep: the last read's requests and
+        // refusals, taken once the second read has stored them.
+        const kept = () => JSON.stringify([p.requests, p.refusals]);
+        let before = "";
+        steps = [
+            // The wakes that came before the identity were its read: nothing more follows.
+            { name: "no read owed to the early wakes", until: () => Date.now() - since >= 300, run: function () {
+                if (p.shellLookup.calls !== 1 || p.reading) {
+                    fail("read-pipeline: the wakes before the identity are the identity's read (lookups "
+                         + p.shellLookup.calls + ")");
+                }
+                // A wake reads; three more during that read make one later read.
+                p.wake.activated();
+                p.wake.activated();
+                p.wake.activated();
+                p.wake.activated();
+                if (p.shellLookup.calls !== 2) {
+                    fail("read-pipeline: a wake reads, and no second read starts while one runs (lookups "
+                         + p.shellLookup.calls + ")");
+                }
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([answer()]);
+            } },
+            { name: "the coalesced read", until: () => p.shellLookup.calls > 2, run: function () {
+                if (p.shellLookup.calls !== 3) {
+                    fail("read-pipeline: the wakes during a read make one later read (lookups " + p.shellLookup.calls + ")");
+                }
+                before = kept();
+                if (p.requests.length !== 2 || p.refusals.length !== 5) {
+                    fail("read-pipeline: the second read stored its requests and refusals (got " + before + ")");
+                }
+                // A shell owner that is no unique connection is not read from, and the read
+                // keeps the lists.
+                p.shellLookup.finished(["org.kde.plasmashell"]);
+                if (p.reader.calls !== 2 || p.reading) {
+                    fail("read-pipeline: a shell owner that is no unique connection is not read from");
+                }
+                if (kept() !== before) {
+                    fail("read-pipeline: a read from no unique connection keeps the requests and refusals");
+                }
+                // A failed owner lookup ends the read and keeps the lists.
+                p.wake.activated();
+                p.shellLookup.failed();
+                if (p.reading || kept() !== before) {
+                    fail("read-pipeline: a failed lookup ends the read and keeps the requests and refusals");
+                }
+            } },
+            { name: "a read after a failed lookup", until: () => !p.reading, run: function () {
+                p.wake.activated();
+                if (p.shellLookup.calls !== 5) {
+                    fail("read-pipeline: a failed lookup ends the read, and the next wake reads (lookups "
+                         + p.shellLookup.calls + ")");
+                }
+                p.shellLookup.finished([":1.9"]);
+                // A failed or malformed answer ends the read and keeps the lists: not JSON, the rows
+                // without the script's start, a start that is no number, more than 16 rows, an
+                // inventory (P5) with no rows or with rows that are no list, and a well-formed
+                // answer with a new request one character over the limit.
+                p.reader.failed();
+                if (p.reading || kept() !== before) {
+                    fail("read-pipeline: a failed read ends the read and keeps the requests and refusals");
+                }
+                // An answer of exactly the limit is read as any other: the last answer, padded with
+                // the whitespace JSON allows.
+                const padTo = (text, length) => text + " ".repeat(length - text.length);
+                const listed = p.requests;
+                p.wake.activated();
+                p.shellLookup.finished([":1.9"]);
+                p.reader.finished([padTo(answer(), limit)]);
+                if (p.reading || kept() !== before || p.requests === listed) {
+                    fail("read-pipeline: an answer of exactly the limit is read as any other");
+                }
+                const inventory = { widgets: [1], empty: [], truncated: false };
+                const newRequest = { id: 19, consumer: "c19", request: 19, version: 1, intent: "query",
+                                     outputName: "Virtual-1" };
+                for (const malformed of ["{not json", JSON.stringify([]), JSON.stringify({ rows: [] }),
+                                         JSON.stringify({ start: "now", rows: [] }),
+                                         readAnswer(Array.from({ length: 17 }, (_, i) => ({
+                                             id: i + 1, consumer: "c", request: i + 1, version: 1, intent: "query",
+                                             outputName: "Virtual-1" }))),
+                                         JSON.stringify(Object.assign({ start: Date.now() }, inventory)),
+                                         JSON.stringify(Object.assign({ start: Date.now(), rows: "x" }, inventory)),
+                                         padTo(readAnswer(answerRows.concat([newRequest])), limit + 1)]) {
+                    p.wake.activated();
+                    p.shellLookup.finished([":1.9"]);
+                    p.reader.finished([malformed]);
+                    if (p.reading || kept() !== before) {
+                        fail("read-pipeline: a malformed answer ends the read and keeps the requests and refusals ("
+                             + malformed.slice(0, 20) + ")");
+                    }
+                }
+                // A retirement during a read: the answers that follow reach nothing, and the last
+                // requests and refusals stay.
+                p.wake.activated();
+                const lookups = p.shellLookup.calls;
+                const reads = p.reader.calls;
+                p.retire();
+                p.shellLookup.finished([":1.9"]);
+                p.wake.activated();
+                if (p.reading || p.reader.calls !== reads || p.shellLookup.calls !== lookups) {
+                    fail("read-pipeline: after the retirement nothing is read");
+                }
+                if (kept() !== before) {
+                    fail("read-pipeline: the retirement keeps the last requests and refusals");
+                }
+                // The shell's late answers - a read's and a failure - reach neither the lists nor
+                // the journal (the driver counts its lines).
+                p.reader.finished([readAnswer([])]);
+                p.reader.failed();
+                if (p.reading || kept() !== before) {
+                    fail("read-pipeline: a late answer after the retirement reaches nothing");
+                }
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
+
+    // The layout provider's own rules, on instances of its own (no script): nothing before
+    // start(), a first state at revision 1, one move per change and only while online, start()
+    // once, one move to go offline and nothing after it, and a label per instance.
+    function runProviderRules() {
+        const base = "file://" + packagesRoot + "/scripts/plasmafusion-placement/contents/ui/";
+        const component = Qt.createComponent(base + "LayoutProvider.qml");
+        if (component.status !== Component.Ready) {
+            fail("provider-rules: LayoutProvider.qml did not load: " + component.errorString());
+            done = true;
+            return;
+        }
+        const p = component.createObject(harness);
+        const state = () => [p.revision, p.online, p.capable, p.active, p.desktopId, p.activityId,
+                             p.outputName].join("|");
+        const expect = (what, wanted) => {
+            if (state() !== wanted) {
+                fail("provider-rules: " + what + ": got " + state() + ", not " + wanted);
+            }
+        };
+        p.nativeCapable = true;
+        p.setSession(true, "11", "a", "Virtual-1");
+        expect("nothing before start()", "0|false|false|false|||");
+        p.start();
+        expect("start()", "1|true|true|false|||");
+        follow(p);
+        // A name the bus refuses (another connection holds it) is no identity: nothing is
+        // looked up.
+        DBusStubs.SessionBus.answer(expectIdentityRequest("provider-rules", p), [{ value: 3 }]);
+        if (p.identityLookup.calls !== 0 || p.identityReady) {
+            fail("provider-rules: a refused name is no identity, and nothing is looked up");
+        }
+        p.setSession(false, "", "", "");
+        expect("a report that changes nothing", "1|true|true|false|||");
+        p.setSession(true, "11", "a", "Virtual-1");
+        expect("a session", "2|true|true|true|11|a|Virtual-1");
+        p.start();
+        expect("start() again", "2|true|true|true|11|a|Virtual-1");
+        p.setSession(true, "12", "a", "Virtual-1");
+        expect("the session on another view", "3|true|true|true|12|a|Virtual-1");
+        p.nativeCapable = false;
+        expect("capability lost", "4|true|false|true|12|a|Virtual-1");
+        p.retire();
+        expect("retire()", "5|false|false|false|||");
+        p.retire();
+        p.nativeCapable = true;
+        p.setSession(true, "11", "a", "Virtual-1");
+        p.start();
+        expect("nothing after retire()", "5|false|false|false|||");
+        // The name is released once, by the first retire(), granted or not.
+        if (JSON.stringify(p.identityRelease.callLog) !== JSON.stringify([[p.identityName]])) {
+            fail("provider-rules: retire() releases the name once (got " + JSON.stringify(p.identityRelease.callLog) + ")");
+        }
+        const other = component.createObject(harness);
+        if (!/^[0-9a-f]{32}$/.test(p.label) || other.label === p.label) {
+            fail("provider-rules: each instance draws a label of its own (" + p.label + ", " + other.label + ")");
+        }
+        if (identityRequests(other).length !== 0 || other.identityRelease.calls !== 0) {
+            fail("provider-rules: a provider that never started asks for no name and releases none");
+        }
+        other.destroy();
+        // A granted name whose owner cannot be read is no identity either.
+        const unread = component.createObject(harness);
+        unread.start();
+        DBusStubs.SessionBus.answer(expectIdentityRequest("provider-rules (unread owner)", unread), [{ value: 1 }]);
+        unread.identityLookup.failed();
+        if (unread.identityLookup.calls !== 1 || unread.identityReady || unread.selfOwner !== "") {
+            fail("provider-rules: a name whose owner cannot be read is no identity");
+        }
+        unread.retire();
+        unread.destroy();
+        // A bus error is no identity.
+        const denied = component.createObject(harness);
+        denied.start();
+        DBusStubs.SessionBus.answer(expectIdentityRequest("provider-rules (bus error)", denied), [],
+                                    "org.freedesktop.DBus.Error.AccessDenied");
+        if (denied.identityLookup.calls !== 0 || denied.identityReady) {
+            fail("provider-rules: a bus error is no identity, and nothing is looked up");
+        }
+        denied.retire();
+        denied.destroy();
+        // An owner that is no unique connection name is no identity.
+        const odd = component.createObject(harness);
+        odd.start();
+        DBusStubs.SessionBus.answer(expectIdentityRequest("provider-rules (odd owner)", odd), [{ value: 1 }]);
+        odd.identityLookup.finished(["org.example.NotUnique"]);
+        if (odd.identityReady || odd.selfOwner !== "") {
+            fail("provider-rules: an owner that is no unique connection name is no identity, and is not kept (got "
+                 + odd.identityReady + ", " + odd.selfOwner + ")");
+        }
+        odd.retire();
+        odd.destroy();
+        // A held identity goes with the retirement, and an owner read that arrives after it
+        // makes none.
+        const held = component.createObject(harness);
+        // The owner is set before the flag: whatever reacts to identityReady finds it.
+        let ownerAtReady = null;
+        held.identityReadyChanged.connect(() => {
+            if (held.identityReady) {
+                ownerAtReady = held.selfOwner;
+            }
+        });
+        held.start();
+        DBusStubs.SessionBus.answer(expectIdentityRequest("provider-rules (held)", held), [{ value: 1 }]);
+        held.identityLookup.finished([":1.7"]);
+        if (!held.identityReady || held.selfOwner !== ":1.7" || ownerAtReady !== ":1.7") {
+            fail("provider-rules: a granted name with its owner is the identity, the owner set before the flag (got "
+                 + held.identityReady + ", " + held.selfOwner + ", at the flag " + ownerAtReady + ")");
+        }
+        held.retire();
+        if (held.identityReady || held.selfOwner !== "") {
+            fail("provider-rules: the retirement ends the identity");
+        }
+        held.destroy();
+        const lateOwner = component.createObject(harness);
+        lateOwner.start();
+        DBusStubs.SessionBus.answer(expectIdentityRequest("provider-rules (late owner)", lateOwner), [{ value: 1 }]);
+        lateOwner.retire();
+        lateOwner.identityLookup.finished([":1.8"]);
+        if (lateOwner.identityReady || lateOwner.selfOwner !== "") {
+            fail("provider-rules: an owner read after the retirement makes no identity");
+        }
+        lateOwner.destroy();
+        // A retirement before the answer drops the pending request: a late answer reaches
+        // nothing.
+        const early = component.createObject(harness);
+        early.start();
+        const earlyReply = expectIdentityRequest("provider-rules (early retirement)", early);
+        early.retire();
+        DBusStubs.SessionBus.answer(earlyReply, [{ value: 1 }]);
+        if (early.registration !== null || early.identityLookup.calls !== 0 || early.identityReady) {
+            fail("provider-rules: a retirement drops the pending request, and a late answer reaches nothing");
+        }
+        early.destroy();
+        done = true;
+    }
+
+    // P5's desired mode on the real script: a bar's set through the slot its prepare took, the
+    // tiler's untoggle and start behind it (main.qml, applyMode). Tiled from floating, decided at
+    // once, the app the master and given focus; a re-read that starts nothing again; Tiled again
+    // with no target, a no-op; a set validated when it is handled, its popup's focus included;
+    // another lifetime's handle; Floating on the tiled view, which ends the session, and with no
+    // session, which changes nothing; a refused tree; a completion that outlives a failed
+    // publication. Then the cross-output transfer whose first admission is refused 7 while the old
+    // master's restore takes focus: it starts on its retry, the prepared app focused after the
+    // first attempt and nothing moving focus after it, and inside its retry window a re-read
+    // starts nothing and another widget's set is busy. A desktop switch of the user's inside a
+    // retry window: the start takes the captured view and the switch stands. The shortcut
+    // cancelling a set's retry; a retry whose target was minimized; an admission refused for good.
+    // A retried set's outcome, which reaches that set read again as it was and nothing else under
+    // its identity: neither another payload - refused, or handled afresh once another consumer
+    // replaced the record - nor a query reusing its number. Tiled between the master's release
+    // and the tree's end, handled as on an untiled view.
+    function runSet() {
+        if (setup() === "") {
+            done = true;
+            return;
+        }
+        const ws = KWinStubs.Workspace;
+        const p = provider;
+        script.admitRetryMillis = 20;
+        script.admitRetryLimit = 3;
+        const output = ws.activeScreen;
+        const second = { name: "Virtual-2", geometry: Qt.rect(1440, 0, 1440, 900), devicePixelRatio: 1 };
+        ws.screens = [output, second];
+        const otherDesktop = { id: 12 };
+        ws.desktops = [firstDesktop, otherDesktop];
+        const shellPid = 900;
+        master.pid = 500;
+        winA.pid = 501;
+        winB.pid = 502;
+        const surface = (id, over, on) => {
+            const w = mk(Object.assign({ internalId: id, normalWindow: false, pid: shellPid }, over));
+            w.output = on || output;
+            w.desktops = [firstDesktop];
+            return w;
+        };
+        const popup = surface("popup", { appletPopup: true });
+        const awayPopup = surface("popup-away", { appletPopup: true }, second);
+        const foreign = surface("foreign", { appletPopup: true, pid: 777 });
+        // An app on the other output, with that output's bar.
+        const away = mk({ internalId: "away", resourceClass: "org.fusion.away", desktopFileName: "org.fusion.away.desktop",
+                          frameGeometry: Qt.rect(1500, 80, 600, 400), pid: 503 });
+        away.output = second;
+        away.desktops = [firstDesktop];
+        const focus = w => {
+            ws.activeWindow = w;
+            ws.windowActivated(w);
+        };
+        DBusStubs.SessionBus.answer(expectIdentityRequest("set", p), [{ value: 1 }]);
+        p.identityLookup.finished([":1.42"]);
+        const ask = (id, consumer, request, intent, extra) => Object.assign({
+            id: id, consumer: consumer, request: request, version: 1, intent: intent, outputName: "Virtual-1" }, extra || {});
+        const prep = (id, consumer, request, extra) => ask(id, consumer, request, "prepare", Object.assign({
+            epoch: p.label, view: { desktopId: "11", activityId: "a" } }, extra || {}));
+        const setTo = (id, consumer, request, mode, handle, extra) => ask(id, consumer, request, "set",
+            Object.assign({ mode: mode, handle: handle }, extra || {}));
+        // Answering a publication can start the next one at once (a completion or a view change
+        // made one due meanwhile), so they are answered until none is in flight, each with every
+        // frame it carried written: a shorter count would confirm none of them.
+        const settle = () => {
+            for (let i = 0; i < 8 && p.publishing; ++i) {
+                p.writer.finished([writeAnswer(p.pending.messages.length)]);
+            }
+        };
+        const framesSince = from => {
+            const frames = {};
+            for (let i = from; i < p.writer.callLog.length; ++i) {
+                Object.assign(frames, framesOf(p, i, [5, 6]));
+            }
+            settle();
+            return frames;
+        };
+        // Each clock's field keeps its last request, as the shell's widget configuration does: a
+        // read carries every field, the rows given replacing their widgets' (an inventory with
+        // only some widgets would say the others are gone). The frames it published, or with
+        // `holdPublication` its publication left unanswered.
+        const fields = {};
+        let owner = ":1.9";
+        const read = (rows, holdPublication) => {
+            for (const row of rows) {
+                fields[row.id] = row;
+            }
+            const all = Object.keys(fields).map(id => fields[id]);
+            settle();
+            const from = p.writer.callLog.length;
+            if (!p.reading) {
+                p.wake.activated();
+            }
+            p.shellLookup.finished([owner]);
+            p.reader.finished([JSON.stringify({ start: Date.now(), rows: all, widgets: all.map(r => r.id), empty: [],
+                                                truncated: false })]);
+            return holdPublication ? null : framesSince(from);
+        };
+        const completionOf = id => {
+            const row = p.requests.find(r => r.id === id);
+            return row ? row.completion : "no request";
+        };
+        const decided = (what, id, wanted) => {
+            if (canonical(completionOf(id)) !== canonical(wanted)) {
+                fail("set: " + what + " (got " + canonical(completionOf(id)) + ", not " + canonical(wanted) + ")");
+            }
+        };
+        const pending = (what, id) => {
+            if (completionOf(id) !== undefined) {
+                fail("set: " + what + " (got " + canonical(completionOf(id)) + ")");
+            }
+        };
+        const doneSet = { intent: "set", result: "done" };
+        const refusedSet = reason => ({ intent: "set", result: "refused", reason: reason });
+        // A prepare of widget `id` from the popup `opener` opened after `app` (null: none); its
+        // handle.
+        const prepareFrom = (id, consumer, request, app, opener, extra) => {
+            if (app) {
+                focus(app);
+            }
+            focus(opener);
+            read([prep(id, consumer, request, extra)]);
+            const completion = completionOf(id);
+            if (!completion || completion.result !== "done") {
+                fail("set: widget " + id + " prepares (got " + canonical(completion) + ")");
+                return "";
+            }
+            return completion.handle;
+        };
+        // The first read, with nothing to answer, takes the shell's PID.
+        p.shellLookup.finished([":1.9"]);
+        p.shellPidLookup.finished([shellPid]);
+        p.reader.finished([JSON.stringify({ start: Date.now(), rows: [], widgets: [], empty: [], truncated: false })]);
+        settle();
+        let frames = null;
+        let from = 0;
+        let h = "";
+        let h6 = "";
+        let creates = 0;
+        let admits = 0;
+        // ---- Tiled from floating: decided at once, the app the master, focus given to it ----
+        h = prepareFrom(5, "c5", 1, master, popup);
+        creates = calls("createTile").length;
+        frames = read([setTo(5, "c5", 2, "tiled", h)]);
+        if (facade.owned !== master || !inColumn(winA) || !p.active || calls("createTile").length !== creates + 1) {
+            fail("set: Tiled starts the session with the prepared app as the master (owned "
+                 + (facade.owned ? facade.owned.internalId : null) + ", a in column " + inColumn(winA) + ", active "
+                 + p.active + ", trees " + (calls("createTile").length - creates) + ")");
+        }
+        if (!frames[5] || canonical(frames[5].completion) !== canonical(doneSet) || frames[5].tiled !== true
+                || frames[5].prepared !== undefined) {
+            fail("set: the set's frame says it is done and the view tiled (got " + canonical(frames[5]) + ")");
+        }
+        if (ws.activeWindow !== master || p.slot !== null) {
+            fail("set: focus goes to the app, and the set consumed the slot");
+        }
+        admits = calls("admitTile").length;
+        const writes = p.writer.calls;
+        read([setTo(5, "c5", 2, "tiled", h)]);
+        if (calls("admitTile").length !== admits || p.writer.calls !== writes) {
+            fail("set: a set read again starts nothing again and tells nothing new");
+        }
+        read([setTo(5, "c5", 2, "tiled", "0".repeat(32) + ":9:9")]);
+        decided("the same set with another handle is refused", 5, refusedSet("conflicting-request"));
+        if (calls("admitTile").length !== admits) {
+            fail("set: a conflicting set starts nothing");
+        }
+        // ---- Tiled again: the master on its tile is no eligible app, so no target; a no-op ----
+        h = prepareFrom(5, "c5", 3, master, popup);
+        if (!completionOf(5) || completionOf(5).target !== false) {
+            fail("set: the popup opened from the master on its tile has no target");
+        }
+        creates = calls("createTile").length;
+        read([setTo(5, "c5", 4, "tiled", h)]);
+        decided("Tiled on the tiled view is a no-op, done before any target is needed", 5, doneSet);
+        if (calls("createTile").length !== creates || facade.owned !== master) {
+            fail("set: re-selecting Tiled changes nothing");
+        }
+        // ---- validated when handled: the popup lost focus unseen, the set refused with that ----
+        h = prepareFrom(5, "c5", 5, master, popup);
+        ws.activeWindow = winA;
+        read([setTo(5, "c5", 6, "floating", h)]);
+        decided("a set whose popup no longer holds focus is refused with that", 5, refusedSet("focus-changed"));
+        if (!p.active || facade.owned !== master || p.slot !== null) {
+            fail("set: a refused set changes nothing, and its slot ends");
+        }
+        ws.activeWindow = popup;
+        // ---- another lifetime's handle is stale ----
+        prepareFrom(5, "c5", 7, master, popup);
+        read([setTo(5, "c5", 8, "floating", "0".repeat(32) + ":1:1")]);
+        decided("another lifetime's handle is stale", 5, refusedSet("stale-context"));
+        if (!p.active || p.slot !== null) {
+            fail("set: a stale set changes nothing, and the holder's slot ends");
+        }
+        // ---- an incapable provider refuses the set, and the slot is freed ----
+        h = prepareFrom(7, "c7", 1, master, popup);
+        p.nativeCapable = false;
+        read([setTo(7, "c7", 2, "floating", h)]);
+        p.nativeCapable = true;
+        decided("an incapable provider refuses a set", 7, refusedSet("unavailable"));
+        if (p.slot !== null || !p.active) {
+            fail("set: an unavailable set frees the slot and changes nothing");
+        }
+        // ---- another widget's set, under the holder's own consumer label, is stale ----
+        h = prepareFrom(7, "c7", 3, master, popup);
+        read([setTo(8, "c7", 1, "floating", h)]);
+        decided("another widget's set naming the holder's handle is stale", 8, refusedSet("stale-context"));
+        if (!p.slot || p.slot.id !== 7 || !p.active) {
+            fail("set: another widget's set leaves the holder's slot and the session alone");
+        }
+        // ---- the holder's set naming another output is stale, and ends the preparation ----
+        read([setTo(7, "c7", 4, "floating", h, { outputName: "Virtual-2" })]);
+        decided("a set for another output than its preparation's is stale", 7, refusedSet("stale-context"));
+        if (p.slot !== null || !p.active) {
+            fail("set: the holder's stale set frees the slot and changes nothing");
+        }
+        // ---- Floating on the tiled view ends the session ----
+        h = prepareFrom(5, "c5", 9, master, popup);
+        frames = read([setTo(5, "c5", 10, "floating", h)]);
+        decided("Floating on the tiled view is done", 5, doneSet);
+        if (p.active || facade.owned !== null || onTile(master) || !frames[5] || frames[5].tiled !== false) {
+            fail("set: Floating ends the session on the prepared view (got " + canonical(frames[5]) + ")");
+        }
+        // ---- Floating with no session: done, nothing changes ----
+        h = prepareFrom(5, "c5", 11, master, popup);
+        creates = calls("createTile").length;
+        const restores = calls("restoreWindow").length;
+        read([setTo(5, "c5", 12, "floating", h)]);
+        decided("Floating with no session is done", 5, doneSet);
+        if (p.active || calls("createTile").length !== creates || calls("restoreWindow").length !== restores) {
+            fail("set: Floating with no session changes nothing");
+        }
+        // ---- Tiled with no target on a view that is not tiled: no-target ----
+        focus(foreign);
+        focus(popup);
+        read([prep(7, "c7", 5)]);
+        if (!completionOf(7) || completionOf(7).target !== false) {
+            fail("set: a popup opened from another process's window has no target");
+        }
+        read([setTo(7, "c7", 6, "tiled", completionOf(7).handle)]);
+        decided("Tiled with no target on an untiled view is refused", 7, refusedSet("no-target"));
+        if (p.active) {
+            fail("set: a set with no target starts nothing");
+        }
+        // ---- a refused tree refuses the set ----
+        h = prepareFrom(5, "c5", 13, master, popup);
+        facade.refuseCreate = true;
+        read([setTo(5, "c5", 14, "tiled", h)]);
+        facade.refuseCreate = false;
+        decided("a refused tree refuses the set", 5, refusedSet("tree-refused"));
+        if (p.active) {
+            fail("set: a refused tree starts nothing");
+        }
+        // ---- a completion outlives a failed publication: the next one carries it ----
+        h = prepareFrom(5, "c5", 15, master, popup);
+        read([setTo(5, "c5", 16, "tiled", h)], true);
+        if (!p.publishing || !p.active) {
+            fail("set: the set started the session and its frame is going out");
+        }
+        p.writer.failed();
+        frames = read([setTo(5, "c5", 16, "tiled", h)]);
+        if (!frames[5] || canonical(frames[5].completion) !== canonical(doneSet) || frames[5].tiled !== true) {
+            fail("set: the frame a failed publication did not deliver goes out with the next one (got "
+                 + canonical(frames[5]) + ")");
+        }
+        steps = [
+            { name: "the transfer to the other output", run: function () {
+                // ---- the cross-output transfer: the session on the first output ends, the old
+                // master's restore focuses it, the first admission on the second is refused 7 ----
+                // ---- Floating on another output leaves the session here alone ----
+                focus(away);
+                focus(awayPopup);
+                read([prep(6, "c6", 1, { outputName: "Virtual-2" })]);
+                read([setTo(6, "c6", 2, "floating", completionOf(6).handle, { outputName: "Virtual-2" })]);
+                decided("Floating on another output is done", 6, doneSet);
+                if (!p.active || facade.owned !== master || p.outputName !== "Virtual-1") {
+                    fail("set: Floating on another output leaves this output's session alone");
+                }
+                focus(away);
+                focus(awayPopup);
+                read([prep(6, "c6", 3, { outputName: "Virtual-2" })]);
+                h6 = completionOf(6) ? completionOf(6).handle : "";
+                if (!completionOf(6) || completionOf(6).target !== true) {
+                    fail("set: the popup on the second output opened from its app prepares it");
+                }
+                facade.admitAnswers = [7];
+                admits = calls("admitTile").length;
+                const restored = calls("restoreWindow").length;
+                read([setTo(6, "c6", 4, "tiled", h6, { outputName: "Virtual-2" })]);
+                pending("a set whose admission is retried has no completion yet", 6);
+                if (p.active || facade.owned !== null || calls("admitTile").length !== admits + 1
+                        || calls("restoreWindow").length === restored) {
+                    fail("set: the session on the first output ended and the first admission was refused");
+                }
+                if (ws.activeWindow !== away) {
+                    fail("set: focus went to the prepared app after the first attempt (got "
+                         + (ws.activeWindow ? ws.activeWindow.internalId : null) + ")");
+                }
+                // ---- inside the retry window: a re-read starts nothing, another set is busy ----
+                read([setTo(6, "c6", 4, "tiled", h6, { outputName: "Virtual-2" })]);
+                pending("the re-read set is still under way", 6);
+                const h5 = prepareFrom(5, "c5", 17, master, popup);
+                read([setTo(5, "c5", 18, "tiled", h5)]);
+                decided("another set while a start is retried is busy", 5, refusedSet("busy"));
+                if (p.slot !== null) {
+                    fail("set: a busy set frees the slot");
+                }
+                pending("the retried set is still under way", 6);
+                if (calls("admitTile").length !== admits + 1) {
+                    fail("set: nothing inside the retry window admitted again");
+                }
+                settle();
+                from = p.writer.callLog.length;
+            } },
+            { name: "the transfer's retry", until: () => facade.owned === away && p.writer.callLog.length > from,
+              run: function () {
+                frames = framesSince(from);
+                if (!frames[6] || canonical(frames[6].completion) !== canonical(doneSet) || frames[6].tiled !== true) {
+                    fail("set: the retried set is told done, the second output tiled (got " + canonical(frames[6]) + ")");
+                }
+                if (calls("admitTile").length !== admits + 2 || p.outputName !== "Virtual-2" || ws.activeWindow !== popup) {
+                    fail("set: the retry admitted the app on the second output, and moved no focus");
+                }
+                read([]);
+                decided("a set decided after its read keeps its completion when read again", 6, doneSet);
+                // ---- the completion rides a newer state frame: the activity switched ----
+                settle();
+                from = p.writer.callLog.length;
+                ws.currentActivity = "b";
+            } },
+            { name: "a newer state frame", until: () => p.writer.callLog.length > from, run: function () {
+                const decidedAt = frames[6] ? frames[6].revision : -1;
+                frames = framesSince(from);
+                if (!frames[6] || canonical(frames[6].completion) !== canonical(doneSet) || !(frames[6].revision > decidedAt)
+                        || !frames[6].view || frames[6].view.activityId !== "b") {
+                    fail("set: a newer state frame for the request carries its completion (got " + canonical(frames[6]) + ")");
+                }
+                ws.currentActivity = "a";
+            } },
+            { name: "the activity back", until: () => p.views[6] && p.views[6].view && p.views[6].view.activityId === "a",
+              run: function () {
+                settle();
+                // ---- a desktop switch of the user's inside a retry window ----
+                h6 = prepareFrom(6, "c6", 5, null, awayPopup, { outputName: "Virtual-2" });
+                read([setTo(6, "c6", 6, "floating", h6, { outputName: "Virtual-2" })]);
+                decided("Floating on the second output's tiled view is done", 6, doneSet);
+                h = prepareFrom(5, "c5", 19, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 20, "tiled", h)]);
+                pending("a retried set has no completion yet", 5);
+                ws.currentDesktop = otherDesktop;
+            } },
+            { name: "the retry after the desktop switch", until: () => facade.owned === master, run: function () {
+                if (p.desktopId !== "11" || ws.currentDesktop !== otherDesktop || ws.activeWindow !== master) {
+                    fail("set: the retry starts on the captured desktop, the user's switch stands and focus stays");
+                }
+                decided("the retried set is done", 5, doneSet);
+                ws.currentDesktop = firstDesktop;
+            } },
+            { name: "the desktop back", until: () => p.views[5] && p.views[5].view && p.views[5].view.desktopId === "11",
+              run: function () {
+                // ---- the shortcut cancels a set's retry ----
+                h = prepareFrom(5, "c5", 21, master, popup);
+                read([setTo(5, "c5", 22, "floating", h)]);
+                decided("Floating ends the session", 5, doneSet);
+                h = prepareFrom(5, "c5", 23, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 24, "tiled", h)]);
+                pending("a retried set has no completion yet", 5);
+                settle();
+                from = p.writer.callLog.length;
+                tileShortcut.activated();
+                decided("the shortcut cancels a set's retry", 5, refusedSet("cancelled"));
+                if (!p.active || facade.owned !== master) {
+                    fail("set: the shortcut's own press then tiles as it always does");
+                }
+            } },
+            { name: "the cancellation's publication", until: () => p.writer.callLog.length > from, run: function () {
+                frames = framesSince(from);
+                if (!frames[5] || canonical(frames[5].completion) !== canonical(refusedSet("cancelled"))) {
+                    fail("set: the cancelled set is told so (got " + canonical(frames[5]) + ")");
+                }
+                tileShortcut.activated();
+                // ---- a retry whose target was minimized meanwhile is refused with that ----
+                h = prepareFrom(5, "c5", 25, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 26, "tiled", h)]);
+                settle();
+                from = p.writer.callLog.length;
+                master.minimized = true;
+            } },
+            // A refusal that comes later with no state change is told at its own revision step.
+            { name: "the retry of a minimized target", until: () => completionOf(5) !== undefined
+                                                                && p.writer.callLog.length > from, run: function () {
+                frames = framesSince(from);
+                if (!frames[5] || canonical(frames[5].completion) !== canonical(refusedSet("target-departed"))) {
+                    fail("set: a refusal decided later is told with a frame of its own (got " + canonical(frames[5]) + ")");
+                }
+                decided("a retry whose target left is refused with that", 5, refusedSet("target-departed"));
+                master.minimized = false;
+                if (p.active || facade.owned !== null) {
+                    fail("set: a retry refused starts nothing");
+                }
+                // ---- an admission refused for good ----
+                h = prepareFrom(5, "c5", 27, master, popup);
+                facade.admitAnswers = [7, 7, 7, 7];
+                admits = calls("admitTile").length;
+                read([setTo(5, "c5", 28, "tiled", h)]);
+            } },
+            { name: "the last admission", until: () => completionOf(5) !== undefined, run: function () {
+                decided("an admission refused after its retries refuses the set", 5, refusedSet("admission-refused"));
+                if (calls("admitTile").length !== admits + 4 || p.active) {
+                    fail("set: the first admission and its three retries, then the refusal stands (admissions "
+                         + (calls("admitTile").length - admits) + ")");
+                }
+                // ---- a retry whose desktop was removed meanwhile is refused with that ----
+                h = prepareFrom(5, "c5", 29, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 30, "tiled", h)]);
+                ws.desktops = [otherDesktop];
+            } },
+            { name: "the retry on a removed desktop", until: () => completionOf(5) !== undefined, run: function () {
+                decided("a retry whose view is gone is refused with that", 5, refusedSet("view-changed"));
+                ws.desktops = [firstDesktop, otherDesktop];
+                // ---- a retry whose activity was removed meanwhile is refused with that ----
+                h = prepareFrom(5, "c5", 31, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 32, "tiled", h)]);
+                ws.activities = [];
+            } },
+            { name: "the retry on a removed activity", until: () => completionOf(5) !== undefined, run: function () {
+                decided("a retry whose activity is gone is refused with that", 5, refusedSet("view-changed"));
+                ws.activities = ["a", "b"];
+                // ---- a retry whose output was unplugged meanwhile is refused with that ----
+                focus(away);
+                focus(awayPopup);
+                read([prep(6, "c6", 7, { outputName: "Virtual-2" })]);
+                facade.admitAnswers = [7];
+                read([setTo(6, "c6", 8, "tiled", completionOf(6).handle, { outputName: "Virtual-2" })]);
+                pending("a retried set on the other output has no completion yet", 6);
+                ws.screens = [output];
+            } },
+            { name: "the retry on an unplugged output", until: () => completionOf(6) !== undefined, run: function () {
+                decided("a retry whose output is gone is refused with that", 6, refusedSet("view-changed"));
+                ws.screens = [output, second];
+                if (p.active || facade.owned !== null) {
+                    fail("set: a retry on an unplugged output starts nothing");
+                }
+                // ---- a retry after the shell's connection changed is refused with that ----
+                h = prepareFrom(5, "c5", 33, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 34, "tiled", h)]);
+                owner = ":1.10";
+                read([]);
+            } },
+            { name: "the retry after a new shell", until: () => completionOf(5) !== undefined, run: function () {
+                decided("a retry under another shell is refused with that", 5, refusedSet("shell-replaced"));
+                facade.admitAnswers = [];
+                if (p.active) {
+                    fail("set: no retry refused for its view or shell started anything");
+                }
+                // ---- a retried set's outcome reaches that set read again as it was, and nothing
+                // else under its identity: another payload keeps its refusal ----
+                p.shellPidLookup.finished([shellPid]);
+                h = prepareFrom(5, "c5", 35, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 36, "tiled", h)]);
+                pending("a retried set has no completion yet", 5);
+                read([setTo(5, "c5", 36, "tiled", "0".repeat(32) + ":9:9")]);
+                decided("another handle under a retried set's identity is refused", 5, refusedSet("conflicting-request"));
+                from = p.writer.callLog.length;
+            } },
+            { name: "a retried set's outcome beside another payload", until: () => p.active && p.writer.callLog.length > from,
+              run: function () {
+                frames = framesSince(from);
+                decided("a retried set's outcome leaves another payload under its identity refused", 5,
+                        refusedSet("conflicting-request"));
+                if (!frames[5] || canonical(frames[5].completion) !== canonical(refusedSet("conflicting-request"))
+                        || canonical(p.records[5].completion) !== canonical(doneSet) || facade.owned !== master) {
+                    fail("set: the retried set is done and recorded so, and the other payload's frames keep its refusal (got "
+                         + canonical(frames[5]) + ", record " + canonical(p.records[5]) + ")");
+                }
+                // ---- nor does it reach a query reusing its number ----
+                h = prepareFrom(5, "c5", 37, master, popup);
+                read([setTo(5, "c5", 38, "floating", h)]);
+                decided("Floating ends the session", 5, doneSet);
+                h = prepareFrom(5, "c5", 39, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 40, "tiled", h)]);
+                pending("a retried set has no completion yet", 5);
+                read([ask(5, "c5", 40, "query")]);
+                from = p.writer.callLog.length;
+            } },
+            { name: "a retried set's outcome beside a query", until: () => p.active && p.writer.callLog.length > from,
+              run: function () {
+                frames = framesSince(from);
+                if (completionOf(5) !== undefined || !frames[5] || frames[5].completion !== undefined
+                        || frames[5].tiled !== true || canonical(p.records[5].completion) !== canonical(doneSet)) {
+                    fail("set: a query reusing a retried set's number is answered as a query, the set's outcome in its"
+                         + " record (got " + canonical(completionOf(5)) + ", frame " + canonical(frames[5]) + ")");
+                }
+                // ---- nor an identical set handled afresh, once another consumer replaced
+                // the record ----
+                h = prepareFrom(5, "c5", 41, master, popup);
+                read([setTo(5, "c5", 42, "floating", h)]);
+                decided("Floating ends the session", 5, doneSet);
+                h = prepareFrom(5, "c5", 43, master, popup);
+                facade.admitAnswers = [7];
+                read([setTo(5, "c5", 44, "tiled", h)]);
+                pending("a retried set has no completion yet", 5);
+                read([setTo(5, "c5b", 1, "tiled", "0".repeat(32) + ":8:8")]);
+                read([setTo(5, "c5", 44, "tiled", h)]);
+                decided("a set handled afresh under a replaced record names no slot", 5, refusedSet("stale-context"));
+            } },
+            { name: "a retried set's outcome beside a replaced record", until: () => p.active, run: function () {
+                if (facade.owned !== master) {
+                    fail("set: the retried set started the session with its app");
+                }
+                decided("the deferred decision does not update the replacement's live answer", 5,
+                        refusedSet("stale-context"));
+                read([setTo(5, "c5", 44, "tiled", h)]);
+                decided("a set handled afresh under its identity keeps its own answer once the retried set is decided", 5,
+                        refusedSet("stale-context"));
+                // The session ends: the next case starts one with the shortcut.
+                h = prepareFrom(5, "c5", 45, master, popup);
+                read([setTo(5, "c5", 46, "floating", h)]);
+                decided("Floating ends the session", 5, doneSet);
+                if (p.active) {
+                    fail("set: the last Floating ends the session");
+                }
+            } },
+            // ---- Tiled between the master's release and the tree's end (vacated): the view is
+            // tiled no more, so the set is handled as on an untiled view - refused with no target,
+            // and with one the vacated teardown taken now and the session started there ----
+            { name: "a set between the master's release and the tree's end", run: function () {
+                focus(master);
+                tileShortcut.activated();
+                if (!p.active || facade.owned !== master) {
+                    fail("set: the shortcut tiles the view before the master's release");
+                }
+                h = prepareFrom(5, "c5", 47, master, popup);
+                facade.vacate();
+                read([setTo(5, "c5", 48, "tiled", h)]);
+                decided("Tiled in the gap with no target is refused, never done", 5, refusedSet("no-target"));
+                facade.treeAlive = false;
+                facade.treeChanged();
+                if (p.active) {
+                    fail("set: the tree's end after the refused set ends the session");
+                }
+                focus(master);
+                tileShortcut.activated();
+                if (!p.active || facade.owned !== master) {
+                    fail("set: the shortcut tiles the view again before the master's second release");
+                }
+                h = prepareFrom(5, "c5", 49, winA, popup);
+                creates = calls("createTile").length;
+                facade.vacate();
+                read([setTo(5, "c5", 50, "tiled", h)]);
+                decided("Tiled in the gap with a target is done", 5, doneSet);
+                if (calls("createTile").length !== creates + 1 || facade.owned !== winA || !p.active) {
+                    fail("set: Tiled in the gap starts the session with the prepared app (owned "
+                         + (facade.owned ? facade.owned.internalId : null) + ", trees "
+                         + (calls("createTile").length - creates) + ", active " + p.active + ")");
+                }
+                h = prepareFrom(5, "c5", 51, winA, popup);
+                read([setTo(5, "c5", 52, "floating", h)]);
+                decided("Floating ends the session before the failed retry", 5, doneSet);
+                h = prepareFrom(5, "c5", 53, master, popup);
+                facade.admitAnswers = [7, "throw"];
+                admits = calls("admitTile").length;
+                read([setTo(5, "c5", 54, "tiled", h)]);
+                pending("the first admission declined and left a retry pending", 5);
+            } },
+            { name: "admission throws on a retry", until: () => calls("admitTile").length === admits + 2,
+              run: function () {
+                decided("a throwing retry answers the set with unavailable", 5, refusedSet("unavailable"));
+                const attempted = calls("admitTile").slice(-1)[0];
+                const released = calls("releaseTile").slice(-1)[0];
+                if (p.startPending || p.active || facade.treeAlive || facade.owned !== null
+                        || released.generation !== attempted.generation) {
+                    fail("set: a throwing retry drops pending state and releases its own generation");
+                }
+                h = prepareFrom(5, "c5", 55, master, popup);
+                read([setTo(5, "c5", 56, "tiled", h)]);
+                decided("a later set is admitted after the exception", 5, doneSet);
+                if (!p.active || facade.owned !== master) {
+                    fail("set: the later set starts normally after the failed retry");
+                }
+                // A terminal refusal during a transfer is not a rollback to the previous view.
+                focus(away);
+                focus(awayPopup);
+                frames = read([ask(5, "c5", 57, "query"), prep(6, "c6", 100, { outputName: "Virtual-2" })]);
+                if (!frames[5] || frames[5].tiled !== true
+                        || !frames[6] || frames[6].tiled !== false || !completionOf(6)?.target) {
+                    fail("set: before transfer A is tiled and B is ready to prepare from its app");
+                }
+                h6 = completionOf(6)?.handle ?? "";
+                const restores = calls("restoreWindow").length;
+                facade.admitAnswers = [8];
+                frames = read([ask(5, "c5", 57, "query"),
+                               setTo(6, "c6", 101, "tiled", h6, { outputName: "Virtual-2" })]);
+                decided("terminal admission failure on B refuses its set", 6, refusedSet("admission-refused"));
+                if (p.active || facade.owned !== null || p.startPending
+                        || calls("restoreWindow").length !== restores + 1
+                        || !frames[5] || frames[5].tiled !== false
+                        || !frames[6] || frames[6].tiled !== false) {
+                    fail("set: terminal transfer refusal reports A's teardown and leaves both bars Floating");
+                }
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
+
+    // P5's prepared target, on a provider of its own: the shell's PID looked up beside the read; a
+    // prepare decided once per request identity against the bar's frozen context, the one slot and
+    // a verified shell applet popup holding focus; its target the app the popup was opened from, or
+    // none with a reason; the preparation's frames, and their end by focus, the target, the view or
+    // the shell, with a revision step; the slot freed by its holder's next request, a withdrawal or
+    // its widget gone in a complete inventory, never by an incomplete read; a saved prepare refused
+    // by a later lifetime; a lifetime started while the app or a popup holds focus; a set and an
+    // unknown intent refused before any action; a query's frames as they were, and the offline
+    // frames with nothing of an intent.
+    function runPrepare() {
+        const base = "file://" + packagesRoot + "/scripts/plasmafusion-placement/contents/ui/";
+        const component = Qt.createComponent(base + "LayoutProvider.qml");
+        if (component.status !== Component.Ready) {
+            fail("prepare: LayoutProvider.qml did not load: " + component.errorString());
+            done = true;
+            return;
+        }
+        setupView();
+        const ws = KWinStubs.Workspace;
+        const output = ws.activeScreen;
+        const second = { name: "Virtual-2", geometry: Qt.rect(1440, 0, 1440, 900), devicePixelRatio: 1 };
+        ws.screens = [output, second];
+        const otherDesktop = { id: 12 };
+        ws.desktops = [firstDesktop, otherDesktop];
+        let shellPid = 900;
+        const app = master;
+        const editor = winA;
+        app.pid = 500;
+        editor.pid = 501;
+        const surface = (id, over, on) => {
+            const w = mk(Object.assign({ internalId: id, normalWindow: false, pid: shellPid }, over));
+            w.output = on || output;
+            w.desktops = [firstDesktop];
+            return w;
+        };
+        const popup = surface("popup", { appletPopup: true });
+        const otherPopup = surface("popup-2", { appletPopup: true });
+        const dock = surface("dock", { dock: true });
+        const foreign = surface("foreign", { appletPopup: true, pid: 777 });
+        const awayPopup = surface("popup-away", { appletPopup: true }, second);
+        // A window of the shell's that is none of the three kinds (a dialog of its own, say) is no
+        // shell surface; the desktop's surface is one, as the panel is.
+        const dialog = surface("dialog", {});
+        const desktopSurface = surface("desktop", { desktopWindow: true });
+        // A popup whose process the compositor could not tell (PID 0), as no PID known is 0 too.
+        const zeroPopup = surface("popup-zero", { appletPopup: true, pid: 0 });
+        // An eligible app on the other output.
+        const away = mk({ internalId: "away", resourceClass: "org.fusion.away", desktopFileName: "org.fusion.away.desktop",
+                          frameGeometry: Qt.rect(1500, 80, 600, 400), pid: 502 });
+        away.output = second;
+        away.desktops = [firstDesktop];
+        const focus = w => {
+            ws.activeWindow = w;
+            ws.windowActivated(w);
+        };
+        const p = component.createObject(harness);
+        p.nativeCapable = true;
+        p.start();
+        follow(p);
+        DBusStubs.SessionBus.answer(expectIdentityRequest("prepare", p), [{ value: 1 }]);
+        p.identityLookup.finished([":1.42"]);
+        const view = { desktopId: "11", activityId: "a", outputName: "Virtual-1" };
+        const ask = (id, consumer, request, intent, extra) => Object.assign({
+            id: id, consumer: consumer, request: request, version: 1, intent: intent, outputName: "Virtual-1" }, extra || {});
+        const prep = (id, consumer, request, extra) => ask(id, consumer, request, "prepare", Object.assign({
+            epoch: p.label, view: { desktopId: "11", activityId: "a" } }, extra || {}));
+        const handle = (shell, serial) => p.label + ":" + shell + ":" + serial;
+        const ready = (h, target, reason) => target ? { intent: "prepare", result: "done", handle: h, target: true }
+            : { intent: "prepare", result: "done", handle: h, target: false, reason: reason };
+        const refused = reason => ({ intent: "prepare", result: "refused", reason: reason });
+        // A publication outstanding is answered first, so that a wake reads at once, with every
+        // frame it carried written: a shorter count would confirm none of them.
+        const settle = () => {
+            if (p.publishing) {
+                p.writer.finished([writeAnswer(p.pending.messages.length)]);
+            }
+        };
+        // The frames the publications since call `from` carried, by widget, the last answered.
+        const framesSince = from => {
+            const frames = {};
+            for (let i = from; i < p.writer.callLog.length; ++i) {
+                Object.assign(frames, framesOf(p, i, [1, 2, 5, 6, 7, 8]));
+            }
+            settle();
+            return frames;
+        };
+        // A read of the rows the clocks hold, with the inventory the shell side reports (each row's
+        // widget, complete) unless one is given (null: none); the frames it published.
+        // The identity's arrival starts the first read itself; a wake during a read would owe one
+        // more read, which nothing here answers, so a read in flight is not woken again.
+        let owner = ":1.9";
+        // From the target's own changes on, widget 5's next prepare: its request and handle serial
+        // counted on, so a case added there renumbers nothing after it.
+        let request = 0;
+        let serial = 0;
+        const read = (rows, inventory) => {
+            settle();
+            const from = p.writer.callLog.length;
+            if (!p.reading) {
+                p.wake.activated();
+            }
+            p.shellLookup.finished([owner]);
+            const inv = inventory === undefined ? { widgets: rows.map(r => r.id), empty: [], truncated: false } : inventory;
+            p.reader.finished([JSON.stringify(Object.assign({ start: Date.now(), rows: rows }, inv || {}))]);
+            return framesSince(from);
+        };
+        // A widget's completion as the last read decided it, and the slot's holder.
+        const decided = (what, id, wanted) => {
+            const row = p.requests.find(r => r.id === id);
+            const got = row ? canonical(row.completion) : "no request";
+            if (got !== canonical(wanted)) {
+                fail("prepare: " + what + " (got " + got + ", not " + canonical(wanted) + ")");
+            }
+        };
+        const prepareAgain = (what, target, reason) => {
+            read([prep(6, "c6", 3), prep(5, "c5", request)]);
+            decided(what, 5, ready(handle(2, serial), target, reason));
+            request += 1;
+            serial += 1;
+        };
+        const holds = (what, id, target) => {
+            const s = p.slot;
+            if (id === null ? s !== null : (!s || s.id !== id || s.window !== target)) {
+                fail("prepare: " + what + " (the slot " + (s ? "is widget " + s.id + "'s, target "
+                     + (s.window ? s.window.internalId : null) : "is free") + ")");
+            }
+        };
+        const frameIs = (what, frames, id, completion, prepared) => {
+            const f = frames[id];
+            if (!f || canonical(f.completion) !== canonical(completion)
+                    || (prepared === null ? f.prepared !== undefined : canonical(f.prepared) !== canonical(prepared))) {
+                fail("prepare: " + what + " (got " + canonical(f) + ")");
+            }
+        };
+        // ---- before the shell's PID is known: a prepare refused, a query's frame as it was ----
+        // With no PID and no read yet, nothing is the shell's, a window of PID 0 neither: it
+        // clears the remembered app as any other window does.
+        focus(app);
+        focus(zeroPopup);
+        if (p.lastEligible !== null) {
+            fail("prepare: with no PID known a window of PID 0 is not the shell's");
+        }
+        focus(app);
+        focus(popup);
+        let frames = read([ask(2, "c2", 1, "query"), prep(1, "c1", 1)]);
+        if (JSON.stringify(p.shellPidLookup.callLog) !== JSON.stringify([[":1.9"]])
+                || p.shellPidLookup.method !== "GetConnectionUnixProcessID" || p.shellPidLookup.service !== "org.freedesktop.DBus"
+                || p.reader.calls !== 1) {
+            fail("prepare: the shell's PID is asked of the bus for the connection read from, beside the read (got "
+                 + JSON.stringify(p.shellPidLookup.callLog) + ", reads " + p.reader.calls + ")");
+        }
+        frameIs("a prepare read before the shell's PID is known is refused", frames, 1, refused("unavailable"), null);
+        if (canonical(frames[2]) !== canonical(frameWanted(p, { consumer: "c2", request: 1 },
+                                                           { capable: true, view: view, tiled: false }))) {
+            fail("prepare: a query's frame carries the state and nothing of an intent (got " + canonical(frames[2]) + ")");
+        }
+        // A prepare's frozen context, checked at each bound before any action: an epoch of 1 to 64
+        // characters, a view whose desktop id has 1 to 128 and whose activity id at most 128 (one
+        // may be empty); anything else, a missing view too, is malformed. Widget 40 sits on the
+        // bounds and is taken: refused for its epoch, which is not this lifetime's.
+        const longest = (c, n) => c.repeat(n);
+        read([ask(2, "c2", 1, "query"), prep(1, "c1", 1),
+              prep(30, "c30", 1, { epoch: "" }), prep(31, "c31", 1, { epoch: longest("e", 65) }),
+              prep(32, "c32", 1, { epoch: 7 }), prep(33, "c33", 1, { view: null }), prep(34, "c34", 1, { view: "11" }),
+              prep(35, "c35", 1, { view: { desktopId: "", activityId: "a" } }),
+              prep(36, "c36", 1, { view: { desktopId: longest("d", 129), activityId: "a" } }),
+              prep(37, "c37", 1, { view: { desktopId: 11, activityId: "a" } }),
+              prep(38, "c38", 1, { view: { desktopId: "11", activityId: longest("a", 129) } }),
+              prep(39, "c39", 1, { view: { desktopId: "11" } }), prep(41, "c41", 1, { view: undefined }),
+              prep(40, "c40", 1, { epoch: longest("e", 64), view: { desktopId: longest("d", 128), activityId: "" } })]);
+        if (JSON.stringify(p.refusals.map(r => [r.id, r.reason]))
+                !== JSON.stringify([30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41].map(id => [id, "malformed"]))) {
+            fail("prepare: a prepare without its frozen context is malformed, at each bound (got "
+                 + JSON.stringify(p.refusals.map(r => [r.id, r.reason])) + ")");
+        }
+        decided("a prepare on the bounds is taken, and refused for its epoch", 40, refused("stale-context"));
+        // A set names a mode, tiled or floating, and a handle of 1 to 128 characters; anything else
+        // is malformed. Widget 48 sits on the bounds and is taken: refused for its handle, which
+        // names no slot.
+        read([ask(2, "c2", 1, "query"), prep(1, "c1", 1),
+              ask(42, "c42", 1, "set", { mode: "x", handle: "h" }), ask(43, "c43", 1, "set", { handle: "h" }),
+              ask(44, "c44", 1, "set", { mode: "tiled", handle: "" }),
+              ask(45, "c45", 1, "set", { mode: "tiled", handle: longest("h", 129) }),
+              ask(46, "c46", 1, "set", { mode: "floating", handle: 7 }), ask(47, "c47", 1, "set", { mode: "floating" }),
+              ask(48, "c48", 1, "set", { mode: "floating", handle: longest("h", 128) })]);
+        if (JSON.stringify(p.refusals.map(r => [r.id, r.reason]))
+                !== JSON.stringify([42, 43, 44, 45, 46, 47].map(id => [id, "malformed"]))) {
+            fail("prepare: a set without its mode and handle is malformed, at each bound (got "
+                 + JSON.stringify(p.refusals.map(r => [r.id, r.reason])) + ")");
+        }
+        decided("a set on the bounds is taken, and refused for its handle", 48,
+                { intent: "set", result: "refused", reason: "stale-context" });
+        p.shellPidLookup.finished([shellPid]);
+        if (p.shellPid !== 900 || p.shellSerial !== 1) {
+            fail("prepare: the shell's PID is kept with the first shell serial (got " + p.shellPid + ", " + p.shellSerial + ")");
+        }
+        // An incapable provider prepares nothing, the shell's PID known or not.
+        p.nativeCapable = false;
+        read([ask(2, "c2", 1, "query"), prep(1, "c1", 1), prep(3, "c3", 1)]);
+        decided("an incapable provider refuses a prepare", 3, refused("unavailable"));
+        p.nativeCapable = true;
+        // ---- the bar's popup, opened from the app: ready, the app its target ----
+        // Activated while no PID was known, the popup made no handoff; from the app again it does.
+        focus(app);
+        focus(popup);
+        frames = read([ask(2, "c2", 1, "query"), prep(1, "c1", 2)]);
+        frameIs("a prepare from a popup opened from the app is ready with the app as its target", frames, 1,
+                ready(handle(1, 1), true), { handle: handle(1, 1), ready: true });
+        holds("the slot holds the app for widget 1", 1, app);
+        if (p.slot && p.slot.focusSurface !== popup) {
+            fail("prepare: the slot keeps the popup that held focus");
+        }
+        focus(popup);
+        holds("the popup activated again is no change of focus", 1, app);
+        // ---- once per request identity ----
+        const writes = p.writer.calls;
+        read([ask(2, "c2", 1, "query"), prep(1, "c1", 2)]);
+        if (p.slotSerial !== 1 || p.writer.calls !== writes) {
+            fail("prepare: a prepare read again is not prepared again and tells nothing new (serial " + p.slotSerial
+                 + ", writes " + (p.writer.calls - writes) + ")");
+        }
+        read([ask(2, "c2", 1, "query"), prep(1, "c1", 2, { view: { desktopId: "11", activityId: "b" } })]);
+        decided("the same request with another payload is refused", 1, { intent: "prepare", result: "refused",
+                                                                          reason: "conflicting-request" });
+        holds("a conflicting payload leaves the preparation of its identity", 1, app);
+        read([ask(2, "c2", 1, "query"), prep(1, "c1", 1)]);
+        decided("a lower request number is refused", 1, refused("stale-request"));
+        holds("another request of the holder frees the slot", null);
+        if (p.preparations[1] !== undefined) {
+            fail("prepare: the holder's next request ends its preparation (got " + JSON.stringify(p.preparations[1]) + ")");
+        }
+        // ---- one slot: busy, decided once ----
+        read([prep(1, "c1", 3)]);
+        decided("the holder prepares again", 1, ready(handle(1, 2), true));
+        read([prep(1, "c1", 3), prep(5, "c5", 1)]);
+        decided("another widget's prepare while the slot is held is busy", 5, refused("busy"));
+        read([ask(1, "c1", 4, "query"), prep(5, "c5", 1)]);
+        holds("the holder's query frees the slot", null);
+        decided("a busy prepare stays refused once the slot is free", 5, refused("busy"));
+        read([ask(1, "c1", 4, "query"), prep(5, "c5", 2)]);
+        decided("a new request then prepares", 5, ready(handle(1, 3), true));
+        // A new consumer on a widget replaces its record: its first request is handled, here busy,
+        // however low its number.
+        read([prep(5, "c5", 2), prep(1, "c1b", 1)]);
+        decided("a new consumer's request is handled afresh", 1, refused("busy"));
+        // The refusals' order while widget 5 holds the slot: an incapable provider is unavailable
+        // before it is busy, and busy comes before a focus the provider did not see move (the
+        // active window changed with no activation, so the slot stays).
+        p.nativeCapable = false;
+        read([prep(5, "c5", 2), prep(10, "c10", 1)]);
+        decided("unavailable comes before busy", 10, refused("unavailable"));
+        p.nativeCapable = true;
+        ws.activeWindow = editor;
+        read([prep(5, "c5", 2), prep(11, "c11", 1)]);
+        decided("busy comes before an unconfirmed focus", 11, refused("busy"));
+        ws.activeWindow = popup;
+        holds("the refusals leave the holder's slot", 5, app);
+        // ---- the bar's frozen context ----
+        read([prep(5, "c5", 3, { epoch: "0".repeat(32) })]);
+        decided("another lifetime's epoch is stale", 5, refused("stale-context"));
+        read([prep(5, "c5", 4, { view: { desktopId: "12", activityId: "a" } })]);
+        decided("a view that is not the output's now is stale", 5, refused("stale-context"));
+        read([prep(5, "c5", 5, { outputName: "Gone-1" })]);
+        decided("an output KWin does not have is stale", 5, refused("stale-context"));
+        read([prep(5, "c5", 5, { outputName: "Gone-1" }), prep(4, "c4", 1, { view: { desktopId: "11", activityId: "b" } })]);
+        decided("an activity that is not the current one is stale", 4, refused("stale-context"));
+        // ---- the focus a prepare needs: a verified shell applet popup on the bar's output ----
+        focus(app);
+        read([prep(5, "c5", 6)]);
+        decided("an app holding focus is no popup", 5, refused("popup-focus-unconfirmed"));
+        focus(foreign);
+        read([prep(5, "c5", 7)]);
+        decided("a popup of another process is not the shell's", 5, refused("popup-focus-unconfirmed"));
+        focus(awayPopup);
+        read([prep(5, "c5", 8)]);
+        decided("the shell's popup on another output is not the bar's", 5, refused("popup-focus-unconfirmed"));
+        // A popup KWin holds active whose activation the provider did not see (it came online with
+        // the popup open, say) is not confirmed either.
+        focus(app);
+        ws.activeWindow = popup;
+        read([prep(5, "c5", 8), prep(9, "c9", 1)]);
+        decided("a popup whose activation went unseen is unconfirmed", 9, refused("popup-focus-unconfirmed"));
+        focus(dock);
+        read([prep(5, "c5", 8), prep(9, "c9", 2)]);
+        decided("the shell's panel holding focus is no popup", 9, refused("popup-focus-unconfirmed"));
+        // ---- no target: nothing remembered, or focus from elsewhere; never another window ----
+        focus(foreign);
+        focus(popup);
+        read([prep(5, "c5", 9)]);
+        decided("with no app remembered the preparation has no target", 5, ready(handle(1, 4), false, "no-target"));
+        holds("a preparation without a target holds the slot for Floating", 5, null);
+        focus(app);
+        focus(otherPopup);
+        focus(popup);
+        read([prep(5, "c5", 10)]);
+        decided("a popup reached from another popup hands nothing off", 5, ready(handle(1, 5), false, "focus-changed"));
+        focus(away);
+        focus(popup);
+        read([prep(5, "c5", 11)]);
+        decided("an app on another output is no target for this bar", 5, ready(handle(1, 6), false, "no-target"));
+        // ---- keyboard entry: the panel first, then the popup ----
+        focus(app);
+        focus(dock);
+        focus(popup);
+        read([prep(5, "c5", 12)]);
+        decided("a popup opened from the panel while the app is remembered hands the app off", 5, ready(handle(1, 7), true));
+        holds("keyboard entry targets the remembered app", 5, app);
+        // ---- another widget's set naming the holder's handle is stale, an unknown intent refused
+        // before any action; neither touches the holder's slot ----
+        read([prep(5, "c5", 12), ask(7, "c7", 1, "set", { mode: "tiled", handle: handle(1, 7) }), ask(8, "c8", 1, "toggle")]);
+        if (JSON.stringify(p.refusals.map(r => [r.id, r.reason])) !== JSON.stringify([[8, "intent"]])) {
+            fail("prepare: an unknown intent is refused before any action (got "
+                 + JSON.stringify(p.refusals.map(r => [r.id, r.reason])) + ")");
+        }
+        decided("another widget's set naming the holder's handle is stale", 7,
+                { intent: "set", result: "refused", reason: "stale-context" });
+        holds("refusals leave the slot", 5, app);
+        // ---- the completion across a newer state ----
+        settle();
+        let from = p.writer.callLog.length;
+        let before = p.revision;
+        p.setSession(true, "11", "a", "Virtual-1");
+        steps = [
+            { name: "the session's state published", until: () => p.writer.callLog.length > from, run: function () {
+                frames = framesSince(from);
+                frameIs("a newer state frame carries the completion and the preparation", frames, 5,
+                        ready(handle(1, 7), true), { handle: handle(1, 7), ready: true });
+                if (!frames[5] || frames[5].tiled !== true || frames[5].revision !== before + 1) {
+                    fail("prepare: the newer frame says the session tiles the view (got " + canonical(frames[5]) + ")");
+                }
+                p.setSession(false, "", "", "");
+                // ---- the end of a preparation: a focus change, told with a revision step ----
+                settle();
+                from = p.writer.callLog.length;
+                before = p.revision;
+                focus(editor);
+                holds("a focus change ends the preparation", null);
+            } },
+            { name: "the focus change's publication", until: () => p.writer.callLog.length > from, run: function () {
+                frames = framesSince(from);
+                frameIs("the holder is told its preparation ended, its completion kept", frames, 5,
+                        ready(handle(1, 7), true), { handle: handle(1, 7), ready: false, reason: "focus-changed" });
+                if (p.revision !== before + 1) {
+                    fail("prepare: the preparation's end moves the revision once (moved " + (p.revision - before) + ")");
+                }
+                // ---- the target's departure ----
+                focus(app);
+                focus(popup);
+                read([prep(5, "c5", 13)]);
+                decided("the holder prepares again", 5, ready(handle(1, 8), true));
+                from = p.writer.callLog.length;
+                app.desktops = [otherDesktop];
+                holds("the target leaving the view ends the preparation", null);
+            } },
+            { name: "the departure's publication", until: () => p.writer.callLog.length > from, run: function () {
+                frames = framesSince(from);
+                frameIs("the holder is told its target left", frames, 5, ready(handle(1, 8), true),
+                        { handle: handle(1, 8), ready: false, reason: "target-departed" });
+                app.desktops = [firstDesktop];
+                // ---- the view's change ----
+                focus(app);
+                focus(popup);
+                read([prep(5, "c5", 14)]);
+                decided("the holder prepares again", 5, ready(handle(1, 9), true));
+                from = p.writer.callLog.length;
+                ws.currentDesktop = otherDesktop;
+            } },
+            { name: "the view's change", until: () => p.slot === null && p.writer.callLog.length > from, run: function () {
+                frames = framesSince(from);
+                frameIs("the holder is told its view changed", frames, 5, ready(handle(1, 9), true),
+                        { handle: handle(1, 9), ready: false, reason: "view-changed" });
+                if (!frames[5] || canonical(frames[5].view) !== canonical({ desktopId: "12", activityId: "a", outputName: "Virtual-1" })) {
+                    fail("prepare: the frame names the bar's new view (got " + canonical(frames[5]) + ")");
+                }
+                from = p.writer.callLog.length;
+                ws.currentDesktop = firstDesktop;
+            } },
+            { name: "the view back", until: () => p.views[5] && p.views[5].view && p.views[5].view.desktopId === "11",
+              run: function () {
+                settle();
+                // ---- the shared-popup trade-off: another popup from the same app passes, the next
+                // focus change frees the slot ----
+                focus(app);
+                focus(otherPopup);
+                read([prep(5, "c5", 15)]);
+                decided("a prepare handled while another popup from the app holds focus is prepared", 5,
+                        ready(handle(1, 10), true));
+                focus(popup);
+                holds("the next focus change frees the slot", null);
+                // ---- incomplete reads keep the slot; a withdrawal and a departure free it ----
+                focus(app);
+                focus(popup);
+                read([prep(6, "c6", 1)]);
+                decided("widget 6 prepares", 6, ready(handle(1, 11), true));
+                read([ask(2, "c2", 1, "query")], null);
+                holds("a read without an inventory proves no widget gone", 6, app);
+                read([ask(2, "c2", 1, "query")], { widgets: [2], empty: [], truncated: true });
+                holds("an incomplete inventory proves no widget gone", 6, app);
+                settle();
+                if (!p.reading) {
+                    p.wake.activated();
+                }
+                p.shellLookup.finished([owner]);
+                p.reader.failed();
+                holds("a failed read proves no widget gone", 6, app);
+                read([ask(2, "c2", 1, "query")], { widgets: [2], empty: [6], truncated: false });
+                holds("an inventory naming as empty a widget it did not list proves nothing", 6, app);
+                read([ask(2, "c2", 1, "query")], { widgets: [9], empty: [], truncated: false });
+                holds("an inventory that does not list a row's widget proves nothing", 6, app);
+                read([ask(2, "c2", 1, "query")], { widgets: [2], empty: [2], truncated: false });
+                holds("an inventory that lists a row's widget as empty proves nothing", 6, app);
+                read([ask(2, "c2", 1, "query"), ask(2, "c2", 1, "query")], { widgets: [2], empty: [], truncated: false });
+                holds("an answer with a row twice proves nothing", 6, app);
+                read([ask(2, "c2", 1, "query")], { widgets: [2, 6], empty: [6], truncated: false });
+                holds("a withdrawn request frees the slot", null);
+                frames = read([ask(2, "c2", 1, "query"), prep(6, "c6", 1)]);
+                frameIs("a withdrawn request read again keeps its completion, its preparation over", frames, 6,
+                        ready(handle(1, 11), true), null);
+                holds("a withdrawn request read again prepares nothing", null);
+                read([prep(6, "c6", 2)]);
+                decided("widget 6 prepares again", 6, ready(handle(1, 12), true));
+                const beforeGone = p.revision;
+                read([ask(2, "c2", 1, "query")], { widgets: [2], empty: [], truncated: false });
+                holds("a widget gone from a complete inventory frees the slot", null);
+                if (p.records[6] !== undefined || p.preparations[6] !== undefined || p.revision !== beforeGone) {
+                    fail("prepare: a complete inventory drops the record and preparation of a widget it did not see, a"
+                         + " holder no bar can read with no revision step (revision " + beforeGone + " to " + p.revision + ")");
+                }
+                // ---- a new shell connection: the slot goes; its PID first, then the next serial ----
+                read([prep(6, "c6", 3)]);
+                decided("widget 6 prepares under the first shell", 6, ready(handle(1, 13), true));
+                owner = ":1.10";
+                read([prep(6, "c6", 3), prep(5, "c5", 16)]);
+                holds("a new shell connection ends the preparation", null);
+                if (p.lastEligible !== null || p.handoff !== null) {
+                    fail("prepare: a new shell connection forgets the app and the handoff remembered under the old one");
+                }
+                if (!p.preparations[6] || p.preparations[6].ready !== false || p.preparations[6].reason !== "shell-replaced") {
+                    fail("prepare: the holder is told the shell was replaced (got " + JSON.stringify(p.preparations[6]) + ")");
+                }
+                decided("a prepare before the new shell's PID is known is refused", 5, refused("unavailable"));
+                if (JSON.stringify(p.shellPidLookup.callLog[p.shellPidLookup.callLog.length - 1]) !== JSON.stringify([":1.10"])) {
+                    fail("prepare: the new shell's PID is asked for (got " + JSON.stringify(p.shellPidLookup.callLog) + ")");
+                }
+                // The shell moves again before the bus answers: the answer for the connection no
+                // longer read from is not kept, and the next read asks for the new one.
+                owner = ":1.11";
+                read([prep(6, "c6", 3), prep(5, "c5", 16)]);
+                const asked = p.shellPidLookup.callLog.length;
+                p.shellPidLookup.finished([901]);
+                if (p.shellPid !== 0 || p.shellPidOwner !== "" || p.shellSerial !== 1) {
+                    fail("prepare: a PID answered for a connection no longer read from is not kept (got "
+                         + p.shellPid + " for " + JSON.stringify(p.shellPidOwner) + ", serial " + p.shellSerial + ")");
+                }
+                read([prep(6, "c6", 3), prep(5, "c5", 16)]);
+                if (p.shellPidLookup.callLog.length !== asked + 1
+                        || JSON.stringify(p.shellPidLookup.callLog[asked]) !== JSON.stringify([":1.11"])) {
+                    fail("prepare: the next read asks for the new connection's PID (got "
+                         + JSON.stringify(p.shellPidLookup.callLog.slice(asked)) + ")");
+                }
+                shellPid = 901;
+                for (const w of [popup, otherPopup, dock, awayPopup, dialog, desktopSurface]) {
+                    w.pid = shellPid;
+                }
+                p.shellPidLookup.finished([shellPid]);
+                focus(app);
+                focus(popup);
+                read([prep(6, "c6", 3), prep(5, "c5", 17)]);
+                decided("the new shell's popup prepares, its handle naming the second shell", 5, ready(handle(2, 14), true));
+                // ---- the target's own changes, each ending the preparation: it leaves the view, turns
+                // into no eligible app as KWin notifies it, or closes ----
+                const changes = [
+                    ["moves to the other output", w => { w.output = second; }, w => { w.output = output; }],
+                    ["leaves the activity", w => { w.activities = ["b"]; }, w => { w.activities = []; }],
+                    ["is minimized", w => { w.minimized = true; }, w => { w.minimized = false; }],
+                    ["goes fullscreen", w => { w.fullScreen = true; }, w => { w.fullScreen = false; }],
+                    ["is maximized", w => { w.maximizeMode = 3; w.maximizedChanged(); },
+                     w => { w.maximizeMode = 0; w.maximizedChanged(); }],
+                    ["is tiled", w => { w.tile = { some: "tile" }; }, w => { w.tile = null; }],
+                    ["leaves the taskbar", w => { w.skipTaskbar = true; }, w => { w.skipTaskbar = false; }],
+                    ["leaves the window switcher", w => { w.skipSwitcher = true; }, w => { w.skipSwitcher = false; }],
+                    ["turns modal", w => { w.modal = true; }, w => { w.modal = false; }],
+                    ["closes", w => { w.deleted = true; ws.windowRemoved(w); }, w => { w.deleted = false; }]
+                ];
+                request = 18;
+                serial = 15;
+                for (const [what, change, undo] of changes) {
+                    focus(app);
+                    focus(popup);
+                    prepareAgain("the holder prepares again", true);
+                    change(app);
+                    if (p.slot !== null || !p.preparations[5] || p.preparations[5].reason !== "target-departed") {
+                        fail("prepare: the target " + what + " and the preparation ends (got "
+                             + JSON.stringify(p.preparations[5]) + ")");
+                    }
+                    undo(app);
+                }
+                // ---- the popup holding focus closes before KWin activates another window: the
+                // preparation's focus is gone ----
+                focus(app);
+                focus(popup);
+                prepareAgain("the holder prepares again", true);
+                popup.deleted = true;
+                ws.windowRemoved(popup);
+                if (p.slot !== null || !p.preparations[5] || p.preparations[5].reason !== "focus-changed") {
+                    fail("prepare: the popup holding focus closing ends the preparation (got "
+                         + JSON.stringify(p.preparations[5]) + ")");
+                }
+                popup.deleted = false;
+                // ---- the handoff checked again when the prepare comes: an app minimized, or gone
+                // from the view, after its popup opened is no target; a dialog of the shell's
+                // clears the remembered app; from another popup, with the app on another output,
+                // there is none for the app's output, not for the focus ----
+                focus(app);
+                focus(popup);
+                app.minimized = true;
+                prepareAgain("an app minimized after its popup opened is no target", false, "no-target");
+                app.minimized = false;
+                focus(app);
+                focus(popup);
+                app.desktops = [otherDesktop];
+                prepareAgain("an app gone from the view after its popup opened is no target", false, "no-target");
+                app.desktops = [firstDesktop];
+                focus(app);
+                focus(dialog);
+                focus(popup);
+                prepareAgain("a dialog of the shell's clears the remembered app", false, "no-target");
+                focus(away);
+                focus(otherPopup);
+                focus(popup);
+                prepareAgain("from another popup, the app on another output, there is no target", false, "no-target");
+                // ---- the holder's next request ends its preparation however it is answered: a set,
+                // refused here as no tiler applies it (this provider runs alone), and a query
+                // reusing the prepare's number; neither is a change any bar is told of ----
+                focus(app);
+                focus(popup);
+                const held = handle(2, serial);
+                prepareAgain("the holder prepares again", true);
+                let revisionBefore = p.revision;
+                frames = read([prep(6, "c6", 3), ask(5, "c5", request, "set", { mode: "tiled", handle: held })]);
+                request += 1;
+                if (p.slot !== null || p.preparations[5] !== undefined || p.revision !== revisionBefore || !frames[5]
+                        || frames[5].refused !== undefined || frames[5].prepared !== undefined
+                        || canonical(frames[5].completion) !== canonical({ intent: "set", result: "refused",
+                                                                           reason: "unavailable" })) {
+                    fail("prepare: the holder's set, refused, frees the slot and ends its preparation, with no revision"
+                         + " step (got " + canonical(frames[5]) + ", revision " + revisionBefore + " to " + p.revision + ")");
+                }
+                focus(app);
+                focus(popup);
+                prepareAgain("the holder prepares again", true);
+                revisionBefore = p.revision;
+                frames = read([prep(6, "c6", 3), ask(5, "c5", request - 1, "query")]);
+                if (p.slot !== null || p.preparations[5] !== undefined || p.revision !== revisionBefore
+                        || canonical(frames[5]) !== canonical(frameWanted(p, { consumer: "c5", request: request - 1 },
+                                                                         { capable: true, view: view, tiled: false }))) {
+                    fail("prepare: a query reusing the holder's number frees the slot and is answered as a query (got "
+                         + canonical(frames[5]) + ")");
+                }
+                // ---- a set with an older number than the preparation's frees the slot as any
+                // other request does ----
+                focus(app);
+                focus(popup);
+                const older = handle(2, serial);
+                prepareAgain("the holder prepares again", true);
+                read([prep(6, "c6", 3), ask(5, "c5", request - 2, "set", { mode: "tiled", handle: older })]);
+                decided("a set older than the preparation is refused", 5,
+                        { intent: "set", result: "refused", reason: "stale-request" });
+                holds("an older set frees the slot", null);
+                // ---- the holder's next request refused at the frame's level frees the slot too ----
+                focus(app);
+                focus(popup);
+                prepareAgain("the holder prepares again", true);
+                read([prep(6, "c6", 3), ask(5, "c5", request, "set", { mode: "x", handle: "h" })]);
+                request += 1;
+                if (!p.refusals.some(r => r.id === 5 && r.reason === "malformed")) {
+                    fail("prepare: the holder's malformed set is refused at the frame's level");
+                }
+                holds("the holder's malformed request frees the slot", null);
+                // ---- a tiler that throws: the set refused, the read finished ----
+                focus(app);
+                focus(popup);
+                const thrown = handle(2, serial);
+                prepareAgain("the holder prepares again", true);
+                p.applier = () => { throw new Error("the tiler failed"); };
+                read([prep(6, "c6", 3), ask(5, "c5", request, "set", { mode: "tiled", handle: thrown })]);
+                request += 1;
+                p.applier = null;
+                decided("a set whose tiler throws is refused", 5, { intent: "set", result: "refused", reason: "unavailable" });
+                if (p.reading || p.slot !== null) {
+                    fail("prepare: a tiler that throws leaves the read finished and the slot consumed");
+                }
+                focus(app);
+                focus(desktopSurface);
+                focus(popup);
+                prepareAgain("a popup opened from the desktop while the app is remembered hands the app off", true);
+                // ---- the output replaced by one of the same name (unplugged and back in one turn):
+                // the preparation's output is gone, and its view with it ----
+                settle();
+                ws.screens = [Object.assign({}, output), second];
+            } },
+            { name: "the output's replacement", until: () => p.slot === null, run: function () {
+                if (!p.preparations[5] || p.preparations[5].ready !== false || p.preparations[5].reason !== "view-changed") {
+                    fail("prepare: an output replaced by one of the same name ends the preparation (got "
+                         + JSON.stringify(p.preparations[5]) + ")");
+                }
+                ws.screens = [output, second];
+            } },
+            { name: "the output back", run: function () {
+                settle();
+                // ---- the activity switched: the preparation's view is no longer the output's ----
+                focus(app);
+                focus(popup);
+                prepareAgain("the holder prepares again", true);
+                ws.currentActivity = "b";
+            } },
+            { name: "the activity switched", until: () => p.slot === null, run: function () {
+                if (!p.preparations[5] || p.preparations[5].ready !== false || p.preparations[5].reason !== "view-changed") {
+                    fail("prepare: an activity switch ends the preparation (got " + JSON.stringify(p.preparations[5]) + ")");
+                }
+                ws.currentActivity = "a";
+            } },
+            { name: "the activity back", until: () => p.views[5] && p.views[5].view && p.views[5].view.activityId === "a",
+              run: function () {
+                settle();
+                // ---- the serials refuse rather than wrap ----
+                p.slotSerial = 2147483646;
+                focus(app);
+                focus(popup);
+                const exhausted = request;
+                read([prep(6, "c6", 3), prep(5, "c5", exhausted)]);
+                decided("an exhausted slot serial refuses", 5, refused("unavailable"));
+                holds("an exhausted slot serial takes no slot", null);
+                p.shellSerial = 2147483646;
+                focus(app);
+                owner = ":1.12";
+                read([prep(6, "c6", 3), prep(5, "c5", exhausted)]);
+                if (p.lastEligible !== app || p.lastFocused !== app || p.handoff !== null) {
+                    fail("prepare: replacing the shell retains only the currently focused eligible app");
+                }
+                p.shellPidLookup.finished([shellPid]);
+                if (p.shellPid !== 0 || p.shellSerial !== 2147483646) {
+                    fail("prepare: an exhausted shell serial takes no PID (got " + p.shellPid + ", serial "
+                         + p.shellSerial + ")");
+                }
+                read([prep(6, "c6", 3), prep(5, "c5", exhausted + 1)]);
+                decided("with no shell serial left no prepare is taken", 5, refused("unavailable"));
+                // ---- a later lifetime refuses the saved prepare ----
+                const later = component.createObject(harness);
+                later.nativeCapable = true;
+                later.start();
+                DBusStubs.SessionBus.answer(expectIdentityRequest("prepare (a later lifetime)", later), [{ value: 1 }]);
+                later.identityLookup.finished([":1.43"]);
+                later.shellLookup.finished([":1.12"]);
+                focus(app);
+                focus(popup);
+                // Its first read is answered before the bus tells it the shell's PID: the saved prepare
+                // is stale for its epoch whatever else holds.
+                later.reader.finished([JSON.stringify({ start: Date.now(), widgets: [5, 6], empty: [], truncated: false,
+                                                        rows: [prep(5, "c5", exhausted + 1),
+                                                               ask(6, "c6", 9, "set", { mode: "tiled", handle: handle(2, 14) })] })]);
+                const saved = later.requests.find(r => r.id === 5);
+                if (!saved || canonical(saved.completion) !== canonical(refused("stale-context")) || later.slot !== null) {
+                    fail("prepare: a later lifetime refuses a prepare saved under an earlier one (got "
+                         + (saved ? canonical(saved.completion) : "no request") + ")");
+                }
+                const savedSet = later.requests.find(r => r.id === 6);
+                if (!savedSet || canonical(savedSet.completion) !== canonical({ intent: "set", result: "refused",
+                                                                               reason: "stale-context" })) {
+                    fail("prepare: a later lifetime refuses a set saved under an earlier one (got "
+                         + (savedSet ? canonical(savedSet.completion) : "no request") + ")");
+                }
+                later.shellPidLookup.finished([shellPid]);
+                // Under its own epoch it prepares, from the popup activated once it read the shell;
+                // retired holding the slot, it keeps nothing prepared.
+                if (later.publishing) {
+                    later.writer.finished([writeAnswer(later.pending.messages.length)]);
+                }
+                focus(app);
+                focus(popup);
+                later.wake.activated();
+                later.shellLookup.finished([":1.12"]);
+                later.reader.finished([JSON.stringify({ start: Date.now(), rows: [prep(5, "c5", exhausted + 2, { epoch: later.label })],
+                                                        widgets: [5], empty: [], truncated: false })]);
+                const fresh = later.requests.find(r => r.id === 5);
+                if (!fresh || canonical(fresh.completion) !== canonical(ready(later.label + ":1:1", true))
+                        || !later.slot || later.slot.window !== app) {
+                    fail("prepare: a later lifetime prepares under its own epoch (got "
+                         + (fresh ? canonical(fresh.completion) : "no request") + ")");
+                }
+                later.retire();
+                if (later.slot !== null) {
+                    fail("prepare: a lifetime retired holding the slot keeps nothing prepared");
+                }
+                later.destroy();
+                // ---- a lifetime that starts while the app holds focus (the script enabled or
+                // reloaded in a running session) remembers the app as if its activation had been
+                // seen: a popup opened from it hands it off; one that starts on a popup takes
+                // nothing, and the popup's focus stays unconfirmed ----
+                const startedOn = (active, owner, focusPopup) => {
+                    focus(app);
+                    if (active !== app) {
+                        focus(active);
+                    }
+                    const made = component.createObject(harness);
+                    made.nativeCapable = true;
+                    made.start();
+                    DBusStubs.SessionBus.answer(expectIdentityRequest("prepare (started on " + active.internalId + ")",
+                                                                      made), [{ value: 1 }]);
+                    made.identityLookup.finished([owner]);
+                    made.shellLookup.finished([":1.12"]);
+                    made.reader.finished([JSON.stringify({ start: Date.now(), rows: [], widgets: [], empty: [],
+                                                           truncated: false })]);
+                    made.shellPidLookup.finished([shellPid]);
+                    if (focusPopup) {
+                        focus(popup);
+                    }
+                    made.wake.activated();
+                    made.shellLookup.finished([":1.12"]);
+                    made.reader.finished([JSON.stringify({ start: Date.now(), widgets: [5], empty: [], truncated: false,
+                                                           rows: [prep(5, "c5", 1, { epoch: made.label })] })]);
+                    const row = made.requests.find(r => r.id === 5);
+                    return { made: made, completion: row ? row.completion : "no request" };
+                };
+                const seeded = startedOn(app, ":1.44", true);
+                if (canonical(seeded.completion) !== canonical(ready(seeded.made.label + ":1:1", true))
+                        || !seeded.made.slot || seeded.made.slot.window !== app) {
+                    fail("prepare: a lifetime started while the app holds focus prepares it from a popup opened from it"
+                         + " (got " + canonical(seeded.completion) + ")");
+                }
+                seeded.made.retire();
+                seeded.made.destroy();
+                const onPopup = startedOn(popup, ":1.45", false);
+                if (canonical(onPopup.completion) !== canonical(refused("popup-focus-unconfirmed"))
+                        || onPopup.made.slot !== null) {
+                    fail("prepare: a lifetime started while a popup holds focus takes nothing of it (got "
+                         + canonical(onPopup.completion) + ")");
+                }
+                onPopup.made.retire();
+                onPopup.made.destroy();
+                // ---- the retirement: the offline frames carry nothing of an intent ----
+                settle();
+                from = p.writer.callLog.length;
+                p.retire();
+                const offline = framesOf(p, from, [5, 6]);
+                for (const id of [5, 6]) {
+                    const f = offline[id];
+                    if (!f || f.status !== "offline" || f.completion !== undefined || f.prepared !== undefined
+                            || f.capable !== false || f.view !== null || f.tiled !== false) {
+                        fail("prepare: the offline frame for widget " + id + " says the lifetime ended and nothing of an"
+                             + " intent (got " + canonical(f) + ")");
+                    }
+                }
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
+
+    // The writer has no answer for the memory's first read, as at load time before its snapshot
+    // is ready: the read retry (2 s) finds the memory. The layout provider starts incapable and
+    // turns capable then, one revision later; a toggle before that starts nothing and moves
+    // nothing, and one after it starts a session.
+    function runLateMemory() {
+        facade.snapshotSilences = 1;
+        if (setup() === "") {
+            done = true;
+            return;
+        }
+        if (script.loaded) {
+            fail("late-memory: the memory waits for the writer's answer");
+        }
+        expectProvider("late-memory: at start", { revision: 1 }, 0, { online: true, capable: false, active: false });
+        expectIdentityRequest("late-memory: at start", provider);
+        let before = providerState();
+        steps = [
+            { name: "a toggle before the memory loaded", run: function () {
+                tileShortcut.activated();
+                if (calls("createTile").length !== 0) {
+                    fail("late-memory: no session before the memory loaded");
+                }
+                expectProvider("late-memory: a toggle before the memory loaded", before, 0, { capable: false, active: false });
+            } },
+            { name: "the memory's read retry", until: () => script.loaded, run: function () {
+                expectProvider("late-memory: the memory loaded", before, 1, { online: true, capable: true, active: false });
+                before = providerState();
+                tileShortcut.activated();
+                expectProvider("late-memory: a toggle once capable", before, 1, { active: true, desktopId: "11" });
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
+    }
+
+    // The writer refuses the provider registration as the fork does while another provider holds
+    // its slot or the writer is busy: the facade answers a null QUuid's text. The memory stays
+    // disabled for the session and takes no other transport: it never loads - the gate of every
+    // write, record and toggle and of the teardown write - so no window is tracked or recorded,
+    // no shell script call goes out, and a toggle starts no tree. A record an earlier instance
+    // left stays held: settling it needs the registration. The run checks past the script's
+    // longest delayed call (flush and readRetry, 2 s) that the writer heard nothing but the
+    // registration, read-only calls included; the driver reads the calls again after the run.
+    function runRefusedProvider() {
+        facade.providerAnswer = "{00000000-0000-0000-0000-000000000000}";
+        setupView();
+        const floatA = facade.plain(winA.frameGeometry);
+        const managed = facade.plain(facade.masterRect);
+        winA.frameGeometry = Qt.rect(managed.x, managed.y, managed.width, managed.height);
+        const held = facade.heldRecords;
+        held.a = { target: managed, floating: floatA, placedByUser: false,
+                   provider: "earlier-token" };
+        facade.heldRecords = held;
+        const floats = facade.floatings;
+        floats.a = floatA;
+        facade.floatings = floats;
+        const base = "file://" + packagesRoot + "/scripts/plasmafusion-placement/contents/ui/";
+        const component = Qt.createComponent(base + "main.qml");
+        if (component.status !== Component.Ready) {
+            fail("refused-provider: main.qml did not load: " + component.errorString());
+            done = true;
+            return;
+        }
+        script = component.createObject(harness);
+        if (!script) {
+            fail("refused-provider: the script was not made");
+            done = true;
+            return;
+        }
+        trackProvider();
+        // The legacy transport's calls: the script's evaluateScript DBusCalls.
+        const shellScriptCalls = () => {
+            let count = 0;
+            for (let i = 0; i < script.data.length; ++i) {
+                const child = script.data[i];
+                if (child && child.method === "evaluateScript") {
+                    count += child.calls;
+                }
+            }
+            return count;
+        };
+        for (let i = 0; i < script.data.length; ++i) {
+            const child = script.data[i];
+            if (child && child.name === "Plasma Fusion: Tile Workspace") {
+                tileShortcut = child;
+            }
+        }
+        if (!tileShortcut) {
+            fail("refused-provider: the Tile Workspace shortcut was not registered");
+            done = true;
+            return;
+        }
+        let since = 0;
+        steps = [
+            { name: "a toggle", run: function () {
+                tileShortcut.activated();
+                since = Date.now();
+            } },
+            { name: "past the script's delayed calls", until: () => Date.now() - since >= 2500, run: function () {
+                if (script.loaded || !script.nativeRefused) {
+                    fail("refused-provider: the memory stays unloaded and refused (loaded " + script.loaded
+                         + ", nativeRefused " + script.nativeRefused + ")");
+                }
+                const ops = JSON.stringify(facadeCalls.map(c => c.op));
+                if (ops !== JSON.stringify(["registerProvider"])) {
+                    fail("refused-provider: registerProvider is the only recorded facade call (got " + ops + ")");
+                }
+                if (readCalls.length !== 0) {
+                    fail("refused-provider: a refused provider reads nothing of the writer (got "
+                         + JSON.stringify(readCalls.map(c => c.op)) + ")");
+                }
+                if (shellScriptCalls() !== 0) {
+                    fail("refused-provider: no shell script call replaces the refused native writer");
+                }
+                // The layout provider: online, never capable, nothing moved; a label of its own
+                // (P0's probe had derived it from the token, so every refused lifetime shared
+                // one), and the refusal's text is not kept as a token.
+                expectProvider("refused-provider", { revision: 1 }, 0, { online: true, capable: false, active: false });
+                expectOwnLabel("refused-provider", facade.providerAnswer);
+                // The identity marks the lifetime, not the capability: an incapable provider
+                // asks for its name all the same - and answers the bars all the same: online, not
+                // capable, nothing tiled.
+                DBusStubs.SessionBus.answer(expectIdentityRequest("refused-provider", provider), [{ value: 1 }]);
+                provider.identityLookup.finished([":1.42"]);
+                provider.shellLookup.finished([":1.9"]);
+                const asked = { id: 1, consumer: "c1", request: 1, version: 1, intent: "query", outputName: "Virtual-1" };
+                provider.reader.finished([readAnswer([asked])]);
+                const told = framesOf(provider, 0, [1]);
+                const unsupported = frameWanted(provider, asked, {
+                    capable: false, view: { desktopId: "11", activityId: "a", outputName: "Virtual-1" }, tiled: false });
+                if (!provider.writer || provider.writer.calls !== 1 || canonical(told[1]) !== canonical(unsupported)) {
+                    fail("refused-provider: an incapable provider answers a request, online and not capable (got "
+                         + canonical(told[1]) + ", not " + canonical(unsupported) + ")");
+                }
+                if (script.providerToken !== "") {
+                    fail("refused-provider: a refused registration keeps no token (got " + script.providerToken + ")");
+                }
+            } }
+        ];
+        stepSince = Date.now();
+        stepper.start();
     }
 
     // The script unloaded mid-session as KWin unloads a declarative script: the object that
@@ -663,6 +3751,9 @@ Item {
         let cellA = null;
         let asked = 0;
         let toggledAt = 0;
+        let revisionBeforeUnload = 0;
+        let identityAtUnload = "";
+        let releasedAtRetire = null;
         steps = [
             { name: "the script as KWin makes it", until: () => kwinScript !== null, run: function () {
                 if (adopt(kwinScript) === "") {
@@ -672,6 +3763,10 @@ Item {
                 if (calls("admitTile").length !== 1 || !master.tile) {
                     throw "unload: no session started (admissions " + calls("admitTile").length + ")";
                 }
+                expectProvider("unload: the session", { revision: 1 }, 1, { online: true, active: true });
+                // The identity granted, so the unload has a name to release.
+                DBusStubs.SessionBus.answer(expectIdentityRequest("unload", provider), [{ value: 1 }]);
+                provider.identityLookup.finished([":1.42"]);
                 cellA = facade.plain(winA.frameGeometry);
                 if (facade.same(cellA, floatA)) {
                     throw "unload: the stack window was given no cell (at " + JSON.stringify(winA.frameGeometry) + ")";
@@ -699,6 +3794,17 @@ Item {
                     facade.vacate();
                 }
                 asked = facadeCalls.length;
+                revisionBeforeUnload = provider ? provider.revision : 0;
+                // What the retirement released, read as it releases (the provider is gone once the
+                // unload is over): the revision already moved for the offline state, and no
+                // offline frame went out, as no request was read.
+                const retiring = provider;
+                identityAtUnload = retiring.identityName;
+                // (On callLogChanged: the stand-in counts a call before it logs its arguments.)
+                retiring.identityRelease.callLogChanged.connect(() => {
+                    releasedAtRetire = { log: [].concat(retiring.identityRelease.callLog), revision: retiring.revision,
+                                         online: retiring.online, frames: retiring.writer ? retiring.writer.calls : -1 };
+                });
                 unloadWanted = true;
             } },
             { name: "the script unloaded as KWin unloads it", until: () => unloaded, run: function () {
@@ -716,6 +3822,23 @@ Item {
                 }
                 if (unloadVacated && !facade.same(master.frameGeometry, floatMaster)) {
                     fail("unload (vacated): the released master went back to its float (at " + JSON.stringify(master.frameGeometry) + ")");
+                }
+                // The provider went offline before the teardown, once, with no capability or
+                // session left to report: the teardown's own untoggle moved nothing after that.
+                const last = providerStates[providerStates.length - 1];
+                if (!last || last.revision !== revisionBeforeUnload + 1 || last.online || last.capable || last.active
+                        || last.desktopId !== "") {
+                    fail("unload" + (unloadVacated ? " (vacated)" : "") + ": the provider went offline once, with no"
+                         + " capability or session (before " + revisionBeforeUnload + ", got " + JSON.stringify(last) + ")");
+                }
+                // The identity name is released once, by the retirement, with the name it stored:
+                // nothing of a torn-down context is looked up for it. It goes last, after the
+                // offline state's revision.
+                if (!releasedAtRetire || JSON.stringify(releasedAtRetire.log) !== JSON.stringify([[identityAtUnload]])
+                        || releasedAtRetire.revision !== revisionBeforeUnload + 1 || releasedAtRetire.online
+                        || releasedAtRetire.frames !== 0) {
+                    fail("unload" + (unloadVacated ? " (vacated)" : "") + ": the retirement releases the identity name once,"
+                         + " after the offline state's revision, with no frame to send (got " + JSON.stringify(releasedAtRetire) + ")");
                 }
                 // Nothing of the script answers anything any more.
                 const gone = facadeCalls.length;
@@ -794,7 +3917,9 @@ Item {
                 tileShortcut.activated();
             } },
             { name: "the toggle answered", until: () => strandedSuccessor ? !!winA.tile : admitsOfA().length >= 1 + script.admitRetryLimit, run: function () {
-                const answers = JSON.stringify(admitsOfA().map(c => c.token === "harness-token"));
+                if (admitsOfA().some(c => c.token !== facade.grantedToken)) {
+                    fail("stranded: every admission uses the current provider token");
+                }
                 if (strandedSuccessor) {
                     if (!winA.tile || calls("admitTile").length !== 1) {
                         fail("stranded: the window is admitted at the first toggle (admissions " + calls("admitTile").length + ")");
@@ -826,6 +3951,28 @@ Item {
             return;
         }
         const desktop = firstDesktop;
+        // The layout provider as the script started: online, no session, and capable where the
+        // writer accepted the registration, the memory loaded and the facade is complete - not
+        // with a facade without restoreWindow, whatever the writer says; its label is its own.
+        expectProvider("the provider at start", { revision: 1 }, 0,
+                       { online: true, capable: !legacyFacade, active: false, desktopId: "", outputName: "" });
+        expectOwnLabel("the provider at start", facade.grantedToken);
+        let providerBefore = providerState();
+        // The identity alias: requested once at start; its owner is looked up only once the
+        // name is granted, then known - this connection, KWin's; none of it moves the revision.
+        const identityReply = expectIdentityRequest("the provider at start", provider);
+        if (provider.identityLookup.calls !== 0 || provider.identityReady) {
+            fail("the identity's owner is looked up only once the name is granted");
+        }
+        DBusStubs.SessionBus.answer(identityReply, [{ value: 1 }]);
+        if (JSON.stringify(provider.identityLookup.callLog) !== JSON.stringify([[provider.identityName]])) {
+            fail("the granted name's owner is looked up once (got " + JSON.stringify(provider.identityLookup.callLog) + ")");
+        }
+        provider.identityLookup.finished([":1.42"]);
+        if (!provider.identityReady || provider.selfOwner !== ":1.42") {
+            fail("the identity is ready, with its owner (got " + provider.identityReady + ", " + provider.selfOwner + ")");
+        }
+        expectProvider("the identity granted", providerBefore, 0, {});
 
         if (nativeStackProbe) {
             let refuse = false;
@@ -841,9 +3988,12 @@ Item {
             tileShortcut.activated();
             const cells = calls("placeStackWindow");
             const admissions = calls("admitTile");
-            if (cells.length !== 2 || admissions.length !== 1
+            const token = String(script.providerToken);
+            if (!token || token !== facade.grantedToken
+                    || cells.length !== 2 || admissions.length !== 1
                     || cells.some(c => c.generation !== admissions[0].generation
-                                  || c.token !== "harness-token" || c.window === "master")) {
+                                  || c.token !== token || c.token !== admissions[0].token
+                                  || c.window === "master")) {
                 fail("native stack placement did not use the admitted tree and provider");
             }
             if (!rectIs(winA.frameGeometry, 704, 34, 736, 429)) {
@@ -927,6 +4077,7 @@ Item {
             if (calls("createTile").length !== 0) {
                 fail("a facade without restoreWindow starts no session");
             }
+            expectProvider("a facade without restoreWindow", providerBefore, 0, { capable: false, active: false });
             if (calls("registerProvider").length !== 1) {
                 fail("the placement memory still registered as the provider");
             }
@@ -949,13 +4100,16 @@ Item {
                 fail("a fork build that cannot say what it keeps of a window gets no record for the toggle (records "
                      + masterRecorded.length + ", admissions " + calls("admitTile").length + ")");
             }
+            expectProvider("interim: a refused admission", providerBefore, 0, { capable: true, active: false });
             // And a session all the same where the memory has the window's own place.
             facade.entries[masterKey] = { x: 40, y: 80, width: 620, height: 420 };
             tileShortcut.activated();
             if (!master.tile || calls("record").filter(c => c.window === "master").length !== 0) {
                 fail("the window is admitted from its own place there, with nothing recorded");
             }
+            expectProvider("interim: the session", providerBefore, 1, { capable: true, active: true });
             tileShortcut.activated();
+            expectProvider("interim: the untoggle", providerBefore, 2, { active: false });
             snapshot = ({ createTile: calls("createTile").length, admitTile: calls("admitTile").length,
                           restoreWindow: calls("restoreWindow").length });
             done = true;
@@ -981,7 +4135,7 @@ Item {
         if (admitted[0].window !== "master" || admitted[0].key !== masterKey) {
             fail("the master was admitted under its app key (got " + admitted[0].window + "/" + admitted[0].key + ")");
         }
-        if (admitted[0].token !== "harness-token") {
+        if (admitted[0].token !== facade.grantedToken) {
             fail("admitTile carried the provider token (got " + admitted[0].token + ")");
         }
         if (admitted[0].generation !== created[0].generation) {
@@ -1016,6 +4170,10 @@ Item {
         if (calls("releaseTile").length !== 0) {
             fail("releaseTile before any untoggle");
         }
+        // The provider: the session on, for the view it tiles as a bar names one.
+        expectProvider("toggle on", providerBefore, 1,
+                       { active: true, desktopId: "11", activityId: "a", outputName: "Virtual-1" });
+        providerBefore = providerState();
 
         // ---- a live window joins mid-session ----
         const winC = mk({ internalId: "c", resourceClass: "org.fusion.mail",
@@ -1037,9 +4195,14 @@ Item {
         if (cells[0].y !== column.y || cells[2].y + cells[2].height !== column.y + column.height || cells[0].y + cells[0].height > cells[1].y || cells[1].y + cells[1].height > cells[2].y) {
             fail("the relaid column covers the area without overlap: " + JSON.stringify(cells));
         }
+        // A window joining and the relayout change nothing a bar is told.
+        expectProvider("a live window joining", providerBefore, 0, { active: true });
 
         // ---- untoggle: the floats back, the master's native restore, the tree released ----
         tileShortcut.activated();
+        expectProvider("the untoggle", providerBefore, 1,
+                       { active: false, desktopId: "", activityId: "", outputName: "" });
+        providerBefore = providerState();
         if (!rectIs(winA.frameGeometry, 700, 120, 300, 320) || !rectIs(winB.frameGeometry, 760, 480, 300, 300)
                 || !rectIs(winC.frameGeometry, 300, 500, 260, 260)) {
             fail("the untoggle restored the saved floats (got " + JSON.stringify(winA.frameGeometry) + " "
@@ -1059,6 +4222,8 @@ Item {
         if (calls("createTile").length !== 2) {
             fail("the second toggle started a second session");
         }
+        expectProvider("the second session", providerBefore, 1, { active: true, desktopId: "11" });
+        providerBefore = providerState();
         facade.treeAlive = false;
         facade.treeChanged();
         if (!rectIs(winA.frameGeometry, 700, 120, 300, 320) || !rectIs(winB.frameGeometry, 760, 480, 300, 300)) {
@@ -1067,6 +4232,9 @@ Item {
         if (calls("releaseTile").length !== 1) {
             fail("the native teardown does not release an already-ended tree");
         }
+        expectProvider("the native teardown", providerBefore, 1,
+                       { active: false, desktopId: "", activityId: "", outputName: "" });
+        providerBefore = providerState();
         // the session is gone: the next toggle starts a session instead of un-toggling
         tileShortcut.activated();
         if (calls("createTile").length !== 3) {
@@ -1076,6 +4244,8 @@ Item {
         if (calls("releaseTile").length !== 2) {
             fail("the third session released its tree");
         }
+        expectProvider("the third session on and off", providerBefore, 2, { active: false });
+        providerBefore = providerState();
 
         // ---- a refused tree: no session, no geometry write ----
         facade.refuseCreate = true;
@@ -1087,6 +4257,7 @@ Item {
         if (!rectIs(winA.frameGeometry, before.x, before.y, before.width, before.height)) {
             fail("a refused tree writes no geometry");
         }
+        expectProvider("a refused tree", providerBefore, 0, { active: false });
         facade.refuseCreate = false;
 
         // ---- a refused admission: the tree released, no session, no geometry write ----
@@ -1104,6 +4275,7 @@ Item {
         if (!rectIs(winA.frameGeometry, before.x, before.y, before.width, before.height)) {
             fail("a refused admission writes no geometry");
         }
+        expectProvider("a refused admission", providerBefore, 0, { active: false });
         facade.refuseAdmit = false;
 
         // ---- the admission lands the master before it returns: nothing is recorded ----
@@ -1121,6 +4293,8 @@ Item {
         }
         facade.landOnAdmit = false;
         tileShortcut.activated(); // untoggle it
+        expectProvider("a session admitted on landing, on and off", providerBefore, 2, { active: false });
+        providerBefore = providerState();
 
         // ---- the invoked view survives the untoggle of another view's session ----
         // A session on the first desktop, then a second desktop with its own window; the
@@ -1139,6 +4313,8 @@ Item {
         ws.currentDesktop = desktop;
         ws.activeWindow = master;
         tileShortcut.activated(); // the session on the first desktop
+        expectProvider("the session on the first desktop", providerBefore, 1, { active: true, desktopId: "11" });
+        providerBefore = providerState();
         const desktop1Session = calls("createTile").length;
         ws.currentDesktop = desktop2;
         ws.activeWindow = m2;
@@ -1164,9 +4340,15 @@ Item {
         if (ws.activeWindow !== m2) {
             fail("the focus returned to the window the shortcut was invoked on");
         }
+        // The provider: the first session's end, then the new one on the view the shortcut was
+        // invoked on - not the desktop the old master's activation carried back.
+        expectProvider("the invocation on the other desktop", providerBefore, 2,
+                       { active: true, desktopId: "12", activityId: "a", outputName: "Virtual-1" });
+        providerBefore = providerState();
         facade.onRestore = null;
         ws.currentDesktop = desktop2;
         tileShortcut.activated(); // untoggle it (still the invoked view)
+        expectProvider("the untoggle on the other desktop", providerBefore, 1, { active: false, desktopId: "" });
 
         // ---- a manual move of an ignored app's stack window detaches it (late phase) ----
         // org.fusion.files is in IgnoreApps: the memory never records it, but the tiler's
@@ -1863,7 +5045,12 @@ Item {
                 ws.windows = [late, winB, winA, master];
                 ws.windowAdded(late);
                 ws.activeWindow = master;
-                script.staleCellMillis = 60;
+                // Short enough for the steps below to wait out, long against a process stall: in
+                // the second session the untoggle that stamps the bound and the statement that
+                // settles the window run in one turn, and a stall longer than the bound between
+                // them expired the window's entry before it settled (#210). Each step that needs
+                // the bound passed waits 1250 ms after its untoggle.
+                script.staleCellMillis = 1000;
                 tileShortcut.activated();
                 if (!inColumn(late)) {
                     fail("released: the late window is in its cell");

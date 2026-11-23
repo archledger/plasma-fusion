@@ -23,10 +23,10 @@ import org.kde.ksvg as KSvg
 //   2  phone and clipboard move into quick settings (the quicksettings widget); the system
 //      meters leave the bar
 //   3  the app name hides: the logo (tablet: the app icon) only (appname)
-//   4  the short date in the pill
+//   4  the short date in the pill, and the workspace layout control's glyph alone
 //   5  the time only
 //   6  quick settings hides the battery %
-//   7  the workspace dots hide (the overview still switches workspaces)
+//   7  the workspace dots and the layout control hide (the overview still switches workspaces)
 //
 // Tablet posture starts at step 2 (portrait or a narrow screen: step 5), TABLET 4.3.
 //
@@ -243,9 +243,10 @@ Item {
         return c.widths[at] ?? c.hint;
     }
 
-    // Everything the result depends on, read in one binding so that any change re-evaluates:
-    // the children and their hints and widths at each budget step, the window width, the menu
-    // estimate and the posture. A collapsed widget's saving can change without its hint changing.
+    // What the result depends on, read in one binding so that a change re-evaluates: the
+    // children's widths at every step, the window width, the pill's width and savings,
+    // the menu estimate and the posture. A collapsed widget's current width can stay the
+    // same while the width it would need at another step changes.
     readonly property var snapshot: {
         const layout = panelLayout;
         if (!layout || !clock.Window.window) {
@@ -269,10 +270,15 @@ Item {
             children.push({ "item": child, "applet": applet, "hint": shown,
                             "widths": widths, "spacer": isExpandingSpacer(child) });
         }
+        const savings = [];
+        for (let at = 0; at <= maxLevel; ++at) {
+            savings.push(clock.budgetSaving(at));
+        }
         return {
             "children": children,
             "windowWidth": clock.Window.window.width,
             "pill": clock.pillWidth,
+            "savings": savings,
             "menu": menuEstimate,
             "compact": menuCompact,
             "tablet": tablet,

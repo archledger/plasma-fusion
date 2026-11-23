@@ -18,6 +18,7 @@ KCM.SimpleKCM {
 
     property alias cfg_showWorkspaces: showWorkspaces.checked
     property alias cfg_wheelSwitchesWorkspaces: wheelSwitches.checked
+    property alias cfg_showLayoutControl: showLayoutControl.checked
     property alias cfg_showDate: showDate.checked
     property string cfg_dateFormat
     property alias cfg_customDateFormat: customDateFormat.text
@@ -38,10 +39,13 @@ KCM.SimpleKCM {
     property string cfg_menuPolicy: "centre"
     property bool cfg_menuCompacted: false
     property string cfg_debugAction: ""
+    property string cfg_layoutRequest: ""
+    property string cfg_layoutResponse: ""
 
     // The configuration dialog also hands every key's default value to the page.
     property bool cfg_showWorkspacesDefault
     property bool cfg_wheelSwitchesWorkspacesDefault
+    property bool cfg_showLayoutControlDefault
     property bool cfg_showDateDefault
     property string cfg_dateFormatDefault
     property string cfg_customDateFormatDefault
@@ -57,6 +61,8 @@ KCM.SimpleKCM {
     property string cfg_menuPolicyDefault
     property bool cfg_menuCompactedDefault
     property string cfg_debugActionDefault
+    property string cfg_layoutRequestDefault
+    property string cfg_layoutResponseDefault
 
     function saveConfig() {
         const config = Plasmoid.configuration;
@@ -69,6 +75,10 @@ KCM.SimpleKCM {
         cfg_menuCompacted = config.menuCompacted;
         // requests written through desktop scripting
         cfg_debugAction = config.debugAction;
+        // the layout request the clock writes itself, and the answer the placement script writes
+        // through desktop scripting ("Workspace layout state" in docs/parts/shell-topbar.md)
+        cfg_layoutRequest = config.layoutRequest;
+        cfg_layoutResponse = config.layoutResponse;
     }
 
     readonly property date sample: new Date()
@@ -83,6 +93,13 @@ KCM.SimpleKCM {
         QQC2.CheckBox {
             id: wheelSwitches
             text: i18nc("@option:check", "Scroll over the pill to switch workspaces")
+        }
+
+        QQC2.CheckBox {
+            id: showLayoutControl
+            text: i18nc("@option:check", "Show the dynamic tiling control")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: i18nc("@info:tooltip", "Floating or Tiled for the current workspace, shown only where dynamic tiling is available. The tiling shortcut works either way.")
         }
 
         Item {

@@ -15,6 +15,7 @@ PACKAGES_KWIN_DIR defaults to this checkout's packages/kwin; the CI lane passes 
 tree's .local/share/kwin.
 """
 import os
+import re
 import sys
 
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, QTimer, QUrl, Slot, qInstallMessageHandler
@@ -102,6 +103,10 @@ qInstallMessageHandler(keep_message)
 app = QGuiApplication(sys.argv[:1])
 engine = QQmlEngine()
 engine.addImportPath(os.path.join(here, "stubs"))
+# The stand-in bus module is this suite's alone: in the shared stubs/ it would hide the system
+# org.kde.plasma.workspace.dbus from the other offscreen suites: the snap script and switcher they
+# load use more of it (their copies of FusionTablet) than the stand-in has.
+engine.addImportPath(os.path.join(here, "lifecycle-stubs"))
 # Keep every context QObject referenced for the engine's lifetime: a temporary would be
 # garbage-collected by Python while QML still resolves through it (a dangling pointer).
 i18n = I18n()
@@ -129,6 +134,56 @@ def run_harness(initial=None):
     return instance
 
 
+provider_labels = {}
+
+# The layout provider's lines for a read and a publication that came back: what each found or
+# carried, then its length from call to answer and, when its script's start lies within the call,
+# its length from that start (decision 1's time limit); a call over the limit is said on a line
+# of its own, with the length it was judged by - from its script's start when there is one, else
+# from its call.
+LENGTH = r", in (\d+) ms(?: \((\d+) ms from its script's start\))?"
+READ_LINE = re.compile(r"plasmafusion-placement: layout provider: read (\d+) request\(s\), (\d+) refused" + LENGTH)
+PUBLISHED_LINE = re.compile(r"plasmafusion-placement: layout provider: published (\d+) frame\(s\), (\d+) written"
+                            + LENGTH)
+OVER_LINE = re.compile(r"plasmafusion-placement: layout provider: a (read|publication) took (\d+) ms from its"
+                       r" (script's start|call) to its answer, over the 50 ms limit")
+
+
+def call_lines(journal, pattern, marker):
+    """The journal's lines holding `marker`, parsed with `pattern`, as (found, carried or written,
+    length, length from the script's start or None); a line that does not parse, or whose length
+    from the script's start is longer than the call, is None."""
+    lines = []
+    for message in journal:
+        if marker not in message:
+            continue
+        match = pattern.fullmatch(message)
+        shell = None if not match or match.group(4) is None else int(match.group(4))
+        if not match or (shell is not None and shell > int(match.group(3))):
+            lines.append(None)
+            continue
+        lines.append((int(match.group(1)), int(match.group(2)), int(match.group(3)), shell))
+    return lines
+
+
+def check_provider(instance, name):
+    """The run's layout provider (LayoutProvider.qml), as the harness recorded it: revisions
+    1, 2, ... one per state, each a change of what a bar would be told, and a lifetime label
+    no earlier run had."""
+    states = [dict(state) for state in instance.property("providerStates").toVariant() or []]
+    check(bool(states), "%s: the run followed the script's layout provider" % name)
+    for index, state in enumerate(states):
+        check(state.get("revision") == index + 1,
+              "%s: the provider's revisions run 1, 2, ... (state %d has %s)" % (name, index, state.get("revision")))
+        if index:
+            check(dict(state, revision=0) != dict(states[index - 1], revision=0),
+                  "%s: revision %s moved with nothing changed (%s)" % (name, state.get("revision"), state))
+    label = str(instance.property("providerLabel") or "")
+    check(label != "" and label not in provider_labels.values(),
+          "%s: the provider's lifetime label is its own (%r, earlier runs %r)" % (name, label, provider_labels))
+    provider_labels[name] = label
+
+
 def retire(instance, name):
     """End a run whose results have been read. The stand-in Workspace is one object for the
     whole engine, so a script left alive answers the next run's windows as well: with its
@@ -138,7 +193,10 @@ def retire(instance, name):
     throw on that path shows only as the engine's message, so the lines of the retirement
     are read for one. (Until 2026-11-14 one such line was let through, a readConfig of the
     engine's teardown: it was the script's own handler answering its teardown's writes, the
-    path that crashed KWin, and no teardown reads a setting now.)"""
+    path that crashed KWin, and no teardown reads a setting now.)
+
+    The layout provider's record is read first (check_provider), while the run is alive."""
+    check_provider(instance, name)
     before_retire = len(messages)
     instance.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
@@ -226,6 +284,275 @@ native_stack = run_harness({"nativeStackProbe": True})
 for problem in list(native_stack.property("problems").toVariant() or []):
     failures.append("native stack: " + str(problem))
 retire(native_stack, "native stack")
+
+# A run against a writer that refuses the provider registration as the fork does while another
+# provider holds its slot or the writer is busy (a null QUuid's text): the memory stays disabled
+# for the session and takes no other transport, and a toggle starts no tree. The harness checks
+# the calls past the script's longest delayed call; the journal says the refusal once and never
+# claims the registration.
+before = len(messages)
+refused_provider = run_harness({"scenario": "refused-provider"})
+for problem in list(refused_provider.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+check(sum("the writer refused the provider registration" in message for message in journal) == 1,
+      "refused-provider: the refusal was said once")
+check(not any("registered as the placement provider" in message for message in journal),
+      "refused-provider: a null UUID is not a registration")
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "refused-provider: a refused provider throws nothing, got %s" % thrown)
+# Read again run_harness's 1.3 s after the run, which ends 2.5 s after its toggle: the
+# registration is the only thing a refused provider asks of the writer, read-only calls included.
+refused_calls = refused_provider.property("facadeCalls").toVariant() or []
+refused_ops = [call.get("op") for call in refused_calls]
+check(refused_ops == ["registerProvider"],
+      "refused-provider: registerProvider is the only recorded facade call, got %s" % refused_ops)
+refused_reads = [call.get("op") for call in refused_provider.property("readCalls").toVariant() or []]
+check(not refused_reads, "refused-provider: a refused provider reads nothing of the writer, got %s"
+      % refused_reads)
+retire(refused_provider, "refused-provider")
+
+# A writer with no answer for the memory's first read, as at load time before its snapshot is
+# ready: the layout provider starts incapable and turns capable when the read retry finds the
+# memory, one revision later; a toggle before that starts nothing (the harness checks).
+late_memory = run_harness({"scenario": "late-memory"})
+for problem in list(late_memory.property("problems").toVariant() or []):
+    failures.append(str(problem))
+retire(late_memory, "late-memory")
+
+# The read side of the layout provider's pipeline on the real script: the wake shortcut, one read
+# once the identity is ready, the wakes during a read coalesced, the shell side's bounds and the
+# provider's own checks of every row, each failure, and the limit on an answer's length (the
+# harness checks). A failed read and each of the eight malformed answers - one of them a
+# well-formed answer one character over the limit - are said once each; the three reads that came
+# back - one of them exactly the limit long - say what they found and how long they took; nothing
+# throws.
+before = len(messages)
+read_pipeline = run_harness({"scenario": "read-pipeline"})
+for problem in list(read_pipeline.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+check(sum("the bars' requests could not be read" in message for message in journal) == 1,
+      "read-pipeline: a failed read is said once")
+check(sum("the bars' requests came back malformed" in message for message in journal) == 8,
+      "read-pipeline: each malformed answer is said once")
+reads = call_lines(journal, READ_LINE, "layout provider: read ")
+check(None not in reads and [read[:2] for read in reads] == [(2, 5)] * 3,
+      "read-pipeline: each of the three reads that came back says what it found and how long it took, got %s" % reads)
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "read-pipeline: nothing threw, got %s" % thrown)
+retire(read_pipeline, "read-pipeline")
+
+# The publication side of the pipeline on the real script: the frames, each bar's own view and its
+# changes, where and when they go, what is not written again, a short count and a failure (each
+# confirming none of its frames), a new shell, the changes coalesced, and the retirement's offline
+# frame before the name's release (the harness checks).
+# Each publication that came back says once how many frames it carried, how many the shell wrote
+# and how long it took; the failed one is said once, and so are the offline frames; the thirteen
+# reads say what they found and how long they took; nothing throws.
+before = len(messages)
+publication = run_harness({"scenario": "publication"})
+for problem in list(publication.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+published = call_lines(journal, PUBLISHED_LINE, "layout provider: published ")
+counts = [line[:2] for line in published if line]
+check(None not in published and counts == [(5, 4), (5, 5), (2, 2), (1, 1), (1, 1), (5, 5), (2, 2), (2, 2), (1, 1), (1, 1), (2, 2), (3, 3),
+                  (3, 3), (1, 1), (1, 1), (1, 1), (1, 1)],
+      "publication: each publication that came back before the retirement says its frames and what the shell wrote"
+      " once, got %s" % counts)
+check(sum("the bars' layout state could not be published" in message for message in journal) == 1,
+      "publication: the failed publication is said once")
+check(sum(message == "plasmafusion-placement: layout provider: sent 5 offline frame(s)" for message in journal) == 1,
+      "publication: the offline frames are said once")
+reads = call_lines(journal, READ_LINE, "layout provider: read ")
+five, four = (4, 1), (3, 1)
+check(None not in reads and [read[:2] for read in reads] == [five] * 3 + [four] + [five] * 6 + [four] + [five] * 2,
+      "publication: each of the thirteen reads that came back says what it found and how long it took, got %s" % reads)
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "publication: nothing threw, got %s" % thrown)
+check(not [message for message in journal if OVER_LINE.fullmatch(message)],
+      "publication: no call there is over the limit")
+retire(publication, "publication")
+
+# Two bars on the session's view, whose session's start went out in a publication that failed:
+# the session's end, which brings each bar's frame back to what the shell confirmed last, goes
+# out to both (the harness checks). The two publications that came back say their two frames
+# each, the failed one is said once, and nothing throws.
+before = len(messages)
+unconfirmed_run = run_harness({"scenario": "unconfirmed"})
+for problem in list(unconfirmed_run.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+published = call_lines(journal, PUBLISHED_LINE, "layout provider: published ")
+check(None not in published and [line[:2] for line in published] == [(2, 2), (2, 2)],
+      "unconfirmed: each publication that came back says its frames and what the shell wrote, got %s" % published)
+check(sum("the bars' layout state could not be published" in message for message in journal) == 1,
+      "unconfirmed: the failed publication is said once")
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "unconfirmed: nothing threw, got %s" % thrown)
+retire(unconfirmed_run, "unconfirmed")
+
+# Decision 1's time limit on the real script, the harness setting each call's timing: a read and a
+# publication answered at once, and a read whose owner lookup took 70 ms, measured from its own
+# call; two whose script ran from the call's start for 70 ms - over the 50 ms limit by their
+# length from that start, said right after their lines - two that waited 70 ms but whose script
+# started 1 ms before the answer, not over - and two whose start lies outside the call, so their
+# 70 ms from call to answer puts them over; a short one of those is not over; then a malformed
+# read and five malformed publications - the first with a wake during it - each said once and
+# each followed by the read that sends the frame again, one the shell wrote none of, which the
+# next read sends again too, and the frame told at last; then a session's start whose publication
+# failed, and one answered malformed, each followed by the session's end, which goes out though
+# its frame says what the shell confirmed last (answered a step after it went out, not at once);
+# then a publication whose answer is longer than the limit, malformed, and the read that sends
+# its frame again. Nothing throws.
+before = len(messages)
+time_limit = run_harness({"scenario": "time-limit"})
+for problem in list(time_limit.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+events = []
+failed_round_trips = []
+diagnostic = re.compile(r"plasmafusion-placement: layout provider: the bars' (requests|layout state)"
+                        r" (could not be read|came back malformed|could not be published), in 70 ms"
+                        r" \(round trip\)")
+for index, message in enumerate(journal):
+    for kind, pattern, marker in (("read", READ_LINE, "layout provider: read "),
+                                  ("published", PUBLISHED_LINE, "layout provider: published ")):
+        if marker in message:
+            # A line that does not parse is an event of its own kind, as an over line is below:
+            # the order check then fails with it, and the length checks never read its text.
+            line = call_lines([message], pattern, marker)[0]
+            events.append(((kind,) + line[2:]) if line else ("unparsed " + kind, message))
+    over = OVER_LINE.fullmatch(message)
+    if over:
+        failed = diagnostic.fullmatch(journal[index - 1]) if index else None
+        if failed:
+            failed_round_trips.append((failed.group(1), failed.group(2), over.group(1),
+                                       over.group(3), int(over.group(2))))
+        else:
+            events.append(("over " + over.group(1), over.group(3), int(over.group(2))))
+    if "layout provider: a " in message and "over the 50 ms limit" in message and not over:
+        events.append(("unparsed over", message))
+    if "the bars' requests came back malformed" in message:
+        events.append(("malformed read",))
+    if "the bars' layout state came back malformed" in message:
+        events.append(("malformed state",))
+check(failed_round_trips == [
+    ("requests", "could not be read", "read", "call", 70),
+    ("requests", "came back malformed", "read", "call", 70),
+    ("layout state", "came back malformed", "publication", "call", 70),
+    ("layout state", "could not be published", "publication", "call", 70),
+], "time-limit: failed and malformed calls are judged by their round trips (%s)" % failed_round_trips)
+kinds = [event[0] for event in events]
+wanted = (["read", "published", "read"]
+          + ["read", "over read", "published", "over publication"]
+          + ["read", "published"]
+          + ["read", "over read", "published", "over publication"]
+          + ["read", "malformed read"]
+          + ["malformed state", "read"] * 5
+          + ["published", "read", "published", "read"]
+          + ["published", "malformed state", "published"]
+          + ["malformed state", "read", "published"])
+check(kinds == wanted, "time-limit: the calls' lines and the limit's, in order, got %s" % events)
+if kinds == wanted:
+    def at_once(event):
+        return event[1:] == (0, 0)
+
+    def held(event, over):
+        return event[1:] == (70, 70) and over[1:] == ("script's start", 70)
+
+    def waited(event):
+        return event[1:] == (70, 1)
+
+    def outside(event, over):
+        return event[1:] == (70, None) and over[1:] == ("call", 70)
+
+    for index in (0, 1, 2, 16, 18, 20, 22, 24, 25, 26, 27, 28, 33, 34):
+        check(at_once(events[index]), "time-limit: a call answered at once, from its own call, has its length from"
+              " the script's start, under 50 ms (%s)" % (events[index],))
+    check(held(events[3], events[4]) and held(events[5], events[6]),
+          "time-limit: a call whose script ran 70 ms is over the limit by its length from that start (%s)"
+          % (events[3:7],))
+    check(waited(events[7]) and waited(events[8]),
+          "time-limit: a call with 70 ms elapsed but only 1 ms from script start stays under the limit (%s)"
+          % (events[7:9],))
+    check(outside(events[9], events[10]) and outside(events[11], events[12]),
+          "time-limit: a start outside the call leaves the length from call to answer to decide (%s)"
+          % (events[9:13],))
+    check(events[13][1:] == (0, None),
+          "time-limit: a short call whose start lies outside it is not over the limit (%s)" % (events[13],))
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "time-limit: nothing threw, got %s" % thrown)
+retire(time_limit, "time-limit")
+
+# The layout provider's own rules, without the script: what start(), setSession() and retire()
+# move and what they leave alone, and its identity name refused, denied, unread and dropped by
+# an early retirement (the harness checks). Each name that is no identity is said once.
+before = len(messages)
+provider_rules = run_harness({"scenario": "provider-rules"})
+for problem in list(provider_rules.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+check(sum("the identity name was not granted" in message for message in journal) == 2,
+      "provider-rules: a refused name and a bus error are each said once")
+check(sum("the identity name's owner could not be read" in message for message in journal) == 1,
+      "provider-rules: an owner that cannot be read is said once")
+# The answers arrive in signal handlers, where a throw shows only in the journal.
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "provider-rules: nothing threw, got %s" % thrown)
+retire(provider_rules, "provider-rules")
+
+# P5's prepared target on a provider of its own (the harness checks each decision, frame and end):
+# its revisions each a change of what a bar is told, each fresh decision said once - 38 ready and
+# 21 refused, the later lifetimes' refusals and prepares among them - and each end of a
+# preparation said with its reason, a holder's widget gone among them; a read again or a
+# conflicting payload decides nothing new and says nothing, and a malformed prepare is a refusal
+# of the read's, not a decision.
+before = len(messages)
+prepare_run = run_harness({"scenario": "prepare"})
+for problem in list(prepare_run.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+ready_lines = sum("layout provider: a prepare is ready" in message for message in journal)
+refused_lines = sum("layout provider: a prepare was refused" in message for message in journal)
+check(ready_lines == 38 and refused_lines == 21,
+      "prepare: each fresh decision is said once, 38 ready and 21 refused, got %s and %s" % (ready_lines, refused_lines))
+ends = {}
+for message in journal:
+    if "layout provider: a preparation ended, " in message:
+        reason = message.split("a preparation ended, ", 1)[1].strip().strip('"')
+        ends[reason] = ends.get(reason, 0) + 1
+check(ends == {"focus-changed": 11, "target-departed": 11, "view-changed": 3, "shell-replaced": 1,
+              "consumer-retired": 1},
+      "prepare: each preparation's end is said with its reason, got %s" % ends)
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "prepare: nothing threw, got %s" % thrown)
+retire(prepare_run, "prepare")
+
+# P5's desired mode on the real script (the harness checks each set, its completion and what the
+# tiler did). Each set whose start is retried is said under way once and decided once later -
+# five done (three of them beside another payload or a query under their identity), and one each
+# cancelled by the shortcut, refused for a target gone, for an admission refused for good, for its
+# desktop removed, for its activity removed, for its output unplugged, under a new shell, and
+# for a throwing admission. No exception escapes the retry handler.
+before = len(messages)
+set_run = run_harness({"scenario": "set"})
+for problem in list(set_run.property("problems").toVariant() or []):
+    failures.append(str(problem))
+journal = messages[before:]
+under_way = sum("layout provider: a set (" in message and ") is under way" in message for message in journal)
+later = sorted(message.split("layout provider: a set ", 1)[1] for message in journal
+               if "layout provider: a set is done" in message or "layout provider: a set was refused, " in message)
+check(under_way == 13 and later == ["is done"] * 5 + ["was refused, admission-refused", "was refused, cancelled",
+                                                       "was refused, shell-replaced", "was refused, target-departed",
+                                                       "was refused, unavailable",
+                                                       "was refused, view-changed", "was refused, view-changed",
+                                                       "was refused, view-changed"],
+      "set: each retried set is under way once and decided once later, got %s under way and %s" % (under_way, later))
+thrown = [message for message in journal if "TypeError" in message or "ReferenceError" in message]
+check(not thrown, "set: nothing threw, got %s" % thrown)
+retire(set_run, "set")
 
 # A third run: the master a native teardown released without restoring it (a removed desktop, a
 # second window of its app, a move of the master). The harness asserts the geometry, the settle

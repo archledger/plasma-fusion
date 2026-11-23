@@ -85,6 +85,12 @@ assert.ok(!eligibleForMaster(windowWith({ tile: { some: "tile" } })), "tiled ref
 assert.ok(!eligibleForMaster(windowWith({ resizeable: false })), "not resizable refused");
 assert.ok(!eligibleForMaster(windowWith({ skipTaskbar: true })), "a window out of the taskbar is not the user's to tile");
 assert.ok(!eligibleForMaster(windowWith({ skipSwitcher: true })), "nor one out of the window switcher");
+// The layout provider leans on these (LayoutProvider.qml, P5): a shell surface - an applet popup,
+// a dock, the desktop - is no normal window, so it is never the app a bar's menu acts on, and a
+// remembered app that closed, or none at all, is no target either.
+assert.ok(!eligibleForMaster(windowWith({ normalWindow: false })), "a window that is not normal refused");
+assert.ok(!eligibleForMaster(windowWith({ deleted: true })), "a closing window refused");
+assert.ok(!eligibleForMaster(null), "no window refused");
 {
     // The XWayland Video Bridge keeps an invisible normal window mapped on the desktop: on
     // the ThinkPad it took a stack cell, and the whole column once the others had left.
