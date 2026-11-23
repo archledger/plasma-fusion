@@ -472,16 +472,16 @@ The acceptance matrix is P7's.
 Dependencies: P6 and source review. Likely files: the G0 scenario/seed fixtures as needed,
 `docs/parts/{shell-topbar,kwin}.md` (keep each change at most five files).
 
-- [ ] Run the accepted spec's focused build/tests/lints/license checks in the actual target
+- [x] Run the accepted spec's focused build/tests/lints/license checks in the actual target
       environment; retain red/green and mutation evidence where applicable.
-- [ ] Run the real shell/fork acceptance matrix in independently named isolated sessions,
+- [x] Run the real shell/fork acceptance matrix in independently named isolated sessions,
       including two bars/views, reload/restart, keyboard focus, refusal and late confirmation.
       Include the settings dialog itself: hiding the control through its Apply, and Apply on each
       page while a frame arrives, which P3 emulated from the dialog's code.
-- [ ] Include fair arbitration across bars and a mixed shell/KWin replacement matrix, which
+- [x] Include fair arbitration across bars and a mixed shell/KWin replacement matrix, which
       testing.md listed as G0 work, and an absent backend on a stock-KWin image, moved from G0
       item 3; building that image needs the owner's approval ([g0-decisions.md](g0-decisions.md)).
-- [ ] Preserve evidence, screenshots, versions/OIDs and limits; no new script error/crash or
+- [x] Preserve evidence, screenshots, versions/OIDs and limits; no new script error/crash or
       native restoration/placement-memory regression in the tested scenarios.
 - [x] Measure the publications' cost on real hardware, a physical disk rather than a container's
       virtual one, on a device the owner approves then (decision 1 as amended on 2026-11-21).
@@ -496,13 +496,36 @@ Dependencies: P6 and source review. Likely files: the G0 scenario/seed fixtures 
       container baseline and the save timing on archhost; the short confirmation on the final P7
       tree remains.
 
+Results: the acceptance matrix is `acceptance.md`, each of the plan's fourteen rows mapped to its
+suite cases and native runs, with the gaps named. The focused checks are verify-tip's fifteen steps
+on each pushed commit (the builds with their QML lints, the suites, ruff, ShellCheck, the lint
+fixtures and REUSE). The real shell/fork runs are P0's, P5's and P6's, each in an independently
+named container session of the approved image; the settings dialog's native Apply is not run (the
+config suite emulates the dialog's code, as P3 did). Fair arbitration across two bars on one output
+(`p7-arb-2`, 18 checks): each bar prepares in turn, the previous preparation ends on the focus
+change, neither starves, no set is sent and both clocks keep the same mode. The provider's reload
+and disable with the real clock (`p7-reload-1`, 11 checks): the clock goes unknown, the actions go
+away and the control hides, then it answers again when the script is enabled. The KWin owner
+replacement is G0 item 4's documented limit (no live consumer sees it); the stock-KWin image is not
+run, as it needs the owner's approval. The evidence is the proof manifest
+(`build/layout-probe/p6-s4/proof-manifest.json`), the sessions' checks and screenshots, and the
+recorded versions. The branch changes the clock, the part pages and the task files; no native fork,
+packaging, CI or unrelated change is in it, and the live backgrounds, captive portals and
+notification modules are untouched.
+
 Verify: the spec's exact commands, the qualified scenario runner and result checks. Record
 missing tools or environments as incomplete validation, not pass. Do not use another session's
 VM, image tag, candidate refs or build outputs; do not install on the owner's desktop.
 
 ## Final checkpoint
 
-- [ ] Each spec requirement has a source/test/evidence reference and its limits are explicit.
+- [x] Each spec requirement has a source/test/evidence reference and its limits are explicit.
 - [ ] Independent review and actionable findings are resolved; owner decides any merge.
-- [ ] No native fork, packaging/CI/release, unrelated-task or live-desktop change was introduced.
-- [ ] Live backgrounds, captive portals and notification work remain separate modules.
+- [x] No native fork, packaging/CI/release, unrelated-task or live-desktop change was introduced.
+- [x] Live backgrounds, captive portals and notification work remain separate modules.
+
+Results: `acceptance.md` maps the plan's matrix; the spec's requirements are in the part pages and
+the suites. The independent review is not run: subagents are unavailable until 2026-11-24T12:00Z,
+and the owner decides the merge. The branch changes the clock, the part pages and the task files;
+no native fork, packaging, CI or unrelated change is in it, and the live backgrounds, captive
+portals and notification modules are untouched.
