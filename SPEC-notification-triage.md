@@ -160,10 +160,12 @@ pattern of the existing compiled parts, and it adds two requirements of its own:
 - **Version-bound.** The copy is in force only while the installed `plasma-workspace` version is
   exactly the one it was built from. This is evaluated every time plasmashell starts. The
   existing login check alone does not satisfy it: it runs once per login, so a Plasma update
-  followed by a plasmashell restart would otherwise load a mismatched copy. The enforcement
-  point must either run before plasmashell picks its plugins, or be a guard inside the copy that
-  keeps the feature off when the running version differs from the one it was built against. At
-  any other version the stock plugin loads and the shortcut does not exist.
+  followed by a plasmashell restart would otherwise load a mismatched copy. So the enforcement
+  point runs before plasmashell picks its plugins: at any other version the copy is not put in
+  front of the stock plugin, the stock plugin loads and the shortcut does not exist. A guard
+  inside the copy, which keeps the feature off when the running version differs from the one it
+  was built against, is kept as a second layer. On its own it would leave the copy in use with
+  the feature off, so it does not replace that selection.
 - **Packaging.** Adding a compiled part touches every channel's build. The capability map keeps
   packaging changes behind coordination first; the owner approved this one on 2026-11-26.
 
@@ -273,6 +275,11 @@ follows.
 8. **Older banners and dismiss-all.** Newest only. Stepping to an older banner and dismissing
    everything are later slices.
 9. **Channels.** Fedora 44 first; the other channels follow afterwards.
+10. **Where the version rule is enforced.** Before plasmashell picks its plugins, so that at
+    another version the stock plugin loads. A guard inside the copy is kept as a second layer
+    and does not replace that selection: on its own it would leave the copy in use with the
+    feature off. A review remark on this specification showed that the second of two allowed
+    enforcement points could not deliver rule 12.
 
 Left for the implementation plan: per-channel build requirements, the source of the stock tree,
 the exact gate mechanism with its enforcement point, and the new test suites. The plan must prove that a copy which fails to
