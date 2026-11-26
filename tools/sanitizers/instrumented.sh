@@ -19,13 +19,12 @@ while IFS= read -r -d '' f; do
   # 36 entries) such a reader closes the pipe while readelf is still writing, readelf dies of a
   # broken pipe, and pipefail reports a built plugin as not built.
   dynamic=$(readelf -d "$f") || dynamic=
-  case $dynamic in
-    *NEEDED*libasan*) ;;
-    *)
-      echo "not built with the sanitizers: $f" >&2
-      exit 1
-      ;;
-  esac
+  # One NEEDED line must name the runtime: a pattern over the whole section would also match a run
+  # path that happens to contain the name.
+  if ! grep 'NEEDED.*libasan' >/dev/null <<<"$dynamic"; then
+    echo "not built with the sanitizers: $f" >&2
+    exit 1
+  fi
   echo "instrumented: ${f#"$build"/}"
   count=$((count + 1))
 done < <(find "$build" -name CMakeFiles -prune -o -type f \( -name '*.so' -o -perm -u+x \) -print0)

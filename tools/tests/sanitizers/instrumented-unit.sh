@@ -102,6 +102,14 @@ elf "$B/bin/plugin.so" '  NEEDED   Shared library: [libubsan.so.1]'
 check "$B"
 expect "a plugin that does not link the runtime stops the check: exit 1, naming it" exit_saying 1 "not built with the sanitizers: $B/bin/plugin.so"
 
+# A run path that names the runtime is not a link to it: the match must stay within one NEEDED line.
+B=$WORK/runpath
+mkdir -p "$B/bin"
+elf "$B/bin/plugin.so" '  NEEDED   Shared library: [libc.so.6]' '  RUNPATH   Library runpath: [/tmp/libasan-check]'
+check "$B"
+expect "a plugin whose run path names the runtime but which does not link it stops the check: exit 1, naming it" exit_saying 1 "not built with the sanitizers: $B/bin/plugin.so"
+expect "  and nothing is reported instrumented" nothing_listed
+
 B=$WORK/skipped
 mkdir -p "$B/CMakeFiles/6.0.0/CompilerIdCXX" "$B/bin"
 elf "$B/CMakeFiles/6.0.0/CompilerIdCXX/a.out" '  NEEDED   Shared library: [libm.so.6]'
