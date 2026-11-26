@@ -60,19 +60,26 @@ The copy carries the banner keyboard triage of `SPEC-notification-triage.md`:
   a click does: the default action if there is one, otherwise nothing, once per press, and only
   while the banner's content itself has the keyboard focus. With a button or the reply field
   focused, the keys are theirs: a button is pressed with Space, as in stock, and in the reply
-  field Escape keeps the text and Return sends it. The keyboard focus reaching the reply field
-  starts the reply, as a click on it does.
+  field Escape keeps the text and Return sends it. From every other control of the banner, the
+  close button included, Escape dismisses. The keyboard focus reaching the reply field starts the
+  reply, as a click on it does.
 - **The interaction ends by itself** when the banner is replaced, is closed or loses focus, or
   when the screen locks. Nothing is dismissed then and no other banner is taken; only a
-  replacement that ends a focused interaction gives the previous window its focus back.
+  replacement that ends a focused interaction asks for the previous window back. A replacement is
+  seen by the update time, which KDE resets on every replacement, and by the text and the
+  actions; the window asked for is a window itself, also when it is one of several windows of an
+  application (a group of windows cannot be activated).
 
 The decisions are in one file, `src/global/BannerTriage.js`, as pure functions; the stock QML
-(`src/global/Globals.qml`, `src/NotificationPopup.qml`) only applies them. The applet reports
-each step through its debug category (`org.kde.plasma.notifications.debug`) as
+(`src/global/Globals.qml`, `src/NotificationPopup.qml`) only applies them, and the reply field
+(`src/components/NotificationReplyField.qml`) carries one property that marks it. The applet
+reports each step through its debug category (`org.kde.plasma.notifications.debug`) as
 `banner triage "<step>"`: `triage-available`, `shortcut-ignored-no-banner`, `focus-requested`,
 `focus-granted`, `focus-within inside=... <item>` (each move of the keyboard focus inside the
-banner), `dismissed-by-escape`, `activated-by-enter`, `focus-restored`, `focus-restore-skipped`,
-`ended lost`, `ended hidden`, `ended replaced` and `ended not-granted`.
+banner), `dismissed-by-escape`, `activated-by-enter`, `focus-restore-requested` (the applet asked
+KWin to activate the window recorded at the request; KWin decides), `focus-restore-skipped`,
+`ended lost`, `ended hidden`, `ended replaced` and `ended not-granted`. A report names a banner by
+its notification id and an item by its type; none carries a summary or a draft.
 The private-session scenarios read these lines.
 
 KWin owns the lock and inhibitor boundary, and the applet adds no check of its own: a locked
@@ -101,12 +108,13 @@ needs no compiler and no packages. Three Qt Tests cover the code that is not QML
 
 | Test | What it runs |
 |---|---|
-| `notifications-triage-rules` | `tests/triagetest.cpp`: the rules of `BannerTriage.js` through a small QML holder, offscreen: choosing the banner (7 cases), the transitions between idle, requested and active (14), Escape (5) and Enter (7) |
+| `notifications-triage-rules` | `tests/triagetest.cpp`: the rules of `BannerTriage.js` through a small QML holder, offscreen: choosing the banner (7 cases), the window that had the keyboard focus inside a group of windows (9), the transitions between idle, requested and active (14), Escape (5) and Enter (6); and on real items, whether the item that has the keyboard focus is in the reply field |
 | `notifications-triage-version` | `tests/versiontest.cpp`: the version rule, versions in and a decision out |
-| `notifications-triage-shortcut` | `tests/shortcuttest.cpp`: `GlobalShortcuts` itself; the focus action exists at the built-from version and at no other |
+| `notifications-triage-shortcut` | `tests/shortcuttest.cpp`: `GlobalShortcuts` itself; the focus action exists at the built-from version and at no other. It runs through `tests/run-shortcut-test.sh` on a private session bus: the class registers its actions with the global shortcut daemon under the shell's component name, so on the bus of a real desktop the test would reach the desktop's own shortcuts. |
 
 The tests are configured with the package (`BUILD_TESTING=ON`); the packages are built
-with them off.
+with them off. `notifications-triage-shortcut` needs `dbus-run-session` and is left out without
+it; `tools/tests/ctest-required.sh` then fails the build, as for the settings module's tests.
 
 To see where the plugin would be installed:
 
@@ -133,15 +141,15 @@ a `PASS`. The numbers are the checks each mode passed, the same on all three:
 
 | Mode | Checks | What it showed |
 |---|---|---|
-| `stock` | 18 | The installed applet has no "Focus notification banner" action; the test chord moves no focus; a banner without actions that times out and a closed notification tell the application, a click runs a default action once. |
-| `copy` | 20 | The copy lists the action, unassigned; the chord moves no focus; the same stock behaviour as `stock`. |
-| `full` | 37 | With no banner the shortcut is ignored. Arrival moves no focus. The shortcut gives a banner keyboard focus; Escape dismisses it, KWrite is active again and the application is told nothing. A replacement while focused gives KWrite its focus back and the replacement is not taken. A click into KWrite ends the interaction; a later Escape in KWrite dismisses nothing and the banner can still be closed by the application. |
+| `stock` | 19 | The installed applet has no "Focus notification banner" action; the test chord moves no focus; a banner without actions that times out and a closed notification tell the application, a click runs a default action once. |
+| `copy` | 21 | The copy lists the action, unassigned; the chord moves no focus; the same stock behaviour as `stock`. |
+| `full` | 52 | With no banner the shortcut is ignored. Arrival moves no focus. The shortcut gives a banner keyboard focus; Escape dismisses it, KWrite is active again and the application is told nothing. A replacement while focused ends the interaction, asks for the previous window and is not taken: also when it keeps the summary and the text, and also when the previous window is one of two windows of one application. A click into KWrite ends the interaction; a later Escape in KWrite dismisses nothing and the banner can still be closed by the application. |
 | `lock-idle` | 12 | Locked with no banner focused: the shortcut is not dispatched, and a later Escape dismisses nothing. |
 | `lock-focused` | 11 | Locked while a banner is focused: the interaction ends, and a later Escape dismisses nothing. |
-| `activate` | 40 | Enter gives the application the same two receipts as a click for a banner with a default action; for one without, and for one without but with the application's window open, both leave it told nothing and the banner where it is. A held Return activates once. |
-| `buttons` | 27 | Tab lands inside the banner and invokes nothing; Escape from a control dismisses; Space on the action's button invokes exactly that action and is not taken as Enter on the banner; in the reply field Escape keeps the draft and Return sends it. |
+| `activate` | 52 | Enter gives the application the same two receipts as a click for a banner with a default action; for one without, and for one without but with the application's window open, both leave it told nothing and the banner where it is. A held Return activates once. A resident banner stays after Enter; a second, separate Enter acts again, and Escape still dismisses it. |
+| `buttons` | 34 | Tab lands inside the banner and invokes nothing; Escape from a control dismisses; Space on the action's button invokes exactly that action and is not taken as Enter on the banner; with the reply open, Escape from the banner's close button dismisses; in the reply field Escape keeps the draft and Return sends it. |
 | `timer` | 15 | A three-second banner is still focused four seconds after the shortcut took it; the shortcut again asks for nothing; after a click ends the interaction the timeout resumes and the banner expires, the application told nothing. |
-| `eligible` | 56 | Critical and resident banners are taken and dismissed by Escape. A job popup and a banner whose reply is open are not taken, and KWrite stays active. Of two banners the newer one's id is named. The shortcut again asks for no second focus, and a replacement still restores KWrite. With the pointer on the banner the keyboard focus arrives at once. A banner closed right after the request restores nothing. |
+| `eligible` | 55 | Critical and resident banners are taken and dismissed by Escape. A job popup and a banner whose reply is open are not taken, and KWrite stays active. Of two banners the newer one is named by its id. The shortcut again asks for no second focus, and a replacement still gives KWrite its focus back. With the pointer on the banner the keyboard focus arrives at once. A banner closed right after the request restores nothing. |
 
 No shell log held a script error in any mode.
 
@@ -152,7 +160,8 @@ No shell log held a script error in any mode.
 | Fedora 44 test container on the build host | `6.8.3-1.fc44` | `6.8.3-1.fc44` | the staged plugin, by SHA-256 |
 
 The runs on the VM and on the ThinkPad are recorded in the shared ledger under
-`2026-11-26-notification-triage-spec/evidence/part-b/`, each with the kit's checksums. The
+`2026-11-26-notification-triage-spec/evidence/part-b-review-fixes/`, each with the kit's
+checksums; the earlier runs, before the review fixes, are under `evidence/part-b/`. The
 container's runs are kept as the table of one sweep of all nine modes.
 
 ## What is not covered
