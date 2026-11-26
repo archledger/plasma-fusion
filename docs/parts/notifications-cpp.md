@@ -127,8 +127,9 @@ triage. The control runs Plasma's installed applet and the built copy through th
 stock behaviour, so a difference between them is the copy's doing. The applet plasmashell mapped
 is recorded in every mode: the installed one in `stock`, the staged plugin by SHA-256 otherwise.
 
-Run on 2026-11-26 in the Fedora 44 test container on the build host (KWin and Plasma Workspace
-`6.8.3`), each with `scenario rc=0`, `session rc=0` and `left: none`, and every check a `PASS`:
+Run on 2026-11-26 on the stock VM and on the ThinkPad, and in the Fedora 44 test container on
+the build host, each mode with `scenario rc=0`, `session rc=0` and `left: none`, and every check
+a `PASS`. The numbers are the checks each mode passed, the same on all three:
 
 | Mode | Checks | What it showed |
 |---|---|---|
@@ -144,18 +145,24 @@ Run on 2026-11-26 in the Fedora 44 test container on the build host (KWin and Pl
 
 No shell log held a script error in any mode.
 
-The nine modes have run only there so far. On the stock VM and on the ThinkPad with the fork KWin
-only the control (`stock`, `copy`) has run with this scenario, on 2026-11-26 (6 and 7 checks,
-before the control gained its chord checks); those runs are recorded in the shared ledger under
-`2026-11-26-notification-triage-spec/evidence/part-a/`.
+| Machine | KWin | Plasma Workspace | The applet plasmashell mapped in the copy's modes |
+|---|---|---|---|
+| Stock VM (a throwaway overlay of the provisioned image) | `6.8.3-1.fc44` | `6.8.3-1.fc44` | the staged plugin, by SHA-256 |
+| ThinkPad | `6.8.3-1.fc44.pf1` | `6.8.3-1.fc44` | the staged plugin, by SHA-256 |
+| Fedora 44 test container on the build host | `6.8.3-1.fc44` | `6.8.3-1.fc44` | the staged plugin, by SHA-256 |
+
+The runs on the VM and on the ThinkPad are recorded in the shared ledger under
+`2026-11-26-notification-triage-spec/evidence/part-b/`, each with the kit's checksums. The
+container's runs are kept as the table of one sweep of all nine modes.
 
 ## What is not covered
 
 - No package installs the copy, and no setup step enables it.
 - The enforcement point of the version rule is not written.
 - The `compiled` and `sanitizers` workflows build and test the part without installing it.
-- The seven triage modes have not run on the stock VM or on the ThinkPad; only the Fedora 44 test
-  container on the build host has run them.
+- The runs on the stock VM were made on the same hardware as the container ones (both on the build
+  host, under KVM), with stock KWin; the ThinkPad with the fork KWin is the one run on other
+  hardware.
 - A keyboard-shortcut inhibitor held by the focused window is not in the scenarios. The earlier
   probes showed on both machines that the shortcut is not dispatched then; the widget adds no
   check of its own.
