@@ -23,20 +23,7 @@ cmake -S "$src" -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=None -DBUILD_TESTING=ON
 cmake --build "$build"
 
 # Every ELF plugin and program of the build (not CMake's own probes) must link the runtime.
-count=0
-while IFS= read -r -d '' f; do
-  readelf -h "$f" >/dev/null 2>&1 || continue
-  if ! readelf -d "$f" | grep -q 'NEEDED.*libasan'; then
-    echo "not built with the sanitizers: $f" >&2
-    exit 1
-  fi
-  echo "instrumented: ${f#"$build"/}"
-  count=$((count + 1))
-done < <(find "$build" -name CMakeFiles -prune -o -type f \( -name '*.so' -o -perm -u+x \) -print0)
-if [ "$count" -eq 0 ]; then
-  echo "no plugin or program found in $build" >&2
-  exit 1
-fi
+"$here/instrumented.sh" "$build"
 
 # The part's tests must all be there: a test whose requirement is missing is left out by CMake,
 # and ctest would pass without it.

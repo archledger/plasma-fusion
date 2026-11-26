@@ -335,7 +335,12 @@ and pushes that change one, and every Wednesday. The script:
   and `LDFLAGS=-fsanitize=address,undefined` (AddressSanitizer with LeakSanitizer, and
   UndefinedBehaviorSanitizer);
 - checks with `readelf` that every plugin and program it built links the sanitizer runtime, so a
-  build that dropped the flags fails instead of passing untested;
+  build that dropped the flags fails instead of passing untested. `tools/sanitizers/instrumented.sh`
+  collects `readelf`'s output before it searches it: a `grep -q` on the pipe stopped at the first
+  match and, with a dynamic section longer than one write (the notification applet's plugin has
+  36 entries), closed it while `readelf` was still writing, and `pipefail` then reported a built
+  plugin as not built. `tools/tests/sanitizers/instrumented-unit.sh`, which the `build` workflow
+  runs, is its unit test;
 - checks that the part's tests are all registered (`tools/tests/ctest-required.sh`, which the
   `compiled` workflow runs too): CMake leaves a test out when `dbus-run-session` or the colour
   schemes are missing, and ctest would then pass with ECM's appstream test alone;
