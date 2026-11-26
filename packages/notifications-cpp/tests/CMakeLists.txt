@@ -42,7 +42,10 @@ add_test(NAME notifications-triage-version COMMAND notificationsversiontest)
 set_tests_properties(notifications-triage-version PROPERTIES TIMEOUT 30)
 
 # The focus shortcut through GlobalShortcuts itself. The class is compiled into the plugin, so the
-# test compiles its source and the applet's logging category with it.
+# test compiles its source and the applet's logging category with it. It registers its actions with
+# the global shortcut daemon, so it runs on a private session bus (run-shortcut-test.sh): on the
+# bus of a real desktop it would reach the desktop's own shortcut settings. Without dbus-run-session
+# the test is left out (tools/tests/ctest-required.sh makes CI fail then).
 add_executable(notificationsshortcuttest shortcuttest.cpp ../src/globalshortcuts.cpp
     "${CMAKE_BINARY_DIR}/src/notifications_debug.cpp")
 set_target_properties(notificationsshortcuttest PROPERTIES AUTOMOC ON)
@@ -51,5 +54,10 @@ target_compile_definitions(notificationsshortcuttest PRIVATE
     PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION="${PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION}")
 target_link_libraries(notificationsshortcuttest PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::DBus Qt6::Test
     KF6::GlobalAccel KF6::I18n)
-add_test(NAME notifications-triage-shortcut COMMAND notificationsshortcuttest)
-set_tests_properties(notifications-triage-shortcut PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 30)
+find_program(DBUS_RUN_SESSION dbus-run-session)
+if(DBUS_RUN_SESSION)
+    add_test(NAME notifications-triage-shortcut
+        COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/run-shortcut-test.sh" $<TARGET_FILE:notificationsshortcuttest>
+                "${CMAKE_CURRENT_BINARY_DIR}/shortcuttest-home")
+    set_tests_properties(notifications-triage-shortcut PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
+endif()
