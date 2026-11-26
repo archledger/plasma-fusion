@@ -57,8 +57,11 @@ The copy carries the banner keyboard triage of `SPEC-notification-triage.md`:
   the banner's timeout is paused for that time, as it is while the pointer rests on it.
 - **Escape** on that banner dismisses it through its own expiry, so the notification stays in the
   history, and the window that was active before the shortcut is active again. **Enter** does what
-  a click does: the default action if there is one, otherwise nothing, once per press. In the
-  reply field Escape keeps its stock behaviour.
+  a click does: the default action if there is one, otherwise nothing, once per press, and only
+  while the banner's content itself has the keyboard focus. With a button or the reply field
+  focused, the keys are theirs: a button is pressed with Space, as in stock, and in the reply
+  field Escape keeps the text and Return sends it. The keyboard focus reaching the reply field
+  starts the reply, as a click on it does.
 - **The interaction ends by itself** when the banner is replaced, is closed or loses focus, or
   when the screen locks. Nothing is dismissed then and no other banner is taken; only a
   replacement that ends a focused interaction gives the previous window its focus back.
@@ -67,8 +70,9 @@ The decisions are in one file, `src/global/BannerTriage.js`, as pure functions; 
 (`src/global/Globals.qml`, `src/NotificationPopup.qml`) only applies them. The applet reports
 each step through its debug category (`org.kde.plasma.notifications.debug`) as
 `banner triage "<step>"`: `triage-available`, `shortcut-ignored-no-banner`, `focus-requested`,
-`focus-granted`, `dismissed-by-escape`, `activated-by-enter`, `focus-restored`,
-`focus-restore-skipped`, `ended lost`, `ended hidden`, `ended replaced` and `ended not-granted`.
+`focus-granted`, `focus-within inside=... <item>` (each move of the keyboard focus inside the
+banner), `dismissed-by-escape`, `activated-by-enter`, `focus-restored`, `focus-restore-skipped`,
+`ended lost`, `ended hidden`, `ended replaced` and `ended not-granted`.
 The private-session scenarios read these lines.
 
 KWin owns the lock and inhibitor boundary, and the applet adds no check of its own: a locked
@@ -97,7 +101,7 @@ needs no compiler and no packages. Three Qt Tests cover the code that is not QML
 
 | Test | What it runs |
 |---|---|
-| `notifications-triage-rules` | `tests/triagetest.cpp`: the rules of `BannerTriage.js` through a small QML holder, offscreen: choosing the banner (7 cases), the transitions between idle, requested and active (14), Escape (5) and Enter (5) |
+| `notifications-triage-rules` | `tests/triagetest.cpp`: the rules of `BannerTriage.js` through a small QML holder, offscreen: choosing the banner (7 cases), the transitions between idle, requested and active (14), Escape (5) and Enter (7) |
 | `notifications-triage-version` | `tests/versiontest.cpp`: the version rule, versions in and a decision out |
 | `notifications-triage-shortcut` | `tests/shortcuttest.cpp`: `GlobalShortcuts` itself; the focus action exists at the built-from version and at no other |
 
@@ -117,35 +121,45 @@ directory of Qt's own.
 
 ## Private session
 
-`tests/vsession/scen-notifications.sh` runs the applet in an isolated session twice: once with
-Plasma's installed applet (`stock`) and once with the built copy put in front of it through
-`QT_PLUGIN_PATH` (`copy`). Both modes run the same checks, so a difference between them is the
-copy's doing. `tests/vsession/README.md` has the commands.
+`tests/vsession/scen-notifications.sh` runs the applet in an isolated session in nine modes
+(`tests/vsession/README.md`): `stock` and `copy`, the control, and seven for the banner keyboard
+triage. The control runs Plasma's installed applet and the built copy through the same checks of
+stock behaviour, so a difference between them is the copy's doing. The applet plasmashell mapped
+is recorded in every mode: the installed one in `stock`, the staged plugin by SHA-256 otherwise.
 
-Demonstrated on 2026-11-26, each mode with `scenario rc=0`, `session rc=0` and `left: none`, and
-every check a `PASS`:
+Run on 2026-11-26 in the Fedora 44 test container on the build host (KWin and Plasma Workspace
+`6.8.3`), each with `scenario rc=0`, `session rc=0` and `left: none`, and every check a `PASS`:
 
-| Machine | `stock` | `copy` |
+| Mode | Checks | What it showed |
 |---|---|---|
-| Stock VM: KWin and Plasma Workspace `6.8.3-1.fc44` | 6 checks | 7 checks |
-| ThinkPad: KWin `6.8.3-1.fc44.pf1`, Plasma Workspace `6.8.3-1.fc44` | 6 checks | 7 checks |
+| `stock` | 18 | The installed applet has no "Focus notification banner" action; the test chord moves no focus; a banner without actions that times out and a closed notification tell the application, a click runs a default action once. |
+| `copy` | 20 | The copy lists the action, unassigned; the chord moves no focus; the same stock behaviour as `stock`. |
+| `full` | 37 | With no banner the shortcut is ignored. Arrival moves no focus. The shortcut gives a banner keyboard focus; Escape dismisses it, KWrite is active again and the application is told nothing. A replacement while focused gives KWrite its focus back and the replacement is not taken. A click into KWrite ends the interaction; a later Escape in KWrite dismisses nothing and the banner can still be closed by the application. |
+| `lock-idle` | 12 | Locked with no banner focused: the shortcut is not dispatched, and a later Escape dismisses nothing. |
+| `lock-focused` | 11 | Locked while a banner is focused: the interaction ends, and a later Escape dismisses nothing. |
+| `activate` | 40 | Enter gives the application the same two receipts as a click for a banner with a default action; for one without, and for one without but with the application's window open, both leave it told nothing and the banner where it is. A held Return activates once. |
+| `buttons` | 27 | Tab lands inside the banner and invokes nothing; Escape from a control dismisses; Space on the action's button invokes exactly that action and is not taken as Enter on the banner; in the reply field Escape keeps the draft and Return sends it. |
+| `timer` | 15 | A three-second banner is still focused four seconds after the shortcut took it; the shortcut again asks for nothing; after a click ends the interaction the timeout resumes and the banner expires, the application told nothing. |
+| `eligible` | 56 | Critical and resident banners are taken and dismissed by Escape. A job popup and a banner whose reply is open are not taken, and KWrite stays active. Of two banners the newer one's id is named. The shortcut again asks for no second focus, and a replacement still restores KWrite. With the pointer on the banner the keyboard focus arrives at once. A banner closed right after the request restores nothing. |
 
-In both `copy` sessions plasmashell mapped the staged plugin, verified by SHA-256, where the
-`stock` sessions mapped the installed one. The receipts the test application saw were identical
-in both modes on each machine: a banner without actions that times out reports reason 1, a click
-on a banner with a default action runs the action once and reports reason 3, and closing a
-notification reports reason 3. The shell logs held no script error. The device baseline of the
-ThinkPad was the same before the run and after the cleanup. The runs are recorded in the shared
-ledger under `2026-11-26-notification-triage-spec/evidence/part-a/`.
+No shell log held a script error in any mode.
+
+The nine modes have run only there so far. On the stock VM and on the ThinkPad with the fork KWin
+only the control (`stock`, `copy`) has run with this scenario, on 2026-11-26 (6 and 7 checks,
+before the control gained its chord checks); those runs are recorded in the shared ledger under
+`2026-11-26-notification-triage-spec/evidence/part-a/`.
 
 ## What is not covered
 
 - No package installs the copy, and no setup step enables it.
 - The enforcement point of the version rule is not written.
 - The `compiled` and `sanitizers` workflows build and test the part without installing it.
-- The triage itself has run so far in one private session in the Fedora 44 test container on the
-  build host: the test chord focused a banner, Escape dismissed it with KWrite active again, and
-  Enter ran a default action once. Its own session scenarios, on the stock VM and on the ThinkPad,
-  are the next change.
+- The seven triage modes have not run on the stock VM or on the ThinkPad; only the Fedora 44 test
+  container on the build host has run them.
+- A keyboard-shortcut inhibitor held by the focused window is not in the scenarios. The earlier
+  probes showed on both machines that the shortcut is not dispatched then; the widget adds no
+  check of its own.
+- That a dismissed notification is in the history is not read: the history is in the applet's
+  memory. The scenarios check what it implies and keep screenshots.
 - The private sessions used injected input and a synthetic sender. The physical keyboard, the
   live desktop and real applications were not exercised.
