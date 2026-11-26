@@ -24,8 +24,8 @@ Item {
     function transitionRestores(state, event) {
         return Triage.transition(state, event).restoreFocus;
     }
-    function escapeAction(interactionActive, replying) {
-        return Triage.escapeAction(interactionActive, replying);
+    function escapeAction(interactionActive, replying, spent, autoRepeat) {
+        return Triage.escapeAction(interactionActive, replying, spent, autoRepeat);
     }
     function enterAction(interactionActive, hasDefaultAction, spent, autoRepeat) {
         return Triage.enterAction(interactionActive, hasDefaultAction, spent, autoRepeat);

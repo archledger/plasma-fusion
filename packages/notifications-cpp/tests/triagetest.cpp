@@ -111,20 +111,26 @@ private Q_SLOTS:
     {
         QTest::addColumn<bool>("interactionActive");
         QTest::addColumn<bool>("replying");
+        QTest::addColumn<bool>("spent");
+        QTest::addColumn<bool>("autoRepeat");
         QTest::addColumn<QString>("expected");
 
-        QTest::newRow("Escape on the focused banner dismisses it") << true << false << QStringLiteral("dismiss");
-        QTest::newRow("Escape in the reply field is not ours") << true << true << QString();
-        QTest::newRow("Escape outside the interaction is not ours") << false << false << QString();
+        QTest::newRow("Escape on the focused banner dismisses it") << true << false << false << false << QStringLiteral("dismiss");
+        QTest::newRow("Escape in the reply field is not ours") << true << true << false << false << QString();
+        QTest::newRow("Escape outside the interaction is not ours") << false << false << false << false << QString();
+        QTest::newRow("a second Escape does not expire the banner again") << true << false << true << false << QStringLiteral("consume");
+        QTest::newRow("a held Escape does not repeat") << true << false << false << true << QStringLiteral("consume");
     }
 
     void escapeAction()
     {
         QFETCH(bool, interactionActive);
         QFETCH(bool, replying);
+        QFETCH(bool, spent);
+        QFETCH(bool, autoRepeat);
         QFETCH(QString, expected);
         QVariant result;
-        QVERIFY(call(&result, "escapeAction", {interactionActive, replying}));
+        QVERIFY(call(&result, "escapeAction", {interactionActive, replying, spent, autoRepeat}));
         QCOMPARE(result.toString(), expected);
     }
 

@@ -57,10 +57,14 @@ function transition(state, event)
 }
 
 // "dismiss" while the interaction is active, unless the reply field has the keyboard: there Escape
-// keeps its stock behaviour, so a draft is not lost. "" when the key is not ours.
-function escapeAction(interactionActive, replying)
+// keeps its stock behaviour, so a draft is not lost. The banner's expiry runs once per interaction
+// and never on a held key; "consume" is such a key. "" when the key is not ours.
+function escapeAction(interactionActive, replying, spent, autoRepeat)
 {
-    return interactionActive && !replying ? "dismiss" : "";
+    if (!interactionActive || replying) {
+        return "";
+    }
+    return autoRepeat || spent ? "consume" : "dismiss";
 }
 
 // "activate" runs the default action, once per interaction and never on a held key. "consume" is a

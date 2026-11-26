@@ -1,8 +1,12 @@
 /*
     SPDX-FileCopyrightText: 2019 Kai Uwe Broulik <kde@privat.broulik.de>
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 
     SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 */
+
+// Plasma Fusion changes in this file are marked "Plasma Fusion": the banner keyboard triage of
+// SPEC-notification-triage.md.
 
 pragma ComponentBehavior: Bound
 pragma Singleton
@@ -20,6 +24,9 @@ import org.kde.taskmanager as TaskManager
 import plasma.applet.org.kde.plasma.notifications as Notifications
 
 import ".."
+
+// Plasma Fusion: the rules of the banner keyboard triage.
+import "./BannerTriage.js" as BannerTriage
 
 // This singleton object contains stuff shared between all notification plasmoids, namely:
 // - Popup creation and placement
@@ -799,8 +806,68 @@ QtObject {
         }
     }
 
+    // Plasma Fusion: banner keyboard triage (SPEC-notification-triage.md; the rules are in
+    // BannerTriage.js). KWin decides whether the "Focus notification banner" shortcut is
+    // dispatched; this takes the newest banner that may be taken and asks it for keyboard focus.
+    // The window that was active then is recorded here and used only after a replacement that
+    // ends a focused interaction.
+    property var bannerFocusPrevious: null
+
+    function requestBannerFocus() {
+        const banners = [];
+        for (let index = 0; index < popupInstantiator.count; ++index) {
+            const popup = popupInstantiator.objectAt(index);
+            if (!popup) {
+                continue;
+            }
+            banners.push({
+                created: popup.created.valueOf(),
+                visible: popup.visible,
+                eligible: popup.visible && popup.type !== NotificationManager.Notifications.JobType && !popup.modelInterface.replying
+            });
+        }
+
+        const chosen = BannerTriage.newestBannerIndex(banners);
+        shortcuts.reportTriage("triage-available");
+        if (chosen === -1) {
+            shortcuts.reportTriage("shortcut-ignored-no-banner");
+            return;
+        }
+
+        const popup = popupInstantiator.objectAt(chosen);
+        // Pressing the shortcut again while that banner is taken changes nothing: no second
+        // request, and the recorded window stays the one from the first press.
+        if (popup.triageState !== BannerTriage.STATE_IDLE) {
+            return;
+        }
+
+        bannerFocusPrevious = null;
+        for (let row = 0; row < tasksModel.rowCount(); ++row) {
+            if (tasksModel.data(tasksModel.index(row, 0), TaskManager.AbstractTasksModel.IsActive)) {
+                // Takes a row number, not a QModelIndex
+                bannerFocusPrevious = tasksModel.makePersistentModelIndex(row);
+                break;
+            }
+        }
+
+        shortcuts.reportTriage("focus-requested " + popup.triageIdentity);
+        popup.requestBannerFocus();
+    }
+
+    // Plasma Fusion: gives the window recorded at the request its focus back, when it still exists.
+    function restorePreviousTask() {
+        if (bannerFocusPrevious && bannerFocusPrevious.valid) {
+            tasksModel.requestActivate(bannerFocusPrevious);
+            shortcuts.reportTriage("focus-restored");
+        } else {
+            shortcuts.reportTriage("focus-restore-skipped");
+        }
+    }
+
     property Notifications.GlobalShortcuts shortcuts: Notifications.GlobalShortcuts {
         onToggleDoNotDisturbTriggered: globals.toggleDoNotDisturbMode()
         onClearHistoryTriggered: plasmoidItem.clearNotificationHistoryAndShowOsd()
+        // Plasma Fusion
+        onFocusBannerTriggered: globals.requestBannerFocus()
     }
 }

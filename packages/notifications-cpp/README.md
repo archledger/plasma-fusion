@@ -25,12 +25,27 @@ and in the repository's root.
 translation catalogue step. `UPSTREAM-FILES` lists the QML files the linters skip because they
 are upstream code.
 
-Plasma Fusion changes:
+Plasma Fusion changes (each marked "Plasma Fusion" in the file):
 
 - `CMakeLists.txt`: the wrapper build around the stock one. It installs the plugin under
   `PF_NOTIFICATIONS_PLUGIN_DIR`, which must be an absolute path that, symbolic links resolved, is
   neither Qt's own plugin directory nor inside it (`cmake/PluginDirGuard.cmake`).
-- `src/CMakeLists.txt`: a licence header above the stock build file, which has none.
+- `src/CMakeLists.txt`: a licence header above the stock build file, which has none, and the
+  banner triage rules among the QML sources.
+- `src/global/BannerTriage.js`: new. The rules of the banner keyboard triage
+  (`SPEC-notification-triage.md`): which banner the shortcut takes, how one banner's interaction
+  moves between its states, and what Escape and Enter do on it.
+- `src/bannertriageversion.h`: new. The version rule as code.
+- `src/globalshortcuts.h`, `src/globalshortcuts.cpp`: the "Focus notification banner" shortcut
+  action, which exists only while the running Plasma is the one this copy was built from, and
+  `reportTriage`, through which the applet's QML reports the steps of the triage to the applet's
+  debug category.
+- `src/global/Globals.qml`: taking the newest banner that may be taken when the shortcut is
+  pressed, and recording the window to return to.
+- `src/NotificationPopup.qml`: the interaction with one banner: keyboard focus, the focus ring,
+  the timer pause, Escape and Enter.
+- `tests/`: the plugin test, the directory guard's test, the Qt Tests of the rules, the version
+  rule and the shortcut; the private-session scenarios.
 
 ## Version rule
 
