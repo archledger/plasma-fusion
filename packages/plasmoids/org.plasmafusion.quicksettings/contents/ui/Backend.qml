@@ -335,6 +335,7 @@ Item {
         readonly property var vpnModel: s ? s.vpnModel : null
         readonly property int vpnCount: s ? s.vpnCount : 0
         readonly property bool scanning: s ? s.scanning : false
+        readonly property string portalNotice: s ? s.portalNotice : ""
         readonly property string connectionError: s ? s.connectionError : ""
         readonly property bool checked: wifiDevice && wifiEnabled && !airplane
         readonly property bool hotspotSupported: s ? s.hotspotSupported : false

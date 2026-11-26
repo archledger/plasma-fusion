@@ -256,6 +256,20 @@ ColumnLayout {
     }
 
     FText {
+        objectName: "wifi-portal-note"
+        Layout.fillWidth: true
+        pal: page.pal
+        metrics: page.metrics
+        visible: text.length > 0
+        text: page.backend.net.portalNotice || ""
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text
+        activeFocusOnTab: false
+        color: page.pal.secondary
+        wrapMode: Text.WordWrap
+    }
+
+    FText {
         objectName: "wifi-connection-error"
         Layout.fillWidth: true
         pal: page.pal
