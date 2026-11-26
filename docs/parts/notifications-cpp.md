@@ -36,7 +36,9 @@ exactly the one it was built from. `PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION` in t
 `CMakeLists.txt` names that version; it is written into the plugin and into its record. This
 package does not enforce the rule. The build's minimum versions are floors, not exact pins: a
 newer Plasma in the build root must not fail the build, because the gate, not the build, decides
-whether the copy is used.
+whether the copy is used. The floors are those of the stock source's own build, Qt 6.11 and
+Frameworks 6.30 (plasma-workspace v6.8.3, `CMakeLists.txt`): what a system needs to build it at
+all.
 
 ## Build and test
 

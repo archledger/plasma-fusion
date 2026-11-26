@@ -13,8 +13,10 @@ cmake_minimum_required(VERSION 3.22)
 # C as well as C++: Qt generates the applet's Wayland protocol code as C.
 project(plasma-fusion-notifications VERSION 0.1.0 LANGUAGES C CXX)
 
-set(QT_MIN_VERSION "6.8.0")
-set(KF_MIN_VERSION "6.10.0")
+# The floors of the stock source's own build (plasma-workspace v6.8.3, CMakeLists.txt): what a
+# system needs to build it at all, not the versions it was tested with.
+set(QT_MIN_VERSION "6.11.0")
+set(KF_MIN_VERSION "6.30.0")
 # The Plasma version src/ was taken from (README.md). The plugin compares the running Plasma with
 # this version before it offers the banner keyboard triage, and the built-against record names it.
 set(PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION "6.8.3")
