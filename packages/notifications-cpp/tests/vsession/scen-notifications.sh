@@ -73,9 +73,22 @@ pid=$(qdbus org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.GetC
 expect "the notification server is plasmashell's" \
     "$(qdbus org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.GetConnectionUnixProcessID org.freedesktop.Notifications)" "$pid"
 applet_maps=$(awk '$NF ~ /\/org\.kde\.plasma\.notifications\.so$/ {print $NF}' "/proc/$pid/maps" | sort -u)
+# Exactly one applet is mapped, and it is not the staged copy. (An empty map is one blank line,
+# which a count of the lines that are not the copy would take for the installed applet.)
+stock_applet_mapped() {
+    local path count=0
+    [[ -n "$applet_maps" ]] || return 1
+    while IFS= read -r path; do
+        [[ -n "$path" ]] || continue
+        [[ "$path" == */pf-plugins/* ]] && return 1
+        count=$((count + 1))
+    done <<<"$applet_maps"
+    [ "$count" = 1 ]
+}
+
 if [[ "$mode" == stock ]]; then
     expect "the installed applet is mapped, not a copy" \
-        "$(printf '%s\n' "$applet_maps" | grep -c -v -- '/pf-plugins/' || true)" 1
+        "$(stock_applet_mapped && echo yes || echo no)" yes
 else
     expect "the copy is mapped" "$applet_maps" "$HOME/pf-plugins/plasma/applets/org.kde.plasma.notifications.so"
     expect "the mapped copy is the built one" "$(sha256sum "$applet_maps" | cut -c1-64)" "$(cat "$HOME/pf-notif/plugin.sha256")"
