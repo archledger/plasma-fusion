@@ -18,6 +18,7 @@ on:
       - "packages/kcm-cpp/**"
       - "packages/quicklook-cpp/**"
       - "packages/copytext-cpp/**"
+      - "packages/notifications-cpp/**"
       - "packages/color-schemes/*.colors"
       - "tools/sanitizers/**"
       - "tools/tests/ctest-required.sh"
@@ -30,6 +31,7 @@ on:
       - "packages/kcm-cpp/**"
       - "packages/quicklook-cpp/**"
       - "packages/copytext-cpp/**"
+      - "packages/notifications-cpp/**"
       - "packages/color-schemes/*.colors"
       - "tools/sanitizers/**"
       - "tools/tests/ctest-required.sh"
@@ -55,7 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [navigation-cpp, decoration-cpp, kcm-cpp, quicklook-cpp, copytext-cpp]
+        package: [navigation-cpp, decoration-cpp, kcm-cpp, quicklook-cpp, copytext-cpp, notifications-cpp]
         # Random scenes (decoration) and rounds (settings module) of the weekly and manual runs.
         include:
           - package: decoration-cpp

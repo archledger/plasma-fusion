@@ -20,6 +20,7 @@ on:
       - "packages/kcm-cpp/**"
       - "packages/quicklook-cpp/**"
       - "packages/copytext-cpp/**"
+      - "packages/notifications-cpp/**"
       - "packages/color-schemes/*.colors"
       - "tools/tests/ctest-required.sh"
       - "packaging/fedora/plasma-fusion.spec"
@@ -32,6 +33,7 @@ on:
       - "packages/kcm-cpp/**"
       - "packages/quicklook-cpp/**"
       - "packages/copytext-cpp/**"
+      - "packages/notifications-cpp/**"
       - "packages/color-schemes/*.colors"
       - "tools/tests/ctest-required.sh"
       - "packaging/fedora/plasma-fusion.spec"
@@ -58,7 +60,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [navigation-cpp, decoration-cpp, kcm-cpp, quicklook-cpp, copytext-cpp]
+        package: [navigation-cpp, decoration-cpp, kcm-cpp, quicklook-cpp, copytext-cpp, notifications-cpp]
         plasma: [stable, beta]
     steps:
       - name: Install git, builddep, D-Bus and the power-tier test's tools (checkout runs inside the container)
