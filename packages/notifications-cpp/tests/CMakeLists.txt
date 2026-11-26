@@ -31,3 +31,12 @@ target_link_libraries(notificationstriagetest PRIVATE Qt6::Core Qt6::Test Qt6::Q
 add_test(NAME notifications-triage-rules COMMAND notificationstriagetest)
 set_tests_properties(notifications-triage-rules PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software" TIMEOUT 30)
+
+# The version rule on its own: numbers in, a decision out.
+add_executable(notificationsversiontest versiontest.cpp)
+set_target_properties(notificationsversiontest PROPERTIES AUTOMOC ON)
+target_compile_definitions(notificationsversiontest PRIVATE
+    PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION="${PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION}")
+target_link_libraries(notificationsversiontest PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME notifications-triage-version COMMAND notificationsversiontest)
+set_tests_properties(notifications-triage-version PROPERTIES TIMEOUT 30)
