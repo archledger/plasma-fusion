@@ -11,7 +11,7 @@ before implementation. This map does not declare an implementation complete.
 | Module id | Responsibility | Existing dependency | Specification |
 |---|---|---|---|
 | workspace-layout-control | Show and explicitly change the current view's Fusion tiling mode. | Placement script and the full profile's native tiler. | [Accepted](SPEC-workspace-layout-control.md) |
-| captive-portal-sign-in | Show that network sign-in is needed and offer an explicit browser-launch action. | Fusion network service and the platform's portal flow. | Not written. |
+| captive-portal-sign-in | Show cached possible network sign-in as a passive network-wide note. Browser launch remains unimplemented. | Fusion network service and the platform's cached connectivity state. | [Status-note contract](SPEC-captive-portal-status.md) |
 | notification-triage | Separate quick actions for dismissing and activating the newest eligible notification. | Existing notification server and shortcut infrastructure. | Not written. |
 
 Build order: `workspace-layout-control` → `captive-portal-sign-in` → `notification-triage`.

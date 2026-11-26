@@ -188,7 +188,9 @@ Wi-Fi (Popups board tray panel: connected network card with band, security and l
 networks, a `Wi‑Fi hotspot` section with Start/Stop and the reason when the radio can't run one,
 the network name and the masked password with Show/Hide while it is on, and `Change name and
 password…` (an empty password keeps the saved one, which plasma-nm generates on first use; it is
-not read before that), `Hidden network…` and `Network settings`), Bluetooth (paired devices, connect /
+not read before that), `Hidden network…` and `Network settings`). A separate network-wide note reports when the last cached
+connectivity check says a portal is possible; it has no URL or sign-in action and does not identify a
+particular Wi-Fi connection (`SPEC-captive-portal-status.md`). Bluetooth (paired devices, connect /
 disconnect, `Pair a new device…`, `Bluetooth settings`), Sound output (choose the default sink).
 A device row's "⋯" button (or right-click, press and hold, the Menu key) opens plasma-pa's own
 device menu (`ListItemMenu` with the cards' `CardModel`, as the stock Audio Volume widget): its
@@ -249,7 +251,8 @@ packages/plasmoids/org.plasmafusion.quicksettings/
                                     Tile, FusionSlider, FusionSwitch, IconButton, TextButton, ListRow,
                                     PageHeader, FocusRing, FText
   contents/ui/services/             one file per data source, each loaded by a Loader:
-                                    Network (plasma-nm), Audio (plasma-pa), Battery, PowerProfiles,
+                                    Network (plasma-nm), PortalStatus (cached NetworkManager
+                                    connectivity through Workspace D-Bus; no connectivity probe), Audio (plasma-pa), Battery, PowerProfiles,
                                     KeepAwake (PowerDevil manual sleep/ScreenSaver inhibition),
                                     Display (brightness, Night Light, light/dark pairing), Media (MPRIS),
                                     Notifications, Keyboard, KdeConnect, Bluetooth (BluezQt), Session, Exec,
@@ -403,6 +406,32 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   under the list, a click on a profile chooses it directly.
   Keep awake page: the four durations, `Until…` folds out the quarter-hour chooser and `Start`
   passes its time, the state line for timed and untimed.
+* Passive portal status through the real Workspace D-Bus module and a private python-dbus mock
+  (offscreen, no real radio, profile, browser or host system bus):
+
+  ```sh
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/portal_status_test.py
+  ```
+
+  The reader requires cached `ConnectivityCheckAvailable`, `ConnectivityCheckEnabled` and
+  `Connectivity == NM_CONNECTIVITY_PORTAL`. The suite checks initial/reopened state, every connectivity
+  value, malformed/incomplete/invalidated properties, delayed snapshots, hidden pages, real owner loss
+  and rapid replacement, read errors, destruction and zero `CheckConnectivity` or property writes.
+  Gate values must be D-Bus booleans and `Connectivity` a D-Bus `uint32`. Cached reads and change
+  signals are scoped to the resolved unique owner; a delayed reply or signal from a retired owner
+  cannot restore the note.
+  `PortalStatus.qml` never polls and never creates another `PlasmaNM.NetworkStatus`. A partial live
+  update that leaves required fields unknown triggers one fresh cached read. Its note is
+  separate from every Wi-Fi row, has no action and says nothing about a particular activation.
+  The page suite checks its accessible non-interactive presentation and clearance while keyboard,
+  password and touch behavior continue to work. An isolated Plasma 6.8.3 session also verified cached
+  display and live Full clearance; candidate and unmodified baseline both made the existing network
+  stack's three startup `CheckConnectivity` calls, with only cached reads added for this note.
+  A separate fresh Fedora 44 VM with real NetworkManager 1.56.1 verified `PORTAL` and `FULL` against a
+  controlled IP-based HTTP fixture (the expected Fedora `OK` body), including disabled checks and service
+  restart. This is not a physical provider or browser sign-in test.
 * New-network Wi-Fi dispatch is also checked with the real plasma-nm module on private system and
   session buses (`python3-dbusmock`; no real radio or saved profile is used):
 

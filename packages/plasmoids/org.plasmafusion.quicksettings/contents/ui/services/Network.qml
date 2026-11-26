@@ -90,6 +90,14 @@ Item {
     }
     readonly property bool limited: iconName.indexOf("limited") !== -1
 
+    // One network-wide explanation, not a claim about an activation. The reader never requests a
+    // connectivity check and invalidates its snapshot whenever this page closes.
+    readonly property string portalNotice: portalStatus.portalNotice
+    PortalStatus {
+        id: portalStatus
+        listVisible: net.listVisible
+    }
+
     readonly property var activeModel: activeWifiModel
     readonly property var otherModel: otherWifiModel
     property string connectionError: ""

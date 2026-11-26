@@ -17,9 +17,12 @@ import tempfile
 # X11 and crashes on the missing connection (clipboard_sheet_test.py does the same).
 os.environ["QT_QPA_OFFSCREEN_NO_GLX"] = "1"
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
-from PySide6.QtCore import Q_ARG, QMetaObject, QObject, QPoint, QPointF, Qt, QUrl, Slot  # noqa: E402
+from PySide6.QtCore import (
+    Q_ARG, QMetaObject, QObject, QPoint, QPointF, Qt, QUrl, Slot,
+)  # noqa: E402
 from PySide6.QtGui import QFont, QGuiApplication  # noqa: E402
 from PySide6.QtQuick import QQuickItem, QQuickView  # noqa: E402
+from PySide6.QtQml import QQmlExpression, qmlContext  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
 
@@ -157,6 +160,7 @@ Item {
     height: 560
     property bool touch: false
     property bool hotspotOn: false
+    property string portalNotice: ""
     property bool acceptConnection: true
     property var connectionRequest: []
     function changeNetwork(role: string, value) { backend.net.otherModel.setProperty(0, role, value); }
@@ -198,6 +202,7 @@ Item {
             function refresh() {}
         }
         property QtObject net: QtObject {
+            readonly property string portalNotice: root.portalNotice
             readonly property string connectionError: root.acceptConnection ? "" : "Network changed"
             readonly property bool wifiEnabled: true
             readonly property bool wifiHwEnabled: true
@@ -256,6 +261,7 @@ Item {
         objectName: "wifiPage"
         x: 800
         width: root.width
+        height: root.height
         backend: backend
         pal: pal
         metrics: metrics
@@ -292,6 +298,17 @@ def click(view, item):
 # The touch minimum (ADAPTIVE 5.3): every visible enabled control reaches 44 x 44 in touch mode.
 CONTROLS = ("QQuickAbstractButton", "QQuickItemDelegate", "QQuickSwitch", "QQuickSlider",
             "QQuickComboBox", "QQuickTextField", "QQuickTextArea", "QQuickTextInput")
+
+
+def array_value(value):
+    return value.toVariant() if hasattr(value, "toVariant") else value
+
+
+def evaluated(item, expression):
+    """Evaluate an attached QML property in the item's own context."""
+    context = qmlContext(item)
+    value, undefined = QQmlExpression(context, item, expression).evaluate()
+    return None if undefined else value
 
 
 def classes(item):
@@ -416,6 +433,82 @@ root.setProperty("touch", False)
 view, root = load(SUBPAGES)
 # The text scale pinned above is what makes the sweeps strict: 44 x 0.85 snaps to 37.
 check(root.property("px44") < 40, "the suite runs at the minimum text scale (px(44) = %s)" % root.property("px44"))
+wifi = find(root, "wifiPage")
+check(find(wifi, "wifi-portal-note") is None,
+      "Wi-Fi status has no note without explicit cached portal evidence")
+root.setProperty("portalNotice",
+    "The last connectivity check reported a possible network sign-in. "
+    "If your browser offers a network sign-in page, use that prompt or choose another network.")
+QTest.qWait(100)
+note = find(wifi, "wifi-portal-note")
+check(note is not None and "last connectivity check" in note.property("text")
+      and "browser" in note.property("text"), "the Wi-Fi page explains the cached network-wide status")
+rows_outside = [i for i in items(wifi) if i.objectName() == "wifi-row"]
+check(note not in rows_outside and note.parent() == wifi
+      and "QQuickAbstractButton" not in classes(note) and "QQuickMouseArea" not in classes(note),
+      "the note is a separate plain-text item, not a Wi-Fi row or button")
+check(evaluated(note, "Accessible.name") == note.property("text")
+      and evaluated(note, "Accessible.role === Accessible.StaticText") is True,
+      "the note has its text as its accessible name and static-text role")
+check(note.property("activeFocusOnTab") is False and note.property("width") <= wifi.width()
+      and note.property("height") > 0
+      and note.mapToItem(wifi, 0, note.property("height")).y() <= wifi.height(),
+      "the status is non-focusable, wrapped and inside the page")
+check(not any(item.property("text") == "Sign in" for item in items(wifi)),
+      "the passive note adds no sign-in control")
+check(all(item.parent() != note for item in rows_outside),
+      "the passive note does not contain a network row")
+check(array_value(root.property("connectionRequest")) == [], "showing the note dispatches no connection request")
+click(view, note)
+check(note.property("activeFocus") is False and array_value(root.property("connectionRequest")) == [],
+      "clicking the status note does nothing")
+rows_before = [i for i in items(wifi) if i.objectName() == "wifi-row"]
+QMetaObject.invokeMethod(root, "changeNetwork", Q_ARG(str, "SecurityType"), Q_ARG("QVariant", -1))
+network_list = evaluated(rows_before[0], "ListView.view")
+network_list.setProperty("currentIndex", 0)
+QMetaObject.invokeMethod(network_list, "forceActiveFocus")
+QTest.qWait(50)
+QTest.keyClick(view, Qt.Key_Space)
+QTest.qWait(50)
+request = root.property("connectionRequest")
+request = request.toVariant() if hasattr(request, "toVariant") else request
+check(request == ["/d/1", "/s/2", "Neighbour", -1, 0],
+      "keyboard activation on an open network row is preserved with the status shown")
+QMetaObject.invokeMethod(root, "changeNetwork", Q_ARG(str, "SecurityType"), Q_ARG("QVariant", 1))
+root.setProperty("connectionRequest", [])
+root.setProperty("acceptConnection", False)
+root.setProperty("portalNotice", "")
+QTest.qWait(100)
+check(find(wifi, "wifi-portal-note") is None,
+      "the note disappears when cached portal evidence is no longer available")
+check(find(wifi, "wifi-connection-error") is not None,
+      "an ordinary connection error remains visible after the portal status clears")
+error_row = rows_before[0]
+QMetaObject.invokeMethod(error_row, "connect")
+field = next(i for i in items(error_row) if "QQuickTextField" in classes(i))
+field.setProperty("text", "secret123")
+connect_button = next(i for i in items(error_row) if i.property("text") == "Connect")
+connect_button.clicked.emit()
+QTest.qWait(50)
+check(error_row.property("expanded") and field.property("text") == "secret123"
+      and array_value(root.property("connectionRequest")) == ["/d/1", "/s/2", "Neighbour", 1, 9],
+      "existing password-entry submission stays independent of the note")
+root.setProperty("acceptConnection", True)
+root.setProperty("portalNotice",
+    "The last connectivity check reported a possible network sign-in. "
+    "If your browser offers a network sign-in page, use that prompt or choose another network.")
+root.setProperty("touch", True)
+QTest.qWait(150)
+touch_assert(root, find(root, "wifiPage"), "the Wi-Fi page with the portal note")
+note = find(wifi, "wifi-portal-note")
+settings = next(i for i in items(wifi) if i.property("text") == "Network settings")
+check(note is not None and note.isVisible() and note.property("height") > 0
+      and note.mapToItem(wifi, 0, note.property("height")).y() <= wifi.height(),
+      "the portal note fits inside the touch Wi-Fi page")
+check(settings.isVisible() and settings.mapToItem(wifi, 0, settings.property("height")).y() <= wifi.height(),
+      "the Network settings footer remains visible with the portal note shown")
+root.setProperty("touch", False)
+QTest.qWait(100)
 root.setProperty("touch", True)
 QTest.qWait(150)
 touch_assert(root, find(root, "audioPage"), "the Audio page")
