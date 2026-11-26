@@ -505,19 +505,21 @@ mode_activate() {
     sleep 1
     need "the test document is saved, so the session can end quietly" active pf-notif-app.txt after-save || return 1
 
-    # A resident banner stays after its default action: each separate press acts once, and Escape
-    # still dismisses.
+    # A resident banner stays after its default action, and keeps the keyboard focus. A held
+    # Return acts once while it stays (the case above cannot show that: its banner closes with the
+    # first activation), each separate press acts again, and Escape still dismisses.
     need "a resident banner with a default action is sent" send staying ',"actions":["default","Open"],"hints":{"resident":true}' || return 1
     staying=$SENT_ID
     sleep 1.5
     need "the shortcut takes it" take_banner || return 1
     granted=$(log_lines)
-    pfinput 'key return'
-    need "Enter runs the default action" triage "activated-by-enter $staying\"" "$granted" || return 1
+    pfinput 'keydown return' 'sleep 1.2' 'keyup return'
+    need "a held Return runs the default action" triage "activated-by-enter $staying\"" "$granted" || return 1
     need "  and the application is told" wait_text "\"event\": \"action\", \"id\": $staying, \"key\": \"default\"" "$OUT/sender.log" || return 1
     sleep 1
     expect "  the resident banner stays" "$(shown_banners)" 1
     need "  and keeps the keyboard focus" active plasmashell still-focused || return 1
+    expect "  and is told once, the banner staying" "$(grep -c "\"event\": \"action\", \"id\": $staying," "$OUT/sender.log" || true)" 1
     from=$(log_lines)
     pfinput 'key return'
     need "a second, separate Enter acts again" triage "activated-by-enter $staying\"" "$from" || return 1
