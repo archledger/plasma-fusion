@@ -22,6 +22,15 @@ execute_process(COMMAND ln -s "${scratch}/qt" "${scratch}/lib")
 execute_process(COMMAND ln -s "${scratch}/qt/plugins/plasma" "${scratch}/dir/plasma")
 execute_process(COMMAND ln -s "${scratch}/qt/plugins/not-yet" "${scratch}/dangling")
 execute_process(COMMAND ln -s "${scratch}/elsewhere" "${scratch}/alias")
+# A second stand-in for Qt's plugin directory, whose plasma/applets is itself a link to a
+# directory outside it (as a distribution may arrange), and a file-level link.
+file(MAKE_DIRECTORY "${scratch}/qt2/plugins/plasma" "${scratch}/outside" "${scratch}/same-applets/plasma"
+  "${scratch}/other-applets/plasma/applets" "${scratch}/filelink/plasma/applets")
+execute_process(COMMAND ln -s "${scratch}/outside" "${scratch}/qt2/plugins/plasma/applets")
+execute_process(COMMAND ln -s "${scratch}/outside" "${scratch}/same-applets/plasma/applets")
+execute_process(COMMAND touch "${scratch}/qt/plugins/plasma/applets/org.kde.plasma.notifications.so")
+execute_process(COMMAND ln -s "${scratch}/qt/plugins/plasma/applets/org.kde.plasma.notifications.so"
+  "${scratch}/filelink/plasma/applets/org.kde.plasma.notifications.so")
 
 set(qt "${scratch}/qt/plugins")
 set(stock "is Qt's plugin directory or inside it")
@@ -39,12 +48,15 @@ set(cases
   "${scratch}/lib/plugins|${qt}|stops|${stock}|Qt's directory through a link above it"
   "${scratch}/dir|${qt}|stops|${stock}|a directory whose plasma is a link into Qt's"
   "${scratch}/dangling|${qt}|stops|${stock}|a dangling link into Qt's directory"
+  "${scratch}/filelink|${qt}|stops|is a symbolic link|a directory whose plugin file is a link to another file"
+  "${scratch}/same-applets|${scratch}/qt2/plugins|stops|is the stock plugin's own|Qt's applets directory is a link outside it, and the copy's applets is the same directory"
   "${scratch}/libexec/plasma-fusion/qt6/plugins|${qt}|allows||the default directory, not existing yet"
   "${scratch}/elsewhere|${qt}|allows||another directory"
   "${scratch}/alias|${qt}|allows||a link to another directory"
   "${scratch}/alias/sub|${qt}|allows||a directory that does not exist yet, under a link to another directory"
   "${qt}/../qt6/qt6/plugins|${qt}|allows||a look-alike outside Qt's directory"
-  "${qt}/../other|${qt}|allows||a sibling of Qt's directory")
+  "${qt}/../other|${qt}|allows||a sibling of Qt's directory"
+  "${scratch}/other-applets|${scratch}/qt2/plugins|allows||next to where Qt's applets link leads, but another directory")
 
 set(passed 0)
 set(failed 0)
@@ -74,7 +86,7 @@ foreach(case IN LISTS cases)
     message(STATUS "PASS ${verdict}: ${what}")
   else()
     math(EXPR failed "${failed} + 1")
-    message(STATUS "FAIL ${verdict}: ${what} (exit ${result}) ${output}")
+    message(STATUS "FAIL ${verdict}: ${what} (exit ${result}) ${flat}")
   endif()
 endforeach()
 file(REMOVE_RECURSE "${scratch}")

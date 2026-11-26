@@ -51,9 +51,11 @@ function(pf_resolved_path path var)
 endfunction()
 
 # Stops the configuration unless PLUGIN_DIR is safe to install the copy under, with Qt's plugin
-# directory in QT_PLUGIN_DIR. It must be an absolute path, and once symbolic links are resolved
-# it must be neither that directory nor inside it. The same is checked for PLUGIN_DIR/plasma/applets,
-# where the plugin itself lands: that may reach Qt's directory through a link of its own.
+# directory in QT_PLUGIN_DIR. It must be an absolute path. Once symbolic links are resolved, it
+# must be neither that directory nor inside it; the directory the plugin itself lands in,
+# PLUGIN_DIR/plasma/applets, must not be inside it either and must not be the directory of the
+# stock plugin, wherever a link to it leads. And the plugin's own path there must not be a link:
+# installing through it would replace what it points to.
 function(pf_check_plugin_dir plugin_dir qt_plugin_dir)
   if(NOT IS_ABSOLUTE "${plugin_dir}")
     # install() reads a relative destination against the installation prefix, where a path such as
@@ -72,9 +74,16 @@ function(pf_check_plugin_dir plugin_dir qt_plugin_dir)
   # A path is not a prefix of itself, so the two directories being the same is its own test.
   cmake_path(IS_PREFIX _qt "${_resolved}" _inside)
   cmake_path(IS_PREFIX _qt "${_resolved_applets}" _inside_applets)
-  if(_resolved STREQUAL _qt OR _inside OR _inside_applets)
+  if(_resolved STREQUAL _qt OR _inside OR _inside_applets OR _resolved_applets STREQUAL _qt_applets)
     message(FATAL_ERROR
-      "PF_NOTIFICATIONS_PLUGIN_DIR ('${plugin_dir}') is Qt's plugin directory or inside it "
-      "('${qt_plugin_dir}'), symbolic links resolved: the copy would replace the stock plugin's file")
+      "PF_NOTIFICATIONS_PLUGIN_DIR ('${plugin_dir}') is Qt's plugin directory or inside it, or is "
+      "the stock plugin's own directory ('${qt_plugin_dir}'), symbolic links resolved: the copy "
+      "would replace the stock plugin's file")
+  endif()
+
+  if(IS_SYMLINK "${_resolved_applets}/org.kde.plasma.notifications.so")
+    message(FATAL_ERROR
+      "PF_NOTIFICATIONS_PLUGIN_DIR ('${plugin_dir}'): the plugin's own path there is a symbolic "
+      "link, and installing through it would replace what it points to")
   endif()
 endfunction()
