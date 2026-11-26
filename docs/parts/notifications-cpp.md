@@ -146,7 +146,7 @@ a `PASS`. The numbers are the checks each mode passed, the same on all three:
 | `full` | 52 | With no banner the shortcut is ignored. Arrival moves no focus. The shortcut gives a banner keyboard focus; Escape dismisses it, KWrite is active again and the application is told nothing. A replacement while focused ends the interaction, asks for the previous window and is not taken: also when it keeps the summary and the text, and also when the previous window is one of two windows of one application. A click into KWrite ends the interaction; a later Escape in KWrite dismisses nothing and the banner can still be closed by the application. |
 | `lock-idle` | 12 | Locked with no banner focused: the shortcut is not dispatched, and a later Escape dismisses nothing. |
 | `lock-focused` | 11 | Locked while a banner is focused: the interaction ends, and a later Escape dismisses nothing. |
-| `activate` | 52 | Enter gives the application the same two receipts as a click for a banner with a default action; for one without, and for one without but with the application's window open, both leave it told nothing and the banner where it is. A held Return activates once. A resident banner stays after Enter; a second, separate Enter acts again, and Escape still dismisses it. |
+| `activate` | 53 | Enter gives the application the same two receipts as a click for a banner with a default action; for one without, and for one without but with the application's window open, both leave it told nothing and the banner where it is. A held Return activates once. A resident banner stays after Enter and keeps the keyboard focus: a held Return acts once while it stays, a second, separate Enter acts again, and Escape still dismisses it. |
 | `buttons` | 34 | Tab lands inside the banner and invokes nothing; Escape from a control dismisses; Space on the action's button invokes exactly that action and is not taken as Enter on the banner; with the reply open, Escape from the banner's close button dismisses; in the reply field Escape keeps the draft and Return sends it. |
 | `timer` | 15 | A three-second banner is still focused four seconds after the shortcut took it; the shortcut again asks for nothing; after a click ends the interaction the timeout resumes and the banner expires, the application told nothing. |
 | `eligible` | 55 | Critical and resident banners are taken and dismissed by Escape. A job popup and a banner whose reply is open are not taken, and KWrite stays active. Of two banners the newer one is named by its id. The shortcut again asks for no second focus, and a replacement still gives KWrite its focus back. With the pointer on the banner the keyboard focus arrives at once. A banner closed right after the request restores nothing. |
@@ -162,7 +162,10 @@ No shell log held a script error in any mode.
 The runs on the VM and on the ThinkPad are recorded in the shared ledger under
 `2026-11-26-notification-triage-spec/evidence/part-b-review-fixes/`, each with the kit's
 checksums; the earlier runs, before the review fixes, are under `evidence/part-b/`. The
-container's runs are kept as the table of one sweep of all nine modes.
+container's runs are kept as the table of one sweep of all nine modes. `activate` ran again on
+all three after its held-Return case was added (`held-return/`), on a rebuild of the same
+sources: the two builds of the plugin differ in their build id and in four bytes of `.rodata`,
+not in an instruction.
 
 ## What is not covered
 
