@@ -158,9 +158,12 @@ This is the first Fusion part that stands in for a stock Plasma component. It fo
 pattern of the existing compiled parts, and it adds two requirements of its own:
 
 - **Version-bound.** The copy is in force only while the installed `plasma-workspace` version is
-  exactly the one it was built from. It is evaluated every time plasmashell starts, not only at
-  login, so an update followed by a plasmashell restart cannot load a mismatched copy. At any
-  other version the stock plugin loads and the shortcut does not exist.
+  exactly the one it was built from. This is evaluated every time plasmashell starts. The
+  existing login check alone does not satisfy it: it runs once per login, so a Plasma update
+  followed by a plasmashell restart would otherwise load a mismatched copy. The enforcement
+  point must either run before plasmashell picks its plugins, or be a guard inside the copy that
+  keeps the feature off when the running version differs from the one it was built against. At
+  any other version the stock plugin loads and the shortcut does not exist.
 - **Packaging.** Adding a compiled part touches every channel's build. The capability map keeps
   packaging changes behind coordination first; the owner approved this one on 2026-11-26.
 
@@ -272,7 +275,7 @@ follows.
 9. **Channels.** Fedora 44 first; the other channels follow afterwards.
 
 Left for the implementation plan: per-channel build requirements, the source of the stock tree,
-the exact gate mechanism and the new test suites. The plan must prove that a copy which fails to
+the exact gate mechanism with its enforcement point, and the new test suites. The plan must prove that a copy which fails to
 load leaves the user with a working stock notification widget at the next plasmashell start.
 Proposing the change to KDE upstream is worth doing in parallel; it is the owner's own action and
 not the delivery path.
