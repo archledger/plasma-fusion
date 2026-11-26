@@ -137,27 +137,31 @@ private Q_SLOTS:
     void enterAction_data()
     {
         QTest::addColumn<bool>("interactionActive");
+        QTest::addColumn<bool>("focusOnContent");
         QTest::addColumn<bool>("hasDefaultAction");
         QTest::addColumn<bool>("spent");
         QTest::addColumn<bool>("autoRepeat");
         QTest::addColumn<QString>("expected");
 
-        QTest::newRow("Enter with a default action activates it") << true << true << false << false << QStringLiteral("activate");
-        QTest::newRow("Enter without a default action does nothing") << true << false << false << false << QStringLiteral("consume");
-        QTest::newRow("a second Enter does not activate again") << true << true << true << false << QStringLiteral("consume");
-        QTest::newRow("a held Enter does not repeat") << true << true << false << true << QStringLiteral("consume");
-        QTest::newRow("Enter outside the interaction is not ours") << false << true << false << false << QString();
+        QTest::newRow("Enter with a default action activates it") << true << true << true << false << false << QStringLiteral("activate");
+        QTest::newRow("Enter without a default action does nothing") << true << true << false << false << false << QStringLiteral("consume");
+        QTest::newRow("a second Enter does not activate again") << true << true << true << true << false << QStringLiteral("consume");
+        QTest::newRow("a held Enter does not repeat") << true << true << true << false << true << QStringLiteral("consume");
+        QTest::newRow("Enter outside the interaction is not ours") << false << true << true << false << false << QString();
+        QTest::newRow("Enter on a control inside the banner is that control's own") << true << false << true << false << false << QString();
+        QTest::newRow("  also when there is no default action") << true << false << false << false << false << QString();
     }
 
     void enterAction()
     {
         QFETCH(bool, interactionActive);
+        QFETCH(bool, focusOnContent);
         QFETCH(bool, hasDefaultAction);
         QFETCH(bool, spent);
         QFETCH(bool, autoRepeat);
         QFETCH(QString, expected);
         QVariant result;
-        QVERIFY(call(&result, "enterAction", {interactionActive, hasDefaultAction, spent, autoRepeat}));
+        QVERIFY(call(&result, "enterAction", {interactionActive, focusOnContent, hasDefaultAction, spent, autoRepeat}));
         QCOMPARE(result.toString(), expected);
     }
 
@@ -194,6 +198,15 @@ private:
                                              Q_ARG(QVariant, args.at(1)),
                                              Q_ARG(QVariant, args.at(2)),
                                              Q_ARG(QVariant, args.at(3)));
+        case 5:
+            return QMetaObject::invokeMethod(holder,
+                                             method,
+                                             Q_RETURN_ARG(QVariant, *result),
+                                             Q_ARG(QVariant, args.at(0)),
+                                             Q_ARG(QVariant, args.at(1)),
+                                             Q_ARG(QVariant, args.at(2)),
+                                             Q_ARG(QVariant, args.at(3)),
+                                             Q_ARG(QVariant, args.at(4)));
         default:
             return false;
         }

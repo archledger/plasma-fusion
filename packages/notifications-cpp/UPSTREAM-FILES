@@ -1,8 +1,8 @@
 # Files kept as in plasma-workspace v6.8.3 applets/notifications; the linters skip them
 # (tools/checks/qmlscan.py), as they are upstream code. Plasma Fusion changes in them are marked
-# "Plasma Fusion" in the file. src/global/Globals.qml and src/NotificationPopup.qml carry marked
-# Plasma Fusion changes (the banner keyboard triage) and stay listed: the rest of each is upstream
-# code.
+# "Plasma Fusion" in the file. src/global/Globals.qml, src/NotificationPopup.qml and
+# src/components/NotificationReplyField.qml carry marked Plasma Fusion changes (the banner keyboard
+# triage) and stay listed: the rest of each is upstream code.
 src/CompactRepresentation.qml
 src/DraggableDelegate.qml
 src/FullRepresentation.qml

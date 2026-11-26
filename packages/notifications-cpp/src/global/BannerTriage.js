@@ -67,11 +67,13 @@ function escapeAction(interactionActive, replying, spent, autoRepeat)
     return autoRepeat || spent ? "consume" : "dismiss";
 }
 
-// "activate" runs the default action, once per interaction and never on a held key. "consume" is a
-// key of ours that does nothing. "" when the key is not ours.
-function enterAction(interactionActive, hasDefaultAction, spent, autoRepeat)
+// "activate" runs the default action: once per interaction, never on a held key, and only while
+// the banner's content itself has the keyboard focus. A control inside the banner that has it (a
+// button, the reply field) acts on the key itself, and the event is not ours. "consume" is a key
+// of ours that does nothing. "" when the key is not ours.
+function enterAction(interactionActive, focusOnContent, hasDefaultAction, spent, autoRepeat)
 {
-    if (!interactionActive) {
+    if (!interactionActive || !focusOnContent) {
         return "";
     }
     if (autoRepeat || spent || !hasDefaultAction) {

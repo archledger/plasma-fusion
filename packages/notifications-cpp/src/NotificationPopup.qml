@@ -94,17 +94,41 @@ NotificationsApplet.NotificationWindow {
         }
     }
 
+    // Plasma Fusion: Tab is left to the banner's controls, as in stock. Each move of the keyboard
+    // focus inside the banner is reported, so that the session scenarios can press Tab until the
+    // control they want has it.
+    onActiveFocusItemChanged: reportFocusWithin()
+
+    // Plasma Fusion: reports where the keyboard focus is: the type, object name and text of the
+    // item that has it, and whether that is inside the banner's content.
+    function reportFocusWithin() {
+        const item = notificationPopup.activeFocusItem;
+        let inside = false;
+        for (let node = item; node; node = node.parent) {
+            if (node === focusListener) {
+                inside = true;
+                break;
+            }
+        }
+        const what = item ? [String(item).split("(")[0], item.objectName, item.text].join("|") : "none";
+        NotificationsApplet.Globals.shortcuts.reportTriage("focus-within inside=" + inside + " " + what);
+    }
+
     // Plasma Fusion: ends the interaction because KWin or the banner moved on. Nothing is dismissed.
     function triageEnd(reason) {
         triageState = BannerTriage.transition(triageState, reason).state;
         NotificationsApplet.Globals.shortcuts.reportTriage("ended " + reason);
     }
 
-    // Plasma Fusion: Return and Enter do what a click on the banner does.
+    // Plasma Fusion: Return and Enter do what a click on the banner does, but only from the
+    // banner's content itself. Qt Quick offers a key press to this item before the control inside
+    // the banner that has the keyboard focus, and a Keys handler accepts it by default, so a
+    // Return meant for a button or for the reply field is refused here in so many words.
     function activateByEnter(event) {
-        const action = BannerTriage.enterAction(triageActive, modelInterface.hasDefaultAction, triageSpent, event.isAutoRepeat);
+        const action = BannerTriage.enterAction(triageActive, notificationPopup.activeFocusItem === focusListener, modelInterface.hasDefaultAction, triageSpent, event.isAutoRepeat);
         if (action === "") {
-            return; // not ours
+            event.accepted = false; // not ours
+            return;
         }
         event.accepted = true;
         if (action === "activate") {
@@ -181,7 +205,8 @@ NotificationsApplet.NotificationWindow {
         Keys.onEscapePressed: event => {
             const action = BannerTriage.escapeAction(notificationPopup.triageActive, notificationItem.modelInterface.replying, notificationPopup.triageSpent, event.isAutoRepeat);
             if (action === "") {
-                return; // not ours: in the reply field Escape keeps its own behaviour
+                event.accepted = false; // not ours: in the reply field Escape keeps its own behaviour
+                return;
             }
             event.accepted = true;
             if (action === "dismiss") {

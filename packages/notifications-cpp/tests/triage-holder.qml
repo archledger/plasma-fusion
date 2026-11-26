@@ -27,7 +27,7 @@ Item {
     function escapeAction(interactionActive, replying, spent, autoRepeat) {
         return Triage.escapeAction(interactionActive, replying, spent, autoRepeat);
     }
-    function enterAction(interactionActive, hasDefaultAction, spent, autoRepeat) {
-        return Triage.enterAction(interactionActive, hasDefaultAction, spent, autoRepeat);
+    function enterAction(interactionActive, focusOnContent, hasDefaultAction, spent, autoRepeat) {
+        return Triage.enterAction(interactionActive, focusOnContent, hasDefaultAction, spent, autoRepeat);
     }
 }

@@ -43,7 +43,10 @@ Plasma Fusion changes (each marked "Plasma Fusion" in the file):
 - `src/global/Globals.qml`: taking the newest banner that may be taken when the shortcut is
   pressed, and recording the window to return to.
 - `src/NotificationPopup.qml`: the interaction with one banner: keyboard focus, the focus ring,
-  the timer pause, Escape and Enter.
+  the report of where the keyboard focus is inside it, the timer pause, Escape and Enter (Enter
+  only from the banner's content itself).
+- `src/components/NotificationReplyField.qml`: in a banner, the keyboard focus reaching the
+  reply field starts the reply, as a click on it does.
 - `tests/`: the plugin test, the directory guard's test, the Qt Tests of the rules, the version
   rule and the shortcut; the private-session scenarios.
 
