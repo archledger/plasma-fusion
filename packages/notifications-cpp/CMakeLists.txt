@@ -44,22 +44,15 @@ find_package(Wayland REQUIRED COMPONENTS Client)
 
 # plasma_add_applet installs into ${KDE_INSTALL_PLUGINDIR}/plasma/applets. The copy must never land
 # on the stock plugin's path there: it goes under a directory Plasma Fusion owns, and the build
-# stops if that directory is Qt's own or inside it. KDEInstallDirs fills its variables at the end
-# of the configuration, so Qt's plugin directory is taken from Qt and the copy's directory is a
-# real path now, not a placeholder expanded later.
+# stops unless that directory is an absolute path that, symbolic links resolved, is neither Qt's
+# own plugin directory nor inside it (cmake/PluginDirGuard.cmake). KDEInstallDirs fills its
+# variables at the end of the configuration, so Qt's plugin directory is taken from Qt and the
+# copy's directory is a real path now, not a placeholder expanded later.
 set(PF_QT_PLUGIN_DIR "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}")
 set(PF_NOTIFICATIONS_PLUGIN_DIR "${CMAKE_INSTALL_FULL_LIBEXECDIR}/plasma-fusion/qt6/plugins"
-    CACHE PATH "Directory the notification applet copy is installed under")
-cmake_path(ABSOLUTE_PATH PF_QT_PLUGIN_DIR NORMALIZE OUTPUT_VARIABLE _pf_qt_plugin_dir)
-cmake_path(ABSOLUTE_PATH PF_NOTIFICATIONS_PLUGIN_DIR NORMALIZE OUTPUT_VARIABLE _pf_notifications_plugin_dir)
-cmake_path(IS_PREFIX _pf_qt_plugin_dir "${_pf_notifications_plugin_dir}" NORMALIZE
-           _pf_notifications_inside_qt_plugins)
-# A path is not a prefix of itself, so the two directories being the same needs its own test.
-if(_pf_notifications_plugin_dir STREQUAL _pf_qt_plugin_dir OR _pf_notifications_inside_qt_plugins)
-    message(FATAL_ERROR
-        "PF_NOTIFICATIONS_PLUGIN_DIR ('${_pf_notifications_plugin_dir}') is Qt's plugin directory "
-        "or inside it ('${_pf_qt_plugin_dir}'): the copy would replace the stock plugin's file")
-endif()
+    CACHE PATH "Absolute directory the notification applet copy is installed under")
+include(cmake/PluginDirGuard.cmake)
+pf_check_plugin_dir("${PF_NOTIFICATIONS_PLUGIN_DIR}" "${PF_QT_PLUGIN_DIR}")
 set(KDE_INSTALL_PLUGINDIR "${PF_NOTIFICATIONS_PLUGIN_DIR}")
 
 add_subdirectory(src)

@@ -20,8 +20,11 @@ exists, nothing puts the copy in front of the stock plugin.
   from its file name when the metadata does not state one, as the stock metadata does not, so only
   this name lets the copy stand in for the stock applet.
 - Installed under `libexec/plasma-fusion/qt6/plugins/plasma/applets/`, a directory Plasma Fusion
-  owns. The build stops if `PF_NOTIFICATIONS_PLUGIN_DIR` is inside Qt's own plugin directory:
-  landing on the stock plugin's path would replace the stock file.
+  owns. The build stops unless `PF_NOTIFICATIONS_PLUGIN_DIR` is an absolute path that, symbolic
+  links resolved, is neither Qt's own plugin directory nor inside it
+  (`cmake/PluginDirGuard.cmake`): landing on the stock plugin's path would replace the stock
+  file. A relative value would be installed against the installation prefix, where it may be Qt's
+  directory, and a link reaches the same directory under another name.
 - A `built-against` record with `plasma-workspace=6.8.3` and the Qt version of the build, beside
   the records of the other compiled parts.
 - In this first change the copy is the stock applet as it is. It changes no behaviour.
@@ -51,8 +54,10 @@ ctest --test-dir build/notifications --output-on-failure
 
 `notifications-plugin` loads the built plugin and checks that it is the stock applet under its own
 name: it loads, it provides `org.kde.plasma.notifications`, and its file name is the stock
-plugin's. The tests are configured with the package (`BUILD_TESTING=ON`); the packages are built
-with them off.
+plugin's. `notifications-plugin-dir-guard` is the directory guard's unit test: on a tree of
+directories and symbolic links, 18 cases, each refused or allowed with the expected words; it
+needs no compiler and no packages. The tests are configured with the package (`BUILD_TESTING=ON`);
+the packages are built with them off.
 
 To see where the plugin would be installed:
 

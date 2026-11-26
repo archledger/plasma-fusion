@@ -27,6 +27,9 @@ are upstream code.
 
 Plasma Fusion changes:
 
+- `CMakeLists.txt`: the wrapper build around the stock one. It installs the plugin under
+  `PF_NOTIFICATIONS_PLUGIN_DIR`, which must be an absolute path that, symbolic links resolved, is
+  neither Qt's own plugin directory nor inside it (`cmake/PluginDirGuard.cmake`).
 - `src/CMakeLists.txt`: a licence header above the stock build file, which has none.
 
 ## Version rule
