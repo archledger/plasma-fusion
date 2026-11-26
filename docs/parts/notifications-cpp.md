@@ -36,12 +36,16 @@ exists, nothing puts the copy in front of the stock plugin.
 
 The copy may stand in for the stock plugin only while the installed `plasma-workspace` version is
 exactly the one it was built from. `PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION` in the package's
-`CMakeLists.txt` names that version; it is written into the plugin and into its record. This
-package does not enforce the rule. The build's minimum versions are floors, not exact pins: a
-newer Plasma in the build root must not fail the build, because the gate, not the build, decides
-whether the copy is used. The floors are those of the stock source's own build, Qt 6.11 and
-Frameworks 6.30 (plasma-workspace v6.8.3, `CMakeLists.txt`): what a system needs to build it at
-all.
+`CMakeLists.txt` names that version; it is written into the plugin and into its record. Whether
+the copy is used is decided before plasmashell loads its plugins, at every start; this package
+does not provide that gate. It carries one rule of its own: the focus shortcut exists only while
+the running Plasma is the version the copy was built from (`src/bannertriageversion.h`). That
+rule keeps the feature off at another version. On its own it would leave the copy in use with the
+feature off, so it does not replace the gate. The build's minimum versions are floors, not exact
+pins: a newer Plasma in the build root must not fail the build, because the gate, not the build,
+decides whether the copy is used. The floors are those of the stock source's own build, Qt 6.11
+and Frameworks 6.30 (plasma-workspace v6.8.3, `CMakeLists.txt`): what a system needs to build it
+at all.
 
 ## Banner keyboard triage
 
