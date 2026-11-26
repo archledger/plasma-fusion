@@ -49,7 +49,9 @@ GlobalShortcuts::GlobalShortcuts(QObject *parent)
 
     // Plasma Fusion: the focus action exists only while the running Plasma is the one this copy was
     // built from; at any other version the stock shortcuts are all there is. It ships unassigned.
-    if (bannerTriageAvailable()) {
+    // The rule is named with its namespace: an unqualified bannerTriageAvailable() here is the
+    // getter below, which reports whether the action exists.
+    if (PlasmaFusion::bannerTriageAvailable()) {
         m_focusBannerAction = new QAction(this);
         m_focusBannerAction->setObjectName(QStringLiteral("focus notification banner"));
         m_focusBannerAction->setProperty("componentName", QStringLiteral("plasmashell"));

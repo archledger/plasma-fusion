@@ -40,3 +40,16 @@ target_compile_definitions(notificationsversiontest PRIVATE
 target_link_libraries(notificationsversiontest PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME notifications-triage-version COMMAND notificationsversiontest)
 set_tests_properties(notifications-triage-version PROPERTIES TIMEOUT 30)
+
+# The focus shortcut through GlobalShortcuts itself. The class is compiled into the plugin, so the
+# test compiles its source and the applet's logging category with it.
+add_executable(notificationsshortcuttest shortcuttest.cpp ../src/globalshortcuts.cpp
+    "${CMAKE_BINARY_DIR}/src/notifications_debug.cpp")
+set_target_properties(notificationsshortcuttest PROPERTIES AUTOMOC ON)
+target_include_directories(notificationsshortcuttest PRIVATE "${CMAKE_BINARY_DIR}/src")
+target_compile_definitions(notificationsshortcuttest PRIVATE
+    PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION="${PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION}")
+target_link_libraries(notificationsshortcuttest PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::DBus Qt6::Test
+    KF6::GlobalAccel KF6::I18n)
+add_test(NAME notifications-triage-shortcut COMMAND notificationsshortcuttest)
+set_tests_properties(notifications-triage-shortcut PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 30)
