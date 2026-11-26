@@ -64,11 +64,21 @@ NotificationsApplet.NotificationWindow {
     // BannerTriage.js). The interaction with this banner is idle, requested (the shortcut was
     // pressed) or active (KWin gave the banner keyboard focus).
     property string triageState: BannerTriage.STATE_IDLE
-    // Reset by each request; true once Escape or Enter acted, so that a held key does not act again.
-    property bool triageSpent: false
+    // Reset by each request; true once Escape dismissed the banner, so that a held key does not
+    // dismiss it again while it is on its way out.
+    property bool triageDismissed: false
     readonly property bool triageActive: triageState === BannerTriage.STATE_ACTIVE
-    // What the banner shows. A change means the popup now carries another notification.
-    readonly property string triageIdentity: notificationId + " " + summary
+    // What the banner shows and when its notification was last updated. KDE gives a notification a
+    // new update time on every replacement; the text and the actions are a second witness to it.
+    // A change means the popup now carries another notification, or the same one replaced. It is
+    // never reported: what it holds may be private.
+    readonly property string triageIdentity: JSON.stringify([notificationPopup.notificationId,
+                                                              isNaN(notificationPopup.updated) ? "" : notificationPopup.updated.valueOf(),
+                                                              notificationPopup.summary,
+                                                              notificationPopup.body,
+                                                              notificationPopup.hasDefaultAction,
+                                                              notificationPopup.actionNames,
+                                                              notificationPopup.actionLabels])
     // True while keyboard focus is in the banner's content or one of its controls. (isAncestorOf
     // is not exposed to QML, so the parents are walked.)
     readonly property bool triageFocusWithin: {
@@ -85,7 +95,7 @@ NotificationsApplet.NotificationWindow {
 
     // Plasma Fusion: Globals asks the banner for keyboard focus (requestBannerFocus).
     function requestBannerFocus() {
-        triageSpent = false;
+        triageDismissed = false;
         triageState = BannerTriage.transition(triageState, "request").state;
         // The banner may be the active window already, with the pointer on it, and will not
         // become active a second time: the focus is granted here then.
@@ -99,8 +109,8 @@ NotificationsApplet.NotificationWindow {
     // control they want has it.
     onActiveFocusItemChanged: reportFocusWithin()
 
-    // Plasma Fusion: reports where the keyboard focus is: the type, object name and text of the
-    // item that has it, and whether that is inside the banner's content.
+    // Plasma Fusion: reports where the keyboard focus is: the type of the item that has it, and
+    // whether that is inside the banner's content.
     function reportFocusWithin() {
         const item = notificationPopup.activeFocusItem;
         let inside = false;
@@ -110,7 +120,8 @@ NotificationsApplet.NotificationWindow {
                 break;
             }
         }
-        const what = item ? [String(item).split("(")[0], item.objectName, item.text].join("|") : "none";
+        // The type of the item only: what it shows may be a draft or a notification's text.
+        const what = item ? String(item).split("(")[0] : "none";
         NotificationsApplet.Globals.shortcuts.reportTriage("focus-within inside=" + inside + " " + what);
     }
 
@@ -120,20 +131,19 @@ NotificationsApplet.NotificationWindow {
         NotificationsApplet.Globals.shortcuts.reportTriage("ended " + reason);
     }
 
-    // Plasma Fusion: Return and Enter do what a click on the banner does, but only from the
-    // banner's content itself. Qt Quick offers a key press to this item before the control inside
-    // the banner that has the keyboard focus, and a Keys handler accepts it by default, so a
-    // Return meant for a button or for the reply field is refused here in so many words.
+    // Plasma Fusion: Return and Enter do what a click on the banner does, once per press, but only
+    // from the banner's content itself. Qt Quick offers a key press to this item before the control
+    // inside the banner that has the keyboard focus, and a Keys handler accepts it by default, so
+    // a Return meant for a button or for the reply field is refused here in so many words.
     function activateByEnter(event) {
-        const action = BannerTriage.enterAction(triageActive, notificationPopup.activeFocusItem === focusListener, modelInterface.hasDefaultAction, triageSpent, event.isAutoRepeat);
+        const action = BannerTriage.enterAction(triageActive, notificationPopup.activeFocusItem === focusListener, modelInterface.hasDefaultAction, event.isAutoRepeat);
         if (action === "") {
             event.accepted = false; // not ours
             return;
         }
         event.accepted = true;
         if (action === "activate") {
-            triageSpent = true;
-            NotificationsApplet.Globals.shortcuts.reportTriage("activated-by-enter " + triageIdentity);
+            NotificationsApplet.Globals.shortcuts.reportTriage("activated-by-enter " + notificationPopup.notificationId);
             modelInterface.defaultActionInvoked();
         }
     }
@@ -143,7 +153,7 @@ NotificationsApplet.NotificationWindow {
         // when this handler does.
         if (triageState === BannerTriage.STATE_ACTIVE) {
             focusListener.forceActiveFocus(Qt.ShortcutFocusReason);
-            NotificationsApplet.Globals.shortcuts.reportTriage("focus-granted " + triageIdentity);
+            NotificationsApplet.Globals.shortcuts.reportTriage("focus-granted " + notificationPopup.notificationId);
         }
     }
 
@@ -203,7 +213,10 @@ NotificationsApplet.NotificationWindow {
         // Plasma Fusion: on a banner the shortcut focused, Escape dismisses and Return and Enter
         // act as a click. The keys reach this item from the banner's controls as well.
         Keys.onEscapePressed: event => {
-            const action = BannerTriage.escapeAction(notificationPopup.triageActive, notificationItem.modelInterface.replying, notificationPopup.triageSpent, event.isAutoRepeat);
+            // The reply field is exempt while the keyboard focus is in it, and only then: from
+            // any other control of the banner, the close button included, Escape dismisses.
+            const inReplyField = BannerTriage.inReplyField(notificationPopup.activeFocusItem, focusListener);
+            const action = BannerTriage.escapeAction(notificationPopup.triageActive, inReplyField, notificationPopup.triageDismissed, event.isAutoRepeat);
             if (action === "") {
                 event.accepted = false; // not ours: in the reply field Escape keeps its own behaviour
                 return;
@@ -212,8 +225,8 @@ NotificationsApplet.NotificationWindow {
             if (action === "dismiss") {
                 // The banner's own expiry, as its timeout would run it: the notification stays in
                 // the history.
-                notificationPopup.triageSpent = true;
-                NotificationsApplet.Globals.shortcuts.reportTriage("dismissed-by-escape " + notificationPopup.triageIdentity);
+                notificationPopup.triageDismissed = true;
+                NotificationsApplet.Globals.shortcuts.reportTriage("dismissed-by-escape " + notificationPopup.notificationId);
                 notificationPopup.expired();
             }
         }

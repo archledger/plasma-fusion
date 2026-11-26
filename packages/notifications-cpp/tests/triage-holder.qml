@@ -24,10 +24,32 @@ Item {
     function transitionRestores(state, event) {
         return Triage.transition(state, event).restoreFocus;
     }
-    function escapeAction(interactionActive, replying, spent, autoRepeat) {
-        return Triage.escapeAction(interactionActive, replying, spent, autoRepeat);
+    function escapeAction(interactionActive, replyFieldFocused, dismissed, autoRepeat) {
+        return Triage.escapeAction(interactionActive, replyFieldFocused, dismissed, autoRepeat);
     }
-    function enterAction(interactionActive, focusOnContent, hasDefaultAction, spent, autoRepeat) {
-        return Triage.enterAction(interactionActive, focusOnContent, hasDefaultAction, spent, autoRepeat);
+    function enterAction(interactionActive, focusOnContent, hasDefaultAction, autoRepeat) {
+        return Triage.enterAction(interactionActive, focusOnContent, hasDefaultAction, autoRepeat);
     }
+    function activeTaskPath(tasks) {
+        return Triage.activeTaskPath(tasks);
+    }
+    function inReplyField(item, content) {
+        return Triage.inReplyField(item, content);
+    }
+
+    // A small tree of real items for the walk of inReplyField: the banner's content, in it the
+    // reply field (marked) with its editor, and next to it a button.
+    Item {
+        id: walkContent
+        Item {
+            id: walkField
+            readonly property bool isReplyField: true
+            Item { id: walkEditor }
+        }
+        Item { id: walkButton }
+    }
+    readonly property Item walkContentItem: walkContent
+    readonly property Item walkFieldItem: walkField
+    readonly property Item walkEditorItem: walkEditor
+    readonly property Item walkButtonItem: walkButton
 }

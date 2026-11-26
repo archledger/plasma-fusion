@@ -18,11 +18,11 @@ never run against a logged-in desktop.
 |---|---|
 | `stock` | Plasma's installed applet. It has no "Focus notification banner" action, so the test chord moves no focus. Then stock behaviour: a banner without actions that times out tells the application, a click on a banner with a default action runs it once, a closed notification is told. |
 | `copy` | The built copy, put in front of the stock plugin through `QT_PLUGIN_PATH`. Its "Focus notification banner" action is listed with the applet's shortcuts and ships unassigned, so the chord still moves no focus; the same stock checks follow. A difference between this mode and `stock` is the copy's doing. |
-| `full` | The triage end to end (`SPEC-notification-triage.md`): with no banner the shortcut is ignored; a banner's arrival moves no focus; the shortcut gives the newest banner keyboard focus; Escape dismisses it and KWrite is active again; a replacement while focused gives KWrite its focus back; a click into KWrite ends the interaction without dismissing. |
+| `full` | The triage end to end (`SPEC-notification-triage.md`): with no banner the shortcut is ignored; a banner's arrival moves no focus; the shortcut gives the newest banner keyboard focus; Escape dismisses it and KWrite is active again; a replacement while focused ends the interaction and gives the previous window its focus back, also when the replacement keeps the summary and the text, and also when that window is one of two windows of the same application; a click into KWrite ends the interaction without dismissing. |
 | `lock-idle` | With the screen locked and no banner focused, the shortcut is not dispatched and a later Escape dismisses nothing. |
 | `lock-focused` | With the screen locked while a banner is focused, the interaction ends and a later Escape dismisses nothing. |
-| `activate` | Enter does what a click does, for a banner with a default action, one without, and one without but with the application's window open: the application is told the same. A held Return activates once. |
-| `buttons` | Tab moves the keyboard focus inside the banner and invokes nothing; Escape from a control dismisses; Space on the action's button is that button's own click; in the reply field Escape keeps the draft, which Return then sends. |
+| `activate` | Enter does what a click does, for a banner with a default action, one without, and one without but with the application's window open: the application is told the same. A held Return activates once. A resident banner stays after Enter, and each separate press acts again. |
+| `buttons` | Tab moves the keyboard focus inside the banner and invokes nothing; Escape from a control dismisses; Space on the action's button is that button's own click; with the reply open, Escape from the banner's close button dismisses; in the reply field itself Escape keeps the draft, which Return then sends. |
 | `timer` | A three-second banner is still shown four seconds after the shortcut gave it focus; once a click ends the interaction the timeout resumes and the banner expires. |
 | `eligible` | Critical and resident banners are taken and dismissed; a job popup and a banner whose reply is open are not; of two banners the newer one is named; the shortcut pressed again changes nothing; with the pointer on the banner the keyboard focus arrives at once; a banner closed right after the request restores nothing. |
 
@@ -63,7 +63,9 @@ to "Focus notification banner" the way a user would in System Settings, through 
 daemon's D-Bus interface. Input is injected through KWin, and what the applet does is read from
 its own reports (`banner triage "<step>"` in the shell log, through the applet's debug category),
 from the receipts the test application (`sender.py`) gets over the notification interface, and
-from the active window, which a KWin script prints.
+from the active window, which a KWin script prints. A report names a banner by its notification id
+and an item by its type; none carries a summary or a draft. Each observation of KWin has a token
+of its own, so a late answer cannot pass for a new one.
 
 The test application can also send the other shapes of banner: one without a `desktop-entry`
 hint, a critical or a resident one (hints), one with a reply action (the single action

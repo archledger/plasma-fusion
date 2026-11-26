@@ -809,22 +809,22 @@ QtObject {
     // Plasma Fusion: banner keyboard triage (SPEC-notification-triage.md; the rules are in
     // BannerTriage.js). KWin decides whether the "Focus notification banner" shortcut is
     // dispatched; this takes the newest banner that may be taken and asks it for keyboard focus.
-    // The window that was active then is recorded here and used only after a replacement that
-    // ends a focused interaction.
+    // The window that had the keyboard focus then is recorded here: a window itself, never the
+    // group it is in (the task model groups the windows of an application, and a group cannot be
+    // activated). It is used only after a replacement that ends a focused interaction.
     property var bannerFocusPrevious: null
 
     function requestBannerFocus() {
         const banners = [];
         for (let index = 0; index < popupInstantiator.count; ++index) {
             const popup = popupInstantiator.objectAt(index);
-            if (!popup) {
-                continue;
-            }
-            banners.push({
+            // A popup that is not instantiated yet keeps its place, so that the index chosen is
+            // the instantiator's own.
+            banners.push(popup ? {
                 created: popup.created.valueOf(),
                 visible: popup.visible,
                 eligible: popup.visible && popup.type !== NotificationManager.Notifications.JobType && !popup.modelInterface.replying
-            });
+            } : { created: -Infinity, visible: false, eligible: false });
         }
 
         const chosen = BannerTriage.newestBannerIndex(banners);
@@ -841,24 +841,42 @@ QtObject {
             return;
         }
 
-        bannerFocusPrevious = null;
+        // The window that has the keyboard focus now, as the task model names it: each task with
+        // the windows of its group and their place in the stacking order.
+        const tasks = [];
         for (let row = 0; row < tasksModel.rowCount(); ++row) {
-            if (tasksModel.data(tasksModel.index(row, 0), TaskManager.AbstractTasksModel.IsActive)) {
-                // Takes a row number, not a QModelIndex
-                bannerFocusPrevious = tasksModel.makePersistentModelIndex(row);
-                break;
+            const task = tasksModel.index(row, 0);
+            const windows = [];
+            for (let child = 0; child < tasksModel.rowCount(task); ++child) {
+                const window = tasksModel.index(child, 0, task);
+                windows.push({
+                    active: tasksModel.data(window, TaskManager.AbstractTasksModel.IsActive) === true,
+                    stacking: tasksModel.data(window, TaskManager.AbstractTasksModel.StackingOrder)
+                });
             }
+            tasks.push({
+                active: tasksModel.data(task, TaskManager.AbstractTasksModel.IsActive) === true,
+                children: windows
+            });
         }
 
-        shortcuts.reportTriage("focus-requested " + popup.triageIdentity);
+        bannerFocusPrevious = null;
+        const window = BannerTriage.activeTaskPath(tasks);
+        if (window) {
+            // Takes row numbers: of the task, and of a window in its group (-1 for none).
+            bannerFocusPrevious = tasksModel.makePersistentModelIndex(window[0], window.length === 2 ? window[1] : -1);
+        }
+
+        shortcuts.reportTriage("focus-requested " + popup.notificationId);
         popup.requestBannerFocus();
     }
 
-    // Plasma Fusion: gives the window recorded at the request its focus back, when it still exists.
+    // Plasma Fusion: asks for the window recorded at the request to be activated again, when it
+    // still exists. KWin decides; the session scenarios read which window is active afterwards.
     function restorePreviousTask() {
         if (bannerFocusPrevious && bannerFocusPrevious.valid) {
             tasksModel.requestActivate(bannerFocusPrevious);
-            shortcuts.reportTriage("focus-restored");
+            shortcuts.reportTriage("focus-restore-requested");
         } else {
             shortcuts.reportTriage("focus-restore-skipped");
         }

@@ -118,15 +118,13 @@ stop_sender() {
 no_script_error() { [ "$(grep -c -E 'qrc:.*:[0-9]+: [A-Za-z]*Error' "$OUT/plasmashell.log" || true)" = 0 ]; }
 
 # What KWin's script engine sees. Each observation runs a small script that logs one line.
-observations=0
 observe() { # JS EXPRESSION: its value
     local nonce id line
-    observations=$((observations + 1))
-    nonce=$observations
+    nonce=$RANDOM$RANDOM$RANDOM
     printf 'console.info("PF_NOTIF %s " + (%s));\n' "$nonce" "$1" >"$PFV/observe-$nonce.js"
     id=$(busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting loadScript ss "$PFV/observe-$nonce.js" "observe-$nonce" | awk '{print $2}')
     [[ "$id" =~ ^[0-9]+$ ]] || return 1
-    busctl --user call org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script run >/dev/null
+    busctl --user call org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script run >/dev/null || return 1
     wait_text "PF_NOTIF $nonce " "$OUT/kwin.log" || return 1
     line=$(grep -F "PF_NOTIF $nonce " "$OUT/kwin.log" | tail -n 1)
     busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s "observe-$nonce" >/dev/null 2>&1 || true
@@ -147,7 +145,7 @@ triage_count() { grep -c -- "banner triage \"$1" "$OUT/plasmashell.log" || true;
 triage() { # PATTERN (without its closing quote) [AFTER LINE]: a triage step that matches it
     wait_text "banner triage \"$1" "$OUT/plasmashell.log" "${2:-0}"
 }
-last_focus_requested_id() { sed -n 's/^.*banner triage "focus-requested \([0-9][0-9]*\) .*/\1/p' "$OUT/plasmashell.log" | tail -n 1; }
+triage_since() { triage "$2" "$1" && echo yes || echo no; } # AFTER LINE, PATTERN
 
 focus_key='key meta+ctrl+alt+pagedown'
 focus_action="['plasmashell', 'focus notification banner', 'plasmashell', 'Focus Notification Banner']"
@@ -168,22 +166,29 @@ bind_focus_key() {
     accel --object-path /kglobalaccel --method org.kde.KGlobalAccel.shortcutKeys "$focus_action" >"$OUT/binding.txt" 2>&1
     grep -Fq "$key" "$OUT/binding.txt"
 }
-# Tab until the control whose description contains WANTED has the keyboard focus (at most eight
-# presses); the applet reports where each Tab lands.
-tab_to() { # WANTED
-    local wanted=$1 from
+# Tab until an item whose type matches PATTERN has the keyboard focus (at most eight presses);
+# the applet reports the type of the item where each Tab lands.
+focus_with() { # KEY TYPE PATTERN: presses KEY until the focus report matches (at most eight presses)
+    local key=$1 wanted=$2 from
     for _ in {1..8}; do
         from=$(log_lines)
-        pfinput 'key tab'
+        pfinput "$key"
         wait_text 'banner triage "focus-within ' "$OUT/plasmashell.log" "$from" || break
-        if triage "focus-within inside=true .*$wanted" "$from"; then return 0; fi
+        if triage "focus-within inside=true $wanted" "$from"; then return 0; fi
     done
     return 1
 }
-take_banner() { # LABEL [AFTER LINE IS RETURNED IN from]: the shortcut gives banner LABEL keyboard focus
+tab_to() { focus_with 'key tab' "$1"; }
+# The button of an action of the banner. The banner's own buttons (close, configure) are of the
+# stock type; an action's button is declared where the actions are, which makes it a type of its
+# own, with a second numbered part in its name.
+tab_to_action_button() { tab_to 'ToolButton_QMLTYPE_[0-9]+_QML_[0-9]+'; }
+tab_to_reply_field() { tab_to 'TextField'; }
+tab_back_to_close() { focus_with 'key shift+tab' 'ToolButton_QMLTYPE_[0-9]+"'; }
+take_banner() { # [AFTER LINE IS RETURNED IN from]: the shortcut gives the last banner sent (SENT_ID) keyboard focus
     from=$(log_lines)
     pfinput "$focus_key"
-    triage "focus-granted [0-9]+ focus-probe/$1" "$from"
+    triage "focus-granted $SENT_ID\"" "$from"
 }
 
 # A document to type in, so that there is an ordinary window in the session.
@@ -256,8 +261,9 @@ control_mode() {
     # only marked expired, and the application is told nothing.)
     need "a banner without actions is sent" send timed-out ',"timeout":2000,"actions":[]' || return 1
     timed_out=$SENT_ID
-    wait_text "\"event\": \"closed\", \"id\": $timed_out, \"reason\": 1" "$OUT/sender.log"
-    expect "a banner without actions that times out tells the application" "$(receipt_count "$timed_out")" 1
+    need "a banner without actions that times out tells the application it expired" \
+        wait_text "\"event\": \"closed\", \"id\": $timed_out, \"reason\": 1" "$OUT/sender.log" || return 1
+    expect "  once" "$(receipt_count "$timed_out")" 1
 
     # The test chord moves no focus: nothing is bound to it.
     need "a banner with a default action is sent" send unbound ',"actions":["default","Open"]' || return 1
@@ -306,11 +312,11 @@ mode_full() {
     expect "one banner is shown" "$(shown_banners)" 1
 
     # The shortcut gives it keyboard focus; Escape dismisses it through its own expiry.
-    need "the shortcut gives the banner keyboard focus" take_banner original || return 1
+    need "the shortcut gives the banner keyboard focus" take_banner || return 1
     need "  and KWrite is no longer the active window" active plasmashell focused-banner || return 1
     shot 02-focused
     pfinput 'key escape'
-    need "Escape dismisses the focused banner" triage "dismissed-by-escape $original focus-probe/original" "$from" || return 1
+    need "Escape dismisses the focused banner" triage "dismissed-by-escape $original\"" "$from" || return 1
     sleep .6
     need "  and KWrite is active again" active pf-notif-app.txt restored-after-escape || return 1
     shot 03-returned
@@ -321,18 +327,32 @@ mode_full() {
     need "a banner is sent" send replace-me ',"actions":["default","Open"]' || return 1
     replaced=$SENT_ID
     sleep 1
-    need "the shortcut takes it" take_banner replace-me || return 1
+    need "the shortcut takes it" take_banner || return 1
+    granted=$(log_lines)
     need "the application replaces it under the same id" replace replacement "$replaced" ',"actions":["default","Open"]' || return 1
-    need "a replacement ends the interaction" triage 'ended replaced' "$from" || return 1
-    need "  and asks for the previous window" triage 'focus-restored' "$from" || return 1
+    need "a replacement ends the interaction" triage 'ended replaced' "$granted" || return 1
+    need "  and asks for the previous window" triage 'focus-restore-requested' "$granted" || return 1
     sleep .6
     need "  and KWrite is active again" active pf-notif-app.txt after-replacement || return 1
-    expect "the replacement banner is not taken" "$(triage_count 'focus-granted [0-9]+ focus-probe/replacement')" 0
+    expect "  and does not take the replacement banner" "$(triage_since "$granted" "focus-granted $replaced\"")" no
     pfinput 'key escape'
     sleep .5
     expect "a later Escape in KWrite dismisses nothing" "$(triage_count 'dismissed-by-escape')" 1
     expect "  and the application is told nothing" "$(receipt_count "$replaced")" 0
     need "the application closes the replacement" close_notification "$replaced" || return 1
+
+    # A replacement that keeps the summary and the text is a replacement too.
+    need "a banner is sent" send kept ',"actions":["default","Open"]' || return 1
+    kept=$SENT_ID
+    sleep 1.5
+    need "the shortcut takes it" take_banner || return 1
+    granted=$(log_lines)
+    need "the application replaces it with the same summary and text" replace kept "$kept" ',"timeout":30000' || return 1
+    need "a replacement that keeps the summary ends the interaction" triage 'ended replaced' "$granted" || return 1
+    need "  and asks for the previous window" triage 'focus-restore-requested' "$granted" || return 1
+    sleep .6
+    need "  and KWrite is active again" active pf-notif-app.txt after-same-summary || return 1
+    need "  and the application closes it" close_notification "$kept" || return 1
 
     # The user moves the focus away: the interaction ends and nothing is dismissed.
     sleep .8
@@ -341,7 +361,7 @@ mode_full() {
     need "a banner is sent" send focus-loss ',"actions":["default","Open"]' || return 1
     lost=$SENT_ID
     sleep 1
-    need "the shortcut takes it" take_banner focus-loss || return 1
+    need "the shortcut takes it" take_banner || return 1
     pfinput 'click 600 400'
     need "a click into KWrite ends the interaction" triage 'ended lost' "$from" || return 1
     need "  and KWrite is active" active pf-notif-app.txt deliberate-switch || return 1
@@ -350,6 +370,25 @@ mode_full() {
     expect "a later Escape in KWrite dismisses nothing" "$(triage_count 'dismissed-by-escape')" 1
     expect "  the banner is still shown" "$(shown_banners)" 1
     need "  and the application can still close it" close_notification "$lost" || return 1
+
+    # An application with two windows is one row in the task manager: the window that had the
+    # keyboard focus is still the one that gets it back.
+    printf 'previous focus B\n' >"$HOME/pf-notif-app-b.txt"
+    kwrite "$HOME/pf-notif-app-b.txt" >"$OUT/kwrite-b.log" 2>&1 &
+    sleep 3
+    pfinput 'move 700 700' 'click 600 400'
+    need "the second document's window is active" active pf-notif-app-b.txt second-document || return 1
+    need "a banner is sent" send grouped ',"actions":["default","Open"]' || return 1
+    grouped=$SENT_ID
+    sleep 1.5
+    need "the shortcut takes it" take_banner || return 1
+    granted=$(log_lines)
+    need "the application replaces it under the same id" replace replaced "$grouped" ',"actions":["default","Open"]' || return 1
+    need "a replacement ends the interaction" triage 'ended replaced' "$granted" || return 1
+    need "  and asks for the previous window" triage 'focus-restore-requested' "$granted" || return 1
+    sleep .6
+    need "  and that document is active again" active pf-notif-app-b.txt after-grouped || return 1
+    need "  and the application closes it" close_notification "$grouped" || return 1
     expect "no script error in the shell log" "$(no_script_error && echo none || echo some)" none
 }
 
@@ -377,7 +416,7 @@ mode_lock_focused() {
     [[ ${PFV_LOCK:-0} == 1 ]] || { expect "a lock-capable session (PFV_LOCK=1)" no yes; return 1; }
     need "a banner is sent" send lock-focused ',"actions":["default","Open"]' || return 1
     sleep 1.5
-    need "the shortcut gives the banner keyboard focus" take_banner lock-focused || return 1
+    need "the shortcut gives the banner keyboard focus" take_banner || return 1
     pfv_lock
     need "the screen is locked" grep -qx true <<<"$(qdbus org.freedesktop.ScreenSaver /ScreenSaver org.freedesktop.ScreenSaver.GetActive)" || return 1
     need "locking ends the interaction" triage 'ended lost' "$from" || return 1
@@ -400,9 +439,9 @@ mode_activate() {
     need "another is sent" send enter-default ',"actions":["default","Open"]' || return 1
     entered=$SENT_ID
     sleep 1.5
-    need "the shortcut gives it keyboard focus" take_banner enter-default || return 1
+    need "the shortcut gives it keyboard focus" take_banner || return 1
     pfinput 'key return'
-    need "Enter runs the default action" triage "activated-by-enter $entered focus-probe/enter-default" "$from" || return 1
+    need "Enter runs the default action" triage "activated-by-enter $entered\"" "$from" || return 1
     need "  and closes the notification" \
         wait_text "\"event\": \"closed\", \"id\": $entered, \"reason\": 3" "$OUT/sender.log" || return 1
     need "  and KWrite is active again" active pf-notif-app.txt after-enter-default || return 1
@@ -414,7 +453,7 @@ mode_activate() {
     need "a banner without a default action is sent" send enter-plain ',"actions":["open","Open"],"entry":""' || return 1
     plain=$SENT_ID
     sleep 1.5
-    need "the shortcut gives it keyboard focus" take_banner enter-plain || return 1
+    need "the shortcut gives it keyboard focus" take_banner || return 1
     pfinput 'key return'
     sleep 1
     expect "Enter without a default action activates nothing" "$(triage_count 'activated-by-enter')" 1
@@ -422,7 +461,7 @@ mode_activate() {
     expect "  the banner is still shown" "$(shown_banners)" 1
     need "  and still has keyboard focus" active plasmashell still-focused || return 1
     pfinput 'key escape'
-    need "  and Escape still dismisses it" triage "dismissed-by-escape $plain focus-probe/enter-plain" "$from" || return 1
+    need "  and Escape still dismisses it" triage "dismissed-by-escape $plain\"" "$from" || return 1
 
     # No default action, with a window of the application open. What stock does for a click here
     # is its own; Enter must leave the application and the banner in the same state.
@@ -436,24 +475,26 @@ mode_activate() {
     need "another is sent" send enter-fallback ',"actions":["open","Open"]' || return 1
     entered=$SENT_ID
     sleep 1.5
-    need "the shortcut takes it" take_banner enter-fallback || return 1
+    need "the shortcut takes it" take_banner || return 1
     pfinput 'key return'
     sleep 1.5
     expect "Enter tells the application what a click does" "$(receipt_count "$entered")" "$(receipt_count "$clicked")"
     expect "  and leaves both banners, as the click left its" "$(shown_banners)" 2
     pfinput 'key escape'
-    need "  Escape dismisses it" triage "dismissed-by-escape $entered focus-probe/enter-fallback" "$from" || return 1
+    need "  Escape dismisses it" triage "dismissed-by-escape $entered\"" "$from" || return 1
     sleep .6
     need "  with KWrite active again" active pf-notif-app.txt after-fallback || return 1
+    # The banner that was clicked stays shown; it is closed so that the next count starts clean.
+    need "  and the application closes the banner that was clicked" close_notification "$clicked" || return 1
 
     # A held Return activates once. What the held key types afterwards lands in KWrite, as with
     # any focus change, so the document is saved before the session ends.
     need "a banner with a default action is sent" send held ',"actions":["default","Open"]' || return 1
     held=$SENT_ID
     sleep 1.5
-    need "the shortcut takes it" take_banner held || return 1
+    need "the shortcut takes it" take_banner || return 1
     pfinput 'keydown return' 'sleep 1.2' 'keyup return'
-    need "a held Return activates" triage "activated-by-enter $held focus-probe/held" "$from" || return 1
+    need "a held Return activates" triage "activated-by-enter $held\"" "$from" || return 1
     # The activation reaches the application once the key is released and the compositor has
     # given the activation token, so the receipt is waited for, not timed.
     need "  and the application is told" wait_text "\"event\": \"action\", \"id\": $held, \"key\": \"default\"" "$OUT/sender.log" || return 1
@@ -463,6 +504,31 @@ mode_activate() {
     pfinput 'key ctrl+s'
     sleep 1
     need "the test document is saved, so the session can end quietly" active pf-notif-app.txt after-save || return 1
+
+    # A resident banner stays after its default action: each separate press acts once, and Escape
+    # still dismisses.
+    need "a resident banner with a default action is sent" send staying ',"actions":["default","Open"],"hints":{"resident":true}' || return 1
+    staying=$SENT_ID
+    sleep 1.5
+    need "the shortcut takes it" take_banner || return 1
+    granted=$(log_lines)
+    pfinput 'key return'
+    need "Enter runs the default action" triage "activated-by-enter $staying\"" "$granted" || return 1
+    need "  and the application is told" wait_text "\"event\": \"action\", \"id\": $staying, \"key\": \"default\"" "$OUT/sender.log" || return 1
+    sleep 1
+    expect "  the resident banner stays" "$(shown_banners)" 1
+    need "  and keeps the keyboard focus" active plasmashell still-focused || return 1
+    from=$(log_lines)
+    pfinput 'key return'
+    need "a second, separate Enter acts again" triage "activated-by-enter $staying\"" "$from" || return 1
+    sleep 2
+    expect "  so the application is told twice" "$(grep -c "\"event\": \"action\", \"id\": $staying," "$OUT/sender.log" || true)" 2
+    expect "  and the notification is not closed" "$(grep -c "\"event\": \"closed\", \"id\": $staying" "$OUT/sender.log" || true)" 0
+    from=$(log_lines)
+    pfinput 'key escape'
+    need "  and Escape still dismisses it" triage "dismissed-by-escape $staying\"" "$from" || return 1
+    sleep .6
+    need "  with KWrite active again" active pf-notif-app.txt after-resident || return 1
     expect "no script error in the shell log" "$(no_script_error && echo none || echo some)" none
 }
 
@@ -473,14 +539,14 @@ mode_buttons() {
     need "a banner with one action is sent" send buttoned ',"actions":["open","Open"],"entry":""' || return 1
     buttoned=$SENT_ID
     sleep 1.5
-    need "the shortcut gives it keyboard focus" take_banner buttoned || return 1
+    need "the shortcut gives it keyboard focus" take_banner || return 1
     pfinput 'key tab'
     need "Tab lands inside the banner" triage 'focus-within inside=true' "$from" || return 1
     need "  and the banner stays the active window" active plasmashell after-tab || return 1
     expect "  and invokes nothing" "$(receipt_count "$buttoned")" 0
     shot 01-after-tab
     pfinput 'key escape'
-    need "Escape from a control of the banner dismisses it" triage "dismissed-by-escape $buttoned focus-probe/buttoned" "$from" || return 1
+    need "Escape from a control of the banner dismisses it" triage "dismissed-by-escape $buttoned\"" "$from" || return 1
     sleep .6
     need "  and KWrite is active again" active pf-notif-app.txt after-escape-from-control || return 1
     expect "  the application is told nothing" "$(receipt_count "$buttoned")" 0
@@ -490,25 +556,43 @@ mode_buttons() {
     need "a banner with an action is sent" send actioned ',"actions":["act","Open"],"entry":""' || return 1
     actioned=$SENT_ID
     sleep 1.5
-    need "the shortcut gives it keyboard focus" take_banner actioned || return 1
-    need "Tab reaches the action's button" tab_to Open || return 1
+    need "the shortcut gives it keyboard focus" take_banner || return 1
+    need "Tab reaches the action's button" tab_to_action_button || return 1
     pfinput 'key space'
     need "Space on the button invokes the action" wait_text "\"event\": \"action\", \"id\": $actioned, \"key\": \"act\"" "$OUT/sender.log" || return 1
     expect "  and the key was not taken as Enter on the banner" "$(triage_count 'activated-by-enter')" 0
     need "  and the notification is closed for it" wait_text "\"event\": \"closed\", \"id\": $actioned, \"reason\": 3" "$OUT/sender.log" || return 1
 
+    # With the reply open, Escape is the reply field's own only while the keyboard focus is in
+    # it: from the banner's close button it dismisses, as from any button.
+    need "a banner with a reply action is sent" send replying-close ',"actions":["inline-reply","Reply"],"entry":""' || return 1
+    replying_close=$SENT_ID
+    sleep 1.5
+    need "the shortcut gives it keyboard focus" take_banner || return 1
+    need "Tab reaches the reply field, which starts the reply" tab_to_reply_field || return 1
+    pfinput 'type draft'
+    sleep .3
+    need "Shift+Tab goes back to the banner's close button" tab_back_to_close || return 1
+    from=$(log_lines)
+    pfinput 'key escape'
+    need "Escape from the close button dismisses it, the reply open or not" triage "dismissed-by-escape $replying_close\"" "$from" || return 1
+    sleep .6
+    need "  and KWrite is active again" active pf-notif-app.txt after-escape-from-close || return 1
+    expect "  the application is told nothing" "$(receipt_count "$replying_close")" 0
+
     # The reply field: Escape keeps its text, and the reply can still be sent.
     need "a banner with a reply action is sent" send replied ',"actions":["inline-reply","Reply"],"entry":""' || return 1
     replied=$SENT_ID
     sleep 1.5
-    need "the shortcut gives it keyboard focus" take_banner replied || return 1
+    need "the shortcut gives it keyboard focus" take_banner || return 1
     # A banner whose only action is a reply shows the field itself: Tab reaches it and that starts the reply.
-    need "Tab reaches the reply field, which starts the reply" tab_to TextField || return 1
+    need "Tab reaches the reply field, which starts the reply" tab_to_reply_field || return 1
     pfinput 'type draft'
     sleep .5
+    before=$(triage_count 'dismissed-by-escape')
     pfinput 'key escape'
     sleep .8
-    expect "Escape in the reply field dismisses nothing" "$(triage_count 'dismissed-by-escape')" 1
+    expect "Escape in the reply field dismisses nothing" "$(triage_count 'dismissed-by-escape')" "$before"
     expect "  and the banner stays" "$(shown_banners)" 1
     shot 02-after-escape-in-reply
     pfinput 'key return'
@@ -522,7 +606,7 @@ mode_timer() {
     need "a banner with a three-second timeout is sent" send timed ',"timeout":3000' || return 1
     timed=$SENT_ID
     sleep 1
-    need "the shortcut gives it keyboard focus" take_banner timed || return 1
+    need "the shortcut gives it keyboard focus" take_banner || return 1
     sleep 4
     need "four seconds later the banner still has keyboard focus" active plasmashell still-focused || return 1
     expect "  and is still shown" "$(shown_banners)" 1
@@ -551,18 +635,18 @@ mode_eligible() {
     need "a critical banner is sent" send critical ',"actions":["default","Open"],"entry":"","hints":{"urgency":2}' || return 1
     critical=$SENT_ID
     sleep 1.5
-    need "the shortcut takes it" take_banner critical || return 1
+    need "the shortcut takes it" take_banner || return 1
     pfinput 'key escape'
-    need "  and Escape dismisses it" triage "dismissed-by-escape $critical focus-probe/critical" "$from" || return 1
+    need "  and Escape dismisses it" triage "dismissed-by-escape $critical\"" "$from" || return 1
     expect "  the application is told nothing" "$(receipt_count "$critical")" 0
     sleep .6
 
     need "a resident banner is sent" send resident ',"actions":["default","Open"],"entry":"","hints":{"resident":true}' || return 1
     resident=$SENT_ID
     sleep 1.5
-    need "the shortcut takes it" take_banner resident || return 1
+    need "the shortcut takes it" take_banner || return 1
     pfinput 'key escape'
-    need "  and Escape dismisses it" triage "dismissed-by-escape $resident focus-probe/resident" "$from" || return 1
+    need "  and Escape dismisses it" triage "dismissed-by-escape $resident\"" "$from" || return 1
     sleep .6
     expect "  and it is gone" "$(shown_banners)" 0
     expect "  the application is told nothing" "$(receipt_count "$resident")" 0
@@ -583,8 +667,8 @@ mode_eligible() {
     need "a banner with a reply action is sent" send replying ',"actions":["inline-reply","Reply"],"entry":""' || return 1
     replying=$SENT_ID
     sleep 1.5
-    need "the shortcut gives it keyboard focus" take_banner replying || return 1
-    need "Tab reaches the reply field, which starts the reply" tab_to TextField || return 1
+    need "the shortcut gives it keyboard focus" take_banner || return 1
+    need "Tab reaches the reply field, which starts the reply" tab_to_reply_field || return 1
     pfinput 'click 600 400'
     need "a click into KWrite ends the interaction" triage 'ended lost' "$from" || return 1
     expect "the banner with its reply open is still shown" "$(shown_banners)" 1
@@ -601,10 +685,9 @@ mode_eligible() {
     sleep 1.5
     expect "both are shown" "$(shown_banners)" 2
     shot 01-two-banners
-    need "the shortcut names the newer banner" take_banner newer || return 1
-    expect "  the newer one's id" "$(last_focus_requested_id)" "$newer"
+    need "the shortcut names the newer banner" take_banner || return 1
     pfinput 'key escape'
-    need "  and Escape dismisses that one" triage "dismissed-by-escape $newer focus-probe/newer" "$from" || return 1
+    need "  and Escape dismisses that one" triage "dismissed-by-escape $newer\"" "$from" || return 1
     sleep .6
     expect "  leaving the older one" "$(shown_banners)" 1
     need "  which the application closes" close_notification "$older" || return 1
@@ -614,13 +697,13 @@ mode_eligible() {
     need "a banner is sent" send again ',"actions":["default","Open"]' || return 1
     again=$SENT_ID
     sleep 1.5
-    need "the shortcut takes it" take_banner again || return 1
+    need "the shortcut takes it" take_banner || return 1
     before=$(triage_count 'focus-requested')
     pfinput "$focus_key"
     sleep 1
     expect "the shortcut again asks for no second focus" "$(triage_count 'focus-requested')" "$before"
     need "the application replaces it under the same id" replace replaced "$again" ',"actions":["default","Open"]' || return 1
-    need "  and a replacement still asks for KWrite" triage 'focus-restored' "$from" || return 1
+    need "  and a replacement still asks for KWrite" triage 'focus-restore-requested' "$from" || return 1
     sleep .6
     need "  which is active" active pf-notif-app.txt after-replacement || return 1
     need "  and the application closes it" close_notification "$again" || return 1
@@ -633,9 +716,9 @@ mode_eligible() {
     pfinput 'move 200 125' 'click 200 125'
     sleep .6
     need "the banner is the active window with the pointer on it" active plasmashell pointer-on-banner || return 1
-    need "and the shortcut gives it keyboard focus at once" take_banner pointed || return 1
+    need "and the shortcut gives it keyboard focus at once" take_banner || return 1
     pfinput 'key escape'
-    need "  and Escape dismisses it" triage "dismissed-by-escape $pointed focus-probe/pointed" "$from" || return 1
+    need "  and Escape dismisses it" triage "dismissed-by-escape $pointed\"" "$from" || return 1
     sleep .6
     need "  with KWrite active again" active pf-notif-app.txt after-pointed || return 1
 
@@ -647,11 +730,11 @@ mode_eligible() {
     sleep .4
     need "KWrite is active" active pf-notif-app.txt before-late || return 1
     from=$(log_lines)
-    before=$(triage_count 'focus-restored')
+    before=$(triage_count 'focus-restore-requested')
     pfinput "$focus_key"
     need "the application closes it at once" close_notification "$late" || return 1
     sleep 1.5
-    expect "a banner closed right after the request restores nothing" "$(triage_count 'focus-restored')" "$before"
+    expect "a banner closed right after the request restores nothing" "$(triage_count 'focus-restore-requested')" "$before"
     expect "  and dismisses nothing: the close is what the application is told" "$(receipt_count "$late")" 1
     expect "  and no banner is shown" "$(shown_banners)" 0
     need "  and KWrite is active" active pf-notif-app.txt late || return 1

@@ -19,6 +19,10 @@ import plasma.applet.org.kde.plasma.notifications as Notifications
 RowLayout {
     id: replyRow
 
+    // Plasma Fusion: marks this as the reply field of the notification. The banner asks the
+    // ancestors of the item that has the keyboard focus (BannerTriage.inReplyField).
+    readonly property bool isReplyField: true
+
     // implicitWidth will keep being rewritten by the Layout itself
     Layout.maximumWidth: Notifications.Globals.popupWidth
     required property ModelInterface modelInterface

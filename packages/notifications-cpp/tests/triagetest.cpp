@@ -110,13 +110,13 @@ private Q_SLOTS:
     void escapeAction_data()
     {
         QTest::addColumn<bool>("interactionActive");
-        QTest::addColumn<bool>("replying");
-        QTest::addColumn<bool>("spent");
+        QTest::addColumn<bool>("replyFieldFocused");
+        QTest::addColumn<bool>("dismissed");
         QTest::addColumn<bool>("autoRepeat");
         QTest::addColumn<QString>("expected");
 
         QTest::newRow("Escape on the focused banner dismisses it") << true << false << false << false << QStringLiteral("dismiss");
-        QTest::newRow("Escape in the reply field is not ours") << true << true << false << false << QString();
+        QTest::newRow("Escape with the keyboard focus in the reply field is not ours") << true << true << false << false << QString();
         QTest::newRow("Escape outside the interaction is not ours") << false << false << false << false << QString();
         QTest::newRow("a second Escape does not expire the banner again") << true << false << true << false << QStringLiteral("consume");
         QTest::newRow("a held Escape does not repeat") << true << false << false << true << QStringLiteral("consume");
@@ -125,12 +125,12 @@ private Q_SLOTS:
     void escapeAction()
     {
         QFETCH(bool, interactionActive);
-        QFETCH(bool, replying);
-        QFETCH(bool, spent);
+        QFETCH(bool, replyFieldFocused);
+        QFETCH(bool, dismissed);
         QFETCH(bool, autoRepeat);
         QFETCH(QString, expected);
         QVariant result;
-        QVERIFY(call(&result, "escapeAction", {interactionActive, replying, spent, autoRepeat}));
+        QVERIFY(call(&result, "escapeAction", {interactionActive, replyFieldFocused, dismissed, autoRepeat}));
         QCOMPARE(result.toString(), expected);
     }
 
@@ -139,17 +139,15 @@ private Q_SLOTS:
         QTest::addColumn<bool>("interactionActive");
         QTest::addColumn<bool>("focusOnContent");
         QTest::addColumn<bool>("hasDefaultAction");
-        QTest::addColumn<bool>("spent");
         QTest::addColumn<bool>("autoRepeat");
         QTest::addColumn<QString>("expected");
 
-        QTest::newRow("Enter with a default action activates it") << true << true << true << false << false << QStringLiteral("activate");
-        QTest::newRow("Enter without a default action does nothing") << true << true << false << false << false << QStringLiteral("consume");
-        QTest::newRow("a second Enter does not activate again") << true << true << true << true << false << QStringLiteral("consume");
-        QTest::newRow("a held Enter does not repeat") << true << true << true << false << true << QStringLiteral("consume");
-        QTest::newRow("Enter outside the interaction is not ours") << false << true << true << false << false << QString();
-        QTest::newRow("Enter on a control inside the banner is that control's own") << true << false << true << false << false << QString();
-        QTest::newRow("  also when there is no default action") << true << false << false << false << false << QString();
+        QTest::newRow("Enter with a default action activates it") << true << true << true << false << QStringLiteral("activate");
+        QTest::newRow("Enter without a default action does nothing") << true << true << false << false << QStringLiteral("consume");
+        QTest::newRow("a held Enter does not repeat the action") << true << true << true << true << QStringLiteral("consume");
+        QTest::newRow("Enter outside the interaction is not ours") << false << true << true << false << QString();
+        QTest::newRow("Enter on a control inside the banner is that control's own") << true << false << true << false << QString();
+        QTest::newRow("  also when there is no default action") << true << false << false << false << QString();
     }
 
     void enterAction()
@@ -157,12 +155,69 @@ private Q_SLOTS:
         QFETCH(bool, interactionActive);
         QFETCH(bool, focusOnContent);
         QFETCH(bool, hasDefaultAction);
-        QFETCH(bool, spent);
         QFETCH(bool, autoRepeat);
         QFETCH(QString, expected);
         QVariant result;
-        QVERIFY(call(&result, "enterAction", {interactionActive, focusOnContent, hasDefaultAction, spent, autoRepeat}));
+        QVERIFY(call(&result, "enterAction", {interactionActive, focusOnContent, hasDefaultAction, autoRepeat}));
         QCOMPARE(result.toString(), expected);
+    }
+
+    void activeTaskPath_data()
+    {
+        QTest::addColumn<QVariantList>("tasks");
+        QTest::addColumn<QVariantList>("expected");
+
+        const QVariantList noWindows;
+        QTest::newRow("no task at all") << QVariantList() << QVariantList();
+        QTest::newRow("no task is active") << QVariantList{task(false, noWindows)} << QVariantList();
+        QTest::newRow("a window of its own") << QVariantList{task(true, noWindows)} << QVariantList{0.0};
+        QTest::newRow("after an idle one") << QVariantList{task(false, noWindows), task(true, noWindows)} << QVariantList{1.0};
+        QTest::newRow("a window in a group, not the group") << QVariantList{task(true, {window(false, 0), window(true, 2)})} << QVariantList{0.0, 1.0};
+        QTest::newRow("a group's only window") << QVariantList{task(true, {window(true, 1)})} << QVariantList{0.0, 0.0};
+        QTest::newRow("of two windows marked active, the one higher in the stacking order")
+            << QVariantList{task(true, {window(true, 3), window(true, 5)})} << QVariantList{0.0, 1.0};
+        QTest::newRow("  the other way round") << QVariantList{task(true, {window(true, 5), window(true, 3)})} << QVariantList{0.0, 0.0};
+        QTest::newRow("a group marked active with no window of its own marked active restores nothing")
+            << QVariantList{task(true, {window(false, 1)})} << QVariantList();
+    }
+
+    void activeTaskPath()
+    {
+        QFETCH(QVariantList, tasks);
+        QFETCH(QVariantList, expected);
+        QVariant result;
+        QVERIFY(call(&result, "activeTaskPath", {tasks}));
+        if (expected.isEmpty()) {
+            QVERIFY2(result.isNull() || !result.isValid(), "nothing should be restored");
+        } else {
+            QCOMPARE(result.toList(), expected);
+        }
+    }
+
+    // The walk on real items: the editor in the reply field and the field itself are in it; the
+    // button next to it, the content and no item at all are not.
+    void inReplyFieldOnItems()
+    {
+        QObject *holder = m_holder.get();
+        QObject *content = holder->property("walkContentItem").value<QObject *>();
+        QVERIFY(content);
+        for (const char *name : {"walkEditorItem", "walkFieldItem"}) {
+            QObject *item = holder->property(name).value<QObject *>();
+            QVERIFY(item);
+            QVariant result;
+            QVERIFY(call(&result, "inReplyField", {QVariant::fromValue(item), QVariant::fromValue(content)}));
+            QVERIFY2(result.toBool(), name);
+        }
+        for (const char *name : {"walkButtonItem", "walkContentItem"}) {
+            QObject *item = holder->property(name).value<QObject *>();
+            QVERIFY(item);
+            QVariant result;
+            QVERIFY(call(&result, "inReplyField", {QVariant::fromValue(item), QVariant::fromValue(content)}));
+            QVERIFY2(!result.toBool(), name);
+        }
+        QVariant result;
+        QVERIFY(call(&result, "inReplyField", {QVariant(), QVariant::fromValue(content)}));
+        QVERIFY(!result.toBool());
     }
 
 private:
@@ -177,6 +232,19 @@ private:
                 QVariantMap{{QStringLiteral("created"), values.at(0)}, {QStringLiteral("visible"), values.at(1)}, {QStringLiteral("eligible"), values.at(2)}});
         }
         return list;
+    }
+
+    // A window of a group, as the applet reads it: whether it is active, and its place in the
+    // stacking order.
+    static QVariantMap window(bool active, int stacking)
+    {
+        return QVariantMap{{QStringLiteral("active"), active}, {QStringLiteral("stacking"), stacking}};
+    }
+
+    // A task of the applet's task model: whether it is active, and the windows of its group.
+    static QVariantMap task(bool active, const QVariantList &windows)
+    {
+        return QVariantMap{{QStringLiteral("active"), active}, {QStringLiteral("children"), windows}};
     }
 
     bool call(QVariant *result, const char *method, std::initializer_list<QVariant> arguments)
@@ -198,15 +266,6 @@ private:
                                              Q_ARG(QVariant, args.at(1)),
                                              Q_ARG(QVariant, args.at(2)),
                                              Q_ARG(QVariant, args.at(3)));
-        case 5:
-            return QMetaObject::invokeMethod(holder,
-                                             method,
-                                             Q_RETURN_ARG(QVariant, *result),
-                                             Q_ARG(QVariant, args.at(0)),
-                                             Q_ARG(QVariant, args.at(1)),
-                                             Q_ARG(QVariant, args.at(2)),
-                                             Q_ARG(QVariant, args.at(3)),
-                                             Q_ARG(QVariant, args.at(4)));
         default:
             return false;
         }
