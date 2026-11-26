@@ -57,8 +57,10 @@ ecm_target_qml_sources(org.kde.plasma.notifications SOURCES
 
 set_source_files_properties(global/Globals.qml PROPERTIES QT_QML_SINGLETON_TYPE ON)
 
+# Plasma Fusion: the banner keyboard triage rules (src/global/BannerTriage.js).
 ecm_target_qml_sources(org.kde.plasma.notifications SOURCES
     global/Globals.qml
+    global/BannerTriage.js
     global/PulseAudio.qml
     PATH global
 )

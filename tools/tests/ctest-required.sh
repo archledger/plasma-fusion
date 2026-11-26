@@ -18,7 +18,7 @@ case $(basename "$part") in
   kcm-cpp) required=(kcmctl-load kcmctl-fuzz kcmctl-meters kcmctl-panels kcmctl-power kcmctl-reset kcmctl-settingsfile kcmctl-gestures) ;;
   quicklook-cpp) required=(quicklook-model quicklook-viewers) ;;
   copytext-cpp) required=(copytext-core copytext-overlay copytext-capture copytext-flow) ;;
-  notifications-cpp) required=(notifications-plugin notifications-plugin-dir-guard) ;;
+  notifications-cpp) required=(notifications-plugin notifications-plugin-dir-guard notifications-triage-rules) ;;
   *) required=() ;;
 esac
 
