@@ -17,23 +17,27 @@ project(plasma-fusion-notifications VERSION 0.1.0 LANGUAGES C CXX)
 # system needs to build it at all, not the versions it was tested with.
 set(QT_MIN_VERSION "6.11.0")
 set(KF_MIN_VERSION "6.30.0")
-# The Plasma version src/ was taken from (README.md). The plugin compares the running Plasma with
-# this version before it offers the banner keyboard triage, and the built-against record names it.
+# The Plasma version src/ was taken from (README.md). The built-against record names it, beside
+# the Plasma version the build found.
 set(PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION "6.8.3")
 
 find_package(ECM ${KF_MIN_VERSION} REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
+# plasma-workspace builds its C++ as C++ 23 and sets the standard before it includes
+# KDECompilerSettings (its CMakeLists.txt, lines 17 to 25): set afterwards, the standard would be a
+# strict one, without the GNU extensions upstream compiles with.
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(KDEInstallDirs)
 include(KDECMakeSettings)
 include(KDECompilerSettings NO_POLICY_SCOPE)
 include(ECMQmlModule)
 include(ECMQtDeclareLoggingCategory)
+include(ECMDeprecationSettings)
 include(FeatureSummary)
-
-# plasma-workspace builds its C++ as C++ 23.
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# As upstream (its CMakeLists.txt, ecm_set_disabled_deprecation_versions).
+ecm_set_disabled_deprecation_versions(QT 5.15.2 KF 5.98.0)
 
 find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS DBus Quick Widgets WaylandClient)
 find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS
@@ -64,10 +68,12 @@ add_subdirectory(src)
 target_compile_definitions(org.kde.plasma.notifications PRIVATE
     PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION="${PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION}")
 
-# The versions this build was made against, for plasma-fusion status (a copy built from another
-# Plasma version than the running one must not be used).
+# What this build was made against, for plasma-fusion status: the Plasma version the source was
+# taken from, the Plasma version the build found, and Qt's. Both Plasma versions matter: a copy of
+# one version's source compiled against another version's libraries must not be put in front on a
+# machine that runs the source version.
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/built-against
-    "plasma-workspace=${PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION}\nqt=${Qt6_VERSION}\n")
+    "source-plasma-workspace=${PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION}\nplasma-workspace=${LibNotificationManager_VERSION}\nqt=${Qt6_VERSION}\n")
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/built-against
         DESTINATION ${KDE_INSTALL_DATADIR}/plasma-fusion/built-against RENAME notifications)
 
