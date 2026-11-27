@@ -82,7 +82,8 @@ ei.ei_touch_unref.argtypes = [P]; ei.ei_touch_unref.restype = P
 
 CAP_POINTER, CAP_ABS, CAP_KEYBOARD, CAP_TOUCH, CAP_SCROLL, CAP_BUTTON = 1, 2, 4, 8, 16, 32
 BUTTONS = {"left": 0x110, "right": 0x111, "middle": 0x112}
-KEYS = {"esc": 1, "escape": 1, "tab": 15, "return": 28, "enter": 28, "space": 57, "up": 103,
+# "enter" is Return's key, as the scenarios have read it so far; "kp_enter" is the keypad's own.
+KEYS = {"esc": 1, "escape": 1, "tab": 15, "return": 28, "enter": 28, "kp_enter": 96, "space": 57, "up": 103,
         "left": 105, "right": 106, "down": 108, "shift": 42, "ctrl": 29, "alt": 56, "meta": 125,
         "pageup": 104, "pagedown": 109, "a": 30, "b": 48}
 # More keys (linux/input-event-codes.h); the names above keep their codes.
@@ -120,7 +121,7 @@ for _cmd in ARGS:
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 
 # Lock-capable sessions: nothing that could submit a password while the screen is locked.
-SUBMITS = ("return", "enter")
+SUBMITS = ("return", "enter", "kp_enter")
 if os.environ.get("PFV_LOCK") == "1" and any(
         c.split()[:1] == ["type"] or (c.split()[:1] in (["key"], ["keydown"]) and len(c.split()) > 1
                                      and any(k in SUBMITS for k in c.split()[1].lower().split("+")))

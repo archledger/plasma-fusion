@@ -1,8 +1,12 @@
 /*
     SPDX-FileCopyrightText: 2019 Kai Uwe Broulik <kde@broulik.de>
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 
     SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 */
+
+// Plasma Fusion changes in this file are marked "Plasma Fusion": the banner keyboard triage of
+// SPEC-notification-triage.md.
 
 import QtQuick
 import QtQuick.Layouts
@@ -14,6 +18,10 @@ import plasma.applet.org.kde.plasma.notifications as Notifications
 
 RowLayout {
     id: replyRow
+
+    // Plasma Fusion: marks this as the reply field of the notification. The banner asks the
+    // ancestors of the item that has the keyboard focus (BannerTriage.inReplyField).
+    readonly property bool isReplyField: true
 
     // implicitWidth will keep being rewritten by the Layout itself
     Layout.maximumWidth: Notifications.Globals.popupWidth
@@ -38,6 +46,14 @@ RowLayout {
         placeholderText: replyRow.modelInterface.replyPlaceholderText
                          || i18ndc("plasma_applet_org.kde.plasma.notifications", "Text field placeholder", "Type a reply…")
         Accessible.name: placeholderText
+        // Plasma Fusion: in a banner, the keyboard focus arriving in the field starts the reply,
+        // as a click on the field does. Without it Tab would put text into a banner that is not
+        // replying, and Escape would then dismiss it with its draft. The history is left as it is.
+        onActiveFocusChanged: {
+            if (activeFocus && !replyRow.modelInterface.inHistory && !replyRow.modelInterface.replying) {
+                replyRow.beginReplyRequested();
+            }
+        }
         onAccepted: {
             if (replyButton.enabled) {
                 replyRow.modelInterface.replied(text);

@@ -187,7 +187,9 @@ def walk(objs):
 def upstream_files(path):
     """Files a forked upstream package lists in its UPSTREAM-FILES manifest (one path per line,
     relative to the manifest; # comments). They keep upstream's code and are linted upstream; the
-    package's own files and the upstream files it changes for Plasma Fusion stay unlisted."""
+    package's own files stay unlisted. An upstream file that a package changes for Plasma Fusion
+    may stay listed: its changes are then outside these checks, and the package's part page says
+    so."""
     path = pathlib.Path(path).resolve()
     for parent in path.parents:
         manifest = parent / "UPSTREAM-FILES"

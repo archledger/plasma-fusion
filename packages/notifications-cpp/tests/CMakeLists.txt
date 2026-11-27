@@ -22,3 +22,44 @@ add_test(NAME notifications-plugin-dir-guard COMMAND "${CMAKE_COMMAND}"
     "-DWRAPPER=${CMAKE_CURRENT_SOURCE_DIR}/../CMakeLists.txt"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/guardtest.cmake")
 set_tests_properties(notifications-plugin-dir-guard PROPERTIES TIMEOUT 600)
+
+# The rules of the banner keyboard triage are a QML library; this test loads them through a holder.
+find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Qml Quick)
+add_executable(notificationstriagetest triagetest.cpp)
+set_target_properties(notificationstriagetest PROPERTIES AUTOMOC ON)
+target_compile_definitions(notificationstriagetest PRIVATE
+    TRIAGE_HOLDER_QML="${CMAKE_CURRENT_SOURCE_DIR}/triage-holder.qml")
+target_link_libraries(notificationstriagetest PRIVATE Qt6::Core Qt6::Test Qt6::Qml Qt6::Quick)
+add_test(NAME notifications-triage-rules COMMAND notificationstriagetest)
+set_tests_properties(notifications-triage-rules PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software" TIMEOUT 30)
+
+# The version rule on its own: numbers in, a decision out.
+add_executable(notificationsversiontest versiontest.cpp)
+set_target_properties(notificationsversiontest PROPERTIES AUTOMOC ON)
+target_compile_definitions(notificationsversiontest PRIVATE
+    PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION="${PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION}")
+target_link_libraries(notificationsversiontest PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME notifications-triage-version COMMAND notificationsversiontest)
+set_tests_properties(notifications-triage-version PROPERTIES TIMEOUT 30)
+
+# The focus shortcut through GlobalShortcuts itself. The class is compiled into the plugin, so the
+# test compiles its source and the applet's logging category with it. It registers its actions with
+# the global shortcut daemon, so it runs on a private session bus (run-shortcut-test.sh): on the
+# bus of a real desktop it would reach the desktop's own shortcut settings. Without dbus-run-session
+# the test is left out (tools/tests/ctest-required.sh makes CI fail then).
+add_executable(notificationsshortcuttest shortcuttest.cpp ../src/globalshortcuts.cpp
+    "${CMAKE_BINARY_DIR}/src/notifications_debug.cpp")
+set_target_properties(notificationsshortcuttest PROPERTIES AUTOMOC ON)
+target_include_directories(notificationsshortcuttest PRIVATE "${CMAKE_BINARY_DIR}/src")
+target_compile_definitions(notificationsshortcuttest PRIVATE
+    PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION="${PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION}")
+target_link_libraries(notificationsshortcuttest PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::DBus Qt6::Test
+    KF6::GlobalAccel KF6::I18n)
+find_program(DBUS_RUN_SESSION dbus-run-session)
+if(DBUS_RUN_SESSION)
+    add_test(NAME notifications-triage-shortcut
+        COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/run-shortcut-test.sh" $<TARGET_FILE:notificationsshortcuttest>
+                "${CMAKE_CURRENT_BINARY_DIR}/shortcuttest-home")
+    set_tests_properties(notifications-triage-shortcut PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
+endif()

@@ -1,8 +1,12 @@
 /*
     SPDX-FileCopyrightText: 2019 Kai Uwe Broulik <kde@privat.broulik.de>
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 
     SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 */
+
+// Plasma Fusion changes in this file are marked "Plasma Fusion": the banner keyboard triage of
+// SPEC-notification-triage.md.
 
 pragma ComponentBehavior: Bound
 pragma Singleton
@@ -20,6 +24,9 @@ import org.kde.taskmanager as TaskManager
 import plasma.applet.org.kde.plasma.notifications as Notifications
 
 import ".."
+
+// Plasma Fusion: the rules of the banner keyboard triage.
+import "./BannerTriage.js" as BannerTriage
 
 // This singleton object contains stuff shared between all notification plasmoids, namely:
 // - Popup creation and placement
@@ -799,8 +806,105 @@ QtObject {
         }
     }
 
+    // Plasma Fusion: banner keyboard triage (SPEC-notification-triage.md; the rules are in
+    // BannerTriage.js). KWin decides whether the "Focus notification banner" shortcut is
+    // dispatched; this takes the newest banner that may be taken and asks it for keyboard focus.
+    // The window that had the keyboard focus then is recorded here, by the ids the task model
+    // knows it by: a window itself, never the group it is in (the task model groups the windows
+    // of an application, and a group cannot be activated). Only the ids are kept, because the
+    // model moves the window meanwhile, and the window is looked up when it is asked for
+    // (windowCoordinates). When that window is one of the applet's own taken banners, an older
+    // one, the record of the earlier request stands. The record is used only after a replacement
+    // that ends a focused interaction in which no reply was started.
+    property var bannerFocusPrevious: null
+
+    // The ids the task model knows a task's window by, as an array; null when there are none.
+    function windowIdsOf(task) {
+        if (!task || !task.valid) {
+            return null;
+        }
+        const reported = tasksModel.data(task, TaskManager.AbstractTasksModel.WinIdList);
+        const ids = [];
+        for (let i = 0; reported && i < reported.length; ++i) {
+            ids.push(reported[i]);
+        }
+        return ids.length > 0 ? ids : null;
+    }
+
+    function requestBannerFocus() {
+        const banners = [];
+        for (let index = 0; index < popupInstantiator.count; ++index) {
+            const popup = popupInstantiator.objectAt(index);
+            // A popup that is not instantiated yet keeps its place, so that the index chosen is
+            // the instantiator's own.
+            banners.push(popup ? {
+                created: popup.created.valueOf(),
+                visible: popup.visible,
+                active: popup.active,
+                taken: popup.triageState !== BannerTriage.STATE_IDLE,
+                eligible: BannerTriage.eligible(popup.visible, popup.type === NotificationManager.Notifications.JobType, popup.modelInterface.replying)
+            } : { created: -Infinity, visible: false, active: false, taken: false, eligible: false });
+        }
+
+        const chosen = BannerTriage.newestBannerIndex(banners);
+        shortcuts.reportTriage("triage-available");
+        if (chosen === -1) {
+            shortcuts.reportTriage("shortcut-ignored-no-banner");
+            return;
+        }
+
+        const popup = popupInstantiator.objectAt(chosen);
+        // Pressing the shortcut again while that banner is taken changes nothing: no second
+        // request, and the recorded window stays the one from the first press.
+        if (popup.triageState !== BannerTriage.STATE_IDLE) {
+            return;
+        }
+
+        // The window that has the keyboard focus, as the task model names it (its activeTask): a
+        // window itself, never the group it is in. Nothing is recorded when no window has the
+        // keyboard focus. The record of an earlier request stands when the active window is one
+        // of the applet's own taken banners: no task is active then.
+        bannerFocusPrevious = BannerTriage.recordedWindow(banners.some(banner => banner.active && banner.taken),
+                                                           windowIdsOf(tasksModel.activeTask),
+                                                           bannerFocusPrevious);
+
+        shortcuts.reportTriage("focus-requested " + popup.notificationId);
+        popup.requestBannerFocus();
+    }
+
+    // The task model as plain values for BannerTriage.windowCoordinates: one entry per task, a
+    // window on its own by its ids, a group by the ids of each of its windows.
+    function windowTasks() {
+        const tasks = [];
+        for (let row = 0; row < tasksModel.rowCount(); ++row) {
+            const task = tasksModel.index(row, 0);
+            const count = tasksModel.rowCount(task);
+            const children = [];
+            for (let child = 0; child < count; ++child) {
+                children.push(windowIdsOf(tasksModel.index(child, 0, task)));
+            }
+            tasks.push({ ids: count === 0 ? windowIdsOf(task) : null, children: children });
+        }
+        return tasks;
+    }
+
+    // Plasma Fusion: asks for the window recorded at the request to be activated again, when it
+    // still exists, wherever the task model has put it since. KWin decides; the session scenarios
+    // read which window is active afterwards.
+    function restorePreviousTask() {
+        const at = BannerTriage.windowCoordinates(bannerFocusPrevious, windowTasks());
+        if (at) {
+            tasksModel.requestActivate(tasksModel.makeModelIndex(at[0], at.length === 2 ? at[1] : -1));
+            shortcuts.reportTriage("focus-restore-requested");
+        } else {
+            shortcuts.reportTriage("focus-restore-skipped");
+        }
+    }
+
     property Notifications.GlobalShortcuts shortcuts: Notifications.GlobalShortcuts {
         onToggleDoNotDisturbTriggered: globals.toggleDoNotDisturbMode()
         onClearHistoryTriggered: plasmoidItem.clearNotificationHistoryAndShowOsd()
+        // Plasma Fusion
+        onFocusBannerTriggered: globals.requestBannerFocus()
     }
 }
