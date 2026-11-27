@@ -264,13 +264,21 @@ When the optional selector is installed and the Fedora vendor unit is supported,
 vendor file alone. It runs the selector within five seconds and prepends the private path only
 for an admitted shell launch, never for the user manager or for a direct launch. If the on-disk
 unit changes, admission stops; run setup again to remove or reconcile the override. Package
-delivery, runtime recovery, and restore are qualified separately.
+delivery and restore are qualified separately.
 
 The selector keeps a separate `notifications/notify` queue under the Plasma Fusion state
 directory. It queues one notice when an admitted copy is followed by a version or load failure.
 The notifier waits for the desktop notification service and removes the record only after a
 successful reply. A missing package or different theme is silent. The login check's queue is
 independent.
+
+The post-start watcher checks that the selected process mapped the private applet and waits
+up to twelve seconds for its notification service. An absent applet or another service owner
+does not trigger recovery. When the mapped copy leaves the name unowned, the watcher records
+the failed payload and selects stock on the next start. It signals only the original managed
+process via a pidfd and relies on the vendor unit's restart-on-failure policy. This is an
+early, abnormal exit of the broken shell, not a normal logout. The selector tries the copy
+again after the RPM database or payload changes.
 
 ```
 ~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh status   # record, switched-off parts, last runs

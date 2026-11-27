@@ -38,7 +38,7 @@ announce_transition() {
           plasma-fusion-notifications-notify.service >&2
       fi
       ;;
-    missing | non-fusion-theme)
+    missing | non-fusion-theme | qml-blocked)
       if [[ $last == copy || -f $state/notify ]]; then
         write_state "$state/selection" stock && rm -f -- "$state/notify"
       fi
@@ -99,6 +99,11 @@ decision='load-failed'
 [[ -x $checker ]] || exit 1
 payload=$(payload_stamp 2>/dev/null) || exit 1
 db=$(rpm_stamp 2>/dev/null) || db=
+package=$(package_key "$db" "$payload")
+if [[ -n $db && -r $state/qml-failed && -f $state/qml-failed && $(<"$state/qml-failed") == "$package" ]]; then
+  decision='qml-blocked'
+  exit 1
+fi
 
 decision='version-invalid'
 read_record || exit 1
@@ -151,6 +156,10 @@ if [[ $decision == checked-pass && -n $db && ! -v PF_GATE_FAKE_VERSIONS ]]; then
     printf '%s\n%s\n' "$key" "$installed" >"$cache_tmp" &&
       mv -fT -- "$cache_tmp" "$state/pass" && cache_tmp=
   fi
+fi
+
+if [[ -n $db && ! -v PF_GATE_FAKE_VERSIONS && ${INVOCATION_ID:-} =~ ^[a-f0-9]{32}$ ]]; then
+  write_state "$state/admitted" "$INVOCATION_ID" "$package" "$plugin" || :
 fi
 
 printf '%s\n' "$plugin_root"

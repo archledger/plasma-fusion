@@ -73,8 +73,11 @@ configure_file(gate/plasma-fusion-notifications-select.in "${_gate_dir}/plasma-f
     @ONLY FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 configure_file(gate/plasma-fusion-notifications-notify.in "${_gate_dir}/plasma-fusion-notifications-notify"
     @ONLY FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+configure_file(gate/plasma-fusion-notifications-watch.in "${_gate_dir}/plasma-fusion-notifications-watch"
+    @ONLY FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 install(FILES "${_gate_dir}/plasma-fusion-notifications-common.sh" DESTINATION "${KDE_INSTALL_LIBEXECDIR}/plasma-fusion")
 install(PROGRAMS "${_gate_dir}/plasma-fusion-notifications-select" "${_gate_dir}/plasma-fusion-notifications-notify"
+    "${_gate_dir}/plasma-fusion-notifications-watch"
     DESTINATION "${KDE_INSTALL_LIBEXECDIR}/plasma-fusion")
 
 add_subdirectory(src)

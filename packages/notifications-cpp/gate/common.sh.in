@@ -31,6 +31,12 @@ payload_stamp() {
   stat -Lc '%d:%i:%s:%y:%z' -- "$plugin" "$record" "$checker"
 }
 
+package_key() {
+  local hash
+  hash=$(printf '%s\0' "$1" "$2" "$plugin" "$record" "$checker" | sha256sum) || return
+  printf '%s\n' "${hash%% *}"
+}
+
 write_state() {
   local path=$1 tmp
   shift

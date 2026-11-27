@@ -10,7 +10,7 @@ script=$(cd "$(dirname "$0")/.." && pwd)/fusion-config.sh
 mkdir -p "${1:?scratch parent required}"
 base=$(mktemp -d "$(realpath "$1")/notification-setup.XXXXXX")
 for function in notifications_unit_arg notifications_shell_dropin notifications_vendor_supported \
-    notifications_setup install_text session_manager; do
+    notifications_service_unit notifications_setup install_text session_manager; do
   sed -n "/^$function() {/,/^}/p" "$script" >>"$base/functions"
   if ! grep -q "^$function() {" "$base/functions"; then
     printf 'FAIL missing setup function: %s\n' "$function" >&2
@@ -30,6 +30,14 @@ NOTIFICATIONS_ROOT="$base/private qt %"
 NOTIFICATIONS_SELECTOR="$base/selector with spaces %"
 NOTIFICATIONS_SHELL="$base/record-shell"
 NOTIFICATIONS_DROPIN_REL=systemd/user/plasma-plasmashell.service.d/20-plasma-fusion-notifications.conf
+NOTIFICATIONS_NOTIFY=$base/bin-notify
+NOTIFICATIONS_WATCH=$base/bin-watch
+NOTIFICATIONS_NOTIFY_NAME=plasma-fusion-notifications-notify.service
+NOTIFICATIONS_NOTIFY_REL=systemd/user/$NOTIFICATIONS_NOTIFY_NAME
+NOTIFICATIONS_WATCH_REL=systemd/user/plasma-fusion-notifications-watch@.service
+NOTIFICATIONS_WANTS_REL=systemd/user/xdg-desktop-autostart.target.wants/$NOTIFICATIONS_NOTIFY_NAME
+NOTIFICATIONS_FILES=("$NOTIFICATIONS_DROPIN_REL" "$NOTIFICATIONS_NOTIFY_REL" "$NOTIFICATIONS_WATCH_REL"
+  "$NOTIFICATIONS_WANTS_REL")
 dropin=$CONFIG/$NOTIFICATIONS_DROPIN_REL
 export CHANGES=0 DRY=0
 export HOME XDG_CONFIG_HOME="$CONFIG" XDG_DATA_HOME="$DATA" XDG_STATE_HOME="$STATE"
@@ -70,20 +78,23 @@ cat >"$NOTIFICATIONS_SHELL" <<'EOF'
 printf '%s\n%s\n' "$*" "${QT_PLUGIN_PATH-<unset>}" >"$RECORD_PID"
 EOF
 chmod +x "$NOTIFICATIONS_SELECTOR" "$NOTIFICATIONS_SHELL"
+ln -s /usr/bin/true "$NOTIFICATIONS_NOTIFY"
+ln -s /usr/bin/true "$NOTIFICATIONS_WATCH"
 
 : >"$base/manager.log"
 DRY=1
 notifications_setup
-test ! -e "$dropin"
+for rel in "${NOTIFICATIONS_FILES[@]}"; do test ! -e "$CONFIG/$rel"; done
 test ! -s "$base/manager.log"
-test "$CHANGES" = 1
+test "$CHANGES" = 4
 DRY=0 CHANGES=0
 notifications_setup
-test -f "$dropin"
+for rel in "${NOTIFICATIONS_FILES[@]}"; do test -f "$CONFIG/$rel"; done
+test "$(readlink "$CONFIG/$NOTIFICATIONS_WANTS_REL")" = "../$NOTIFICATIONS_NOTIFY_NAME"
 test "$(wc -l <"$base/manager.log")" = 1
 notifications_setup
 test "$(wc -l <"$base/manager.log")" = 1
-test "$CHANGES" = 1
+test "$CHANGES" = 4
 
 launch() {
   local want=$1
@@ -130,7 +141,7 @@ chmod u+w "$legacy"
 printf 'ExecStart=/usr/bin/plasmashell --different-argv\n' >>"$NOTIFICATIONS_VENDOR"
 launch "$QT_PLUGIN_PATH"
 notifications_setup
-test ! -e "$dropin"
+for rel in "${NOTIFICATIONS_FILES[@]}"; do test ! -e "$CONFIG/$rel" && test ! -L "$CONFIG/$rel"; done
 test "$(wc -l <"$base/manager.log")" = 2
 
 sed -i '$d' "$NOTIFICATIONS_VENDOR"
