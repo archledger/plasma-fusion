@@ -827,7 +827,7 @@ QtObject {
                 visible: popup.visible,
                 active: popup.active,
                 taken: popup.triageState !== BannerTriage.STATE_IDLE,
-                eligible: popup.visible && popup.type !== NotificationManager.Notifications.JobType && !popup.modelInterface.replying
+                eligible: BannerTriage.eligible(popup.visible, popup.type === NotificationManager.Notifications.JobType, popup.modelInterface.replying)
             } : { created: -Infinity, visible: false, active: false, taken: false, eligible: false });
         }
 
@@ -845,30 +845,14 @@ QtObject {
             return;
         }
 
-        // The window that has the keyboard focus now, as the task model names it: each task with
-        // the windows of its group and their place in the stacking order.
-        const tasks = [];
-        for (let row = 0; row < tasksModel.rowCount(); ++row) {
-            const task = tasksModel.index(row, 0);
-            const windows = [];
-            for (let child = 0; child < tasksModel.rowCount(task); ++child) {
-                const window = tasksModel.index(child, 0, task);
-                windows.push({
-                    active: tasksModel.data(window, TaskManager.AbstractTasksModel.IsActive) === true,
-                    stacking: tasksModel.data(window, TaskManager.AbstractTasksModel.StackingOrder)
-                });
-            }
-            tasks.push({
-                active: tasksModel.data(task, TaskManager.AbstractTasksModel.IsActive) === true,
-                children: windows
-            });
-        }
-
-        const window = BannerTriage.activeTaskPath(tasks);
-        // The record of the window that had the keyboard focus stands when the active window is
-        // one of the applet's own taken banners: no task is active then.
+        // The window that has the keyboard focus, as the task model names it (its activeTask): a
+        // window itself, never the group it is in. It is kept as a persistent index, so that it
+        // follows its window when the model moves its rows, as stock does for the window of a
+        // default action. The record of an earlier request stands when the active window is one
+        // of the applet's own taken banners: no task is active then.
+        const at = BannerTriage.taskCoordinates(tasksModel.activeTask);
         bannerFocusPrevious = BannerTriage.recordedWindow(banners.some(banner => banner.active && banner.taken),
-                                                           window ? tasksModel.makePersistentModelIndex(window[0], window.length === 2 ? window[1] : -1) : null,
+                                                           at ? tasksModel.makePersistentModelIndex(at[0], at.length === 2 ? at[1] : -1) : null,
                                                            bannerFocusPrevious);
 
         shortcuts.reportTriage("focus-requested " + popup.notificationId);

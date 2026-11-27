@@ -68,17 +68,15 @@ NotificationsApplet.NotificationWindow {
     // dismiss it again while it is on its way out.
     property bool triageDismissed: false
     readonly property bool triageActive: triageState === BannerTriage.STATE_ACTIVE
-    // What the banner shows and when its notification was last updated. KDE gives a notification a
-    // new update time on every replacement; the text and the actions are a second witness to it.
-    // A change means the popup now carries another notification, or the same one replaced. It is
-    // never reported: what it holds may be private.
-    readonly property string triageIdentity: JSON.stringify([notificationPopup.notificationId,
-                                                              isNaN(notificationPopup.updated) ? "" : notificationPopup.updated.valueOf(),
-                                                              notificationPopup.summary,
-                                                              notificationPopup.body,
-                                                              notificationPopup.hasDefaultAction,
-                                                              notificationPopup.actionNames,
-                                                              notificationPopup.actionLabels])
+    // What makes this banner the same notification as before (BannerTriage.identity): its id,
+    // the time its notification was last updated, and what it shows. A change means the popup now
+    // carries another notification, or the same one replaced; the actions are no part of it, since
+    // KDE clears them when the application leaves the bus. It is never reported: what it holds
+    // may be private.
+    readonly property string triageIdentity: BannerTriage.identity(notificationPopup.notificationId,
+                                                                   isNaN(notificationPopup.updated) ? "" : notificationPopup.updated.valueOf(),
+                                                                   notificationPopup.summary,
+                                                                   notificationPopup.body)
     // True while keyboard focus is in the banner's content or one of its controls. (isAncestorOf
     // is not exposed to QML, so the parents are walked.)
     readonly property bool triageFocusWithin: {

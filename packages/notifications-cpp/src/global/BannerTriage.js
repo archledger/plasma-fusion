@@ -7,6 +7,10 @@
     tested: which banner the shortcut takes, which window had the keyboard focus before it, how
     one banner's interaction moves between its states, and what Escape and Enter do on it. The
     applet applies them; KWin decides whether the shortcut is dispatched and which window has focus.
+
+    Each rule is a function of plain values, so that the Qt Test can state them as data: a task of
+    the task model arrives as QML reads a model index (valid, row, parent), and a window to return
+    to as whatever the applet recorded.
 */
 
 .pragma library
@@ -14,6 +18,33 @@
 const STATE_IDLE = "idle";
 const STATE_REQUESTED = "requested";
 const STATE_ACTIVE = "active";
+
+// Whether the shortcut may take a banner: it shows, it is a notification and not a job popup, and
+// no reply has been started in it.
+function eligible(visible, jobPopup, replyStarted)
+{
+    return visible && !jobPopup && !replyStarted;
+}
+
+// What makes a banner the same notification as before: its id, the time its notification was last
+// updated (KDE gives a notification a new update time on every replacement), and what it shows.
+// Not its actions: KDE clears them when the application that sent the notification leaves the
+// bus, and that is no replacement. It is never reported: what it holds may be private.
+function identity(id, updated, summary, body)
+{
+    return JSON.stringify([id, updated, summary, body]);
+}
+
+// Where a task of the task model is, as the model's makePersistentModelIndex takes it: [row] for
+// a task of its own, [row of its group, row in the group] for a window inside a group. A task
+// arrives as QML reads a model index (valid, row, parent); null when there is none.
+function taskCoordinates(task)
+{
+    if (!task || !task.valid) {
+        return null;
+    }
+    return task.parent && task.parent.valid ? [task.parent.row, task.row] : [task.row];
+}
 
 // The newest banner that is visible and may be taken, by the time it was created; the later one
 // when two share a time. -1 when there is none.
@@ -32,34 +63,6 @@ function newestBannerIndex(banners)
         }
     }
     return best;
-}
-
-// The window that has the keyboard focus when the shortcut is pressed, as the task model names
-// it: [row] for a window of its own; in a group of windows [row, child], the window itself and
-// not the group, which cannot be activated. Of several windows marked active the one highest in
-// the stacking order is taken, as the stock default action does. null when there is none.
-function activeTaskPath(tasks)
-{
-    for (let row = 0; row < tasks.length; ++row) {
-        const task = tasks[row];
-        if (!task.active) {
-            continue;
-        }
-        if (task.children.length === 0) {
-            return [row];
-        }
-        let best = -1;
-        let highest = -Infinity;
-        for (let child = 0; child < task.children.length; ++child) {
-            const window = task.children[child];
-            if (window.active && window.stacking >= highest) {
-                highest = window.stacking;
-                best = child;
-            }
-        }
-        return best === -1 ? null : [row, best];
-    }
-    return null;
 }
 
 // Whether ITEM, the item that has the keyboard focus, is the reply field of a notification or is

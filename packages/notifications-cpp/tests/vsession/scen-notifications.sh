@@ -75,50 +75,72 @@ wait_text() { # PATTERN FILE [AFTER LINE]: at most 6 s
     return 1
 }
 
+# The test applications: instances of sender.py, each with a request file and a log of its own.
+# send, replace, close and the receipts work on the selected one. The first serves the whole mode;
+# a mode that needs an application to leave the bus starts a second (start_second_sender).
+sender_request=$HOME/pf-notif-request.json
+sender_log=$OUT/sender.log
+use_sender() { # 1 or 2
+    if [ "$1" = 1 ]; then
+        sender_request=$HOME/pf-notif-request.json sender_log=$OUT/sender.log
+    else
+        sender_request=$HOME/pf-notif-request-2.json sender_log=$OUT/sender-2.log
+    fi
+}
 write_request() {
-    printf '%s\n' "$1" >"$HOME/pf-notif-request.next"
-    mv "$HOME/pf-notif-request.next" "$HOME/pf-notif-request.json"
+    printf '%s\n' "$1" >"$sender_request.next"
+    mv "$sender_request.next" "$sender_request"
 }
 
 SENT_ID=
 send() { # LABEL [EXTRA JSON MEMBERS OF THE REQUEST]
     local label=$1 extra=${2:-} line
     write_request "{\"op\":\"send\",\"label\":\"$label\",\"replaces\":0$extra}"
-    wait_text "\"event\": \"sent\", \"label\": \"$label\"" "$OUT/sender.log" || return 1
-    line=$(grep -F "\"event\": \"sent\", \"label\": \"$label\"" "$OUT/sender.log" | tail -n 1)
+    wait_text "\"event\": \"sent\", \"label\": \"$label\"" "$sender_log" || return 1
+    line=$(grep -F "\"event\": \"sent\", \"label\": \"$label\"" "$sender_log" | tail -n 1)
     SENT_ID=$(sed -n 's/.*"id": *\([0-9][0-9]*\).*/\1/p' <<<"$line")
     [[ "$SENT_ID" =~ ^[1-9][0-9]*$ ]]
 }
 replace() { # LABEL ID OF THE NOTIFICATION REPLACED [EXTRA]
     local label=$1 id=$2 extra=${3:-} line
     write_request "{\"op\":\"send\",\"label\":\"$label\",\"replaces\":$id$extra}"
-    wait_text "\"event\": \"sent\", \"label\": \"$label\"" "$OUT/sender.log" || return 1
-    line=$(grep -F "\"event\": \"sent\", \"label\": \"$label\"" "$OUT/sender.log" | tail -n 1)
+    wait_text "\"event\": \"sent\", \"label\": \"$label\"" "$sender_log" || return 1
+    line=$(grep -F "\"event\": \"sent\", \"label\": \"$label\"" "$sender_log" | tail -n 1)
     SENT_ID=$(sed -n 's/.*"id": *\([0-9][0-9]*\).*/\1/p' <<<"$line")
 }
 close_notification() {
     write_request "{\"op\":\"close\",\"id\":$1}"
-    wait_text "\"event\": \"closed\", \"id\": $1" "$OUT/sender.log"
+    wait_text "\"event\": \"closed\", \"id\": $1" "$sender_log"
 }
 receipts() { # ID: what the test application was told about a notification
-    grep -E "\"event\": \"(action|closed|replied)\", \"id\": $1(,|\})" "$OUT/sender.log" || true
+    grep -E "\"event\": \"(action|closed|replied)\", \"id\": $1(,|\})" "$sender_log" || true
 }
 receipt_count() { receipts "$1" | grep -c . || true; }
-# Stops the test application and waits for it (at most 10 s); kills it if it is still running.
+second_sender=
+start_second_sender() { # starts it and selects it; it has no request yet
+    rm -f "$HOME/pf-notif-request-2.json"
+    python3 "$HOME/pf-notif/sender.py" "$HOME/pf-notif-request-2.json" >"$OUT/sender-2.log" 2>&1 &
+    second_sender=$!
+    use_sender 2
+    wait_text '"event": "ready"' "$sender_log"
+}
+# Stops the selected test application and waits for it (at most 10 s); kills it if it is still running.
 sender_stopped=
 stop_sender() {
+    local pid=$sender
+    [ "$sender_log" != "$OUT/sender-2.log" ] || pid=$second_sender
     write_request '{"op":"stop"}'
     for _ in {1..40}; do
-        kill -0 "$sender" 2>/dev/null || break
+        kill -0 "$pid" 2>/dev/null || break
         sleep .25
     done
-    if kill -0 "$sender" 2>/dev/null; then
-        kill "$sender" 2>/dev/null || true
-        wait "$sender" 2>/dev/null || true
+    if kill -0 "$pid" 2>/dev/null; then
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
         sender_stopped="no (killed)"
         return 1
     fi
-    wait "$sender" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
     sender_stopped=yes
 }
 no_script_error() { [ "$(grep -c -E 'qrc:.*:[0-9]+: [A-Za-z]*Error' "$OUT/plasmashell.log" || true)" = 0 ]; }
@@ -275,7 +297,7 @@ control_mode() {
     need "a banner without actions is sent" send timed-out ',"timeout":2000,"actions":[]' || return 1
     timed_out=$SENT_ID
     need "a banner without actions that times out tells the application it expired" \
-        wait_text "\"event\": \"closed\", \"id\": $timed_out, \"reason\": 1" "$OUT/sender.log" || return 1
+        wait_text "\"event\": \"closed\", \"id\": $timed_out, \"reason\": 1" "$sender_log" || return 1
     expect "  once" "$(receipt_count "$timed_out")" 1
 
     # The test chord moves no focus: nothing is bound to it.
@@ -296,8 +318,8 @@ control_mode() {
     sleep 1.5
     shot 01-banner
     pfinput 'click 200 125'
-    need "the click runs the default action" wait_text "\"event\": \"action\", \"id\": $clicked, \"key\": \"default\"" "$OUT/sender.log" || return 1
-    need "  and closes the notification" wait_text "\"event\": \"closed\", \"id\": $clicked, \"reason\": 3" "$OUT/sender.log" || return 1
+    need "the click runs the default action" wait_text "\"event\": \"action\", \"id\": $clicked, \"key\": \"default\"" "$sender_log" || return 1
+    need "  and closes the notification" wait_text "\"event\": \"closed\", \"id\": $clicked, \"reason\": 3" "$sender_log" || return 1
     expect "  once each" "$(receipt_count "$clicked")" 2
 
     # Closing a notification tells the application.
@@ -448,7 +470,7 @@ mode_activate() {
     sleep 1.5
     pfinput 'click 200 125'
     need "a click on it runs the default action and closes it" \
-        wait_text "\"event\": \"closed\", \"id\": $clicked, \"reason\": 3" "$OUT/sender.log" || return 1
+        wait_text "\"event\": \"closed\", \"id\": $clicked, \"reason\": 3" "$sender_log" || return 1
     need "another is sent" send enter-default ',"actions":["default","Open"]' || return 1
     entered=$SENT_ID
     sleep 1.5
@@ -456,7 +478,7 @@ mode_activate() {
     pfinput 'key return'
     need "Enter runs the default action" triage "activated-by-enter $entered\"" "$from" || return 1
     need "  and closes the notification" \
-        wait_text "\"event\": \"closed\", \"id\": $entered, \"reason\": 3" "$OUT/sender.log" || return 1
+        wait_text "\"event\": \"closed\", \"id\": $entered, \"reason\": 3" "$sender_log" || return 1
     need "  and KWrite is active again" active pf-notif-app.txt after-enter-default || return 1
     shot 01-after-enter
     expect "Enter tells the application what a click does" "$(receipts "$entered" | sed "s/\"id\": $entered/\"id\": N/" | sort)" "$(receipts "$clicked" | sed "s/\"id\": $clicked/\"id\": N/" | sort)"
@@ -510,9 +532,9 @@ mode_activate() {
     need "a held Return activates" triage "activated-by-enter $held\"" "$from" || return 1
     # The activation reaches the application once the key is released and the compositor has
     # given the activation token, so the receipt is waited for, not timed.
-    need "  and the application is told" wait_text "\"event\": \"action\", \"id\": $held, \"key\": \"default\"" "$OUT/sender.log" || return 1
-    need "  and the notification is closed for it" wait_text "\"event\": \"closed\", \"id\": $held, \"reason\": 3" "$OUT/sender.log" || return 1
-    expect "  once" "$(grep -c "\"event\": \"action\", \"id\": $held," "$OUT/sender.log" || true)" 1
+    need "  and the application is told" wait_text "\"event\": \"action\", \"id\": $held, \"key\": \"default\"" "$sender_log" || return 1
+    need "  and the notification is closed for it" wait_text "\"event\": \"closed\", \"id\": $held, \"reason\": 3" "$sender_log" || return 1
+    expect "  once" "$(grep -c "\"event\": \"action\", \"id\": $held," "$sender_log" || true)" 1
     need "  and KWrite is active again" active pf-notif-app.txt after-held || return 1
     pfinput 'key ctrl+s'
     sleep 1
@@ -528,17 +550,17 @@ mode_activate() {
     granted=$(log_lines)
     pfinput 'keydown return' 'sleep 1.2' 'keyup return'
     need "a held Return runs the default action" triage "activated-by-enter $staying\"" "$granted" || return 1
-    need "  and the application is told" wait_text "\"event\": \"action\", \"id\": $staying, \"key\": \"default\"" "$OUT/sender.log" || return 1
+    need "  and the application is told" wait_text "\"event\": \"action\", \"id\": $staying, \"key\": \"default\"" "$sender_log" || return 1
     sleep 1
     expect "  the resident banner stays" "$(shown_banners)" 1
     need "  and keeps the keyboard focus" active plasmashell still-focused || return 1
-    expect "  and is told once, the banner staying" "$(grep -c "\"event\": \"action\", \"id\": $staying," "$OUT/sender.log" || true)" 1
+    expect "  and is told once, the banner staying" "$(grep -c "\"event\": \"action\", \"id\": $staying," "$sender_log" || true)" 1
     from=$(log_lines)
     pfinput 'key return'
     need "a second, separate Enter acts again" triage "activated-by-enter $staying\"" "$from" || return 1
     sleep 2
-    expect "  so the application is told twice" "$(grep -c "\"event\": \"action\", \"id\": $staying," "$OUT/sender.log" || true)" 2
-    expect "  and the notification is not closed" "$(grep -c "\"event\": \"closed\", \"id\": $staying" "$OUT/sender.log" || true)" 0
+    expect "  so the application is told twice" "$(grep -c "\"event\": \"action\", \"id\": $staying," "$sender_log" || true)" 2
+    expect "  and the notification is not closed" "$(grep -c "\"event\": \"closed\", \"id\": $staying" "$sender_log" || true)" 0
     from=$(log_lines)
     pfinput 'key escape'
     need "  and Escape still dismisses it" triage "dismissed-by-escape $staying\"" "$from" || return 1
@@ -574,9 +596,9 @@ mode_buttons() {
     need "the shortcut gives it keyboard focus" take_banner || return 1
     need "Tab reaches the action's button" tab_to_action_button || return 1
     pfinput 'key space'
-    need "Space on the button invokes the action" wait_text "\"event\": \"action\", \"id\": $actioned, \"key\": \"act\"" "$OUT/sender.log" || return 1
+    need "Space on the button invokes the action" wait_text "\"event\": \"action\", \"id\": $actioned, \"key\": \"act\"" "$sender_log" || return 1
     expect "  and the key was not taken as Enter on the banner" "$(triage_count 'activated-by-enter')" 0
-    need "  and the notification is closed for it" wait_text "\"event\": \"closed\", \"id\": $actioned, \"reason\": 3" "$OUT/sender.log" || return 1
+    need "  and the notification is closed for it" wait_text "\"event\": \"closed\", \"id\": $actioned, \"reason\": 3" "$sender_log" || return 1
 
     # With the reply open, Escape is the reply field's own only while the keyboard focus is in
     # it: from the banner's close button it dismisses, as from any button.
@@ -611,7 +633,7 @@ mode_buttons() {
     expect "  and the banner stays" "$(shown_banners)" 1
     shot 02-after-escape-in-reply
     pfinput 'key return'
-    need "the reply is sent with the text Escape left in place" wait_text "\"event\": \"replied\", \"id\": $replied, \"text\": \"draft\"" "$OUT/sender.log" || return 1
+    need "the reply is sent with the text Escape left in place" wait_text "\"event\": \"replied\", \"id\": $replied, \"text\": \"draft\"" "$sender_log" || return 1
 
     # A replacement while a reply is being typed keeps the keyboard in the reply field: the
     # previous window is not asked for, and what is typed next arrives in the reply.
@@ -630,7 +652,7 @@ mode_buttons() {
     pfinput 'type z'
     pfinput 'key return'
     need "what is typed after the replacement arrives in the reply, which is then sent" \
-        wait_text "\"event\": \"replied\", \"id\": $typing, \"text\": \"draftz\"" "$OUT/sender.log" || return 1
+        wait_text "\"event\": \"replied\", \"id\": $typing, \"text\": \"draftz\"" "$sender_log" || return 1
     expect "no script error in the shell log" "$(no_script_error && echo none || echo some)" none
 }
 
@@ -664,7 +686,7 @@ mode_timer() {
 }
 
 mode_eligible() {
-    local critical resident replying older newer again first_taken second_taken granted pointed late before
+    local critical resident replying older newer again first_taken second_taken granted leaving pointed late before
     # Critical and resident banners are taken, and dismissed by Escape.
     need "a critical banner is sent" send critical ',"actions":["default","Open"],"entry":"","hints":{"urgency":2}' || return 1
     critical=$SENT_ID
@@ -687,7 +709,7 @@ mode_eligible() {
 
     # A job popup is not a notification banner.
     write_request '{"op":"job","label":"job"}'
-    need "a job popup is made" wait_text '"event": "job"' "$OUT/sender.log" || return 1
+    need "a job popup is made" wait_text '"event": "job"' "$sender_log" || return 1
     sleep 1.5
     expect "  and shown" "$(shown_banners)" 1
     from=$(log_lines)
@@ -695,7 +717,7 @@ mode_eligible() {
     need "the shortcut does not take a job popup" triage 'shortcut-ignored-no-banner' "$from" || return 1
     need "  and KWrite stays active" active pf-notif-app.txt job-popup || return 1
     write_request '{"op":"job-end","label":"job"}'
-    need "the job popup is ended" wait_text '"event": "job-ended"' "$OUT/sender.log" || return 1
+    need "the job popup is ended" wait_text '"event": "job-ended"' "$sender_log" || return 1
 
     # A banner that is handling a reply is not taken either.
     need "a banner with a reply action is sent" send replying ',"actions":["inline-reply","Reply"],"entry":""' || return 1
@@ -741,6 +763,25 @@ mode_eligible() {
     sleep .6
     need "  which is active" active pf-notif-app.txt after-replacement || return 1
     need "  and the application closes it" close_notification "$again" || return 1
+
+    # An application that leaves the bus is no replacement: KDE then clears the actions of its
+    # notification. The banner stays taken, and Escape still dismisses it.
+    need "a second application is started" start_second_sender || return 1
+    need "it sends a banner with a default action" send leaving ',"actions":["default","Open"]' || return 1
+    leaving=$SENT_ID
+    sleep 1.5
+    need "the shortcut takes it" take_banner || return 1
+    granted=$(log_lines)
+    need "  and the application leaves the bus" stop_sender || return 1
+    sleep 1
+    expect "the application leaving the bus is no replacement" "$(triage_since "$granted" 'ended replaced')" no
+    expect "  and asks for no window" "$(triage_since "$granted" 'focus-restore-requested')" no
+    need "  and the banner is still the active window" active "$banner_window" after-leaving || return 1
+    pfinput 'key escape'
+    need "  and Escape still dismisses it" triage "dismissed-by-escape $leaving\"" "$from" || return 1
+    sleep .6
+    need "  with KWrite active again" active pf-notif-app.txt after-leaving-escape || return 1
+    use_sender 1
 
     # The shortcut takes a newer banner while an older one is still taken: the window from before
     # the first press stays the one to return to.

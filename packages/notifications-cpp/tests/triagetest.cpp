@@ -162,6 +162,109 @@ private Q_SLOTS:
         QTest::newRow("a held Escape does not repeat") << true << false << false << true << QStringLiteral("consume");
     }
 
+    // What makes a banner the same notification as before. The applet compares two identities,
+    // so every row compares the rule's two answers.
+    void identity_data()
+    {
+        QTest::addColumn<QVariantList>("first");
+        QTest::addColumn<QVariantList>("second");
+        QTest::addColumn<bool>("same");
+
+        QTest::newRow("the same notification at the same moment") << identity(7, 1000, QStringLiteral("a summary"), QStringLiteral("a text"))
+                                                                  << identity(7, 1000, QStringLiteral("a summary"), QStringLiteral("a text")) << true;
+        QTest::newRow("a replacement is another moment, whatever it shows")
+            << identity(7, 1000, QStringLiteral("a summary"), QStringLiteral("a text"))
+            << identity(7, 1001, QStringLiteral("a summary"), QStringLiteral("a text")) << false;
+        QTest::newRow("another notification in the same banner") << identity(7, 1000, QStringLiteral("a summary"), QStringLiteral("a text"))
+                                                                 << identity(8, 1001, QStringLiteral("a summary"), QStringLiteral("a text")) << false;
+        QTest::newRow("the same moment and id, another summary") << identity(7, 1000, QStringLiteral("a summary"), QStringLiteral("a text"))
+                                                                 << identity(7, 1000, QStringLiteral("another"), QStringLiteral("a text")) << false;
+        QTest::newRow("the same moment and id, another text") << identity(7, 1000, QStringLiteral("a summary"), QStringLiteral("a text"))
+                                                              << identity(7, 1000, QStringLiteral("a summary"), QStringLiteral("another")) << false;
+        QTest::newRow("no update time known, on either side") << identity(7, QString(), QStringLiteral("a summary"), QStringLiteral("a text"))
+                                                              << identity(7, QString(), QStringLiteral("a summary"), QStringLiteral("a text")) << true;
+        QTest::newRow("an update time where there was none") << identity(7, QString(), QStringLiteral("a summary"), QStringLiteral("a text"))
+                                                             << identity(7, 1000, QStringLiteral("a summary"), QStringLiteral("a text")) << false;
+    }
+
+    void identity()
+    {
+        QFETCH(QVariantList, first);
+        QFETCH(QVariantList, second);
+        QFETCH(bool, same);
+
+        QVariant a;
+        QVERIFY(call(&a, "identity", {first.at(0), first.at(1), first.at(2), first.at(3)}));
+        QVariant b;
+        QVERIFY(call(&b, "identity", {second.at(0), second.at(1), second.at(2), second.at(3)}));
+        QCOMPARE(a.toString() == b.toString(), same);
+    }
+
+    // Where a task of the task model is, in the form makePersistentModelIndex takes: a task of its
+    // own by its row; a window inside a group by the group's row and its own. A task arrives as
+    // QML reads a model index: whether it is valid, its row, and its parent the same. No
+    // coordinates at all when there is no task.
+    void taskCoordinates_data()
+    {
+        QTest::addColumn<bool>("valid");
+        QTest::addColumn<int>("row");
+        QTest::addColumn<bool>("parentValid");
+        QTest::addColumn<int>("parentRow");
+        QTest::addColumn<QVariantList>("expected");
+
+        const QVariantList none;
+        QTest::newRow("a task of its own") << true << 3 << false << -1 << QVariantList{3.0};
+        QTest::newRow("a window inside a group: the group's row and its own") << true << 1 << true << 0 << QVariantList{0.0, 1.0};
+        QTest::newRow("the second window of a group") << true << 4 << true << 7 << QVariantList{7.0, 4.0};
+        QTest::newRow("no task at all") << false << -1 << false << -1 << none;
+        QTest::newRow("a task that is not valid") << false << -1 << true << 2 << none;
+    }
+
+    void taskCoordinates()
+    {
+        QFETCH(bool, valid);
+        QFETCH(int, row);
+        QFETCH(bool, parentValid);
+        QFETCH(int, parentRow);
+        QFETCH(QVariantList, expected);
+
+        const QVariant task = QVariantMap{{QStringLiteral("valid"), valid},
+                                          {QStringLiteral("row"), row},
+                                          {QStringLiteral("parent"), QVariantMap{{QStringLiteral("valid"), parentValid}, {QStringLiteral("row"), parentRow}}}};
+        QVariant result;
+        QVERIFY(call(&result, "taskCoordinates", {task}));
+        if (expected.isEmpty()) {
+            QVERIFY2(result.isNull() || !result.isValid(), "there should be no coordinates");
+        } else {
+            QCOMPARE(result.toList(), expected);
+        }
+    }
+
+    // Which banners the shortcut may take.
+    void eligible_data()
+    {
+        QTest::addColumn<bool>("visible");
+        QTest::addColumn<bool>("jobPopup");
+        QTest::addColumn<bool>("replyStarted");
+        QTest::addColumn<bool>("expected");
+
+        QTest::newRow("a notification banner") << true << false << false << true;
+        QTest::newRow("not on screen, because it no longer fits") << false << false << false << false;
+        QTest::newRow("a job popup") << true << true << false << false;
+        QTest::newRow("a banner in which a reply has been started") << true << false << true << false;
+    }
+
+    void eligible()
+    {
+        QFETCH(bool, visible);
+        QFETCH(bool, jobPopup);
+        QFETCH(bool, replyStarted);
+        QFETCH(bool, expected);
+        QVariant result;
+        QVERIFY(call(&result, "eligible", {visible, jobPopup, replyStarted}));
+        QCOMPARE(result.toBool(), expected);
+    }
+
     void escapeAction()
     {
         QFETCH(bool, interactionActive);
@@ -200,38 +303,6 @@ private Q_SLOTS:
         QVariant result;
         QVERIFY(call(&result, "enterAction", {interactionActive, focusOnContent, hasDefaultAction, autoRepeat}));
         QCOMPARE(result.toString(), expected);
-    }
-
-    void activeTaskPath_data()
-    {
-        QTest::addColumn<QVariantList>("tasks");
-        QTest::addColumn<QVariantList>("expected");
-
-        const QVariantList noWindows;
-        QTest::newRow("no task at all") << QVariantList() << QVariantList();
-        QTest::newRow("no task is active") << QVariantList{task(false, noWindows)} << QVariantList();
-        QTest::newRow("a window of its own") << QVariantList{task(true, noWindows)} << QVariantList{0.0};
-        QTest::newRow("after an idle one") << QVariantList{task(false, noWindows), task(true, noWindows)} << QVariantList{1.0};
-        QTest::newRow("a window in a group, not the group") << QVariantList{task(true, {window(false, 0), window(true, 2)})} << QVariantList{0.0, 1.0};
-        QTest::newRow("a group's only window") << QVariantList{task(true, {window(true, 1)})} << QVariantList{0.0, 0.0};
-        QTest::newRow("of two windows marked active, the one higher in the stacking order")
-            << QVariantList{task(true, {window(true, 3), window(true, 5)})} << QVariantList{0.0, 1.0};
-        QTest::newRow("  the other way round") << QVariantList{task(true, {window(true, 5), window(true, 3)})} << QVariantList{0.0, 0.0};
-        QTest::newRow("a group marked active with no window of its own marked active restores nothing")
-            << QVariantList{task(true, {window(false, 1)})} << QVariantList();
-    }
-
-    void activeTaskPath()
-    {
-        QFETCH(QVariantList, tasks);
-        QFETCH(QVariantList, expected);
-        QVariant result;
-        QVERIFY(call(&result, "activeTaskPath", {tasks}));
-        if (expected.isEmpty()) {
-            QVERIFY2(result.isNull() || !result.isValid(), "nothing should be restored");
-        } else {
-            QCOMPARE(result.toList(), expected);
-        }
     }
 
     // The walk on real items: the editor in the reply field and the field itself are in it; the
@@ -274,17 +345,10 @@ private:
         return list;
     }
 
-    // A window of a group, as the applet reads it: whether it is active, and its place in the
-    // stacking order.
-    static QVariantMap window(bool active, int stacking)
+    // What the applet knows of a notification for the identity of its banner.
+    static QVariantList identity(QVariant id, QVariant updated, QVariant summary, QVariant body)
     {
-        return QVariantMap{{QStringLiteral("active"), active}, {QStringLiteral("stacking"), stacking}};
-    }
-
-    // A task of the applet's task model: whether it is active, and the windows of its group.
-    static QVariantMap task(bool active, const QVariantList &windows)
-    {
-        return QVariantMap{{QStringLiteral("active"), active}, {QStringLiteral("children"), windows}};
+        return QVariantList{id, updated, summary, body};
     }
 
     bool call(QVariant *result, const char *method, std::initializer_list<QVariant> arguments)

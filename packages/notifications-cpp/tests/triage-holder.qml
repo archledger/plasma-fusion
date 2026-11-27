@@ -27,14 +27,20 @@ Item {
     function recordedWindow(takenBannerActive, activeTask, earlierRecord) {
         return Triage.recordedWindow(takenBannerActive, activeTask, earlierRecord);
     }
+    function identity(id, updated, summary, body) {
+        return Triage.identity(id, updated, summary, body);
+    }
+    function taskCoordinates(task) {
+        return Triage.taskCoordinates(task);
+    }
+    function eligible(visible, jobPopup, replyStarted) {
+        return Triage.eligible(visible, jobPopup, replyStarted);
+    }
     function escapeAction(interactionActive, replyFieldFocused, dismissed, autoRepeat) {
         return Triage.escapeAction(interactionActive, replyFieldFocused, dismissed, autoRepeat);
     }
     function enterAction(interactionActive, focusOnContent, hasDefaultAction, autoRepeat) {
         return Triage.enterAction(interactionActive, focusOnContent, hasDefaultAction, autoRepeat);
-    }
-    function activeTaskPath(tasks) {
-        return Triage.activeTaskPath(tasks);
     }
     function inReplyField(item, content) {
         return Triage.inReplyField(item, content);
