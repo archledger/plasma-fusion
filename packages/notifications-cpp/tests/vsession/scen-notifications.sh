@@ -11,6 +11,12 @@
 exec 2>&1
 set -euo pipefail
 
+# Only inside the harness (tools/vsession), which sources this file in a private session: a
+# session bus of its own, and a HOME that holds a seed. Never on a desktop someone is using.
+[[ -n "${PFV:-}" && -d "$PFV" && -f "$HOME/pf-notif/mode" ]] || {
+    echo "this scenario runs only inside tools/vsession" >&2
+    exit 64
+}
 mode=$(cat "$HOME/pf-notif/mode")
 [[ "$mode" == stock || "$mode" == copy ]]
 
@@ -73,14 +79,18 @@ pid=$(qdbus org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.GetC
 expect "the notification server is plasmashell's" \
     "$(qdbus org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.GetConnectionUnixProcessID org.freedesktop.Notifications)" "$pid"
 applet_maps=$(awk '$NF ~ /\/org\.kde\.plasma\.notifications\.so$/ {print $NF}' "/proc/$pid/maps" | sort -u)
-# Exactly one applet is mapped, and it is not the staged copy. (An empty map is one blank line,
-# which a count of the lines that are not the copy would take for the installed applet.)
+# Exactly one applet is mapped, and it is the installed one: a file under /usr that belongs to a
+# package of plasma-workspace (on Fedora 44, plasma-workspace-libs), not the staged copy nor a
+# copy put anywhere else. (An empty map is one blank line, which a count of the lines that are
+# not the copy would take for the installed applet.)
 stock_applet_mapped() {
-    local path count=0
+    local path count=0 owner
     [[ -n "$applet_maps" ]] || return 1
     while IFS= read -r path; do
         [[ -n "$path" ]] || continue
-        [[ "$path" == */pf-plugins/* ]] && return 1
+        [[ "$path" == /usr/* ]] || return 1
+        owner=$(rpm -q --qf '%{NAME}' -f "$path" 2>/dev/null || true)
+        [[ -z "$owner" || "$owner" == plasma-workspace* ]] || return 1
         count=$((count + 1))
     done <<<"$applet_maps"
     [ "$count" = 1 ]
