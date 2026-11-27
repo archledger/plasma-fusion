@@ -20,6 +20,70 @@ Copyright: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 License: GPL-2.0-or-later
 Comment: A few of these files are LGPL-2.0-or-later (their SPDX headers say so).
 
+Files: packages/notifications-cpp/src/CMakeLists.txt
+       packages/notifications-cpp/src/CompactRepresentation.qml
+       packages/notifications-cpp/src/DraggableDelegate.qml
+       packages/notifications-cpp/src/FullRepresentation.qml
+       packages/notifications-cpp/src/NotificationPopup.qml
+       packages/notifications-cpp/src/components/ActionContainer.qml
+       packages/notifications-cpp/src/components/Body.qml
+       packages/notifications-cpp/src/components/EditContextMenu.qml
+       packages/notifications-cpp/src/components/FooterLoader.qml
+       packages/notifications-cpp/src/components/HeadingButtons.qml
+       packages/notifications-cpp/src/components/Icon.qml
+       packages/notifications-cpp/src/components/JobDetails.qml
+       packages/notifications-cpp/src/components/JobIconItem.qml
+       packages/notifications-cpp/src/components/JobItem.qml
+       packages/notifications-cpp/src/components/ModelInterface.qml
+       packages/notifications-cpp/src/components/NotificationHeader.qml
+       packages/notifications-cpp/src/components/NotificationReplyField.qml
+       packages/notifications-cpp/src/components/SpeedChart.qml
+       packages/notifications-cpp/src/components/Summary.qml
+       packages/notifications-cpp/src/delegates/BaseDelegate.qml
+       packages/notifications-cpp/src/delegates/DelegateHistory.qml
+       packages/notifications-cpp/src/delegates/DelegateHistoryGrouped.qml
+       packages/notifications-cpp/src/delegates/DelegatePopup.qml
+       packages/notifications-cpp/src/draghelper.cpp
+       packages/notifications-cpp/src/draghelper.h
+       packages/notifications-cpp/src/global/Globals.qml
+       packages/notifications-cpp/src/global/PulseAudio.qml
+       packages/notifications-cpp/src/main.qml
+       packages/notifications-cpp/src/notificationapplet.cpp
+       packages/notifications-cpp/src/notificationapplet.h
+       packages/notifications-cpp/src/notificationwindow.cpp
+       packages/notifications-cpp/src/notificationwindow.h
+Copyright: KDE contributors (Plasma's notification applet of plasma-workspace 6.8.3), named in each file's SPDX header
+           2026 Wisbendji Fimerlus <archledger236@gmail.com>
+License: GPL-2.0-only or GPL-3.0-only or LicenseRef-KDE-Accepted-GPL
+Comment: `src/CMakeLists.txt` is KDE's build file with a licence header of this
+ project's making, since the file has none; the other files are KDE's as they are.
+
+Files: packages/notifications-cpp/src/globalshortcuts.cpp
+       packages/notifications-cpp/src/globalshortcuts.h
+Copyright: KDE contributors (Plasma's notification applet of plasma-workspace 6.8.3), named in each file's SPDX header
+License: GPL-3.0-only or LicenseRef-KDE-Accepted-GPL
+
+Files: packages/notifications-cpp/src/fileinfo.cpp
+       packages/notifications-cpp/src/fileinfo.h
+       packages/notifications-cpp/src/filemenu.cpp
+       packages/notifications-cpp/src/filemenu.h
+       packages/notifications-cpp/src/jobaggregator.cpp
+       packages/notifications-cpp/src/jobaggregator.h
+       packages/notifications-cpp/src/thumbnailer.cpp
+       packages/notifications-cpp/src/thumbnailer.h
+Copyright: KDE contributors (Plasma's notification applet of plasma-workspace 6.8.3), named in each file's SPDX header
+License: LGPL-2.1-or-later
+
+Files: packages/notifications-cpp/src/components/DraggableFileArea.qml
+       packages/notifications-cpp/src/components/ThumbnailStrip.qml
+Copyright: KDE contributors (Plasma's notification applet of plasma-workspace 6.8.3), named in each file's SPDX header
+License: LGPL-2.0-or-later
+
+Files: packages/notifications-cpp/src/metadata.json
+Copyright: The plasma-workspace authors <https://invent.kde.org/plasma/plasma-workspace>
+License: GPL-2.0-or-later
+Comment: The applet's plugin metadata, which states its own licence and has no copyright header.
+
 Files: docs/* README.md SECURITY.md CONTRIBUTING.md GOVERNANCE.md design/*
        generators/wallpapers/svg/* packages/look-and-feel/*/contents/previews/*
        packages/sddm-theme/README.md
@@ -60,6 +124,16 @@ License: GPL-2.0-or-later
 License: LGPL-2.0-or-later
  On Debian systems, the complete text of the GNU Library General Public License version 2 can be
  found in /usr/share/common-licenses/LGPL-2.
+
+License: LGPL-2.1-or-later
+ GNU Lesser General Public License version 2.1, or (at your option) any later version. The
+ complete text of version 2.1 is in LICENSES/LGPL-2.1-or-later.txt of the source; on Debian
+ systems the text of version 2 is in /usr/share/common-licenses/LGPL-2.
+
+License: GPL-3.0-only or LicenseRef-KDE-Accepted-GPL
+ On Debian systems, the complete text of the GNU General Public License version 3 can be found in
+ /usr/share/common-licenses/GPL-3; KDE e.V.'s acceptance text is in
+ LICENSES/LicenseRef-KDE-Accepted-GPL.txt of the source.
 
 License: GPL-2.0-only or GPL-3.0-only or LicenseRef-KDE-Accepted-GPL
  On Debian systems, the complete texts of the GNU General Public License versions 2 and 3 can be
