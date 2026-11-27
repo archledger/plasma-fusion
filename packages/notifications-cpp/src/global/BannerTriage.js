@@ -35,15 +35,43 @@ function identity(id, updated, summary, body)
     return JSON.stringify([id, updated, summary, body]);
 }
 
-// Where a task of the task model is, as the model's makePersistentModelIndex takes it: [row] for
-// a task of its own, [row of its group, row in the group] for a window inside a group. A task
-// arrives as QML reads a model index (valid, row, parent); null when there is none.
-function taskCoordinates(task)
+// Where a window is in the task model when it is asked for, by the ids the model knows it by
+// (WinIdList): null when there is no record or the window is gone. The model arrives as plain
+// values, one entry per task: a window on its own by its ids, a group by the ids of each of its
+// windows. The window is looked up when it is asked for rather than kept as an index, because
+// the model moves it meanwhile: into a group when its application opens a second window (an
+// index made for the window would then name the group, which cannot be activated), or out of a
+// group when the other window closes (an index made inside the group would then be dead).
+// [row] for a task of its own, [row of its group, row in the group] for a window inside a group.
+function windowCoordinates(winIds, tasks)
 {
-    if (!task || !task.valid) {
+    if (!winIds) {
         return null;
     }
-    return task.parent && task.parent.valid ? [task.parent.row, task.row] : [task.row];
+    for (let row = 0; row < tasks.length; ++row) {
+        if (sharesId(winIds, tasks[row].ids)) {
+            return [row];
+        }
+        const children = tasks[row].children;
+        for (let child = 0; children && child < children.length; ++child) {
+            if (sharesId(winIds, children[child])) {
+                return [row, child];
+            }
+        }
+    }
+    return null;
+}
+
+function sharesId(winIds, ids)
+{
+    for (let i = 0; ids && i < winIds.length; ++i) {
+        for (let j = 0; j < ids.length; ++j) {
+            if (winIds[i] === ids[j]) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 // The newest banner that is visible and may be taken, by the time it was created; the later one

@@ -809,12 +809,27 @@ QtObject {
     // Plasma Fusion: banner keyboard triage (SPEC-notification-triage.md; the rules are in
     // BannerTriage.js). KWin decides whether the "Focus notification banner" shortcut is
     // dispatched; this takes the newest banner that may be taken and asks it for keyboard focus.
-    // The window that had the keyboard focus then is recorded here: a window itself, never the
-    // group it is in (the task model groups the windows of an application, and a group cannot be
-    // activated). When that window is one of the applet's own taken banners, an older one, the
-    // record of the earlier request stands. The record is used only after a replacement that ends
-    // a focused interaction in which no reply was started.
+    // The window that had the keyboard focus then is recorded here, by the ids the task model
+    // knows it by: a window itself, never the group it is in (the task model groups the windows
+    // of an application, and a group cannot be activated). Only the ids are kept, because the
+    // model moves the window meanwhile, and the window is looked up when it is asked for
+    // (windowCoordinates). When that window is one of the applet's own taken banners, an older
+    // one, the record of the earlier request stands. The record is used only after a replacement
+    // that ends a focused interaction in which no reply was started.
     property var bannerFocusPrevious: null
+
+    // The ids the task model knows a task's window by, as an array; null when there are none.
+    function windowIdsOf(task) {
+        if (!task || !task.valid) {
+            return null;
+        }
+        const reported = tasksModel.data(task, TaskManager.AbstractTasksModel.WinIdList);
+        const ids = [];
+        for (let i = 0; reported && i < reported.length; ++i) {
+            ids.push(reported[i]);
+        }
+        return ids.length > 0 ? ids : null;
+    }
 
     function requestBannerFocus() {
         const banners = [];
@@ -846,24 +861,40 @@ QtObject {
         }
 
         // The window that has the keyboard focus, as the task model names it (its activeTask): a
-        // window itself, never the group it is in. It is kept as a persistent index, so that it
-        // follows its window when the model moves its rows, as stock does for the window of a
-        // default action. The record of an earlier request stands when the active window is one
+        // window itself, never the group it is in. Nothing is recorded when no window has the
+        // keyboard focus. The record of an earlier request stands when the active window is one
         // of the applet's own taken banners: no task is active then.
-        const at = BannerTriage.taskCoordinates(tasksModel.activeTask);
         bannerFocusPrevious = BannerTriage.recordedWindow(banners.some(banner => banner.active && banner.taken),
-                                                           at ? tasksModel.makePersistentModelIndex(at[0], at.length === 2 ? at[1] : -1) : null,
+                                                           windowIdsOf(tasksModel.activeTask),
                                                            bannerFocusPrevious);
 
         shortcuts.reportTriage("focus-requested " + popup.notificationId);
         popup.requestBannerFocus();
     }
 
+    // The task model as plain values for BannerTriage.windowCoordinates: one entry per task, a
+    // window on its own by its ids, a group by the ids of each of its windows.
+    function windowTasks() {
+        const tasks = [];
+        for (let row = 0; row < tasksModel.rowCount(); ++row) {
+            const task = tasksModel.index(row, 0);
+            const count = tasksModel.rowCount(task);
+            const children = [];
+            for (let child = 0; child < count; ++child) {
+                children.push(windowIdsOf(tasksModel.index(child, 0, task)));
+            }
+            tasks.push({ ids: count === 0 ? windowIdsOf(task) : null, children: children });
+        }
+        return tasks;
+    }
+
     // Plasma Fusion: asks for the window recorded at the request to be activated again, when it
-    // still exists. KWin decides; the session scenarios read which window is active afterwards.
+    // still exists, wherever the task model has put it since. KWin decides; the session scenarios
+    // read which window is active afterwards.
     function restorePreviousTask() {
-        if (bannerFocusPrevious && bannerFocusPrevious.valid) {
-            tasksModel.requestActivate(bannerFocusPrevious);
+        const at = BannerTriage.windowCoordinates(bannerFocusPrevious, windowTasks());
+        if (at) {
+            tasksModel.requestActivate(tasksModel.makeModelIndex(at[0], at.length === 2 ? at[1] : -1));
             shortcuts.reportTriage("focus-restore-requested");
         } else {
             shortcuts.reportTriage("focus-restore-skipped");

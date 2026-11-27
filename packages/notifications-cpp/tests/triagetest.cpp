@@ -200,41 +200,47 @@ private Q_SLOTS:
         QCOMPARE(a.toString() == b.toString(), same);
     }
 
-    // Where a task of the task model is, in the form makePersistentModelIndex takes: a task of its
-    // own by its row; a window inside a group by the group's row and its own. A task arrives as
-    // QML reads a model index: whether it is valid, its row, and its parent the same. No
-    // coordinates at all when there is no task.
-    void taskCoordinates_data()
+    // Where the window recorded before the shortcut is when it is asked for, in the form
+    // makeModelIndex takes: a window on its own by its row; a window inside a group by the
+    // group's row and its own. The task model may have moved the window since it was recorded,
+    // into a group when its application opened a second window, or out of one when the other
+    // window of the group closed. The model is plain values: each task of its own by the ids the
+    // model knows its window by, each group by the ids of each of its windows. No place at all
+    // when the window is gone or nothing was recorded.
+    void windowCoordinates_data()
     {
-        QTest::addColumn<bool>("valid");
-        QTest::addColumn<int>("row");
-        QTest::addColumn<bool>("parentValid");
-        QTest::addColumn<int>("parentRow");
+        QTest::addColumn<QVariant>("recorded");
+        QTest::addColumn<QVariantList>("tasks");
         QTest::addColumn<QVariantList>("expected");
 
-        const QVariantList none;
-        QTest::newRow("a task of its own") << true << 3 << false << -1 << QVariantList{3.0};
-        QTest::newRow("a window inside a group: the group's row and its own") << true << 1 << true << 0 << QVariantList{0.0, 1.0};
-        QTest::newRow("the second window of a group") << true << 4 << true << 7 << QVariantList{7.0, 4.0};
-        QTest::newRow("no task at all") << false << -1 << false << -1 << none;
-        QTest::newRow("a task that is not valid") << false << -1 << true << 2 << none;
+        const QVariantList a = ids({"a"});
+        const QVariantList b = ids({"b"});
+        const QVariantList c = ids({"c"});
+        const QVariantList d = ids({"d"});
+        const QVariantList e = ids({"e"});
+        QTest::newRow("a window on its own, where it was") << QVariant(a) << taskModel({window(a)}) << place(0);
+        QTest::newRow("behind another task of its own") << QVariant(b) << taskModel({window(a), window(b)}) << place(1);
+        QTest::newRow("a window that became one of two of its application") << QVariant(a) << taskModel({group(a, b)}) << place(0, 0);
+        QTest::newRow("the second window of that group") << QVariant(b) << taskModel({group(a, b)}) << place(0, 1);
+        QTest::newRow("a window of the second group, behind a task and another group")
+            << QVariant(b) << taskModel({window(e), group(c, d), group(a, b)}) << place(2, 1);
+        QTest::newRow("a window that is on its own again, its group having lost the other window")
+            << QVariant(b) << taskModel({window(b), window(c)}) << place(0);
+        QTest::newRow("a window known by several ids, by any of them") << QVariant(ids({"a", "x"})) << taskModel({window(a)}) << place(0);
+        QTest::newRow("the window is gone, its group still there") << QVariant(b) << taskModel({window(a), group(a, c)}) << QVariantList();
+        QTest::newRow("nothing was recorded") << QVariant() << taskModel({window(a)}) << QVariantList();
     }
 
-    void taskCoordinates()
+    void windowCoordinates()
     {
-        QFETCH(bool, valid);
-        QFETCH(int, row);
-        QFETCH(bool, parentValid);
-        QFETCH(int, parentRow);
+        QFETCH(QVariant, recorded);
+        QFETCH(QVariantList, tasks);
         QFETCH(QVariantList, expected);
 
-        const QVariant task = QVariantMap{{QStringLiteral("valid"), valid},
-                                          {QStringLiteral("row"), row},
-                                          {QStringLiteral("parent"), QVariantMap{{QStringLiteral("valid"), parentValid}, {QStringLiteral("row"), parentRow}}}};
         QVariant result;
-        QVERIFY(call(&result, "taskCoordinates", {task}));
+        QVERIFY(call(&result, "windowCoordinates", {recorded, tasks}));
         if (expected.isEmpty()) {
-            QVERIFY2(result.isNull() || !result.isValid(), "there should be no coordinates");
+            QVERIFY2(result.isNull() || !result.isValid(), "there should be no place");
         } else {
             QCOMPARE(result.toList(), expected);
         }
@@ -343,6 +349,39 @@ private:
                 QVariantMap{{QStringLiteral("created"), values.at(0)}, {QStringLiteral("visible"), values.at(1)}, {QStringLiteral("eligible"), values.at(2)}});
         }
         return list;
+    }
+
+    // The ids the task model knows a window by.
+    static QVariantList ids(const std::initializer_list<const char *> &values)
+    {
+        QVariantList list;
+        for (const char *value : values) {
+            list.append(QVariant(QString::fromLatin1(value)));
+        }
+        return list;
+    }
+
+    // A task of its own, and a group, as the applet reads them from the task model.
+    static QVariant window(const QVariantList &winIds)
+    {
+        return QVariantMap{{QStringLiteral("ids"), winIds}, {QStringLiteral("children"), QVariantList()}};
+    }
+
+    static QVariant group(const QVariantList &first, const QVariantList &second)
+    {
+        return QVariantMap{{QStringLiteral("ids"), QVariantList()}, {QStringLiteral("children"), QVariantList{first, second}}};
+    }
+
+    static QVariantList taskModel(const std::initializer_list<QVariant> &items)
+    {
+        return QVariantList(items);
+    }
+
+    // A place in the task model, as the rules return it: the row, and for a window inside a group
+    // its row in the group.
+    static QVariantList place(int row, int child = -1)
+    {
+        return child < 0 ? QVariantList{double(row)} : QVariantList{double(row), double(child)};
     }
 
     // What the applet knows of a notification for the identity of its banner.

@@ -932,6 +932,34 @@ mode_eligible() {
     expect "  and it takes no key: Escape dismisses nothing" "$(triage_count 'dismissed-by-escape')" "$before"
     need "  and the application can still close it" close_notification "$orphan" || return 1
 
+    # The window recorded before the shortcut is one of a group's two windows. While the banner is
+    # taken the other window of the group closes. The recorded window is still there, on its own
+    # from then on, and it is still the one asked for. That a window of the application appears
+    # while the banner is taken is not reached here: KWin activates every window that appears,
+    # which ends the interaction.
+    printf 'previous focus B\n' >"$HOME/pf-notif-app-b.txt"
+    kwrite "$HOME/pf-notif-app-b.txt" >"$OUT/kwrite-b.log" 2>&1 &
+    need "the application opens a second document" wait_window_count pf-notif-app-b.txt 1 || return 1
+    sleep 1.5
+    need "the first document's window is made active" activate_window_by_caption pf-notif-app.txt || return 1
+    sleep .8
+    need "a banner is sent" send ungrouped ',"actions":["default","Open"]' || return 1
+    ungrouped=$SENT_ID
+    sleep 1.5
+    need "  with that window active" active pf-notif-app.txt before-ungrouped || return 1
+    need "the shortcut takes it" take_banner || return 1
+    granted=$(log_lines)
+    need "  and, the banner being taken, the application closes the other window" close_window_by_caption pf-notif-app-b.txt || return 1
+    need "  and that window is gone" wait_window_count pf-notif-app-b.txt 0 || return 1
+    sleep 1.5
+    need "  and the banner still has the keyboard focus" active "$banner_window" ungrouped-still-taken || return 1
+    expect "  and the interaction has not ended" "$(triage_since "$granted" 'ended')" no
+    need "the application replaces the banner" replace ungrouped-replaced "$ungrouped" ',"actions":["default","Open"]' || return 1
+    need "  and asks for the window recorded before the shortcut" triage 'focus-restore-requested' "$granted" || return 1
+    sleep .6
+    need "  and that window is active again, now on its own" active pf-notif-app.txt after-ungrouped || return 1
+    need "  and the application closes it" close_notification "$ungrouped" || return 1
+
     # The banner is the active window already, with the pointer on it: the keyboard focus arrives
     # at once.
     need "a banner without a default action is sent" send pointed ',"actions":["open","Open"],"entry":""' || return 1

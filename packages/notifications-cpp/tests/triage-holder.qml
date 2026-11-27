@@ -30,8 +30,8 @@ Item {
     function identity(id, updated, summary, body) {
         return Triage.identity(id, updated, summary, body);
     }
-    function taskCoordinates(task) {
-        return Triage.taskCoordinates(task);
+    function windowCoordinates(winIds, tasks) {
+        return Triage.windowCoordinates(winIds, tasks);
     }
     function eligible(visible, jobPopup, replyStarted) {
         return Triage.eligible(visible, jobPopup, replyStarted);
