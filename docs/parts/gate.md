@@ -257,8 +257,14 @@ The notification applet has a separate startup selector. It calls this engine's 
 login check's package cache. The selector checks the installed Plasma version against both
 versions in the applet's build record and verifies a load before returning the private plugin
 path. Its own cached pass is tied to the RPM database, including its WAL if present, and the
-payload. An unsuccessful check returns no path and is not cached. The launcher that consumes
-this decision and the Fedora package are separate steps.
+payload. An unsuccessful check returns no path and is not cached.
+
+When the optional selector is installed and the Fedora vendor unit is supported, setup writes
+`20-plasma-fusion-notifications.conf` for `plasma-plasmashell.service`. The drop-in leaves the
+vendor file alone. It runs the selector within five seconds and prepends the private path only
+for an admitted shell launch, never for the user manager or for a direct launch. If the on-disk
+unit changes, admission stops; run setup again to remove or reconcile the override. Package
+delivery, runtime recovery, and restore are qualified separately.
 
 ```
 ~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh status   # record, switched-off parts, last runs
