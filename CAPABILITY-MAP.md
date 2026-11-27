@@ -12,7 +12,7 @@ before implementation. This map does not declare an implementation complete.
 |---|---|---|---|
 | workspace-layout-control | Show and explicitly change the current view's Fusion tiling mode. | Placement script and the full profile's native tiler. | [Accepted](SPEC-workspace-layout-control.md) |
 | captive-portal-sign-in | Show cached possible network sign-in as a passive network-wide note. Browser launch remains unimplemented. | Fusion network service and the platform's cached connectivity state. | [Status-note contract](SPEC-captive-portal-status.md) |
-| notification-triage | Separate quick actions for dismissing and activating the newest eligible notification. | Existing notification server and shortcut infrastructure. | Not written. |
+| notification-triage | A configurable shortcut that focuses the newest eligible notification banner; on that banner, Escape dismisses it into the history and Enter acts as a click. | Plasma's notification applet at the exact Workspace version, and the existing shortcut infrastructure. | [Accepted](SPEC-notification-triage.md) |
 
 Build order: `workspace-layout-control` → `captive-portal-sign-in` → `notification-triage`.
 The modules do not depend on one another and should arrive as separate changes.
@@ -24,7 +24,9 @@ The modules do not depend on one another and should arrive as separate changes.
 - Portal sign-in requires a user gesture. Do not submit credentials, accept terms, introduce a
   new probe endpoint, or change VPN/DNS policy.
 - Notification dismissal and activation are distinct actions. Preserve shortcut assignments
-  and the lock-screen boundary. Exact-repeat collapse is a later notification slice.
+  and the lock-screen boundary. Exact-repeat collapse is a later notification slice. The
+  notification triage ships as a version-bound compiled part with a packaging
+  change, which the owner approved on 2026-11-26.
 - Reuse the design system and existing platform backends. Keep stock-profile fallback and
   prove changes in isolated tests before any installation.
 - Keep native KWin contracts, packaging, candidate refs, release tooling and CI outside these
