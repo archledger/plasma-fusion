@@ -16,6 +16,10 @@ in. On Fedora, install it at the same version and release as `plasma-fusion`, th
 be used. In **System Settings → Keyboard → Shortcuts**, search for **Focus notification banner**
 and assign a key. It has no default binding. Arch, Debian and Nix do not ship the copy.
 
+The RPM does not pin Plasma Workspace. It still has Fedora's generated library dependencies;
+if a Qt upgrade cannot satisfy the applet's private Qt ABI, rebuild the optional RPM or remove
+it so the update can proceed. The startup gate does not affect package resolution.
+
 ## What it is
 
 - The plugin `org.kde.plasma.notifications`, with the stock metadata. Plasma takes an applet's id

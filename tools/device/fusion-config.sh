@@ -3064,24 +3064,41 @@ notifications_shell_dropin() {
 }
 
 notifications_vendor_supported() {
-  local effective dropins stock_dropin=/usr/lib/systemd/user/service.d/10-timeout-abort.conf
+  local effective dropins unit_paths dir entry kind
+  local stock_dropin=/usr/lib/systemd/user/service.d/10-timeout-abort.conf
   local managed=$CONFIG/$NOTIFICATIONS_DROPIN_REL
-  local local_unit=$CONFIG/systemd/user/plasma-plasmashell.service
-  [[ ! -e $local_unit && ! -L $local_unit && -f $NOTIFICATIONS_VENDOR ]] || return 1
+  [[ -f $NOTIFICATIONS_VENDOR ]] || return 1
   [[ $(grep '^ExecStart=' "$NOTIFICATIONS_VENDOR") == 'ExecStart=/usr/bin/plasmashell --no-respawn' &&
      $(grep '^Type=' "$NOTIFICATIONS_VENDOR") == Type=dbus &&
      $(grep '^BusName=' "$NOTIFICATIONS_VENDOR") == BusName=org.kde.plasmashell &&
      $(grep '^Restart=' "$NOTIFICATIONS_VENDOR") == Restart=on-failure &&
      $(grep '^TimeoutSec=' "$NOTIFICATIONS_VENDOR") == TimeoutSec=40sec ]] || return 1
-  if session_manager; then
-    effective=$(systemctl --user show -p FragmentPath --value plasma-plasmashell.service) || return 1
-    [[ $effective == "$NOTIFICATIONS_VENDOR" ]] || return 1
-    dropins=$(systemctl --user show -p DropInPaths --value plasma-plasmashell.service) || return 1
-    case $dropins in
-      '' | "$stock_dropin" | "$managed" | "$stock_dropin $managed" | "$managed $stock_dropin") ;;
-      *) return 1 ;;
-    esac
-  fi
+  effective=$(systemctl --user show -p FragmentPath --value plasma-plasmashell.service) || return 1
+  [[ $effective == "$NOTIFICATIONS_VENDOR" ]] || return 1
+  dropins=$(systemctl --user show -p DropInPaths --value plasma-plasmashell.service) || return 1
+  case $dropins in
+    '' | "$stock_dropin" | "$managed" | "$stock_dropin $managed" | "$managed $stock_dropin") ;;
+    *) return 1 ;;
+  esac
+
+  # The manager's loaded FragmentPath/DropInPaths can lag the files until a reload. Check its
+  # actual search paths too, including dash-prefix and type-wide drop-ins.
+  unit_paths=$(busctl --user --timeout=1s --json=short get-property org.freedesktop.systemd1 \
+    /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager UnitPath |
+    python3 -c 'import json,sys
+paths = json.load(sys.stdin)["data"]
+assert paths and all(isinstance(p,str) and p.startswith("/") and "\n" not in p for p in paths)
+print(*paths, sep="\n")') || return 1
+  while IFS= read -r dir; do
+    entry=$dir/plasma-plasmashell.service
+    if [[ $entry != "$NOTIFICATIONS_VENDOR" && ( -e $entry || -L $entry ) ]]; then return 1; fi
+    for kind in service.d plasma-.service.d plasma-plasmashell.service.d; do
+      for entry in "$dir/$kind/"*.conf; do
+        [[ -e $entry || -L $entry ]] || continue
+        [[ $entry == "$stock_dropin" || $entry == "$managed" ]] || return 1
+      done
+    done
+  done <<<"$unit_paths"
 }
 
 notifications_service_unit() {
@@ -3120,6 +3137,8 @@ EOF
 notifications_setup() {
   local dest=$CONFIG/$NOTIFICATIONS_DROPIN_REL digest changed=0 file rel
   local wants=$CONFIG/$NOTIFICATIONS_WANTS_REL
+  # Do not install or remove an override in a session whose effective unit we cannot verify.
+  session_manager || return 0
   if [[ -x $NOTIFICATIONS_SELECTOR && -x $NOTIFICATIONS_NOTIFY && -x $NOTIFICATIONS_WATCH ]] &&
       notifications_vendor_supported &&
       read -r digest _ < <(/usr/bin/sha256sum -- "$NOTIFICATIONS_VENDOR") &&

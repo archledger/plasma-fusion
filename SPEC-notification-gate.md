@@ -102,8 +102,10 @@ The stock plugin's file is never replaced. On Fedora x86-64 the copy stays under
   A missing, failing or killed selector, including one that printed a path before failing, leaves
   the private directory out. A stale link is not consulted. A launch outside this unit, including
   a manual `--replace` from a normal terminal, is not changed by Fusion.
-- **Vendor compatibility.** Install the override only where the effective vendor unit matches
-  the supported contract. If the vendor unit on disk no longer matches, do not opt in. Remove
+- **Vendor compatibility.** Install the override only when setup can inspect this session's user
+  manager and its on-disk unit paths, and the effective vendor unit matches the supported
+  contract. Setup without a matching user manager leaves the override alone. If the vendor unit
+  on disk no longer matches, do not opt in. Remove
   the Fusion override when setup reconciles an unsupported unit. Until that reconciliation, an
   existing override still invokes the previously supported fixed command without the copy.
   The rollback is removing Fusion's drop-in and reloading the user manager; the vendor file
@@ -154,9 +156,11 @@ service. These establish the detection rule, not packaged recovery.
 - A subpackage, `plasma-fusion-notifications`, builds the copy from the source the repository
   carries, against the installed Plasma's build requirements. It ships the plugin under the
   directory above, the built-against record, the check and the selector.
-- It requires `plasma-fusion` of its own version and release. It pins no Plasma version: a Fedora
-  update is never blocked, as for the navigation effect; the selector is what stands between an
-  update and a copy that was not built for it.
+- It requires `plasma-fusion` of its own version and release. It declares no exact Plasma
+  Workspace dependency; the selector keeps an incompatible installed copy out of the shell.
+  Fedora still generates ELF library dependencies. In particular, a Qt upgrade that removes the
+  package's private-ABI provider may require rebuilding or removing the optional package. The
+  startup gate runs after package resolution and cannot override it.
 - **The subpackage stands alone.** No profile requires
   it and no count includes it: the metapackage of the full profile, its release test, the
   installer and the other channels all name six packages, and they change together when the other
@@ -291,8 +295,10 @@ commands in front of it. No claim extends beyond the tested versions.
     checks that this invocation mapped the admitted copy and waits for the notification service
     from that shell. A layout with no mapped notification applet is not a malfunction. A
     different owner of the service is inconclusive: log it and leave that session alone.
-    On a confirmed failure the watcher records the verdict against the package stamp and
-    payload, then triggers the existing restart-on-failure policy for that process only.
+    On a confirmed failure the watcher prepares a verdict against the package stamp and
+    payload, then signals only the failed shell to trigger the existing restart-on-failure
+    policy. The replacement launch reads the verdict only after the watcher has successfully
+    signaled the original process. If the watcher abandons recovery, it does not publish a block.
     The selector keeps stock in front until that identity changes. Do not restart if the
     invocation has ended, has been replaced, is stopping, or the verdict cannot be saved.
 

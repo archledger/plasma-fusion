@@ -37,6 +37,13 @@ case $1 in
   call)
     [[ " $* " == *' --method org.freedesktop.Notifications.Notify '* ]] || exit 9
     [[ ${FAIL_DELIVERY:-0} == 0 ]] || exit 1
+    if [[ ${SLOW_ONCE:-0} == 1 && ! -f $FIXTURE/sending ]]; then
+      touch "$FIXTURE/sending"
+      for _ in {1..100}; do
+        [[ ! -f $FIXTURE/reply ]] || break
+        sleep .02
+      done
+    fi
     printf '%s\n' "$*" >>"$FIXTURE/delivered"
     ;;
   *) exit 9 ;;
@@ -105,3 +112,23 @@ stock "$select"
 test ! -e "$state/notify"
 test "$(wc -l <"$base/requests")" = 2
 printf 'PASS fallback notice transitions, definite delivery, and independent login queue\n'
+
+mv "$base/record.missing" "$base/record"
+admit
+stock PF_GATE_FAKE_VERSIONS=plasma-workspace=6.8.4 "$select"
+as_user SLOW_ONCE=1 "$notify" &
+delivery=$!
+for _ in {1..80}; do
+  [[ ! -f $base/sending ]] || break
+  sleep .02
+done
+test -f "$base/sending"
+admit
+stock PF_GATE_FAKE_VERSIONS=plasma-workspace=6.8.4 "$select"
+requests=$(wc -l <"$base/requests")
+touch "$base/reply"
+wait "$delivery"
+test "$requests" = 4 || { echo 'FAIL delivery blocked a new fallback transition'; exit 1; }
+test "$(wc -l <"$base/delivered")" = 4
+test ! -e "$state/notify"
+printf 'PASS delivery of the old notice does not lose a newer fallback\n'

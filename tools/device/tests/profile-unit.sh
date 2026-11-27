@@ -123,5 +123,46 @@ check "c: older snapshot clears the live verdict" \
   grep -Fxq "would: rm -rf -- $state" "$BASE/restore-c.txt"
 check "c: dry run leaves the runtime verdict alone" test -f "$state/qml-failed"
 
+D=$BASE/home-d
+xdg="$D/custom config"
+for f in "$dropin" "$notify" "$watch"; do
+  mkdir -p "$xdg/$(dirname "${f#.config/}")"
+  printf 'custom %s\n' "$f" >"$xdg/${f#.config/}"
+done
+mkdir -p "$xdg/$(dirname "${wants#.config/}")" "$D/$(dirname "$dropin")"
+ln -s ../missing-notify.service "$xdg/${wants#.config/}"
+printf 'not the live override\n' >"$D/$dropin"
+snap_d=$(in_home "$D" env XDG_CONFIG_HOME="$xdg" bash "$BACKUP" "$BASE/snap-d" 2>"$BASE/backup-d.err")
+check "d: snapshot captures live XDG override at the compatible archive path" bash -c '
+  actual=$(tar -xzOf "$1" "$2"); [[ $actual == "custom $2" ]]' _ "$snap_d" "$dropin"
+tar -tvzf "$snap_d" >"$BASE/members-d.txt"
+check "d: snapshot preserves the dangling custom XDG wants link" \
+  grep -Fq "$wants -> ../missing-notify.service" "$BASE/members-d.txt"
+in_home "$D" env XDG_CONFIG_HOME="$xdg" bash "$RESTORE" "$snap_d" --dry-run >"$BASE/restore-d.txt" 2>&1
+check "d: current snapshot restores the override to the live XDG config home" \
+  grep -Fq " $xdg/${dropin#.config/}" "$BASE/restore-d.txt"
+in_home "$D" env XDG_CONFIG_HOME="$xdg" bash "$RESTORE" "$snap_b" --dry-run >"$BASE/restore-d-old.txt" 2>&1
+check "d: older snapshot removes the live XDG override" \
+  grep -Fxq "would: rm -f -- $xdg/${dropin#.config/}" "$BASE/restore-d-old.txt"
+
+mkdir "$BASE/profile-test-bin"
+for t in systemctl qdbus-qt6 kquitapp6 sleep fc-cache setsid; do
+  ln -s /usr/bin/true "$BASE/profile-test-bin/$t"
+done
+restore_custom() {
+  in_home "$D" env PATH="$BASE/profile-test-bin:$PATH" XDG_CONFIG_HOME="$xdg" \
+    bash "$RESTORE" "$1"
+}
+printf 'changed\n' >"$xdg/${dropin#.config/}"
+restore_custom "$snap_d" >"$BASE/restore-d-live.txt" 2>&1
+check "d: current restore writes the saved custom-XDG override" bash -c \
+  '[[ $(<"$1") == "custom $2" ]]' _ "$xdg/${dropin#.config/}" "$dropin"
+check "d: current restore writes the exact dangling link" bash -c \
+  '[[ $(readlink "$1") == ../missing-notify.service ]]' _ "$xdg/${wants#.config/}"
+restore_custom "$snap_b" >"$BASE/restore-d-live-old.txt" 2>&1
+check "d: older restore actually removes the custom-XDG override" test ! -e "$xdg/${dropin#.config/}"
+check "d: older restore also removes a dangling custom link" test ! -L "$xdg/${wants#.config/}"
+check "d: the unrelated default config override is untouched" grep -Fxq 'not the live override' "$D/$dropin"
+
 echo "== $passed passed, $failed failed"
 [ "$failed" = 0 ]

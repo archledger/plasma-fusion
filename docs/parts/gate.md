@@ -266,21 +266,27 @@ for an admitted shell launch, never for the user manager or for a direct launch.
 unit changes, admission stops; run setup again to remove or reconcile the override. Package
 delivery and restore are qualified separately.
 
+Setup checks both the session manager's loaded unit and the files in its unit search path.
+Without a matching manager, it leaves the notification override alone rather than guessing
+which launch command to replace.
+
 The selector keeps a separate `notifications/notify` queue under the Plasma Fusion state
 directory. It queues one notice when an admitted copy is followed by a version or load failure.
 The notifier waits for the desktop notification service and removes the record only after a
-successful reply. A missing package or different theme is silent. The login check's queue is
-independent.
+successful reply, without clearing a newer notice queued during delivery. A missing package
+or different theme is silent. The login check's queue is independent.
 
 Device and profile backups keep the managed unit configuration, including the notifier's
-relative wants link, but not the running shell's admission or recovery verdict. Restoring an
+relative wants link, but not the running shell's admission or recovery verdict. Profile archives
+store those files at the same member names when `XDG_CONFIG_HOME` is customized. Restoring an
 older backup removes the managed units and resets the selector's own state before starting the
 shell. Unrelated unit files and shortcut bindings are left alone.
 
 The post-start watcher checks that the selected process mapped the private applet and waits
 up to twelve seconds for its notification service. An absent applet or another service owner
 does not trigger recovery. When the mapped copy leaves the name unowned, the watcher records
-the failed payload and selects stock on the next start. It signals only the original managed
+the failed payload after signaling the original shell and selects stock on the next start.
+The watcher signals only the original managed
 process via a pidfd and relies on the vendor unit's restart-on-failure policy. This is an
 early, abnormal exit of the broken shell, not a normal logout. The selector tries the copy
 again after the RPM database or payload changes.

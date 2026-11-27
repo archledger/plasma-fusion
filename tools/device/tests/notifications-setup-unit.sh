@@ -45,6 +45,11 @@ export STANDIN_ROOT="$NOTIFICATIONS_ROOT" RECORD_PID="$base/ran" SELECT_MODE=mat
 export DBUS_SESSION_BUS_ADDRESS=unix:path=/private-probe
 manager_bus=$DBUS_SESSION_BUS_ADDRESS
 note() { printf '%s\n' "$*" >>"$base/setup.log"; }
+busctl() {
+  [[ $* == '--user --timeout=1s --json=short get-property org.freedesktop.systemd1 /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager UnitPath' ]]
+  python3 -c 'import json,sys; print(json.dumps({"type":"as","data":sys.argv[1:]}))' \
+    "$CONFIG/systemd/user" "$base"
+}
 systemctl() {
   case "$*" in
     '--user show-environment') printf 'DBUS_SESSION_BUS_ADDRESS=%s\n' "$manager_bus" ;;
@@ -145,9 +150,19 @@ for rel in "${NOTIFICATIONS_FILES[@]}"; do test ! -e "$CONFIG/$rel" && test ! -L
 test "$(wc -l <"$base/manager.log")" = 2
 
 sed -i '$d' "$NOTIFICATIONS_VENDOR"
+foreign_dropin=${dropin%/*}/05-vendor-start.conf
+printf '[Service]\nExecStart=\nExecStart=/usr/bin/plasmashell --different-argv\n' >"$foreign_dropin"
+notifications_setup
+if [[ -e $dropin ]]; then
+  echo 'FAIL setup overwrote a conflicting on-disk drop-in not yet loaded by the manager'
+  exit 1
+fi
 manager_bus=unix:path=/other-session
 notifications_setup
-test -f "$dropin"
+test ! -e "$dropin"
+rm -- "$foreign_dropin"
+notifications_setup
+test ! -e "$dropin"
 test "$(wc -l <"$base/manager.log")" = 2
 test ! -e "$CONFIG/plasma-workspace/env/plasma-fusion-notifications.sh"
 printf 'PASS per-launch environment, fallback, foreign unit, dry-run, and manager fencing\n'

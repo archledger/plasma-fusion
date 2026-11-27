@@ -33,10 +33,7 @@ announce_transition() {
         'Plasma changed under Plasma Fusion, or the notification applet could not be loaded. The banner keyboard shortcut is off until Plasma Fusion is updated.' ||
         return
       write_state "$state/selection" stock || return
-      if [[ -n ${INVOCATION_ID:-} ]]; then
-        timeout -k .1 .25 systemctl --user start --no-block \
-          plasma-fusion-notifications-notify.service >&2
-      fi
+      wake=1
       ;;
     missing | non-fusion-theme | qml-blocked)
       if [[ $last == copy || -f $state/notify ]]; then
@@ -49,10 +46,16 @@ announce_transition() {
 finish() {
   local finished now
   [[ -z $cache_tmp ]] || rm -f -- "$cache_tmp"
-  # Do not delay or invalidate the launch decision if a notification is being delivered.
   (
+    wake=0
     exec 9>"$state/notify.lock"
-    flock -n 9 && announce_transition
+    flock -w .15 9 || exit 0
+    announce_transition
+    flock -u 9
+    if [[ $wake == 1 && -n ${INVOCATION_ID:-} ]]; then
+      timeout -k .1 .25 systemctl --user start --no-block \
+        plasma-fusion-notifications-notify.service >&2
+    fi
   ) >/dev/null 2>&1 || :
   finished=${EPOCHREALTIME/.}
   printf -v now '%(%FT%T%z)T' -1
@@ -100,9 +103,19 @@ decision='load-failed'
 payload=$(payload_stamp 2>/dev/null) || exit 1
 db=$(rpm_stamp 2>/dev/null) || db=
 package=$(package_key "$db" "$payload")
-if [[ -n $db && -r $state/qml-failed && -f $state/qml-failed && $(<"$state/qml-failed") == "$package" ]]; then
-  decision='qml-blocked'
-  exit 1
+if [[ -n $db ]]; then
+  exec 8>>"$state/recovery.lock"
+  if ! flock -w .15 8; then
+    decision='recovery-pending'
+    exit 1
+  fi
+  if [[ -r $state/qml-failed && -f $state/qml-failed ]] &&
+    mapfile -t verdict <"$state/qml-failed" && [[ ${#verdict[@]} == 2 &&
+      ${verdict[0]} == "$package" && ${verdict[1]} =~ ^[a-f0-9]{32}$ ]]; then
+    decision='qml-blocked'
+    exit 1
+  fi
+  exec 8>&-
 fi
 
 decision='version-invalid'

@@ -49,6 +49,8 @@ ADDED=(
   .config/systemd/user/graphical-session.target.wants/plasma-fusion-powerfx.service
   .config/systemd/user/plasma-fusion-pen-garage.service
   .config/systemd/user/graphical-session.target.wants/plasma-fusion-pen-garage.service
+)
+NOTIFICATIONS_FILES=(
   .config/systemd/user/plasma-plasmashell.service.d/20-plasma-fusion-notifications.conf
   .config/systemd/user/plasma-fusion-notifications-notify.service
   .config/systemd/user/plasma-fusion-notifications-watch@.service
@@ -98,6 +100,21 @@ if [ -e "$notifications_state" ] || [ -L "$notifications_state" ]; then
   fi
   run rm -rf -- "$notifications_state"
 fi
+config=${XDG_CONFIG_HOME:-$HOME/.config}
+if [[ $config != "$HOME/.config" ]]; then
+  for p in "${NOTIFICATIONS_FILES[@]}"; do
+    live=$config/${p#.config/}
+    if [[ -e $WORK/$p || -L $WORK/$p ]]; then
+      run mkdir -p -- "${live%/*}"
+      run cp -aT --remove-destination -- "$WORK/$p" "$live"
+      rm -- "$WORK/$p"
+    elif [[ -e $live || -L $live ]]; then
+      run rm -f -- "$live"
+    fi
+  done
+else
+  ADDED+=("${NOTIFICATIONS_FILES[@]}")
+fi
 for p in "${ADDED[@]}"; do
   if ! grep -qx -- "$p" "$WORK/paths.txt" && ! grep -q -- "^$p/" "$WORK/paths.txt" && { [ -e "$p" ] || [ -L "$p" ]; }; then
     run rm -rf -- "$p"
@@ -106,6 +123,7 @@ done
 for w in .local/share/wallpapers/PlasmaFusion*; do [ -e "$w" ] && run rm -rf -- "$w"; done
 while IFS= read -r p; do
   [ -n "$p" ] || continue
+  if [[ $config != "$HOME/.config" && " ${NOTIFICATIONS_FILES[*]} " == *" $p "* ]]; then continue; fi
   if [ -d "$WORK/$p" ]; then
     run rm -rf -- "$p"; run mkdir -p "$(dirname "$p")"; run cp -a "$WORK/$p" "$p"
   else

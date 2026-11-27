@@ -19,7 +19,8 @@ ENGINE = Path(__file__).resolve().parents[3] / "tools/device/gate/plasma-fusion-
 
 class WatcherTest(unittest.TestCase):
     def test_only_failed_mapped_current_invocation_is_restarted(self):
-        for case in ("broken", "no-applet", "healthy", "foreign", "replaced", "stopping", "unwritable"):
+        for case in ("broken", "no-applet", "healthy", "foreign", "replaced", "stopping", "unwritable",
+                     "owner-after-write", "replaced-after-write", "signal-error"):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
                 self.check_case(case, Path(tmp))
 
@@ -39,12 +40,22 @@ class WatcherTest(unittest.TestCase):
         systemctl = bin_dir / "systemctl"
         systemctl.write_text(
             "#!/bin/bash\n"
+            "if [[ $CASE == replaced-after-write ]] && "
+            "{ [[ -f $XDG_STATE_HOME/plasma-fusion/notifications/qml-failed ]] || "
+            "compgen -G \"$XDG_STATE_HOME/plasma-fusion/notifications/.qml-failed.*\" >/dev/null; }; then\n"
+            "  UNIT_INVOCATION=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+            "fi\n"
             "printf 'ActiveState=active\\nSubState=running\\nMainPID=%s\\nRestart=on-failure\\n"
             "InvocationID=%s\\nJob=%s\\n' \"$FIXTURE_PID\" \"$UNIT_INVOCATION\" \"$UNIT_JOB\"\n"
         )
         busctl = bin_dir / "busctl"
         busctl.write_text(
             "#!/bin/bash\n"
+            "if [[ $CASE == owner-after-write ]] && "
+            "{ [[ -f $XDG_STATE_HOME/plasma-fusion/notifications/qml-failed ]] || "
+            "compgen -G \"$XDG_STATE_HOME/plasma-fusion/notifications/.qml-failed.*\" >/dev/null; }; then\n"
+            "  NOTIFY_OWNED=true\n"
+            "fi\n"
             "case \"$*\" in\n"
             "  *'GetConnectionUnixProcessID s org.kde.plasmashell') echo \"u $FIXTURE_PID\" ;;\n"
             "  *'GetConnectionUnixProcessID s org.freedesktop.Notifications') echo \"u $NOTIFY_PID\" ;;\n"
@@ -88,13 +99,23 @@ class WatcherTest(unittest.TestCase):
                 self.assertEqual(admitted.returncode, 0, admitted.stderr)
                 if case == "unwritable":
                     (internal / "qml-failed").mkdir()
-                watcher_env = dict(env, FIXTURE_PID=str(shell.pid),
+                watcher_env = dict(env, CASE=case, FIXTURE_PID=str(shell.pid),
                                    UNIT_INVOCATION=INVOCATION if case != "replaced" else "a" * 32,
                                    UNIT_JOB="44" if case == "stopping" else "0",
                                    NOTIFY_OWNED="true" if case in ("healthy", "foreign") else "false",
                                    NOTIFY_PID=str(shell.pid if case == "healthy" else os.getpid()))
                 try:
-                    result = subprocess.run([watcher, INVOCATION], env=watcher_env, capture_output=True, text=True,
+                    cmd = [watcher, INVOCATION]
+                    if case == "signal-error":
+                        cmd = [sys.executable, "-c", """
+import runpy, signal, sys
+def fail(*args):
+    raise PermissionError("intentional pidfd failure")
+signal.pidfd_send_signal = fail
+sys.argv.pop(0)
+runpy.run_path(sys.argv[0], run_name="__main__")
+""", *cmd]
+                    result = subprocess.run(cmd, env=watcher_env, capture_output=True, text=True,
                                             timeout=5)
                 except FileNotFoundError:
                     self.fail("missing watcher executable")
@@ -102,6 +123,7 @@ class WatcherTest(unittest.TestCase):
                 if case != "broken":
                     self.assertIsNone(shell.poll(), f"{case}: watcher stopped the shell")
                     self.assertFalse((internal / "qml-failed").is_file())
+                    self.assertEqual(list(internal.glob(".qml-failed.*")), [])
                     return
 
                 self.assertEqual(shell.wait(timeout=3), -signal.SIGUSR2)

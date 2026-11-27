@@ -4,6 +4,7 @@
 
 """Recover only the managed plasmashell invocation that loaded the broken copy."""
 
+import fcntl
 import os
 import re
 import signal
@@ -66,14 +67,30 @@ def package_key():
     )
 
 
-def write_verdict(state, key):
-    fd, name = tempfile.mkstemp(prefix=".qml-failed.", dir=state)
-    try:
-        with os.fdopen(fd, "w", encoding="ascii") as file:
-            file.write(key + "\n")
-        os.replace(name, state / "qml-failed")
-    finally:
-        Path(name).unlink(missing_ok=True)
+def restart_with_verdict(state, admitted, pid, pidfd):
+    invocation, key, _ = admitted
+    verdict = state / "qml-failed"
+    with (state / "recovery.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if verdict.is_dir():
+            return
+        fd, name = tempfile.mkstemp(prefix=".qml-failed.", dir=state)
+        try:
+            with os.fdopen(fd, "w", encoding="ascii") as file:
+                file.write(f"{key}\n{invocation}\n")
+            if (
+                (state / "admitted").read_text().splitlines() != admitted
+                or current_shell(invocation) != pid
+                or dbus("NameHasOwner", NOTIFICATIONS) != "b false"
+            ):
+                return
+            # Commit only a signal that was sent. The selector shares this lock, so a restart
+            # cannot read the verdict between signaling the old process and publishing the record.
+            signal.pidfd_send_signal(pidfd, signal.SIGUSR2)
+            os.replace(name, verdict)
+            print("Restarting the managed shell with stock notifications", file=sys.stderr)
+        finally:
+            Path(name).unlink(missing_ok=True)
 
 
 def recover(state, invocation):
@@ -109,7 +126,7 @@ def recover(state, invocation):
                 break
             time.sleep(min(0.25, max(0, deadline - time.monotonic())))
 
-        mapped = ((proc / "maps").read_text().splitlines())
+        mapped = (proc / "maps").read_text().splitlines()
         if not any(line.split(None, 5)[-1] == plugin for line in mapped):
             return
         if (
@@ -120,12 +137,7 @@ def recover(state, invocation):
             or dbus("NameHasOwner", NOTIFICATIONS) != "b false"
         ):
             return
-        write_verdict(state, key)
-        if current_shell(invocation) == pid and dbus("NameHasOwner", NOTIFICATIONS) == "b false":
-            # The stock unit restarts on this non-core-dumping signal. A pidfd cannot signal a
-            # replacement after this process has exited, even if the number is reused.
-            signal.pidfd_send_signal(fd, signal.SIGUSR2)
-            print("Restarting the managed shell with stock notifications", file=sys.stderr)
+        restart_with_verdict(state, admitted, pid, fd)
     finally:
         os.close(fd)
 
