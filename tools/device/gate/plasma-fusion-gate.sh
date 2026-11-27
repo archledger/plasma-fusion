@@ -12,6 +12,7 @@
 #                                             what a login switched off (fusion-config.sh runs it)
 #   plasma-fusion-gate.sh notify              show the queued notification (notify unit)
 #   plasma-fusion-gate.sh status              print the record, the switched-off parts, the log tail
+#   plasma-fusion-gate.sh theme               exit 0 for the effective Fusion theme, 1 otherwise
 #
 # Installed by tools/device/fusion-config.sh as ~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh
 # with the stub ~/.config/plasma-workspace/env/plasma-fusion-gate.sh, which startplasma sources
@@ -1072,8 +1073,9 @@ queue_notification() {
 
 FUSION=0 LNF=
 UPD_OFF=()
-evaluate() { # the decision for every part; deploy only turns parts back on
-  local p need_upd need_theme missing risky=0
+read_theme() {
+  local p
+  FUSION=0
   eff kdeglobals KDE LookAndFeelPackage
   LNF=$REPLY
   case $LNF in "$DARK" | "$LIGHT") FUSION=1 ;; esac
@@ -1085,6 +1087,11 @@ evaluate() { # the decision for every part; deploy only turns parts back on
       eff kdeglobals KDE "$p" && case $REPLY in "$DARK" | "$LIGHT") FUSION=1 ;; esac
     done
   fi
+}
+
+evaluate() { # the decision for every part; deploy only turns parts back on
+  local p need_upd need_theme missing risky=0
+  read_theme
   if [ "$MODE" = deploy ]; then
     UPDATE_OK=1 LOCK_OK=1
   else
@@ -1360,5 +1367,6 @@ case $MODE in
   deploy) run_deploy; exit $? ;;
   notify) run_notify; exit 0 ;;
   status) run_status; exit 0 ;;
-  *) echo "usage: plasma-fusion-gate.sh [login|check|deploy [--dry-run]|notify|status]" >&2; exit 2 ;;
+  theme) load_ini; read_theme; [ "$FUSION" = 1 ]; exit $? ;;
+  *) echo "usage: plasma-fusion-gate.sh [login|check|deploy [--dry-run]|notify|status|theme]" >&2; exit 2 ;;
 esac

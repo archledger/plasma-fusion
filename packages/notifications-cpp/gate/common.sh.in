@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+plugin_root='@_pf_plugin_dir@'
+plugin=${PF_NOTIFICATIONS_PLUGIN:-$plugin_root/plasma/applets/org.kde.plasma.notifications.so}
+record=${PF_NOTIFICATIONS_RECORD:-'@CMAKE_INSTALL_FULL_DATADIR@/plasma-fusion/built-against/notifications'}
+checker=${PF_NOTIFICATIONS_CHECK:-'@KDE_INSTALL_FULL_LIBEXECDIR@/plasma-fusion/plasma-fusion-notifications-check'}
+theme_engine=${PF_NOTIFICATIONS_THEME_ENGINE:-'@CMAKE_INSTALL_FULL_DATADIR@/plasma-fusion/tools/device/gate/plasma-fusion-gate.sh'}
+rpm=${PF_GATE_RPM:-/usr/bin/rpm}
+state=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion/notifications
+export LC_ALL=C
+
+rpm_stamp() {
+  local db stamp wal
+  for db in /usr/lib/sysimage/rpm/rpmdb.sqlite /var/lib/rpm/rpmdb.sqlite /var/lib/rpm/Packages; do
+    db=${PF_GATE_ROOT:-}$db
+    [[ -f $db ]] || continue
+    stamp=$(stat -Lc '%d:%i:%s:%y:%z' -- "$db") || return 1
+    if [[ -e $db-wal ]]; then
+      wal=$(stat -Lc '%d:%i:%s:%y:%z' -- "$db-wal") || return 1
+    else
+      wal=absent
+    fi
+    printf '%s\n%s\n%s\n' "$db" "$stamp" "$wal"
+    return
+  done
+  return 1
+}
+
+payload_stamp() {
+  stat -Lc '%d:%i:%s:%y:%z' -- "$plugin" "$record" "$checker"
+}

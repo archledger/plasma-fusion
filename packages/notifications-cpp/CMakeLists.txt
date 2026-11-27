@@ -67,6 +67,13 @@ pf_check_plugin_dir("${PF_NOTIFICATIONS_PLUGIN_DIR}" "${PF_QT_PLUGIN_DIR}" _pf_p
                     "${KDE_INSTALL_FULL_PLUGINDIR}")
 set(KDE_INSTALL_PLUGINDIR "${_pf_plugin_dir}")
 
+set(_gate_dir "${CMAKE_CURRENT_BINARY_DIR}/notifications-gate")
+configure_file(gate/common.sh.in "${_gate_dir}/plasma-fusion-notifications-common.sh" @ONLY)
+configure_file(gate/plasma-fusion-notifications-select.in "${_gate_dir}/plasma-fusion-notifications-select"
+    @ONLY FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+install(FILES "${_gate_dir}/plasma-fusion-notifications-common.sh" DESTINATION "${KDE_INSTALL_LIBEXECDIR}/plasma-fusion")
+install(PROGRAMS "${_gate_dir}/plasma-fusion-notifications-select" DESTINATION "${KDE_INSTALL_LIBEXECDIR}/plasma-fusion")
+
 add_subdirectory(src)
 
 target_compile_definitions(org.kde.plasma.notifications PRIVATE

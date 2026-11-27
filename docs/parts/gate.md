@@ -252,6 +252,14 @@ not saved as a scheme, workspaces and shortcuts. `fusion-restore.sh` is the full
 
 ## Commands
 
+The notification applet has a separate startup selector. It calls this engine's read-only
+`theme` mode to share the existing effective-theme rule; it neither runs `deploy` nor uses the
+login check's package cache. The selector checks the installed Plasma version against both
+versions in the applet's build record and verifies a load before returning the private plugin
+path. Its own cached pass is tied to the RPM database, including its WAL if present, and the
+payload. An unsuccessful check returns no path and is not cached. The launcher that consumes
+this decision and the Fedora package are separate steps.
+
 ```
 ~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh status   # record, switched-off parts, last runs
 ~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh check    # what the next login would do

@@ -1,0 +1,122 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# plasma-fusion-notifications-select: print the private plugin root on success only.
+set -euo pipefail
+
+if [[ $# != 0 ]]; then
+  printf 'Usage: plasma-fusion-notifications-select\n' >&2
+  exit 2
+fi
+
+# shellcheck source=common.sh.in
+source "${BASH_SOURCE[0]%/*}/plasma-fusion-notifications-common.sh"
+
+umask 077
+decision='state-unavailable'
+cache_tmp=
+started=${EPOCHREALTIME/.}
+finish() {
+  local finished now
+  [[ -z $cache_tmp ]] || rm -f -- "$cache_tmp"
+  finished=${EPOCHREALTIME/.}
+  printf -v now '%(%FT%T%z)T' -1
+  { printf '%s %s (%s ms)\n' "$now" "$decision" \
+    "$(((10#$finished - 10#$started) / 1000))" >>"$state/selector.log"; } 2>/dev/null || :
+}
+trap finish EXIT
+trap 'decision=interrupted; exit 1' HUP INT TERM
+mkdir -p -- "$state" || exit 1
+
+decision=missing
+[[ -f $plugin && -r $plugin && -f $record && -r $record ]] || exit 1
+
+decision='non-fusion-theme'
+{ timeout -k .1 .6 /bin/bash "$theme_engine" theme; } >/dev/null 2>&1 || exit 1
+
+version_re='^[0-9]+\.[0-9]+\.[0-9]+$'
+read_record() {
+  local line
+  source_version='' built_version=''
+  while IFS= read -r line || [[ -n $line ]]; do
+    case $line in
+      source-plasma-workspace=*)
+        [[ -z $source_version && ${line#*=} =~ $version_re ]] || return 1
+        source_version=${line#*=}
+        ;;
+      plasma-workspace=*)
+        [[ -z $built_version && ${line#*=} =~ $version_re ]] || return 1
+        built_version=${line#*=}
+        ;;
+    esac
+  done <"$record"
+  [[ -n $source_version && -n $built_version ]]
+}
+
+read_version() {
+  local value
+  value=$(timeout -k .2 1.3 "$rpm" -q --qf '%{NAME}=%{VERSION}\n' plasma-workspace) || return 1
+  [[ $value == plasma-workspace=* && ${value#*=} =~ $version_re ]] || return 1
+  installed=${value#*=}
+}
+
+decision='load-failed'
+[[ -x $checker ]] || exit 1
+payload=$(payload_stamp 2>/dev/null) || exit 1
+db=$(rpm_stamp 2>/dev/null) || db=
+
+decision='version-invalid'
+read_record || exit 1
+installed='' fake=''
+if [[ -n ${PF_GATE_FAKE_VERSIONS:-} ]]; then
+  read -r -a overrides <<<"$PF_GATE_FAKE_VERSIONS"
+  for pair in "${overrides[@]}"; do
+    [[ $pair == plasma-workspace=* ]] || continue
+    [[ -z $fake && ${pair#*=} =~ $version_re ]] || exit 1
+    fake=${pair#*=}
+  done
+fi
+
+# Stand-ins can test the cache, but they cannot populate a pass that a real start would accept.
+scope=system
+if [[ -v PF_GATE_ROOT || -v PF_GATE_RPM || -v PF_NOTIFICATIONS_CHECK || -v PF_NOTIFICATIONS_RECORD \
+      || -v PF_NOTIFICATIONS_PLUGIN || -v PF_NOTIFICATIONS_THEME_ENGINE ]]; then
+  scope='test'
+fi
+key=$(
+  printf '%s\0' "$scope" "$db" "$payload" "$plugin" "$record" "$checker" \
+    "${LD_LIBRARY_PATH:-}" "${LD_PRELOAD:-}" "${LD_AUDIT:-}" "${QT_PLUGIN_PATH:-}" | sha256sum
+)
+key=${key%% *}
+
+if [[ -n $db && ! -v PF_GATE_FAKE_VERSIONS && -f $state/pass ]] &&
+    mapfile -t cached <"$state/pass" 2>/dev/null && [[ ${#cached[@]} == 2 &&
+      ${cached[0]} == "$key" && ${cached[1]} == "$source_version" &&
+      ${cached[1]} == "$built_version" ]]; then
+  decision='cached-pass'
+else
+  decision='version-unknown'
+  if [[ -n $fake ]]; then installed=$fake; else read_version 2>/dev/null || exit 1; fi
+  decision='version-mismatch'
+  [[ $installed == "$source_version" && $installed == "$built_version" ]] || exit 1
+  decision='load-failed'
+  { timeout -k .2 2.1 "$checker" "$plugin"; } >/dev/null 2>&1 || exit 1
+  decision='checked-pass'
+fi
+
+current_payload=$(payload_stamp 2>/dev/null) || { decision=changed; exit 1; }
+current_db=$(rpm_stamp 2>/dev/null) || current_db=
+if [[ $payload != "$current_payload" || $db != "$current_db" ]]; then
+  decision=changed
+  exit 1
+fi
+
+if [[ $decision == checked-pass && -n $db && ! -v PF_GATE_FAKE_VERSIONS ]]; then
+  if cache_tmp=$(mktemp -- "$state/.pass.XXXXXX"); then
+    printf '%s\n%s\n' "$key" "$installed" >"$cache_tmp" &&
+      mv -fT -- "$cache_tmp" "$state/pass" && cache_tmp=
+  fi
+fi
+
+printf '%s\n' "$plugin_root"
