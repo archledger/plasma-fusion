@@ -264,8 +264,8 @@ user manager; in the unit tests; and on the ThinkPad where it says so.
 14. **A copy whose QML cannot be built**, if decision 10 is taken: with such a copy put in its
     place by a hook, stock is in front again within the session, plasmashell is restarted once,
     and the copy stays aside until the packages change.
-15. The login check's own tests (`tools/device/tests/gate-unit.sh`, `gate-stub.sh`) and the
-    package's tests gain a row a case.
+15. **The unit tests.** Each case above that a unit test can hold has a row in the login check's
+    own tests (`tools/device/tests/gate-unit.sh`, `gate-stub.sh`) or in the package's tests.
 
 ## What this does not cover
 
