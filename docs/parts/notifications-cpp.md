@@ -184,13 +184,13 @@ stock behaviour, so a difference between them is the copy's doing. The applet pl
 is recorded in every mode: the installed one in `stock`, the staged plugin by SHA-256 otherwise.
 
 Run on 2026-11-27 in the Fedora 44 test container on the build host, on the stock VM and on the
-ThinkPad, at `db2fd53`, the last commit of this change that touches code, with one kit: each mode
+ThinkPad, at `db2fd53`, the last commit of this change that touches the applet, with one kit: each mode
 with `scenario rc=0`, `session rc=0` and `left: none`, and every check a `PASS`. The numbers are
 the checks each mode passed, the same in all three places:
 
 | Mode | Checks | What it showed |
 |---|---|---|
-| `stock` | 20 | The installed applet has no "Focus notification banner" action; the test chord moves no focus; a banner without actions that times out and a closed notification tell the application, a click runs a default action once. |
+| `stock` | 20 | The applet plasmashell maps is the installed one: exactly one file, under `/usr`, owned by a package of plasma-workspace. It has no "Focus notification banner" action; the test chord moves no focus; a banner without actions that times out and a closed notification tell the application, a click runs a default action once. |
 | `copy` | 22 | The copy lists the action, and it ships unassigned, as the daemon's empty reply shows; the chord moves no focus; the same stock behaviour as `stock`. |
 | `full` | 54 | With no banner the shortcut is ignored. Arrival moves no focus. The shortcut gives a banner keyboard focus, and the focus ring is on the frame of the banner's window and on none of its content; Escape dismisses it, KWrite is active again and the application is told nothing. A replacement while focused ends the interaction, asks for the previous window and is not taken: also when it keeps the summary and the text, and also when the previous window is one of two windows of one application. A click into KWrite ends the interaction; a later Escape in KWrite dismisses nothing and the banner can still be closed by the application. |
 | `lock-idle` | 15 | Before the lock the chord reaches the applet, which ignores it with no banner. Locked with no banner focused: the shortcut is not dispatched, and a later Escape dismisses nothing. |
@@ -213,7 +213,13 @@ The runs are recorded in the shared ledger under
 the kit's checksums, with the sanitizer job on the same commit and with sixteen mutants, each
 caught by the check meant for it. The case of the closing group was watched red first, on the
 build of the commit before the fix, which is kept beside them. The ThinkPad's desktop processes
-were the same before its run and after the cleanup. The runs before the review fixes are under
+were the same before its run and after the cleanup.
+
+One change to the scenario came after that commit: the `stock` mode requires the applet plasmashell
+maps to be owned by a package of plasma-workspace, where it had accepted a package query that
+named nothing. With it that mode ran once more in the three places: the same 20 checks, every one
+a `PASS`, kept in `stock-owner-check/` with the run that fails at that check when a package that
+owns nothing is expected. The runs before the review fixes are under
 `evidence/part-b/` and `evidence/part-b-review-fixes/`; those of the code with the review fixes,
 before the automated reviews of it, under `evidence/part-b-after-review-20261127/`.
 
