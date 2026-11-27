@@ -25,7 +25,7 @@ The modules do not depend on one another and should arrive as separate changes.
   new probe endpoint, or change VPN/DNS policy.
 - Notification dismissal and activation are distinct actions. Preserve shortcut assignments
   and the lock-screen boundary. Exact-repeat collapse is a later notification slice. The
-  notification triage specification ships as a version-bound compiled part with a packaging
+  notification triage ships as a version-bound compiled part with a packaging
   change, which the owner approved on 2026-11-26.
 - Reuse the design system and existing platform backends. Keep stock-profile fallback and
   prove changes in isolated tests before any installation.

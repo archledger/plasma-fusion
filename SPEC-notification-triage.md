@@ -5,13 +5,15 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 # Spec: notification triage
 
-Status: **Accepted on 2026-11-26**, with the decisions below approved to proceed. Module:
+Status: **Accepted on 2026-11-26**, with decisions 1 to 10 below approved to proceed; decisions
+11 to 17 are proposed and wait for the owner. Module:
 `notification-triage` in [CAPABILITY-MAP.md](CAPABILITY-MAP.md). Baseline: main
 `b3f5a7505f3fd8e50f6d94025459cbfbd400fb60`, Plasma Workspace 6.8.3 (`v6.8.3`,
 `4302f699329ebb155097beaab2d5aabbb21e33b3`), fork KWin `6.8.3-1.fc44.pf1`. No implementation is
 included in this specification.
 
-Evidence, all from 2026-11-26 and recorded in the project's shared ledger:
+Evidence, all from 2026-11-26 and kept in the project's own records, which are not part of
+this repository:
 
 - **Focus-then-dismiss validation.** A throwaway test widget in private sessions, on stock KWin
   in a VM and on the fork KWin on a ThinkPad, with lock and shortcut-inhibitor cases.
@@ -25,13 +27,14 @@ on the physical keyboard or in a live desktop.
 
 ## Objective and assumptions
 
-Let a user deal with the newest notification banner without leaving the keyboard. Today a banner
-cannot be handled from the keyboard at all: the stock banner has no key handling, so it stays
-until it times out or the pointer dismisses or opens it.
+Let a user deal with the newest notification banner without leaving the keyboard. Today the
+keyboard cannot reach a banner: nothing gives one keyboard focus, and the stock banner has no key
+handling of its own, so it stays until it times out or the pointer dismisses or opens it.
 
-The module is described in the capability map as separate quick actions for dismissing and
+The module was described in the capability map as separate quick actions for dismissing and
 activating the newest eligible notification, with shortcut assignments and the lock-screen
-boundary preserved. This slice takes the two-step shape that replaced the one-key design:
+boundary preserved; the map's row now says what this slice does. This slice takes the two-step
+shape that replaced the one-key design:
 
 - One configurable shortcut, **Focus notification banner**, with no default key binding.
 - On the focused banner, **Escape** dismisses it into the history the way its own timeout would,
@@ -67,10 +70,12 @@ Why this shape:
   44% of dismissed notifications were ones the same users rated important.
 
 Four safeguards follow from the evidence and are not optional: arrival never moves focus; the
-shortcut ships unassigned; focus returns to the window the user was in; Escape keeps the
-notification.
+shortcut ships unassigned; the keyboard goes back to the window the user was in when the
+interaction ends by a replacement, by the widget's request or by KWin's own order; Escape keeps
+the notification.
 
-Assumptions, each demonstrated by the probes:
+Assumptions. The first six were demonstrated by the probes; the seventh is a reading of the
+stock source.
 
 1. A banner can be given real keyboard focus through the stock route that inline replies and
    pointer interaction already use.
@@ -94,38 +99,62 @@ Assumptions, each demonstrated by the probes:
    bindings. No on-screen hint is added in this slice.
 2. **No eligible banner.** Nothing happens: no focus change, no message.
 3. **Eligible banner.** The newest visible banner that shows a notification, whatever its
-   urgency. Not eligible: a job popup, and a banner that is already handling keyboard input for
-   a reply.
+   urgency. Newest is by the time its notification first arrived, so that a replacement does not
+   make a banner newer. Not eligible: a job popup, and a banner in which a reply has been
+   started. A banner that is not eligible is passed over: with the newest banner in a reply, the
+   shortcut takes the next older eligible one.
 4. **Focus.** The banner becomes the active window and its content takes keyboard focus. A focus
    ring in the theme's focus colour is drawn around it and stays until the interaction ends. For
    that time the window the user was in is inactive, as with any other focus change. Stock
    behaviour on arrival is unchanged: a banner never takes focus by itself.
 5. **Timer.** While the banner is focused, its timeout is paused, as it is while the pointer
-   rests on it. It resumes when the interaction ends and the banner is still shown.
+   rests on it. It resumes when the interaction ends and the banner is still shown, from the full
+   length of its timeout, as it does after the pointer leaves it.
 6. **Escape on the focused banner.** The banner is dismissed through its own expiry path, and
-   the notification stays in the history. The sending application is told what the banner's
-   timeout would tell it: nothing when the notification has actions or is resident, "expired"
-   otherwise. The window that was active before the shortcut is active again. This is the
-   explicit dismissal that the KDE guidelines require for a critical notification, so critical
-   banners are eligible.
-7. **Enter on the focused banner.** Return and Enter both act as a click: the application's
-   default action if it supplied one, otherwise nothing. One press acts once; holding the key
-   does not repeat the action.
-8. **Keys inside the banner.** Tab and Shift+Tab move between the banner's controls as they do
-   today. Escape dismisses the banner from its body and from its buttons. In the reply field
-   Escape keeps its current behaviour, so a draft is not lost. No other key is given a meaning.
-9. **The interaction ends by itself** when the banner is replaced, is closed, loses focus
-   (pointer, another window, lock) or the screen locks. Nothing is dismissed or activated at
-   that point and no other banner is targeted; the shortcut must be pressed again. Only a
-   replacement that ends it while the banner is still focused returns focus to the previous
-   window.
-10. **Locked or inhibited.** No focus request is made while the screen is locked. A shortcut
-    inhibitor held by the focused window keeps the shortcut from being dispatched, as for any
-    global shortcut. The widget adds no check of its own.
+   the notification stays in the history. The sending application is told what that path tells
+   it: nothing when the notification is resident, or has actions and is not transient; "expired"
+   otherwise. A critical banner, which has no timeout, is told "expired" as well. After the
+   dismissal the widget asks for nothing: KWin's own focus order makes the window that was active
+   before the shortcut active again when it still exists, and chooses another when it does not.
+   This is the explicit dismissal that the KDE guidelines require for a critical notification, so
+   critical banners are eligible.
+7. **Enter on the focused banner.** While the banner's content itself has the keyboard focus,
+   Return and Enter both act as a click: the application's default action if it supplied one,
+   otherwise nothing. One press acts once; holding the key does not repeat the action.
+8. **Keys inside the banner.** Tab and Shift+Tab move between the banner's controls. A control
+   that has the keyboard focus is pressed with Space, as in stock; Return does nothing there,
+   and neither key is taken as Enter on the banner. Escape dismisses the banner from its body and
+   from its other controls. In the reply field, and on its Send button, Escape keeps its stock
+   behaviour, which is nothing, so a draft is not lost while the keyboard focus is there; from
+   another control it dismisses, and a draft left in the field goes with the banner, as it does
+   when the banner is closed by its own button. Starting a reply keeps the banner taken: its
+   timeout stays paused and Escape still dismisses it from its other controls. No other key is
+   given a meaning, and nothing brings the keyboard back to the content but taking the banner
+   again.
+9. **The interaction ends by itself** when the banner is replaced, is closed, is hidden because
+   it no longer fits, loses focus (the pointer, another window) or the screen locks, and when
+   KWin has not granted the focus 1.5 seconds after the request. Nothing is dismissed or
+   activated at that point and no other banner is targeted; the shortcut must be pressed again.
+   Only a replacement that ends a focused interaction makes the widget ask for the window it
+   recorded, and only when no reply has been started in the banner: with a reply started, the
+   keyboard stays with the banner, as it does in stock. When there is nothing to ask for, because
+   the recorded window is gone or never was one, the banner stays the active window and takes no
+   key; a click, or the shortcut again, brings the keyboard back.
+10. **Locked or inhibited.** KWin does not deliver the shortcut while the screen is locked, so
+    no focus request is made; locking while a banner is taken ends the interaction. After
+    unlocking, the banner may be the active window again, not taken: the shortcut must be pressed
+    again. A shortcut inhibitor held by the focused window keeps the shortcut from being
+    dispatched, as for any global shortcut. The widget adds no check of its own.
 11. **Held keys.** Activation happens on the first press. A key still held afterwards is
-    delivered to the window that regains focus, as with any focus change.
-12. **Stock fallback.** When the Fusion copy is not in force (see below), behaviour is exactly
-    stock.
+    delivered to the window that regains focus, as with any focus change. This is an accepted
+    limitation (decision 5).
+12. **Stock fallback.** When the Fusion copy is not in force (see below), the stock plugin is
+    the code that runs. The binding a user gave the shortcut is kept by the shortcut daemon, not
+    by the copy; what System Settings then shows for it is for the gate to settle.
+13. **With the copy in force and the shortcut unassigned.** The banner then differs from stock in
+    one way: when the keyboard focus reaches a banner's reply field, the reply starts, as it does
+    on a click, so that Tab cannot type into a banner that is not replying. Everything else is
+    stock's.
 
 ## Ownership and state boundary
 
@@ -134,9 +163,13 @@ widget owns the banner, its timer, its expiry and the history. The feature keeps
 own about what may be dismissed.
 
 The widget holds, per banner, at most one interaction state: not requested, requested, or
-active. It records the previously active task when the shortcut is pressed and uses that record
-only to restore focus after a replacement that ends an active interaction. It never restores
-focus after the user's own focus change.
+active. When the shortcut is pressed it records the window that has the keyboard focus, unless
+that window is one of its own taken banners, in which case the earlier record stands; the record
+is a window, never a banner. It uses that record only after a replacement that ends a focused
+interaction in which no reply was started. It never restores focus after the user's own focus
+change. A request that KWin has not granted within 1.5 seconds is dropped. The applet's debug
+reports name a banner by its notification id and an item by its type; none carries the text of a
+notification or of a reply.
 
 No new daemon, bus service, privilege or KWin change. Both probes ran on stock KWin and on the
 fork without a compositor change.
@@ -166,19 +199,21 @@ pattern of the existing compiled parts, and it adds two requirements of its own:
   inside the copy, which keeps the feature off when the running version differs from the one it
   was built against, is kept as a second layer. On its own it would leave the copy in use with
   the feature off, so it does not replace that selection.
+
+  The copy is built from KDE's source at that version, not from a distribution's package: a fix
+  that a distribution applies to this applet is not in the copy until the copy is rebuilt from it.
 - **Packaging.** Adding a compiled part touches every channel's build. The capability map keeps
   packaging changes behind coordination first; the owner approved this one on 2026-11-26.
 
-Proposed structure, to be confirmed by the implementation plan:
+Structure, as the two implementation pull requests have it:
 
 | Path | Responsibility |
 |---|---|
-| `packages/notifications-cpp/` | Build of the stock applet with the Fusion change, and its QML unit tests. |
-| `tools/build.d/NN-notifications.sh` | Build step for the new part. |
-| `packaging/<channel>/` | Build dependencies and a subpackage for the copy. |
-| `tools/device/fusion-config.sh`, `tools/device/gate/` | Turning the copy on and off by version. |
-| `tools/device/tests/vsession/` | The private-session scenarios, moved from the probes. |
-| `docs/parts/notifications.md` | New part page, including the shortcut and how to bind it. |
+| `packages/notifications-cpp/` | The stock applet with the Fusion change, its build, the directory guard and its record. |
+| `packages/notifications-cpp/tests/` | The Qt Tests, the guard's unit test and the private-session scenarios. |
+| `packaging/fedora/plasma-fusion.spec` | The build requirements, until the second plan adds a subpackage per channel. |
+| `tools/device/gate/` | Turning the copy on and off by version: the second plan's. |
+| `docs/parts/notifications-cpp.md` | The part page, including the shortcut and how to bind it. |
 | `CAPABILITY-MAP.md` | Status of `notification-triage`. |
 
 Plasma 6.7 keeps stock behaviour. The first qualification target is Plasma 6.8.3 on Fedora 44,
@@ -194,23 +229,37 @@ and task switcher parts do.
 
 ## Testing strategy
 
-Fail-first QML tests for the selection rule, the interaction state and its cancel rules, the
-timer pause, and the Escape and Enter handlers.
+Fail-first tests for what can be tested off a desktop: the selection rule, the window inside a
+group, the interaction state and its cancel rules, the Escape and Enter handlers and the walk to
+the reply field (Qt Tests over the rules file), the version rule, the shortcut action on a
+private session bus, and the directory guard with its configure. The timer pause and the focus
+ring cannot be tested off a desktop: the timer pause has a session mode, and the ring has
+screenshots only.
 
 Private-session scenarios on the stock VM and on the ThinkPad, on the real Fusion copy rather
-than the probe: the five modes already written for the probes (`stock`, `full`, `lock-idle`,
-`lock-focused`, `activate`) as regressions, plus the cases the probes did not cover:
+than the probe, in nine modes: `stock`, `copy`, `full`, `lock-idle`, `lock-focused`, `activate`,
+`buttons`, `timer` and `eligible`. They must cover:
 
-- **Eligibility:** critical and resident banners, a job popup, a banner in reply mode, and
-  several banners at once, where only the newest is eligible.
-- **Keys inside the banner:** Escape from a control inside the banner and from the reply field.
+- **Eligibility:** critical and resident banners, a job popup, a banner in which a reply has
+  started, and several banners at once, where only the newest eligible one is taken.
+- **What the application is told:** Escape on a banner without actions, normal and critical,
+  tells it "expired" once; on one with actions it is told nothing.
+- **Keys inside the banner:** Escape from a control inside the banner and from the reply field;
+  Return on a focused control and in the reply field; both Enter keys on the banner.
 - **Timer:** the timeout stays paused while the banner is focused and resumes afterwards.
-- **A real active window:** with Dim Inactive enabled, with a full-screen application in front,
-  and with a different keyboard layout in that application, check what dims, what shows above
-  what, and that the application's own state is back after the interaction.
-- **Stock behaviour:** with the shortcut unassigned, and with the copy switched off, both must
-  behave exactly like stock.
-- **Version gate:** a matching and a different Plasma version.
+- **Ways the interaction ends:** a replacement, a close while focused, a move to a newer banner,
+  the lock.
+
+Not covered by them, and not claimed: a real active window with Dim Inactive enabled, with a
+full-screen application in front, or with a different keyboard layout in that application; a
+shortcut inhibitor on the copy; rule 13 outside an interaction, since the reply field is reached
+by the keyboard only in the `buttons` mode; what the user finds after unlocking; the translation
+of the action's name; and whether Return presses a control under the desktop's own platform
+theme.
+
+Rule 12 is demonstrated by neither: it is the gate's, in the second plan, whose test must show
+that at another Plasma version the stock plugin is the one mapped, after an update followed by a
+plasmashell restart without a new login, and after a failed load.
 
 A real-keyboard run in the live session, with the owner at the ThinkPad: press the shortcut,
 Escape, Enter and Tab on the physical keyboard while test notifications arrive. The probes
@@ -244,32 +293,35 @@ local tooling must be reported; do not install or silently skip it.
 - **Ask first:** a new dependency or daemon, a native seam, any further packaging or CI change
   beyond this part, a live installation, a merge, a release, or use of a shared VM or test
   desktop.
-- **Never:** focus on arrival, a default key binding that overrides an existing one, dismissing
-  or activating without focus, changing how applications are told, weakening a check, or editing
-  a generated file.
+- **Never:** focus on arrival, a default key binding in this slice or at any time one that
+  overrides an existing one, dismissing or activating without focus, telling an application
+  something about its notification that its own expiry path would not, weakening a check, or
+  editing a generated file.
 
-Complete means every rule in the user-visible contract is demonstrated on the Fusion copy on
-both machines, the checks above pass on the tested revision, the part page agrees with the code,
-and the physical-keyboard run is recorded. No claim extends beyond the tested versions.
+Complete means rules 1 to 11 and 13 are demonstrated on the Fusion copy on both machines,
+rule 12 by the gate's test once the gate exists, the checks above pass on the tested revision,
+the part page agrees with the code, and the physical-keyboard run is recorded. No claim extends
+beyond the tested versions.
 
 ## Decisions accepted on 2026-11-26
 
-The research report ended with eight questions for this specification. Each was settled as
-follows.
+The research report ended with eight questions for this specification. They were settled on
+2026-11-26 as follows; the ninth and the tenth were added the same day.
 
 1. **Shipping.** The Fusion-built copy of the stock plugin, with its packaging change.
 2. **Finding the shortcut.** The standard shortcuts page and the part page document it. A later
    slice may add a hint.
 3. **Escape from the banner's controls.** It dismisses from the buttons and keeps its current
-   behaviour in the reply field. Not yet tested; the implementation must test it first.
+   behaviour in the reply field. The implementation tested it first (the `buttons` mode).
 4. **Enter with no default action.** Nothing, as a click does today. KDE Bug 405639 asks for the
    banner to close instead; that is not adopted.
 5. **Held keys.** A key held across an activation is typed into the window that gets focus back.
    This is accepted as ordinary focus behaviour. Preventing it would need compositor support and
    is not in this slice.
 6. **Eligibility and the timer.** Every visible notification banner except job popups and
-   banners in reply mode, and the timer paused while focused. Critical and resident banners and
-   the timer pause were not exercised by the probes and need their own cases.
+   banners in which a reply has started, and the timer paused while focused. Critical and
+   resident banners and the timer pause were not exercised by the probes; the `eligible` and
+   `timer` modes are their cases.
 7. **Default binding.** None in this slice. Fusion's profile already binds Meta+N to the
    notification view, and a later slice may propose a binding of its own.
 8. **Older banners and dismiss-all.** Newest only. Stepping to an older banner and dismissing
@@ -278,14 +330,50 @@ follows.
 10. **Where the version rule is enforced.** Before plasmashell picks its plugins, so that at
     another version the stock plugin loads. A guard inside the copy is kept as a second layer
     and does not replace that selection: on its own it would leave the copy in use with the
-    feature off. A review remark on this specification showed that the second of two allowed
-    enforcement points could not deliver rule 12.
+    feature off. A review remark on this specification showed that the second of the two
+    enforcement points it first allowed could not deliver rule 12.
 
-Left for the implementation plan: per-channel build requirements, the source of the stock tree,
-the exact gate mechanism with its enforcement point, and the new test suites. The plan must prove that a copy which fails to
-load leaves the user with a working stock notification widget at the next plasmashell start.
-Proposing the change to KDE upstream is worth doing in parallel; it is the owner's own action and
-not the delivery path.
+The implementation plan settled the build requirements of Fedora's specification, the source of
+the stock tree (KDE's, at the version above) and the test suites. Left for the second plan: the
+gate with its enforcement point and its test, a subpackage for each channel, and what System
+Settings shows for the shortcut after the copy leaves. Because the notification service itself is
+provided by this applet, a copy that fails to load leaves the session without any notification
+widget until plasmashell starts again; so the plan must show that such a copy is not selected in
+the first place (it is tried before plasmashell picks its plugins) or that the stock widget is
+back within the same session. Proposing the change to KDE upstream is worth doing in parallel;
+it is the owner's own action and not the delivery path.
+
+## Proposed on 2026-11-27, to be accepted with the implementation
+
+An independent review of this specification and of the two pull requests that build on it found
+rules that said something the accepted code deliberately does not do, and cases nobody had ruled
+on. The rules above now say what the code does; these are the choices behind that wording, each
+to be accepted or changed by the owner.
+
+11. **A replacement hands the keyboard back at once.** When a notification is replaced while its
+    banner is taken, the interaction ends and the previous window is asked for at once. A key
+    pressed right after lands in that window. This is accepted as the price of ending the
+    interaction on a replacement, as the held key of decision 5 is.
+12. **Any replacement counts**, also a re-send with identical content. An application that
+    re-sends its notification every second makes the shortcut unusable on that notification: its
+    banner would be taken and released again each second.
+13. **A reply started in a taken banner.** A replacement then ends the interaction without asking
+    for the previous window, so that typing goes on in the reply field. Escape from another
+    control still dismisses the banner, and a draft left in the field goes with it. The
+    alternative, no Escape while the banner holds reply text, was not taken: the close button of
+    stock drops the draft as well.
+14. **A critical banner without actions is told "expired"** by Escape, which its own timeout
+    would never do, because it has none. It is the same dismissal as for any other banner.
+15. **The record of the previous window survives a move to a newer banner.** When the shortcut is
+    pressed again while a banner is taken and a newer one is eligible, the newer one is taken and
+    the window from before the first press stays recorded. With nothing to ask for (the window is
+    gone, or never was one), the banner stays the active window and takes no key; the widget does
+    not guess a window.
+16. **The keyboard focus reaching a banner's reply field starts the reply** whenever the copy is
+    in force, also with the shortcut unassigned (rule 13).
+17. **Enter acts only from the banner's content, and a control is pressed with Space** (rules 7
+    and 8), as stock does in the private sessions. Whether Return presses a control under the
+    desktop's own platform theme was not checked.
 
 Source references: [capability map](CAPABILITY-MAP.md),
 [architecture](docs/ARCHITECTURE.md), [login check](docs/parts/gate.md),
