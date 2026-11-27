@@ -15,7 +15,7 @@
 #include "notifications_debug.h"
 
 #include <QAction>
-#include <QCoreApplication>
+#include <QCoreApplication> // Plasma Fusion
 #include <QDBusConnection>
 #include <QDBusMessage>
 
@@ -55,7 +55,9 @@ GlobalShortcuts::GlobalShortcuts(QObject *parent)
         m_focusBannerAction = new QAction(this);
         m_focusBannerAction->setObjectName(QStringLiteral("focus notification banner"));
         m_focusBannerAction->setProperty("componentName", QStringLiteral("plasmashell"));
-        m_focusBannerAction->setText(i18nc("@action", "Focus Notification Banner"));
+        // Plasma Fusion: as the specification names it. The package has no catalogue step, so the
+        // name is not translated.
+        m_focusBannerAction->setText(i18nc("@action", "Focus notification banner"));
         m_focusBannerAction->setIcon(QIcon::fromTheme(QStringLiteral("notifications")));
         m_focusBannerAction->setShortcutContext(Qt::ApplicationShortcut);
         connect(m_focusBannerAction, &QAction::triggered, this, &GlobalShortcuts::focusBannerTriggered);

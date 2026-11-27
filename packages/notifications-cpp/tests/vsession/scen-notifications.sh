@@ -208,7 +208,7 @@ triage() { # PATTERN (without its closing quote) [AFTER LINE]: a triage step tha
 triage_since() { triage "$2" "$1" && echo yes || echo no; } # AFTER LINE, PATTERN
 
 focus_key='key meta+ctrl+alt+pagedown'
-focus_action="['plasmashell', 'focus notification banner', 'plasmashell', 'Focus Notification Banner']"
+focus_action="['plasmashell', 'focus notification banner', 'plasmashell', 'Focus notification banner']"
 # How KWin names a banner that is the active window: its caption and its class. A panel is a
 # window of plasmashell too, so the class alone would take any of them for the banner.
 banner_window='plasmashell|org.kde.plasmashell'
