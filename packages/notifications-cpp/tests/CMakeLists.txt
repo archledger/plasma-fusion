@@ -14,9 +14,11 @@ target_link_libraries(notificationsplugintest PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME notifications-plugin COMMAND notificationsplugintest)
 set_tests_properties(notifications-plugin PROPERTIES TIMEOUT 30)
 
-# The directory guard as a unit test of its CMake functions (../cmake/PluginDirGuard.cmake): it
-# needs neither a compiler nor the applet's packages.
+# The directory guard as a unit test of its CMake functions (../cmake/PluginDirGuard.cmake), on a
+# tree of directories and symbolic links and behind the wrapper's own lines, which it configures
+# fifteen times in a small project without a compiler: it needs no compiler and no packages.
 add_test(NAME notifications-plugin-dir-guard COMMAND "${CMAKE_COMMAND}"
     "-DGUARD_MODULE=${CMAKE_CURRENT_SOURCE_DIR}/../cmake/PluginDirGuard.cmake"
+    "-DWRAPPER=${CMAKE_CURRENT_SOURCE_DIR}/../CMakeLists.txt"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/guardtest.cmake")
-set_tests_properties(notifications-plugin-dir-guard PROPERTIES TIMEOUT 60)
+set_tests_properties(notifications-plugin-dir-guard PROPERTIES TIMEOUT 600)

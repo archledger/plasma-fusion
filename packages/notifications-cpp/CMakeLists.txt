@@ -47,15 +47,17 @@ find_package(Wayland REQUIRED COMPONENTS Client)
 # plasma_add_applet installs into ${KDE_INSTALL_PLUGINDIR}/plasma/applets. The copy must never land
 # on the stock plugin's path there: it goes under a directory Plasma Fusion owns, and the build
 # stops unless that directory is an absolute path that, symbolic links resolved, is neither Qt's
-# own plugin directory nor inside it (cmake/PluginDirGuard.cmake). KDEInstallDirs fills its
-# variables at the end of the configuration, so Qt's plugin directory is taken from Qt and the
-# copy's directory is a real path now, not a placeholder expanded later.
+# own plugin directory nor inside it, nor KDE's own when that is another directory (cmake/
+# PluginDirGuard.cmake). KDEInstallDirs sets its full paths when it is included, so both are known
+# here. The guard gives back the directory as it resolved it, and that is what the install rule
+# uses: the string checked is the string installed.
 set(PF_QT_PLUGIN_DIR "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}")
 set(PF_NOTIFICATIONS_PLUGIN_DIR "${CMAKE_INSTALL_FULL_LIBEXECDIR}/plasma-fusion/qt6/plugins"
     CACHE PATH "Absolute directory the notification applet copy is installed under")
 include(cmake/PluginDirGuard.cmake)
-pf_check_plugin_dir("${PF_NOTIFICATIONS_PLUGIN_DIR}" "${PF_QT_PLUGIN_DIR}")
-set(KDE_INSTALL_PLUGINDIR "${PF_NOTIFICATIONS_PLUGIN_DIR}")
+pf_check_plugin_dir("${PF_NOTIFICATIONS_PLUGIN_DIR}" "${PF_QT_PLUGIN_DIR}" _pf_plugin_dir
+                    "${KDE_INSTALL_FULL_PLUGINDIR}")
+set(KDE_INSTALL_PLUGINDIR "${_pf_plugin_dir}")
 
 add_subdirectory(src)
 
