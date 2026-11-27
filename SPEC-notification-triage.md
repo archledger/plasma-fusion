@@ -244,8 +244,9 @@ than the probe, in nine modes: `stock`, `copy`, `full`, `lock-idle`, `lock-focus
 
 - **Eligibility:** critical and resident banners, a job popup, a banner in which a reply has
   started, and several banners at once, where only the newest eligible one is taken.
-- **What the application is told:** Escape on a banner without actions, normal and critical,
-  tells it "expired" once; on one with actions that is not transient it is told nothing.
+- **What the application is told:** Escape on a banner without actions that is not resident,
+  normal and critical, tells it "expired" once; on one with actions that is not transient, a
+  critical one among them, it is told nothing, and on a resident one it is told nothing too.
 - **Keys inside the banner:** Escape from a control inside the banner and from the reply field;
   Return on a focused control and in the reply field; both Enter keys on the banner.
 - **Timer:** the timeout stays paused while the banner is focused and resumes afterwards.
@@ -300,10 +301,10 @@ local tooling must be reported; do not install or silently skip it.
   something about its notification that its own expiry path would not, weakening a check, or
   editing a generated file.
 
-Complete means rules 1 to 11 and 13 are demonstrated on the Fusion copy on both machines,
-rule 12 by the gate's test once the gate exists, the checks above pass on the tested revision,
-the part page agrees with the code, and the physical-keyboard run is recorded. No claim extends
-beyond the tested versions.
+Complete means rules 1 to 11 and 13 are demonstrated on the Fusion copy on both machines, apart
+from the cases the scenarios do not cover (listed above), rule 12 by the gate's test once the gate
+exists, the checks above pass on the tested revision, the part page agrees with the code, and the
+physical-keyboard run is recorded. No claim extends beyond the tested versions.
 
 ## Decisions accepted on 2026-11-26
 
