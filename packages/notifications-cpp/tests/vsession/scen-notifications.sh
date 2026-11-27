@@ -184,6 +184,18 @@ activate_window_by_caption() { # CAPTION: KWin makes it the active window, as a 
 close_window_by_caption() { # CAPTION: KWin asks the application to close it
     observe '(() => { const w = workspace.windowList().find(w => w.caption.indexOf("'"$1"'") === 0 && !w.popupWindow); if (!w) return "none"; w.closeWindow(); return "ok"; })()'
 }
+# The focus ring as the picture shows it (ring.py, the standard library only): the focus colour
+# on the frame of the banner's window, one pixel in from each of its four sides, and on none of the
+# window's content. The applet reports the window's place and size, its padding and the focus
+# colour when the ring appears; the screenshot must already be taken.
+ring_check() { # SHOT-NAME
+    local geometry
+    geometry=$(grep -E 'banner triage "ring-geometry [-0-9 ]+#[0-9a-f]{6}"$' "$OUT/plasmashell.log" | tail -n 1 | sed 's/^.*"ring-geometry //; s/"$//')
+    expect "the applet reports where the banner is drawn" "$([ -n "$geometry" ] && echo reported || echo none)" reported
+    [ -n "$geometry" ] || return 1
+    expect "the focus ring is on the banner's frame and on none of its content" \
+        "$(python3 "$HOME/pf-notif/ring.py" "$OUT/$1.png" $geometry)" "on the frame, none in the content"
+}
 shown_banners() { # A banner is a window of plasmashell with the caption "plasmashell".
     observe 'workspace.windowList().filter(w => w.resourceClass == "org.kde.plasmashell" && w.caption == "plasmashell").length'
 }
@@ -370,7 +382,10 @@ mode_full() {
     # The shortcut gives it keyboard focus; Escape dismisses it through its own expiry.
     need "the shortcut gives the banner keyboard focus" take_banner || return 1
     need "  and KWrite is no longer the active window" active "$banner_window" focused-banner || return 1
+    # The compositor draws the ring a moment after the focus arrives.
+    sleep .3
     shot 02-focused
+    ring_check 02-focused
     pfinput 'key escape'
     need "Escape dismisses the focused banner" triage "dismissed-by-escape $original\"" "$from" || return 1
     sleep .6

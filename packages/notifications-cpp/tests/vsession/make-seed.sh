@@ -44,7 +44,7 @@ if [[ -e "$SEED" && ! -d "$SEED/pf-notif" ]]; then
 fi
 rm -rf "$SEED"
 mkdir -p "$SEED/.config" "$SEED/pf-notif"
-cp "$HERE/sender.py" "$SEED/pf-notif/sender.py"
+cp "$HERE/sender.py" "$HERE/ring.py" "$SEED/pf-notif/"
 if [[ "$MODE" != stock ]]; then
     mkdir -p "$SEED/pf-plugins/plasma/applets"
     cp "${plugins[0]}" "$SEED/pf-plugins/plasma/applets/"

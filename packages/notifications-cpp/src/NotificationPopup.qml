@@ -130,9 +130,10 @@ NotificationsApplet.NotificationWindow {
     }
 
     // Plasma Fusion: Return and Enter do what a click on the banner does, once per press, but only
-    // from the banner's content itself. Qt Quick offers a key press to this item before the control
-    // inside the banner that has the keyboard focus, and a Keys handler accepts it by default, so
-    // a Return meant for a button or for the reply field is refused here in so many words.
+    // from the banner's content itself. Qt Quick gives a key press to the item that has the
+    // keyboard focus and, when that item does not take it, to each of its parents in turn: a
+    // Return that a control inside the banner did not accept arrives here too, and is refused here
+    // in so many words, so that it is never taken as a click on the banner.
     function activateByEnter(event) {
         const action = BannerTriage.enterAction(triageActive, notificationPopup.activeFocusItem === focusListener, modelInterface.hasDefaultAction, event.isAutoRepeat);
         if (action === "") {
@@ -241,14 +242,36 @@ NotificationsApplet.NotificationWindow {
         }
 
         // Plasma Fusion: the focus ring, in the theme's focus colour, for as long as the banner
-        // holds keyboard focus.
+        // holds keyboard focus. It lies around the banner, in the padding the window keeps around
+        // its content, where nothing else is drawn; as the content begins at its own edge, a ring
+        // on that edge would run over the first letter of the text. The delegate below reaches up
+        // into the same padding.
         Rectangle {
+            id: triageRing
             anchors.fill: parent
+            anchors.leftMargin: -notificationPopup.leftPadding
+            anchors.topMargin: -notificationPopup.topPadding
+            anchors.rightMargin: -notificationPopup.rightPadding
+            anchors.bottomMargin: -notificationPopup.bottomPadding
             z: 999
             color: "transparent"
-            border.width: 2
+            border.width: Math.round(Kirigami.Units.smallSpacing / 2)
             border.color: Kirigami.Theme.focusColor
+            radius: Kirigami.Units.cornerRadius
             visible: notificationPopup.triageFocusWithin
+            // Plasma Fusion: reports where the banner's window is on the screen, in its pixels, with
+            // the window's padding and the focus colour, when the ring appears: a session scenario
+            // reads the ring off a screenshot with them (tests/vsession/ring.py). Numbers and a
+            // colour only.
+            onVisibleChanged: if (visible) {
+                const ratio = notificationPopup.Screen.devicePixelRatio;
+                NotificationsApplet.Globals.shortcuts.reportTriage(
+                    "ring-geometry " + Math.round(notificationPopup.x * ratio) + " " + Math.round(notificationPopup.y * ratio)
+                    + " " + Math.round(notificationPopup.width * ratio) + " " + Math.round(notificationPopup.height * ratio)
+                    + " " + Math.round(notificationPopup.leftPadding * ratio) + " " + Math.round(notificationPopup.topPadding * ratio)
+                    + " " + Math.round(notificationPopup.rightPadding * ratio) + " " + Math.round(notificationPopup.bottomPadding * ratio)
+                    + " " + String(Kirigami.Theme.focusColor));
+            }
         }
 
         // Activate default action when dragging a file over the notification.
