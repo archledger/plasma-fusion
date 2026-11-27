@@ -406,6 +406,10 @@ status() {
       echo "  $p: not installed"
     fi
   done
+  if f=$(built_record notifications); then
+    built=$(tr '\n' ' ' <"$f" | sed 's/ $//')
+    echo "  notifications: installed, built against $built"
+  fi
   series=$(grep -v '^[[:space:]]*#' "$PF/tested-plasma.txt" 2>/dev/null | tr -s '[:space:]' ' ' | sed 's/^ //;s/ $//')
   echo "  tested with Plasma: ${series:-?}"
   kwin=$(kwin_wayland --version 2>/dev/null | awk '{print $2}' || true)
