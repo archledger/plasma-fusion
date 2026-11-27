@@ -101,11 +101,12 @@ send() { # LABEL [EXTRA JSON MEMBERS OF THE REQUEST]
     SENT_ID=$(sed -n 's/.*"id": *\([0-9][0-9]*\).*/\1/p' <<<"$line")
     [[ "$SENT_ID" =~ ^[1-9][0-9]*$ ]]
 }
-replace() { # LABEL ID OF THE NOTIFICATION REPLACED [EXTRA]
-    local label=$1 id=$2 extra=${3:-} line
+replace() { # LABEL ID OF THE NOTIFICATION REPLACED [EXTRA]: waits for a receipt that is new
+    local label=$1 id=$2 extra=${3:-} line before
+    before=$(wc -l <"$sender_log")
     write_request "{\"op\":\"send\",\"label\":\"$label\",\"replaces\":$id$extra}"
-    wait_text "\"event\": \"sent\", \"label\": \"$label\"" "$sender_log" || return 1
-    line=$(grep -F "\"event\": \"sent\", \"label\": \"$label\"" "$sender_log" | tail -n 1)
+    wait_text "\"event\": \"sent\", \"label\": \"$label\"" "$sender_log" "$before" || return 1
+    line=$(tail -n +"$((before + 1))" "$sender_log" | grep -F "\"event\": \"sent\", \"label\": \"$label\"" | head -n 1)
     SENT_ID=$(sed -n 's/.*"id": *\([0-9][0-9]*\).*/\1/p' <<<"$line")
 }
 close_notification() {
@@ -179,10 +180,10 @@ wait_window_count() { # CAPTION NUMBER: at most 6 s
     return 1
 }
 activate_window_by_caption() { # CAPTION: KWin makes it the active window, as a click into it would
-    observe '(() => { const w = workspace.windowList().find(w => w.caption.indexOf("'"$1"'") === 0 && !w.popupWindow); if (!w) return "none"; workspace.activeWindow = w; return "ok"; })()'
+    [ "$(observe '(() => { const w = workspace.windowList().find(w => w.caption.indexOf("'"$1"'") === 0 && !w.popupWindow); if (!w) return "none"; workspace.activeWindow = w; return "ok"; })()')" = ok ]
 }
 close_window_by_caption() { # CAPTION: KWin asks the application to close it
-    observe '(() => { const w = workspace.windowList().find(w => w.caption.indexOf("'"$1"'") === 0 && !w.popupWindow); if (!w) return "none"; w.closeWindow(); return "ok"; })()'
+    [ "$(observe '(() => { const w = workspace.windowList().find(w => w.caption.indexOf("'"$1"'") === 0 && !w.popupWindow); if (!w) return "none"; w.closeWindow(); return "ok"; })()')" = ok ]
 }
 # The focus ring as the picture shows it (ring.py, the standard library only): the focus colour
 # on the frame of the banner's window, one pixel in from each of its four sides, and on none of the
@@ -418,7 +419,7 @@ mode_full() {
     sleep 1.5
     need "the shortcut takes it" take_banner || return 1
     granted=$(log_lines)
-    need "the application replaces it with the same summary and text" replace kept-again "$kept" ',"timeout":30000' || return 1
+    need "the application replaces it with the same summary and text" replace kept "$kept" ',"timeout":30000' || return 1
     need "a replacement that keeps the summary ends the interaction" triage 'ended replaced' "$granted" || return 1
     need "  and asks for the previous window" triage 'focus-restore-requested' "$granted" || return 1
     sleep .6
@@ -912,7 +913,7 @@ mode_eligible() {
     printf 'previous focus B\n' >"$HOME/pf-notif-app-b.txt"
     kwrite "$HOME/pf-notif-app-b.txt" >"$OUT/kwrite-b.log" 2>&1 &
     sleep 3
-    [ "$(activate_window_by_caption pf-notif-app-b.txt)" = ok ] || return 1
+    need "the second document's window is made active" activate_window_by_caption pf-notif-app-b.txt || return 1
     sleep .8
     need "the second document's window is active" active pf-notif-app-b.txt second-document || return 1
     need "a banner is sent" send orphan ',"actions":["default","Open"]' || return 1
@@ -979,15 +980,24 @@ mode_eligible() {
     need "  and KWrite is active" active pf-notif-app.txt late || return 1
 }
 
+run_mode() { # NAME FUNCTION: a mode stops at its first failed step; a stop that recorded none is a failure
+    local before=$FAILED
+    "$2" || {
+        [ "$FAILED" -gt "$before" ] && return 0
+        echo "FAIL the $1 mode stopped without recording a failure" >>"$OUT/checks.txt"
+        FAILED=$((FAILED + 1))
+    }
+}
+
 case $mode in
-    stock | copy) control_mode || true ;;
-    full) mode_full || true ;;
-    lock-idle) mode_lock_idle || true ;;
-    lock-focused) mode_lock_focused || true ;;
-    activate) mode_activate || true ;;
-    buttons) mode_buttons || true ;;
-    timer) mode_timer || true ;;
-    eligible) mode_eligible || true ;;
+    stock | copy) run_mode control control_mode ;;
+    full) run_mode full mode_full ;;
+    lock-idle) run_mode lock-idle mode_lock_idle ;;
+    lock-focused) run_mode lock-focused mode_lock_focused ;;
+    activate) run_mode activate mode_activate ;;
+    buttons) run_mode buttons mode_buttons ;;
+    timer) run_mode timer mode_timer ;;
+    eligible) run_mode eligible mode_eligible ;;
 esac
 
 # Every mode, the control ones too: a script error in the shell log is the copy's doing.
