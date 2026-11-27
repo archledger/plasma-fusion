@@ -93,13 +93,14 @@ SPDX-FileCopyrightText = [
 ]
 SPDX-License-Identifier = "GPL-2.0-or-later"
 
-# The stock notification applet of plasma-workspace v6.8.3, kept unchanged, with KDE's own
-# statement for its metadata: no copyright, CC0-1.0 (the glob above would name this project)
+# The stock notification applet's metadata of plasma-workspace v6.8.3: it states its own licence
+# in its plugin block (GPL-2.0+, which is GPL-2.0-or-later) and has no copyright header. (The glob
+# above would name this project.)
 [[annotations]]
 path = "packages/notifications-cpp/src/metadata.json"
 precedence = "override"
-SPDX-FileCopyrightText = "none"
-SPDX-License-Identifier = "CC0-1.0"
+SPDX-FileCopyrightText = "The plasma-workspace authors <https://invent.kde.org/plasma/plasma-workspace>"
+SPDX-License-Identifier = "GPL-2.0-or-later"
 
 # KTextEditor colour themes: JSON whose "license" field holds the tag as text
 [[annotations]]

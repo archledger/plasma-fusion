@@ -93,7 +93,9 @@ BuildRequires:  cmake(KWin) >= 6.7
 BuildRequires:  cmake(KDecoration3) >= 6.7
 BuildRequires:  cmake(PlasmaActivities)
 # The notification applet copy (packages/notifications-cpp) builds against Plasma's own applet
-# libraries; the item models package is a build requirement of theirs the config files name.
+# libraries; the item models package is a build requirement of theirs the config files name. The
+# spec does not build the copy yet: the requirements are here so that a build root made from it
+# has them.
 BuildRequires:  cmake(Plasma)
 BuildRequires:  cmake(PlasmaQuick)
 BuildRequires:  cmake(PlasmaWaylandProtocols)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 Bhushan Shah <bshah@kde.org>
+# SPDX-FileCopyrightText: The plasma-workspace authors <https://invent.kde.org/plasma/plasma-workspace>
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 

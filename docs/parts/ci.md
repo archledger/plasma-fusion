@@ -368,7 +368,8 @@ The tests (also run by the `compiled` workflow, without sanitizers):
 | notification applet copy | `notifications-triage-rules` | `tests/triagetest.cpp`: the rules of the banner keyboard triage (`src/global/BannerTriage.js`) through a small QML holder, offscreen: choosing the banner, the interaction's transitions, Escape and Enter |
 | notification applet copy | `notifications-triage-version` | `tests/versiontest.cpp`: the version rule, versions in and a decision out |
 | notification applet copy | `notifications-triage-shortcut` | `tests/shortcuttest.cpp`: `GlobalShortcuts` itself; the focus action exists at the built-from version and at no other |
-| notification applet copy | `notifications-plugin-dir-guard` | `tests/guardtest.cmake`: the directory guard of `cmake/PluginDirGuard.cmake` on a tree of directories and symbolic links, 21 cases; it needs no compiler and no packages |
+| notification applet copy | `notifications-plugin-dir-guard` | `tests/guardtest.cmake`: the directory guard of `cmake/PluginDirGuard.cmake`, 53 cases: 38 on a tree of directories and symbolic links, and 15 through the wrapper's own lines, configuring a small project without a compiler and reading the destination of the generated install script; it needs no compiler and no packages |
+
 | navigation effect | none yet | the job builds it with the sanitizers and runs only ECM's appstream test; it has no tests of its own |
 
 The tests run offscreen, on a private D-Bus session without service activation

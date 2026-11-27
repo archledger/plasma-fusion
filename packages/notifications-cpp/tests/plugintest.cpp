@@ -4,6 +4,7 @@
     SPDX-License-Identifier: GPL-2.0-or-later
 */
 
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -36,6 +37,25 @@ private Q_SLOTS:
             return value.toString() == QLatin1String("org.kde.plasma.notifications");
         };
         QVERIFY(std::any_of(provides.begin(), provides.end(), isStockApplet));
+    }
+
+    // The applet's QML is in the plugin's resources, where plasmashell loads it from: the
+    // entry points and the files they use first. A plugin that lost its QML would still load.
+    void carriesItsQml()
+    {
+        QPluginLoader loader(QStringLiteral(PLUGIN_PATH));
+        QVERIFY(loader.load());
+        const QString prefix = QStringLiteral(":/qt/qml/plasma/applet/org/kde/plasma/notifications/");
+        for (const char *file : {"main.qml",
+                                 "NotificationPopup.qml",
+                                 "CompactRepresentation.qml",
+                                 "FullRepresentation.qml",
+                                 "global/Globals.qml",
+                                 "delegates/DelegatePopup.qml",
+                                 "components/NotificationHeader.qml"}) {
+            const QString path = prefix + QLatin1String(file);
+            QVERIFY2(QFile::exists(path), qPrintable(path));
+        }
     }
 
     // Plasma takes an applet's id from its file name when the metadata does not state one, which

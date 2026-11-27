@@ -36,6 +36,12 @@ if [[ ${#plugins[@]} != 1 ]]; then
     exit 2
 fi
 
+# Only a seed is removed and written again. A directory that holds none (pf-notif) is left alone,
+# whatever the argument says.
+if [[ -e "$SEED" && ! -d "$SEED/pf-notif" ]]; then
+    echo "refusing to replace $SEED: it holds no seed (no pf-notif inside)" >&2
+    exit 2
+fi
 rm -rf "$SEED"
 mkdir -p "$SEED/.config" "$SEED/pf-notif"
 cp "$HERE/sender.py" "$SEED/pf-notif/sender.py"

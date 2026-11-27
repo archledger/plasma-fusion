@@ -6,8 +6,8 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 # Plasma Fusion notification applet
 
 A Fusion-built copy of Plasma's own notification applet. It is built and tested here. Whether a
-machine uses it in place of the stock plugin is decided by the version rule below, not by this
-package alone.
+machine uses it in place of the stock plugin will be decided by a version gate that is not written
+yet (the version rule below); this package alone enables nothing.
 
 ## Origin
 
@@ -29,7 +29,10 @@ Plasma Fusion changes (each marked "Plasma Fusion" in the file):
 
 - `CMakeLists.txt`: the wrapper build around the stock one. It installs the plugin under
   `PF_NOTIFICATIONS_PLUGIN_DIR`, which must be an absolute path that, symbolic links resolved, is
-  neither Qt's own plugin directory nor inside it (`cmake/PluginDirGuard.cmake`).
+  neither Qt's own plugin directory nor inside it, nor KDE's own when that is another directory,
+  and that holds no character CMake reads with a meaning of its own (`cmake/PluginDirGuard.cmake`).
+  The build installs to the directory the guard resolved: the string checked is the string
+  installed.
 - `src/CMakeLists.txt`: a licence header above the stock build file, which has none, and the
   banner triage rules among the QML sources.
 - `src/global/BannerTriage.js`: new. The rules of the banner keyboard triage
@@ -53,8 +56,9 @@ Plasma Fusion changes (each marked "Plasma Fusion" in the file):
 ## Version rule
 
 The copy may stand in for the stock plugin only while the installed `plasma-workspace` version is
-exactly the one it was built from, `6.8.3`. The wrapper build writes that version into the plugin
-and into its `built-against` record. Nothing in this package enables the copy on a machine.
+exactly the one it was built from, `6.8.3`. The wrapper build names that version in its
+`built-against` record, beside the Plasma version the build found and Qt's. Nothing in this
+package enforces the rule or enables the copy on a machine.
 
 ## Updating the copy
 

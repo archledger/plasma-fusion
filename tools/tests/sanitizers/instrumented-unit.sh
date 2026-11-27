@@ -23,7 +23,8 @@ mkdir -p "$WORK/bin"
 # Stand-in for readelf. A file whose first line is "elf" is an ELF file and its other lines are what
 # -d prints; a line "pause" is where readelf would still be working between two writes. -h succeeds
 # for an ELF file and fails for any other file. cat writes the lines, as readelf writes: to a
-# reader that has gone away cat dies of a broken pipe, where sed would exit 0.
+# reader that has gone away cat dies of a broken pipe, where sed would exit 0. A line "fail" is
+# where readelf stops with an error, after printing the lines before it.
 cat >"$WORK/bin/readelf" <<'EOF'
 #!/bin/bash
 set -uo pipefail
@@ -32,6 +33,11 @@ kind=other
 IFS= read -r kind <"$file" 2>/dev/null || :
 [ "$kind" = elf ] || exit 1
 [ "${1:-}" = -h ] && exit 0
+fail_line=$(grep -n -x fail "$file" | cut -d: -f1)
+if [ -n "$fail_line" ]; then
+  tail -n +2 "$file" | head -n $((fail_line - 2)) | cat
+  exit 1
+fi
 pause_line=$(grep -n -x pause "$file" | cut -d: -f1)
 if [ -n "$pause_line" ]; then
   tail -n +2 "$file" | head -n $((pause_line - 2)) | cat
@@ -101,6 +107,16 @@ elf "$B/bin/program"
 elf "$B/bin/plugin.so" '  NEEDED   Shared library: [libubsan.so.1]'
 check "$B"
 expect "a plugin that does not link the runtime stops the check: exit 1, naming it" exit_saying 1 "not built with the sanitizers: $B/bin/plugin.so"
+
+# A run path that names the runtime is not a link to it: the match must stay within one NEEDED line.
+# A file whose dynamic section readelf cannot read to the end: what it printed first must not
+# count as the whole section.
+B=$WORK/damaged
+mkdir -p "$B/bin"
+elf "$B/bin/plugin.so" '  NEEDED   Shared library: [libasan.so.8]' fail
+check "$B"
+expect "a file whose dynamic section readelf fails to read stops the check: exit 1, naming it" exit_saying 1 "not built with the sanitizers: $B/bin/plugin.so"
+expect "  and nothing is reported instrumented" nothing_listed
 
 # A run path that names the runtime is not a link to it: the match must stay within one NEEDED line.
 B=$WORK/runpath
