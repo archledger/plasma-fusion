@@ -19,28 +19,34 @@ exists, nothing puts the copy in front of the stock plugin.
 - The plugin `org.kde.plasma.notifications`, with the stock metadata. Plasma takes an applet's id
   from its file name when the metadata does not state one, as the stock metadata does not, so only
   this name lets the copy stand in for the stock applet.
-- Installed under `libexec/plasma-fusion/qt6/plugins/plasma/applets/`, a directory Plasma Fusion
-  owns. The build stops unless `PF_NOTIFICATIONS_PLUGIN_DIR` is an absolute path that, symbolic
-  links resolved, is neither Qt's own plugin directory nor inside it
-  (`cmake/PluginDirGuard.cmake`), and the directory the plugin itself lands in must be neither
-  inside Qt's nor the stock plugin's own, wherever a link to it leads: landing on the stock
-  plugin's file would replace it. A relative value would be installed against the installation
-  prefix, where it may be Qt's directory, a link reaches the same directory under another name,
-  and a link at the plugin's own path would be installed through.
-- A `built-against` record with `plasma-workspace=6.8.3` and the Qt version of the build, beside
-  the records of the other compiled parts.
+- Installed by default under `<prefix>/lib64/libexec/plasma-fusion/qt6/plugins/plasma/applets/`
+  on Fedora, a directory Plasma Fusion owns. The build stops unless `PF_NOTIFICATIONS_PLUGIN_DIR`
+  is an absolute path that, symbolic links resolved, is neither Qt's own plugin directory nor
+  inside it, nor KDE's own when that is another directory (`cmake/PluginDirGuard.cmake`); the
+  directory the plugin itself lands in must be neither inside them nor the stock plugin's own,
+  wherever a link to it leads, since landing on the stock plugin's file would replace it. A value
+  is refused that would be installed against the installation prefix (a relative one, where it may
+  be Qt's directory), that a link brings to the same directory under another name, or that holds a
+  character CMake reads with a meaning of its own (a generator expression, a backslash, a leading
+  `~`), because `install()` would take it differently from a path check. The build installs to the
+  directory the guard resolved, so the string checked is the string installed. A link at the
+  plugin's own path is refused too: the install would replace the link with the copy. The
+  directory is absolute, so `cmake --install --prefix` does not move the plugin; `DESTDIR` works.
+- A `built-against` record naming the Plasma version of the source (`6.8.3`), the Plasma version
+  the build found and the Qt version, beside the records of the other compiled parts.
 - In this first change the copy is the stock applet as it is. It changes no behaviour.
 
 ## Version rule
 
 The copy may stand in for the stock plugin only while the installed `plasma-workspace` version is
 exactly the one it was built from. `PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION` in the package's
-`CMakeLists.txt` names that version; it is written into the plugin and into its record. This
-package does not enforce the rule. The build's minimum versions are floors, not exact pins: a
-newer Plasma in the build root must not fail the build, because the gate, not the build, decides
-whether the copy is used. The floors are those of the stock source's own build, Qt 6.11 and
-Frameworks 6.30 (plasma-workspace v6.8.3, `CMakeLists.txt`): what a system needs to build it at
-all.
+`CMakeLists.txt` names that version, and the record names it beside the Plasma version the build
+found: a copy of one version's source compiled against another version's libraries is not to be
+used either. This package does not enforce the rule. The build's minimum versions are floors, not
+exact pins: a newer Plasma in the build root must not fail the build, because the gate, not the
+build, decides whether the copy is used. The floors are those of the stock source's own build,
+Qt 6.11 and Frameworks 6.30 (plasma-workspace v6.8.3, `CMakeLists.txt`): what a system needs to
+build it at all.
 
 ## Build and test
 
@@ -57,11 +63,15 @@ ctest --test-dir build/notifications --output-on-failure
 ```
 
 `notifications-plugin` loads the built plugin and checks that it is the stock applet under its own
-name: it loads, it provides `org.kde.plasma.notifications`, and its file name is the stock
-plugin's. `notifications-plugin-dir-guard` is the directory guard's unit test: on a tree of
-directories and symbolic links, 21 cases, each refused or allowed with the expected words; it
-needs no compiler and no packages. The tests are configured with the package (`BUILD_TESTING=ON`);
-the packages are built with them off.
+name: it loads, it provides `org.kde.plasma.notifications`, its file name is the stock plugin's,
+and its QML is in its resources. `notifications-plugin-dir-guard` is the directory guard's unit
+test, 53 cases: 38 on a tree of directories and symbolic links, among them a system with a merged
+`/usr`, links to links and the spellings `install()` would take differently; and 15 through the
+wrapper's own lines, which it reads from `CMakeLists.txt` and configures in a small project
+without a compiler, typed in the ways a cache variable can be, to read the destination from the
+generated install script and to see that an allowed copy leaves the stand-in for the stock plugin
+untouched. It needs no compiler and no packages. The tests are configured with the package
+(`BUILD_TESTING=ON`); the packages are built with them off.
 
 To see where the plugin would be installed:
 
@@ -70,9 +80,9 @@ DESTDIR="$PWD/build/notifications-stage" cmake --install build/notifications
 find build/notifications-stage -type f
 ```
 
-The plugin lands under `libexec/plasma-fusion/qt6/plugins/plasma/applets/` and its record
-under `share/plasma-fusion/built-against/notifications`. Nothing is installed into a plugin
-directory of Qt's own.
+The plugin lands under `lib64/libexec/plasma-fusion/qt6/plugins/plasma/applets/` on Fedora, and
+its record under `share/plasma-fusion/built-against/notifications`. Nothing is installed into a
+plugin directory of Qt's own.
 
 ## Private session
 
@@ -93,9 +103,10 @@ In both `copy` sessions plasmashell mapped the staged plugin, verified by SHA-25
 `stock` sessions mapped the installed one. The receipts the test application saw were identical
 in both modes on each machine: a banner without actions that times out reports reason 1, a click
 on a banner with a default action runs the action once and reports reason 3, and closing a
-notification reports reason 3. The shell logs held no script error. The device baseline of the
-ThinkPad was the same before the run and after the cleanup. The runs are recorded in the shared
-ledger under `2026-11-26-notification-triage-spec/evidence/part-a/`.
+notification reports reason 3. The shell logs held no script error. On the ThinkPad the
+device's state was read after the run and after the cleanup and was the same in both; no reading
+from before the run was kept. The runs are recorded in the shared ledger under
+`2026-11-26-notification-triage-spec/evidence/part-a/`.
 
 ## What is not covered
 
