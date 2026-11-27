@@ -266,6 +266,12 @@ for an admitted shell launch, never for the user manager or for a direct launch.
 unit changes, admission stops; run setup again to remove or reconcile the override. Package
 delivery, runtime recovery, and restore are qualified separately.
 
+The selector keeps a separate `notifications/notify` queue under the Plasma Fusion state
+directory. It queues one notice when an admitted copy is followed by a version or load failure.
+The notifier waits for the desktop notification service and removes the record only after a
+successful reply. A missing package or different theme is silent. The login check's queue is
+independent.
+
 ```
 ~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh status   # record, switched-off parts, last runs
 ~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh check    # what the next login would do

@@ -1,0 +1,24 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# plasma-fusion-notifications-notify: deliver this applet's queued fallback notice.
+set -euo pipefail
+umask 077
+state=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion/notifications
+[[ -f $state/notify ]] || exit 0
+timeout -k 1 76 gdbus wait --session --timeout 75 org.freedesktop.Notifications >/dev/null
+
+# The selector may cancel the notice while the notification service is still starting.
+exec 9>"$state/notify.lock"
+flock -w 1 9
+[[ -f $state/notify ]] || exit 0
+{
+  IFS= read -r summary
+  IFS= read -r body
+} <"$state/notify"
+timeout -k 1 11 gdbus call --session --timeout 10 \
+  --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications \
+  --method org.freedesktop.Notifications.Notify 'Plasma Fusion' 0 dialog-warning \
+  "$summary" "$body" '[]' '{}' 0 >/dev/null
+rm -- "$state/notify"

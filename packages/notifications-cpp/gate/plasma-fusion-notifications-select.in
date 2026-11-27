@@ -17,9 +17,43 @@ umask 077
 decision='state-unavailable'
 cache_tmp=
 started=${EPOCHREALTIME/.}
+announce_transition() {
+  local last=
+  [[ -d $state ]] || return 0
+  if [[ -f $state/selection ]]; then
+    read -r last <"$state/selection" || last=
+  fi
+  case $decision in
+    cached-pass | checked-pass)
+      write_state "$state/selection" copy && rm -f -- "$state/notify"
+      ;;
+    version-invalid | version-unknown | version-mismatch | load-failed)
+      [[ $last == copy ]] || return 0
+      write_state "$state/notify" 'Notification shortcut unavailable' \
+        'Plasma changed under Plasma Fusion, or the notification applet could not be loaded. The banner keyboard shortcut is off until Plasma Fusion is updated.' ||
+        return
+      write_state "$state/selection" stock || return
+      if [[ -n ${INVOCATION_ID:-} ]]; then
+        timeout -k .1 .25 systemctl --user start --no-block \
+          plasma-fusion-notifications-notify.service >&2
+      fi
+      ;;
+    missing | non-fusion-theme)
+      if [[ $last == copy || -f $state/notify ]]; then
+        write_state "$state/selection" stock && rm -f -- "$state/notify"
+      fi
+      ;;
+  esac
+}
+
 finish() {
   local finished now
   [[ -z $cache_tmp ]] || rm -f -- "$cache_tmp"
+  # Do not delay or invalidate the launch decision if a notification is being delivered.
+  (
+    exec 9>"$state/notify.lock"
+    flock -n 9 && announce_transition
+  ) >/dev/null 2>&1 || :
   finished=${EPOCHREALTIME/.}
   printf -v now '%(%FT%T%z)T' -1
   { printf '%s %s (%s ms)\n' "$now" "$decision" \

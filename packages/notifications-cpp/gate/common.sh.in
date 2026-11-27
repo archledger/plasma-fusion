@@ -30,3 +30,14 @@ rpm_stamp() {
 payload_stamp() {
   stat -Lc '%d:%i:%s:%y:%z' -- "$plugin" "$record" "$checker"
 }
+
+write_state() {
+  local path=$1 tmp
+  shift
+  tmp=$(mktemp -- "$state/.new.XXXXXX") || return 1
+  if printf '%s\n' "$@" >"$tmp" && mv -fT -- "$tmp" "$path"; then
+    return 0
+  fi
+  rm -f -- "$tmp"
+  return 1
+}

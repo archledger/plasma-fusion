@@ -71,8 +71,11 @@ set(_gate_dir "${CMAKE_CURRENT_BINARY_DIR}/notifications-gate")
 configure_file(gate/common.sh.in "${_gate_dir}/plasma-fusion-notifications-common.sh" @ONLY)
 configure_file(gate/plasma-fusion-notifications-select.in "${_gate_dir}/plasma-fusion-notifications-select"
     @ONLY FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+configure_file(gate/plasma-fusion-notifications-notify.in "${_gate_dir}/plasma-fusion-notifications-notify"
+    @ONLY FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 install(FILES "${_gate_dir}/plasma-fusion-notifications-common.sh" DESTINATION "${KDE_INSTALL_LIBEXECDIR}/plasma-fusion")
-install(PROGRAMS "${_gate_dir}/plasma-fusion-notifications-select" DESTINATION "${KDE_INSTALL_LIBEXECDIR}/plasma-fusion")
+install(PROGRAMS "${_gate_dir}/plasma-fusion-notifications-select" "${_gate_dir}/plasma-fusion-notifications-notify"
+    DESTINATION "${KDE_INSTALL_LIBEXECDIR}/plasma-fusion")
 
 add_subdirectory(src)
 
