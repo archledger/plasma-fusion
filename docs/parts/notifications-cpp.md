@@ -176,10 +176,10 @@ triage. The control runs Plasma's installed applet and the built copy through th
 stock behaviour, so a difference between them is the copy's doing. The applet plasmashell mapped
 is recorded in every mode: the installed one in `stock`, the staged plugin by SHA-256 otherwise.
 
-Run on 2026-11-27 in the Fedora 44 test container on the build host and on the stock VM, at
-`611a8f2`, the last commit of this change that touches code, with one kit: each mode with
-`scenario rc=0`, `session rc=0` and `left: none`, and every check a `PASS`. The numbers are the
-checks each mode passed, the same in both places:
+Run on 2026-11-27 in the Fedora 44 test container on the build host, on the stock VM and on the
+ThinkPad, at `611a8f2`, the last commit of this change that touches code, with one kit: each mode
+with `scenario rc=0`, `session rc=0` and `left: none`, and every check a `PASS`. The numbers are
+the checks each mode passed, the same in all three places:
 
 | Mode | Checks | What it showed |
 |---|---|---|
@@ -198,25 +198,21 @@ Every mode ends with one check that the shell log holds no script error.
 | Machine | KWin | Plasma Workspace | The applet plasmashell mapped in the copy's modes |
 |---|---|---|---|
 | Stock VM (a throwaway overlay of the provisioned image) | `6.8.3-1.fc44` | `6.8.3-1.fc44` | the staged plugin, by SHA-256 |
+| ThinkPad | `6.8.3-1.fc44.pf1` | `6.8.3-1.fc44` | the staged plugin, by SHA-256 |
 | Fedora 44 test container on the build host | `6.8.3-1.fc44` | `6.8.3-1.fc44` | the staged plugin, by SHA-256 |
-| ThinkPad (KWin `6.8.3-1.fc44.pf1`, Plasma Workspace `6.8.3-1.fc44`) | | | not run at this head: see below |
-
-**The ThinkPad has not run this head.** When this was written its lease could not be claimed,
-because the lock the ledger takes on the shared drive could not be made; the device was not
-touched. The runs it made of earlier heads are under the directories named below, and until it
-has run this head, its results for the banner keyboard triage are those of those heads.
 
 The runs are recorded in the shared ledger under
 `2026-11-26-notification-triage-spec/evidence/part-b-after-review-20261127/`, each with the kit's
-checksums, with the sanitizer job on the same commit and with twelve mutants, each caught by the
-check meant for it. The runs before the review fixes are under `evidence/part-b/` and
+checksums, with the sanitizer job on the same commit and with fourteen mutants, each caught by the
+check meant for it. The ThinkPad's desktop processes were the same before its run and after the
+cleanup. The runs before the review fixes are under `evidence/part-b/` and
 `evidence/part-b-review-fixes/`.
 
 While this change was being made, two cases of the `eligible` mode failed once each, in the first
 runs of their kind and on builds since shown to be the committed code: after the shortcut took a
 newer banner while an older one was still taken, a replacement of the newer one did not ask for
 the recorded window; and an application's leaving the bus was taken for a replacement. Neither
-recurred: the first case passed in 36 later runs of the mode, the second in 24, and each in 45
+recurred: the first case passed in 37 later runs of the mode, the second in 25, and each in 45
 repetitions of its steps in a stress scenario. Among the later runs were six made with the host
 under heavy load, fresh builds running beside the sessions, and others with diagnostic reports in
 the applet. The outputs of the two failing runs were not kept, and the cause was not found.
