@@ -283,14 +283,15 @@ applet_maps=$(awk '$NF ~ /\/org\.kde\.plasma\.notifications\.so$/ {print $NF}' "
 # package of plasma-workspace (on Fedora 44, plasma-workspace-libs), not the staged copy nor a
 # copy put anywhere else. (An empty map is one blank line, which a count of the lines that are
 # not the copy would take for the installed applet.)
+# The package that owns each file is named by rpm; a path whose package cannot be named is not
+# shown to be the installed applet.
 stock_applet_mapped() {
-    local path count=0 owner
+    local path count=0
     [[ -n "$applet_maps" ]] || return 1
     while IFS= read -r path; do
         [[ -n "$path" ]] || continue
         [[ "$path" == /usr/* ]] || return 1
-        owner=$(rpm -q --qf '%{NAME}' -f "$path" 2>/dev/null || true)
-        [[ -z "$owner" || "$owner" == plasma-workspace* ]] || return 1
+        [[ "$(rpm -q --qf '%{NAME}' -f "$path" 2>/dev/null)" == plasma-workspace* ]] || return 1
         count=$((count + 1))
     done <<<"$applet_maps"
     [ "$count" = 1 ]
