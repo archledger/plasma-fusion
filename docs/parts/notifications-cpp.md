@@ -146,8 +146,14 @@ ctest --test-dir build/notifications --output-on-failure
 
 `notifications-plugin` loads the built plugin and checks that it is the stock applet under its own
 name: it loads, it provides `org.kde.plasma.notifications`, its file name is the stock plugin's,
-and its QML is in its resources. `notifications-plugin-dir-guard` is the directory guard's unit
-test, 53 cases: 38 on a tree of directories and symbolic links, among them a system with a merged
+and its QML is in its resources. The standalone `plasma-fusion-notifications-check ABSOLUTE_PLUGIN`
+performs the load, identity and resource checks without creating the applet or instantiating its
+QML. `notifications-plugin-check-cli` tests its exit status with the built applet, missing and
+unloadable files, a renamed real applet, and invalid arguments. The checker is staged with the
+component; at this point no RPM or setup step uses it.
+
+`notifications-plugin-dir-guard` is the directory guard's unit test, 53 cases: 38 on a tree of
+directories and symbolic links, among them a system with a merged
 `/usr`, links to links and the spellings `install()` would take differently; and 15 through the
 wrapper's own lines, which it reads from `CMakeLists.txt` and configures in a small project
 without a compiler, typed in the ways a cache variable can be, to read the destination from the

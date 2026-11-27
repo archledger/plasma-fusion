@@ -48,6 +48,10 @@ find_package(LibNotificationManager 6.8 REQUIRED CONFIG)
 find_package(PlasmaWaylandProtocols 1.23 REQUIRED)
 find_package(Wayland REQUIRED COMPONENTS Client)
 
+add_executable(plasma-fusion-notifications-check src/checkmain.cpp src/plugincheck.cpp)
+target_link_libraries(plasma-fusion-notifications-check PRIVATE Qt6::Core)
+install(TARGETS plasma-fusion-notifications-check DESTINATION "${KDE_INSTALL_LIBEXECDIR}/plasma-fusion")
+
 # plasma_add_applet installs into ${KDE_INSTALL_PLUGINDIR}/plasma/applets. The copy must never land
 # on the stock plugin's path there: it goes under a directory Plasma Fusion owns, and the build
 # stops unless that directory is an absolute path that, symbolic links resolved, is neither Qt's
