@@ -5,7 +5,7 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 # Spec: notification applet gate
 
-Status: **Proposed on 2026-11-27**, waiting for the owner. It is the second plan that
+Status: **Approved design; implementation pending.** It is the second plan that
 [SPEC-notification-triage.md](SPEC-notification-triage.md) left (its rule 12 and decision 10): the
 enforcement point of the version rule and its test, the package that ships the copy, and what
 System Settings shows for the shortcut. Baseline: main
@@ -29,15 +29,14 @@ does one that cannot load with the installed libraries.
    taken: the accepted specification has the rule evaluated every time plasmashell starts, because
    a Plasma update followed by a plasmashell restart would otherwise load a copy that was not
    built for it. An environment file is read once per login and cannot do that.
-2. **At every start of plasmashell through its systemd user unit**: two start commands run
-   before plasmashell starts, and a stop command removes the link when that plasmashell ends
-   (chosen). The start commands run at login, at every restart through the unit and after every
-   crash, and they change nothing in how plasmashell itself is started. Any other start of
-   plasmashell finds stock, because the link exists only while a plasmashell started through the
-   unit runs.
-3. **Inside plasmashell's start command**, by a wrapper that replaces the unit's `ExecStart`.
-   Rejected: the wrapper has to repeat Plasma's own start command, which a Plasma update may
-   change.
+2. **A session-wide path containing a link managed by the user unit.** The original design.
+   Rejected after the specification was merged: a directory can become unwritable after setup.
+   If cleanup fails, the link is still readable through the session's plugin search path, even
+   if the selector rejects the copy. Making cleanup fatal would instead stop the desktop.
+3. **At every start through the unit, in that launch's environment** (chosen). The launch
+   command opts in only when the selector succeeds. No link or exported session-wide path
+   remains when the shell stops. The drop-in wraps the supported vendor command, so changes to
+   that command require compatibility checks rather than blindly installing the same override.
 
 **The bar.**
 
@@ -66,8 +65,8 @@ every start of plasmashell through its unit.
    loaded the copy with the installed libraries and found what the plugin test of the repository
    finds: the plugin loads, its metadata says it is the stock applet, and the QML resources that
    plasmashell loads from it are there. It does not build the QML. A copy whose QML plasmashell
-   cannot build passes this rule; that is the case of decision 10.
-4. **Proposed, the owner's word: the theme.** The Global Theme in use is Plasma Fusion Dark or
+   cannot build may still pass this rule; that is the case of decision 10.
+4. **The theme.** The Global Theme in use is Plasma Fusion Dark or
    Light, read as the login check reads it. Under another theme the copy steps aside with the
    other Fusion parts, and its shortcut with it.
 
@@ -87,62 +86,35 @@ notification, as the other parts are switched back on.
 
 ## How the copy is put in front
 
-The stock plugin's file is never replaced. The copy stays under
-`/usr/lib64/libexec/plasma-fusion/qt6/plugins`, where no Qt application looks for plugins.
+The stock plugin's file is never replaced. On Fedora x86-64 the copy stays under
+`/usr/lib64/libexec/plasma-fusion/qt6/plugins`, outside Qt's plugin directories.
 
-- **One directory of Fusion's own is in the plugin path of the session**, always while the copy's
-  package is applied: `~/.local/share/plasma-fusion/notifications/plugins`. An environment file,
-  `~/.config/plasma-workspace/env/plasma-fusion-notifications.sh`, prepends it to
-  `QT_PLUGIN_PATH`. It is read once per login, by `startplasma`, as Fusion's other environment
-  files are, and it sets that one variable.
-- **The copy is in that directory only by a link**, at
-  `plasma/applets/org.kde.plasma.notifications.so`, to the installed plugin. The link is what
-  makes the copy the first notification applet plasmashell finds. The selector makes it; the first
-  start command and the stop command remove it; nothing else writes it.
-- **Three commands of the same drop-in manage the link.** plasmashell runs as the user unit
-  `plasma-plasmashell.service` (in Plasma 6.8.3: `ExecStart=/usr/bin/plasmashell --no-respawn`,
-  restarted on failure, a start timeout of 40 seconds). A drop-in for that unit in the user's
-  systemd directory, `~/.config/systemd/user/plasma-plasmashell.service.d/20-plasma-fusion-notifications.conf`,
-  adds, in this order:
-
-      [Service]
-      ExecStartPre=-/usr/bin/rm -f "<the link>"
-      ExecStartPre=-/usr/libexec/plasma-fusion/plasma-fusion-notifications-select
-      ExecStopPost=-/usr/bin/rm -f "<the link>"
-
-  (the link's path written out from the user's data directory, with each `%` doubled, as
-  `fusion-config.sh` writes the login check's unit). The leading `-` keeps a failure of a command
-  from keeping plasmashell from starting or stopping.
-
-  The first command removes the link and needs nothing from the package. So stock is in front
-  whenever anything goes wrong before the second has made the link again: a selector that is
-  missing, that cannot run, or that is killed before it has made the link. The first command also
-  clears a link left by a session that died while plasmashell ran, since the stop command could
-  not run then. The stop command removes the link when that plasmashell ends, however it ends, so
-  that a plasmashell started in any other way (from a terminal, with `--replace`, by a Plasma
-  that has no systemd) finds stock. One case stays open and is accepted as it is, or not: a
-  `plasmashell --replace` started by hand while the unit's plasmashell runs, after an update in
-  the same session, loads the copy for as long as that process lives, as the old version's stock
-  applet with the shortcut off.
-- **The selector** is a shell script of the package. It reads the bar, and when it holds it makes
-  the link. It puts a time limit on its own run, 5 seconds against the unit's 40, and at the limit
-  it stops with the link removed. A selector stopped by a signal it can catch removes the link,
-  at any point of its run. One killed by a signal it cannot catch after it has made the link
-  leaves the copy in front for that start of plasmashell: a copy that had just passed the bar.
-- `fusion-config.sh` installs four files, made as it makes the login check's, from the user's
-  directories: the environment file, the drop-in, the notify unit of the copy (below) and its link
-  in `xdg-desktop-autostart.target.wants`. It reloads the user manager when there is one, so the
-  commands count from the next start of plasmashell through the unit. The copy is in front from
-  the next login, when the environment file is read. `fusion-config.sh` never makes the link.
-  Where plasmashell is not started through its unit, the copy is not put in front at all: nothing
-  can read the bar before each start there. `fusion-config.sh` removes the link when it finds one
-  and starts plasmashell with stock. It makes the directory of the link and checks that it can
-  write a file in it and remove it; where it cannot, it installs none of the four files.
-- `fusion-restore.sh` treats the four files as it treats the login check's own: they come back
-  when the configuration it restores has them, and go otherwise; its reload of the user manager
-  covers the notify unit. It removes the link and the selector's state before it starts plasmashell,
-  so that a desktop returned to stock does not have the copy in front in the session it is
-  returned in, whose plugin path names the directory until it ends.
+- **The copy is admitted per launch.** A drop-in for `plasma-plasmashell.service` in
+  `~/.config/systemd/user/plasma-plasmashell.service.d/20-plasma-fusion-notifications.conf`
+  resets `ExecStart` and installs a launcher for the known Fedora command
+  `/usr/bin/plasmashell --no-respawn`. `Type=dbus`, `BusName=org.kde.plasmashell`,
+  `Restart=on-failure` and the 40-second timeout stay in the vendor unit. The launcher `exec`s
+  that command whether or not Fusion is admitted. It does not replace the vendor unit file.
+- **On early failure, start stock.** The launcher takes at most 5 seconds, including terminating
+  a timed-out selector. It prepends the private directory to `QT_PLUGIN_PATH` only when the
+  selector exits successfully with that exact configured directory as its entire output. It
+  preserves unrelated plugin paths and does not set a systemd manager or session variable.
+  A missing, failing or killed selector, including one that printed a path before failing, leaves
+  the private directory out. A stale link is not consulted. A launch outside this unit, including
+  a manual `--replace` from a normal terminal, is not changed by Fusion.
+- **Vendor compatibility.** Install the override only where the effective vendor unit matches
+  the supported contract. If the vendor unit on disk no longer matches, do not opt in. Remove
+  the Fusion override when setup reconciles an unsupported unit. Until that reconciliation, an
+  existing override still invokes the previously supported fixed command without the copy.
+  The rollback is removing Fusion's drop-in and reloading the user manager; the vendor file
+  remains untouched. Test this boundary before qualifying a different vendor unit.
+- **Setup and restore.** `fusion-config.sh` manages the drop-in, the copy's notify unit and its
+  `xdg-desktop-autostart.target.wants` link, and the recovery unit. No login environment file is
+  needed. Reload only the manager belonging to the current session. `fusion-restore.sh` stops
+  pending notification and recovery work before restoring/removing these managed files, clears
+  the selector's state, and reloads the manager before starting the restored shell. Older
+  backups without the managed files must remove them. Profile snapshots must not replay a
+  selection verdict.
 
 **What the selector reads, and when.**
 
@@ -151,9 +123,9 @@ The stock plugin's file is never replaced. The copy stays under
   the package database it was read with (the rpm database's inode, size and time, as the login
   check stamps its cache), and reads the database again only when the stamp differs. It does not
   depend on the login check's cache, which is filled only while one of its parts is on.
-- The load check runs when the stamp differs or no pass is recorded. A pass is recorded with the
-  stamp; a failure is not recorded, so it is tried again at the next start. It has a time limit
-  of its own inside the selector's.
+- The load check runs when the stamp or payload differs or when no pass is recorded. Recheck the
+  stamp and payload identity after the check and do not use the result if they changed during
+  the attempt. Cache passes only. A failed check is tried again on the next start.
 - It honours the login check's test hook for versions, `PF_GATE_FAKE_VERSIONS`, in the same way:
   a faked version is never cached. A hook of its own names other programs and files in its place,
   as `PF_GATE_RPM` names the rpm program: the check, the record and the plugin.
@@ -169,10 +141,13 @@ The stock plugin's file is never replaced. The copy stays under
 notification service and shows what is queued. The login check's queue is not shared: at a login
 both have something to say after a Plasma update, and each is shown once.
 
-That a directory of Fusion's own in `QT_PLUGIN_PATH` is enough was shown on the ThinkPad on
-2026-11-27: a plugin directory under the user's home and one environment file put the copy in
-front of the stock applet, with no package and no root. The start and stop commands are new and
-are shown by the cases below.
+The ungated ThinkPad trial on 2026-11-27 showed that a private directory in `QT_PLUGIN_PATH`
+selects the copy. In a Fedora 44 private user manager, a drop-in changed the path for the stand-in
+shell only, preserved the vendor arguments, and used the original path when the helper was absent.
+In direct-start Plasma 6.8.3 probes, a valid copy mapped and registered the notification service
+under the shell's PID; a copy with an unavailable QML import passed the plugin test and mapped
+but did not register the service; a layout with no applet neither mapped it nor registered the
+service. These establish the detection rule, not packaged recovery.
 
 ## The package
 
@@ -182,12 +157,12 @@ are shown by the cases below.
 - It requires `plasma-fusion` of its own version and release. It pins no Plasma version: a Fedora
   update is never blocked, as for the navigation effect; the selector is what stands between an
   update and a copy that was not built for it.
-- **Proposed, the owner's word: in this plan the subpackage stands alone.** No profile requires
+- **The subpackage stands alone.** No profile requires
   it and no count includes it: the metapackage of the full profile, its release test, the
   installer and the other channels all name six packages, and they change together when the other
   channels get the copy, in the plan that follows this one (decision 9 of the triage's
   specification). A desktop that wants the triage before then installs the subpackage by name.
-- **Proposed, the owner's word: this plan changes the Fedora package only.**
+- **This plan changes the Fedora package only.**
 - **The ThinkPad's package, the owner's word.** The subpackage requires the base package of its
   own release, and the ThinkPad's base package carries the release tag of the full profile. So the
   copy for the ThinkPad comes from a build of the full project, which is a release's build and is
@@ -207,35 +182,32 @@ are shown by the cases below.
 
 ## Where it is shown
 
-- **The unit's commands, in a private user manager inside the private sessions.** Their plasmashell
-  is started directly, without a user manager, so nothing there runs a start command or a stop
-  command. The harness is to start a user manager of its own in the session, with a stand-in unit
-  of the name `plasma-plasmashell.service` whose start command is the harness's own, and to let
-  `fusion-config.sh` install the drop-in there. That shows the commands as systemd runs them: the
-  `-`, the path, a selector killed at its limit, a restart after a crash, the notify unit. Whether
-  this can be had is tried first, as a throwaway; if it cannot, the cases that need it move to the
-  ThinkPad, which is the owner's word for each.
-- **The selector's decisions, in the private sessions** as they are: the harness runs the two
-  start commands in the unit's order and then plasmashell, with the directory in the plugin path.
+- **The unit's launch, in a private user manager.** The existing session harness starts
+  plasmashell directly. Test the drop-in under a disposable manager with a stand-in unit, and
+  keep that evidence separate from direct-start runs. Prove the selector's timeout, removal
+  and restart behavior without touching the host user manager. Cases that require the real
+  ThinkPad unit need authorization for each device change.
+- **The selector's decisions, in the private sessions**: run the same launcher logic before
+  plasmashell, without claiming that a direct-start session tested systemd ordering.
   On the packages: the subpackage installed in the container and on the stock VM's overlay, and
-  the triage's nine modes run with the link made by the selector rather than by a staged plugin.
+  the triage's nine modes run against the installed RPM, not a staged plugin.
 - **The selector and the scripts, in unit tests with fake tools**, as the login check is tested
   (`gate-unit.sh`, `gate-stub.sh`): fake package databases, a record and a plugin of their own, a
   check made to pass or to fail.
 - **The real unit, on the ThinkPad**, when the subpackage is installed there (below): the copy in
-  front at a login, and the four files in place. The VM harness logs in over ssh only; a
+  front at a login, and the managed configuration in place. The VM harness logs in over ssh only; a
   throwaway VM with a real login would be a plan of its own.
 
 ## What must be shown
 
-In the private sessions, with the start commands run in the unit's order unless a case names the
-user manager; in the unit tests; and on the ThinkPad where it says so.
+In the private sessions with the launcher, in the private user manager where named, in unit
+tests, and on the ThinkPad where noted.
 
-1. **Matching Plasma.** After the two start commands the copy is in front: plasmashell maps the
-   link's target and no other notification applet, and the shortcut is listed. The nine modes of
+1. **Matching Plasma.** Plasmashell maps the installed copy and no other notification applet,
+   and the shortcut is listed. The nine modes of
    the triage pass from the package.
 2. **Another Plasma version, without a new login.** With the version faked for the selector, at
-   the next start in the same session: the link is gone, the stock applet is the one mapped, the
+   the next start in the same session: the private path is not added, stock is the one mapped, the
    shortcut is not listed, and one notification is in the copy's queue.
 3. **At a login, in the user manager.** After an update, the login check's notification and the
    copy's are both queued, and each is shown once.
@@ -243,35 +215,33 @@ user manager; in the unit tests; and on the ThinkPad where it says so.
    front, the notification is queued, no pass is recorded, and at the next start the check runs
    again.
 5. **The record or the plugin missing alone.** Stock is in front, and no notification is queued.
-6. **A selector that cannot run, or is killed before it has made the link, in the user manager.**
-   Stock is in front and plasmashell starts. One stopped by a signal it can catch after it has
-   made the link leaves stock in front as well.
-7. **A stop of the unit's plasmashell.** In the user manager: the link is gone when it ends by a
-   crash and by a stop, and it is made again at the next start when the bar holds.
-8. **The device scripts.** After `fusion-config.sh` the four files are in place, and where there
-   is a user manager it knows the drop-in. After `fusion-restore.sh` they are gone, or back when
-   the restored configuration has them, and the link and the state are removed.
+6. **A missing, slow or killed selector in the user manager.** Stock is in front and plasmashell
+   starts, even if the failed helper produced plausible output.
+7. **A stop or crash of the unit's plasmashell.** No plugin path is left in the manager's
+   environment. The next managed start checks again.
+8. **The device scripts.** After setup the matching user manager knows the drop-in. Restore
+   reinstates the backed-up configuration or removes it, and clears pending gate work and state.
 9. **The times.** With nothing changed in the packages the selector finishes in a small fraction
    of a second; after a package change the check's run is measured and is within its limit.
 10. **Under another theme.** With the Global Theme set to one that is not Plasma Fusion's, the
     copy is not in front and nothing is queued; with it set back, it is at the next start.
 11. **On the ThinkPad.** After the subpackage is installed and `fusion-config.sh` has run, at a
-    login: the copy is in front through the real unit's commands, and the shortcut is listed.
+    login: the real unit launched the copy, and the shortcut is listed.
 12. **Without the unit.** Where `fusion-config.sh` starts plasmashell itself, the copy is not in
-    front, and a link found there is removed.
+    front. An unreadable or non-removable link left outside the private RPM path changes nothing.
 13. **The shortcut page.** With the copy in front it lists the action; with the copy stepped aside
     it does not, and the key is back when the copy returns.
-14. **A copy whose QML cannot be built**, if decision 10 is taken: with such a copy put in its
-    place by a hook, stock is in front again within the session, plasmashell is restarted once,
-    and the copy stays aside until the packages change.
+14. **A copy whose QML cannot be built.** Install the invalid-QML fixture in the private test.
+    Stock comes back within the session, plasmashell restarts once, and the copy stays aside
+    until the package or payload identity changes. A layout with no applet does not restart.
 15. **The unit tests.** Each case above that a unit test can hold has a row in the login check's
     own tests (`tools/device/tests/gate-unit.sh`, `gate-stub.sh`) or in the package's tests.
 
 ## What this does not cover
 
 - Beyond what the load check shows: it does not build the QML (decision 10).
-- A `plasmashell --replace` started by hand while the unit's plasmashell runs, after an update in
-  the same session (above).
+- An independently injected plugin path (a test, a manual launch override or another theme
+  package) is not configured or removed by the gate.
 - The real unit before the ThinkPad, if the private user manager cannot be had: the VM harness has
   no graphical login.
 - The other channels, the installer, the profiles and the counts of six packages (above).
@@ -280,8 +250,8 @@ user manager; in the unit tests; and on the ThinkPad where it says so.
 
 ## Boundaries and success criteria
 
-- **Build on:** plasmashell's systemd user unit and Fusion's environment files, which
-  `fusion-config.sh` and `fusion-restore.sh` already manage; the copy's package and its plugin
+- **Build on:** plasmashell's systemd user unit and the unit-file management in
+  `fusion-config.sh` and `fusion-restore.sh`; the copy's package and its plugin
   test; the session harness of the triage and the login check's unit tests.
 - **Ask first:** a change to the ThinkPad beyond its private sessions; a Plasma or Qt version
   other than 6.8.3; a merge, a release, a build of the full project, a package for another channel;
@@ -294,15 +264,14 @@ Complete means the cases above pass where each says, the part pages of the login
 copy say what the code does, and the ThinkPad runs the triage from its package with the real unit's
 commands in front of it. No claim extends beyond the tested versions.
 
-## Decisions proposed, for the owner
+## Decisions
 
 1. **The bar:** the version rule and a load check. Taken on the owner's word to proceed with the
    recommendation.
 2. **Under another Global Theme the copy steps aside**, with the other Fusion parts, and without a
    notification.
-3. **"Every start" means every start through the unit.** Any other start of plasmashell finds
-   stock; the one case that does not, a `--replace` typed by hand while the unit's plasmashell
-   runs after an update in the same session, is accepted.
+3. **"Every start" means every start through the unit.** The path is set only in the admitted
+   launch, not in the session. Other starts are not changed by Fusion.
 4. **The notification** is for the version rule and the load rule only, from a queue of its own,
    shown in the running session; and its wording.
 5. **In this plan the subpackage stands alone:** no profile requires it and no count includes it;
@@ -318,16 +287,16 @@ commands in front of it. No claim extends beyond the tested versions.
 10. **A copy whose QML plasmashell cannot build, with the version the same.** The load check does
     not build the QML, so such a copy is put in front, and the session has no notification service
     until plasmashell starts again. The triage's specification asks for stock back within the same
-    session in that case. **Proposed, the owner's word:** a watcher of the package, started after
-    plasmashell, waits for the notification service; when it does not appear and the copy is in
-    front, it removes the link, records the verdict against the stamp of the package database, so
-    that the selector keeps stock in front until the packages change, and restarts plasmashell
-    once. Taken, it is part of this plan and its case is among those to show. Declined, the case
-    is a limitation of this plan.
+    session in that case. A watcher of the package, started asynchronously after plasmashell,
+    checks that this invocation mapped the admitted copy and waits for the notification service
+    from that shell. A layout with no mapped notification applet is not a malfunction. A
+    different owner of the service is inconclusive: log it and leave that session alone.
+    On a confirmed failure the watcher records the verdict against the package stamp and
+    payload, then triggers the existing restart-on-failure policy for that process only.
+    The selector keeps stock in front until that identity changes. Do not restart if the
+    invocation has ended, has been replaced, is stopping, or the verdict cannot be saved.
 
 ## Size
 
-A project: a selector, a check, a notify unit and, if decision 10 is taken, a watcher, all of the
-package; a subpackage in the Fedora spec file; four files more for `fusion-config.sh` and
-`fusion-restore.sh` to manage; a private user manager in the session harness; session cases in
-three places; and two part pages.
+A selector, a check, a notify unit and a bounded recovery unit; an optional Fedora subpackage;
+setup and restore; private unit and session cases; and the part pages.
