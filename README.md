@@ -161,7 +161,7 @@ Plasma Fusion follows KDE's licensing policy:
 | Part | Licence |
 |---|---|
 | Code (widgets, KWin scripts and effects, settings module, decoration, tools) | GPL-2.0-or-later |
-| Files kept from KDE's own sources (parts of the desktop, lock screen and task switcher) | their original licence (GPL-2.0-or-later or LGPL-2.0-or-later) |
+| Files kept from KDE's own sources (parts of the desktop, lock screen and task switcher, and the notification applet) | their original licence (GPL-2.0-or-later, LGPL-2.0-or-later, LGPL-2.1-or-later, `GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL`, or `GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL`) |
 | Artwork and documentation | CC-BY-SA-4.0 |
 | Metadata and plain data | CC0-1.0 |
 | Bundled fonts (Manrope, Space Grotesk) | OFL-1.1, by their authors |

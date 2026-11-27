@@ -72,7 +72,7 @@ files: icon themes ([`parts/icons.md`](parts/icons.md)), cursor themes
 
 ### Compiled parts
 
-Three C++ plugins and two C++ programs, each with a CMake project, built in a Fedora 44 container
+Four C++ plugins and two C++ programs, each with a CMake project, built in a Fedora 44 container
 (`tools/container/`) or by the `compiled` workflow ([`parts/ci.md`](parts/ci.md)). The decoration
 and the settings module have test tools in their `tests/` directories (an offline renderer, scripted
 private sessions):
@@ -84,6 +84,7 @@ private sessions):
 | `packages/navigation-cpp`: tablet gestures, a KWin effect derived from Plasma Mobile's task switcher | KWin | KWin's internal library, exact version | [`packages/navigation-cpp/README.md`](../packages/navigation-cpp/README.md) |
 | `packages/quicklook-cpp`: Quick Look, `plasma-fusion-quicklook` (a program; its service menu) | Dolphin (Space, context menu), the desktop's context menu | KDE Frameworks | [`quicklook-cpp.md`](parts/quicklook-cpp.md) |
 | `packages/copytext-cpp`: copy text's selection overlay, `plasma-fusion-copytext-overlay` (a program on the session bus; KWin's screenshot permission) | the session bus, started on the first copy text (`plasma-fusion-copytext`) | KDE Frameworks, LayerShellQt | [`copytext-cpp.md`](parts/copytext-cpp.md) |
+| `packages/notifications-cpp`: Plasma's notification applet, copied as it is; built and tested, not packaged yet | plasmashell, only where the version gate puts it in front of the stock plugin | the plasma-workspace version it was built from | [`notifications-cpp.md`](parts/notifications-cpp.md) |
 
 The navigation effect stays idle when the running KWin is not the one it was built against
 (`packages/navigation-cpp/src/plugin/fusionnavigation.cpp`, the version check at start).

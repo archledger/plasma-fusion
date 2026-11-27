@@ -24,6 +24,7 @@ RUN dnf -y --setopt=install_weak_deps=False install \
       gcc-c++ cmake ninja-build extra-cmake-modules gettext rpm-build rpmdevtools \
       "kdecoration-devel-${PLASMA}" "kwin-devel-${PLASMA}" "libplasma-devel-${PLASMA}" \
       "plasma-workspace-devel-${PLASMA}" \
+      plasma-wayland-protocols-devel kf6-kitemmodels-devel \
       "qt6-qtbase-devel-${QT}*" "qt6-qtdeclarative-devel-${QT}*" "qt6-qtsvg-devel-${QT}*" \
       kf6-kcoreaddons-devel kf6-kconfig-devel kf6-kconfigwidgets-devel kf6-kcmutils-devel \
       kf6-ki18n-devel kf6-kguiaddons-devel kf6-kglobalaccel-devel kf6-kwindowsystem-devel \

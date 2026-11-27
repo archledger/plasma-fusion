@@ -85,6 +85,9 @@ jobs:
       - name: Coverage failed-row unit tests
         run: tools/tests/coverage-status-unit.sh
 
+      - name: Sanitizer build's instrumented check (a stand-in readelf)
+        run: tools/tests/sanitizers/instrumented-unit.sh
+
       - name: Performance accounting unit tests
         run: python3 tools/tests/perf/perf_test.py
 

@@ -92,9 +92,19 @@ BuildRequires:  cmake(KWin) >= 6.7
 %endif
 BuildRequires:  cmake(KDecoration3) >= 6.7
 BuildRequires:  cmake(PlasmaActivities)
+# The notification applet copy (packages/notifications-cpp) builds against Plasma's own applet
+# libraries; the item models package is a build requirement of theirs the config files name. The
+# spec does not build the copy yet: the requirements are here so that a build root made from it
+# has them.
+BuildRequires:  cmake(Plasma)
+BuildRequires:  cmake(PlasmaQuick)
+BuildRequires:  cmake(PlasmaWaylandProtocols)
+BuildRequires:  cmake(LibNotificationManager)
+BuildRequires:  kf6-kitemmodels-devel
 BuildRequires:  pkgconfig(epoxy)
 BuildRequires:  pkgconfig(libdrm)
 BuildRequires:  pkgconfig(vulkan)
+BuildRequires:  pkgconfig(wayland-client)
 BuildRequires:  cmake(Qt6Core)
 BuildRequires:  cmake(Qt6Concurrent)
 BuildRequires:  cmake(Qt6DBus)
@@ -112,6 +122,7 @@ BuildRequires:  cmake(KF6GlobalAccel)
 BuildRequires:  cmake(KF6I18n)
 BuildRequires:  cmake(KF6KCMUtils)
 BuildRequires:  cmake(KF6KIO)
+BuildRequires:  cmake(KF6Notifications)
 BuildRequires:  cmake(KF6Package)
 BuildRequires:  cmake(KF6Service)
 BuildRequires:  cmake(KF6WindowSystem)

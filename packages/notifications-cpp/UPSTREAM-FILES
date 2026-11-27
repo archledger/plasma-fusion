@@ -1,0 +1,30 @@
+# Files kept as in plasma-workspace v6.8.3 applets/notifications; the linters skip them
+# (tools/checks/qmlscan.py), as they are upstream code. Plasma Fusion changes in them are marked
+# "Plasma Fusion" in the file.
+src/CompactRepresentation.qml
+src/DraggableDelegate.qml
+src/FullRepresentation.qml
+src/NotificationPopup.qml
+src/components/ActionContainer.qml
+src/components/Body.qml
+src/components/DraggableFileArea.qml
+src/components/EditContextMenu.qml
+src/components/FooterLoader.qml
+src/components/HeadingButtons.qml
+src/components/Icon.qml
+src/components/JobDetails.qml
+src/components/JobIconItem.qml
+src/components/JobItem.qml
+src/components/ModelInterface.qml
+src/components/NotificationHeader.qml
+src/components/NotificationReplyField.qml
+src/components/SpeedChart.qml
+src/components/Summary.qml
+src/components/ThumbnailStrip.qml
+src/delegates/BaseDelegate.qml
+src/delegates/DelegateHistory.qml
+src/delegates/DelegateHistoryGrouped.qml
+src/delegates/DelegatePopup.qml
+src/global/Globals.qml
+src/global/PulseAudio.qml
+src/main.qml

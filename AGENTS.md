@@ -17,8 +17,9 @@ ideas on Plasma's Global Theme structure): themes, widgets, KWin scripts and eff
 shell, a launcher, a dock, installers and per-channel packaging, in one source tree. Plasma 6.7 is
 supported; Plasma 6.8 is tested from the beta through the parts that do not exist in 6.7 (they
 load only where the API is there). Project-authored code is GPL-2.0-or-later; files kept from
-KDE's own sources (parts of the desktop, lock screen and task switcher) keep their original
-licence (GPL-2.0-or-later or LGPL-2.0-or-later); artwork and documentation are CC-BY-SA-4.0,
+KDE's own sources (parts of the desktop, lock screen, task switcher and the notification
+applet) keep their original licence (GPL-2.0-or-later, LGPL-2.0-or-later, LGPL-2.1-or-later or
+the KDE-accepted GPL); artwork and documentation are CC-BY-SA-4.0,
 data CC0-1.0, fonts OFL-1.1 — README.md has the table. The design boards in `design/` decide
 every colour, size and drawing.
 
@@ -99,8 +100,9 @@ as their pages prescribe, and do not invent values beyond the boards and those d
   tile; `PF_LINTS=fail|warn|off`, default fail). `NAME` is a part name: a `tools/build.d/` script
   without its numeric prefix and `.sh` (`20-plasma-style.sh` builds as `plasma-style`; `ls
   tools/build.d/` lists them). An unknown name builds nothing and still exits 0 — the `== NAME`
-  lines say what ran. The five compiled parts (`decoration-cpp`, `kcm-cpp`, `navigation-cpp`,
-  `quicklook-cpp`, `copytext-cpp`) are CMake projects with ctest suites, packaged with
+  lines say what ran. The compiled parts (`decoration-cpp`, `kcm-cpp`, `navigation-cpp`,
+  `quicklook-cpp`, `copytext-cpp`, and `notifications-cpp`, which is built and tested but not
+  packaged yet) are CMake projects with ctest suites, packaged with
   `packaging/build-rpm.sh --compiled` — their part page has the details.
 - `tools/checks/tests/run.sh` — the lints' own fixtures.
 - `tools/checks/shellcheck.sh` — ShellCheck over every script.
