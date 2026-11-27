@@ -112,8 +112,10 @@ stock source.
    length of its timeout, as it does after the pointer leaves it.
 6. **Escape on the focused banner.** The banner is dismissed through its own expiry path, and
    the notification stays in the history. The sending application is told what that path tells
-   it: nothing when the notification is resident, or has actions and is not transient; "expired"
-   otherwise. A critical banner, which has no timeout, is told "expired" as well. After the
+   it after a timeout: nothing when the notification is resident, or has actions and is not
+   transient; "expired" otherwise. Urgency changes nothing in that rule: a critical banner
+   without actions is told "expired" although it has no timeout, and one that is resident, or has
+   actions and is not transient, is told nothing like any other. After the
    dismissal the widget asks for nothing: KWin's own focus order makes the window that was active
    before the shortcut active again when it still exists, and chooses another when it does not.
    This is the explicit dismissal that the KDE guidelines require for a critical notification, so
@@ -242,8 +244,9 @@ than the probe, in nine modes: `stock`, `copy`, `full`, `lock-idle`, `lock-focus
 
 - **Eligibility:** critical and resident banners, a job popup, a banner in which a reply has
   started, and several banners at once, where only the newest eligible one is taken.
-- **What the application is told:** Escape on a banner without actions, normal and critical,
-  tells it "expired" once; on one with actions it is told nothing.
+- **What the application is told:** Escape on a banner without actions that is not resident,
+  normal and critical, tells it "expired" once; on one with actions that is not transient, a
+  critical one among them, it is told nothing, and on a resident one it is told nothing too.
 - **Keys inside the banner:** Escape from a control inside the banner and from the reply field;
   Return on a focused control and in the reply field; both Enter keys on the banner.
 - **Timer:** the timeout stays paused while the banner is focused and resumes afterwards.
@@ -252,10 +255,10 @@ than the probe, in nine modes: `stock`, `copy`, `full`, `lock-idle`, `lock-focus
 
 Not covered by them, and not claimed: a real active window with Dim Inactive enabled, with a
 full-screen application in front, or with a different keyboard layout in that application; a
-shortcut inhibitor on the copy; rule 13 outside an interaction, since the reply field is reached
-by the keyboard only in the `buttons` mode; what the user finds after unlocking; the translation
-of the action's name; and whether Return presses a control under the desktop's own platform
-theme.
+shortcut inhibitor on the copy; a transient banner with actions on Escape, which that path tells
+"expired"; rule 13 outside an interaction, since the reply field is reached by the keyboard only
+in the `buttons` mode; what the user finds after unlocking; the translation of the action's name;
+and whether Return presses a control under the desktop's own platform theme.
 
 Rule 12 is demonstrated by neither: it is the gate's, in the second plan, whose test must show
 that at another Plasma version the stock plugin is the one mapped, after an update followed by a
@@ -298,10 +301,10 @@ local tooling must be reported; do not install or silently skip it.
   something about its notification that its own expiry path would not, weakening a check, or
   editing a generated file.
 
-Complete means rules 1 to 11 and 13 are demonstrated on the Fusion copy on both machines,
-rule 12 by the gate's test once the gate exists, the checks above pass on the tested revision,
-the part page agrees with the code, and the physical-keyboard run is recorded. No claim extends
-beyond the tested versions.
+Complete means rules 1 to 11 and 13 are demonstrated on the Fusion copy on both machines, apart
+from the cases the scenarios do not cover (listed above), rule 12 by the gate's test once the gate
+exists, the checks above pass on the tested revision, the part page agrees with the code, and the
+physical-keyboard run is recorded. No claim extends beyond the tested versions.
 
 ## Decisions accepted on 2026-11-26
 
