@@ -24,6 +24,7 @@
 #                        'drag X1 Y1 X2 Y2' 'scroll X Y STEPS' 'sleep 0.5' (see pfinput.py)
 #   $OUT $HOME $PFV      output dir, session HOME, run root
 # Extra variables for the whole session (e.g. QT_PLUGIN_PATH): KEY=VALUE lines in home/.config/pfv-env.
+# For packaged-app tests, home/.config/pfv-plasmashell-start may name the executable startup hook.
 # The session environment matches startplasma where it matters: XDG_CONFIG_DIRS starts with
 # ~/.config/kdedefaults (where a Global Theme writes its defaults) and Qt logs to stderr.
 # Set NO_PLASMASHELL=1 in the scenario's environment to start only KWin.
@@ -122,9 +123,16 @@ pfv_font() {
 }
 pfv_anim() { kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor --notify "$1"; }
 pfv_tablet() { kwriteconfig6 --file kwinrc --group Input --key TabletMode --notify "$1"; }
+pfv_start_shell() {
+  if [ -x "$HOME/.config/pfv-plasmashell-start" ]; then
+    "$HOME/.config/pfv-plasmashell-start"
+  else
+    plasmashell
+  fi
+}
 pfv_restart_shell() {
   kquitapp6 plasmashell >/dev/null 2>&1; sleep 2
-  plasmashell >>"$OUT/plasmashell.log" 2>&1 &
+  pfv_start_shell >>"$OUT/plasmashell.log" 2>&1 &
   wait_for_name org.kde.plasmashell; sleep "${1:-8}"
 }
 # Rotate an output inside this session (the M2 portrait step, tablet rotation tests).
@@ -260,7 +268,7 @@ fi
 kded6 >"$OUT/kded.log" 2>&1 &
 sleep 2
 if [ "${NO_PLASMASHELL:-0}" != 1 ]; then
-  plasmashell >"$OUT/plasmashell.log" 2>&1 &
+  pfv_start_shell >"$OUT/plasmashell.log" 2>&1 &
   wait_for_name org.kde.plasmashell
   sleep 8
   # First-run "Welcome to Plasma" window: close it so it does not cover screenshots.

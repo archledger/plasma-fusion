@@ -129,6 +129,10 @@ Fusion's own bindings, Meta+N for the notification view among them, are not touc
 sessions bind their test chord through the shortcut daemon's D-Bus interface, which is where
 System Settings writes a binding too.
 
+If the gate falls back to stock, KDE may still show the saved shortcut in System Settings.
+Pressing it under stock does not focus or dismiss a banner. Fusion leaves the saved binding
+alone, and it works again once the copy is loaded.
+
 KWin owns the lock and inhibitor boundary, and the applet adds no check of its own: a locked
 screen or a shortcut inhibitor keeps the shortcut from being dispatched, as for any global
 shortcut.

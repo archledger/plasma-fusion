@@ -51,6 +51,21 @@ bash tools/vsession/vsession.sh notif $p/tests/vsession/scen-notifications.sh 14
 The two lock modes need a lock-capable session: run them with `PFV_LOCK=1` in the environment.
 Never type a password into that lock screen; the session ends locked.
 
+To qualify the installed Fedora RPM rather than a staged build, use `--rpm` as the first
+argument to `make-seed.sh`. Run that seed in a disposable Fedora session with the base and
+notification RPMs installed. The seed invokes the launch command from the installed
+`fusion-config.sh`; it does not copy a plugin into HOME or set a session-wide `QT_PLUGIN_PATH`.
+The `stock` mode asks the selector to reject a test version. Every packaged run requires one
+mapped applet at the expected path, the expected RPM owner, and the installed package's
+SHA-256 digest. This exercises the launch logic, not systemd unit ordering.
+
+The same RPM `copy` seed can run `scen-notifications-shortcuts.sh` instead. Use a 1440x900
+private session with a render device and the AT-SPI typelib. It opens the real Shortcuts
+module, searches for **Focus notification banner**, and reads the result after the copy is
+admitted, stepped aside, and admitted again. It checks that KDE retains the saved row, that
+the key leaves a visible stock banner and the active document alone, and that the same key
+focuses a banner after the copy returns without reassigning it.
+
 Session names must be unique on the host. For the ThinkPad from the laptop, `tools/vsession/remote.sh`
 takes the seed directory instead and fetches the results. In the Fedora 44 test container on a build
 host, `tools/vsession/cvsession.sh` does the same with the seed as its third argument.

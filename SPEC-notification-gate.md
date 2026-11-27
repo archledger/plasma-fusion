@@ -5,11 +5,11 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 # Spec: notification applet gate
 
-Status: **Approved design; implementation pending.** It is the second plan that
+Status: **Implemented for Fedora; real-device qualification pending.** It is the second plan that
 [SPEC-notification-triage.md](SPEC-notification-triage.md) left (its rule 12 and decision 10): the
 enforcement point of the version rule and its test, the package that ships the copy, and what
 System Settings shows for the shortcut. Baseline: main
-`e498f115cf6f697b21143456f10f5f53db5af8b1`, Plasma Workspace 6.8.3. Nothing of it is built.
+`e498f115cf6f697b21143456f10f5f53db5af8b1`, Plasma Workspace 6.8.3.
 
 ## Objective
 
@@ -74,8 +74,8 @@ There is no rule of a tested series here. The login check's rule of that name is
 when `fusion-config.sh` deploys, and from KWin's version; it would not be read at a start of
 plasmashell. The copy needs none: rule 2 admits exactly the version the copy was built from.
 
-When any rule fails, the copy is not in front: the stock applet loads and the shortcut does not
-exist. For the version rule and the load rule the user is told once, each time the copy steps
+When any rule fails, the stock applet loads and the shortcut does not focus a banner. For the
+version rule and the load rule the user is told once, each time the copy steps
 aside after it was in front, through a notification of the copy's own (below): "Plasma changed
 under Plasma Fusion, or the notification applet could not be loaded. The banner keyboard shortcut
 is off until Plasma Fusion is updated." That text holds also when the version could not be read,
@@ -171,14 +171,12 @@ service. These establish the detection rule, not packaged recovery.
 
 ## System Settings
 
-- With the copy in front, the shortcut page lists "Focus notification banner" among plasmashell's
-  shortcuts, unassigned, and the user gives it a key there.
-- With the copy stepped aside, the action is not registered and the page does not list it. The
-  page shows the actions the shortcut daemon has registered, and the daemon lists only those. The
-  key the user gave stays in the daemon's configuration and is theirs again when the copy returns.
-  That much was seen on the ThinkPad on 2026-11-27: with stock in front the daemon no longer
-  listed the action, while its entry stayed in the configuration. The page itself is shown in a
-  session (case 13).
+- With the copy in front, System Settings lists **Focus notification banner** under **Plasma
+  Workspace**. It has no default key.
+- Stock does not implement the action. KDE may still show the saved row and key in System
+  Settings: the page reads the shortcut daemon's saved entries, not just actions a running
+  applet handles. Pressing that key under stock does not focus or dismiss a banner. Fusion
+  does not remove or rewrite the saved binding; it works again when the copy returns (case 13).
 
 ## Where it is shown
 
@@ -208,7 +206,7 @@ tests, and on the ThinkPad where noted.
    the triage pass from the package.
 2. **Another Plasma version, without a new login.** With the version faked for the selector, at
    the next start in the same session: the private path is not added, stock is the one mapped, the
-   shortcut is not listed, and one notification is in the copy's queue.
+   saved shortcut does not focus a banner, and one notification is in the copy's queue.
 3. **At a login, in the user manager.** After an update, the login check's notification and the
    copy's are both queued, and each is shown once.
 4. **A copy that does not load.** With the stamp changed and the check made to fail: stock is in
@@ -229,8 +227,10 @@ tests, and on the ThinkPad where noted.
     login: the real unit launched the copy, and the shortcut is listed.
 12. **Without the unit.** Where `fusion-config.sh` starts plasmashell itself, the copy is not in
     front. An unreadable or non-removable link left outside the private RPM path changes nothing.
-13. **The shortcut page.** With the copy in front it lists the action; with the copy stepped aside
-    it does not, and the key is back when the copy returns.
+13. **The shortcut page and saved key.** In the same session, bind a key with the copy loaded.
+    Verify the saved key is visible in KDE's shortcut page with stock loaded but leaves a visible
+    banner and the active document alone. Verify the same key is shown and focuses a banner when
+    the copy returns, without assigning it again.
 14. **A copy whose QML cannot be built.** Install the invalid-QML fixture in the private test.
     Stock comes back within the session, plasmashell restarts once, and the copy stays aside
     until the package or payload identity changes. A layout with no applet does not restart.
