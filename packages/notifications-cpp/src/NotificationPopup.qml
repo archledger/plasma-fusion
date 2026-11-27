@@ -177,8 +177,9 @@ NotificationsApplet.NotificationWindow {
             return;
         }
         // Another notification took over the banner while the interaction was still going. The
-        // focus goes back only if the banner still had it.
-        const result = BannerTriage.transition(triageState, "replaced");
+        // focus goes back only if the banner still had it and no reply was started in it: a reply
+        // being typed goes on, and the keyboard stays with the banner.
+        const result = BannerTriage.transition(triageState, "replaced", modelInterface.replying);
         triageState = result.state;
         NotificationsApplet.Globals.shortcuts.reportTriage("ended replaced");
         if (result.restoreFocus) {

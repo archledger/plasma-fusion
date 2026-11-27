@@ -155,6 +155,9 @@ triage_since() { triage "$2" "$1" && echo yes || echo no; } # AFTER LINE, PATTER
 
 focus_key='key meta+ctrl+alt+pagedown'
 focus_action="['plasmashell', 'focus notification banner', 'plasmashell', 'Focus Notification Banner']"
+# How KWin names a banner that is the active window: its caption and its class. A panel is a
+# window of plasmashell too, so the class alone would take any of them for the banner.
+banner_window='plasmashell|org.kde.plasmashell'
 accel() { gdbus call --session --timeout 4 --dest org.kde.kglobalaccel "$@"; }
 focus_action_listed() {
     for _ in {1..40}; do
@@ -545,7 +548,7 @@ mode_activate() {
 }
 
 mode_buttons() {
-    local buttoned actioned replied
+    local buttoned actioned replied typing granted
     # Tab moves the keyboard focus inside the banner and nothing is invoked; Escape from there
     # dismisses.
     need "a banner with one action is sent" send buttoned ',"actions":["open","Open"],"entry":""' || return 1
@@ -609,6 +612,25 @@ mode_buttons() {
     shot 02-after-escape-in-reply
     pfinput 'key return'
     need "the reply is sent with the text Escape left in place" wait_text "\"event\": \"replied\", \"id\": $replied, \"text\": \"draft\"" "$OUT/sender.log" || return 1
+
+    # A replacement while a reply is being typed keeps the keyboard in the reply field: the
+    # previous window is not asked for, and what is typed next arrives in the reply.
+    need "a banner with a reply action is sent" send typing ',"actions":["inline-reply","Reply"],"entry":""' || return 1
+    typing=$SENT_ID
+    sleep 1.5
+    need "the shortcut gives it keyboard focus" take_banner || return 1
+    need "Tab reaches the reply field, which starts the reply" tab_to_reply_field || return 1
+    pfinput 'type draft'
+    sleep .5
+    granted=$(log_lines)
+    need "the application replaces it under the same id, the reply open" replace typing-replaced "$typing" ',"actions":["inline-reply","Reply"],"entry":""' || return 1
+    need "the replacement ends the interaction" triage 'ended replaced' "$granted" || return 1
+    expect "  and does not ask for the previous window" "$(triage_since "$granted" 'focus-restore-requested')" no
+    need "  and the banner stays the active window" active "$banner_window" typing-on || return 1
+    pfinput 'type z'
+    pfinput 'key return'
+    need "what is typed after the replacement arrives in the reply, which is then sent" \
+        wait_text "\"event\": \"replied\", \"id\": $typing, \"text\": \"draftz\"" "$OUT/sender.log" || return 1
     expect "no script error in the shell log" "$(no_script_error && echo none || echo some)" none
 }
 
@@ -642,7 +664,7 @@ mode_timer() {
 }
 
 mode_eligible() {
-    local critical resident replying older newer again pointed late before
+    local critical resident replying older newer again first_taken second_taken granted pointed late before
     # Critical and resident banners are taken, and dismissed by Escape.
     need "a critical banner is sent" send critical ',"actions":["default","Open"],"entry":"","hints":{"urgency":2}' || return 1
     critical=$SENT_ID
@@ -719,6 +741,25 @@ mode_eligible() {
     sleep .6
     need "  which is active" active pf-notif-app.txt after-replacement || return 1
     need "  and the application closes it" close_notification "$again" || return 1
+
+    # The shortcut takes a newer banner while an older one is still taken: the window from before
+    # the first press stays the one to return to.
+    need "a banner is sent" send first-taken ',"actions":["default","Open"]' || return 1
+    first_taken=$SENT_ID
+    sleep 1.5
+    need "with KWrite active before it is taken" active pf-notif-app.txt before-hand-over || return 1
+    need "the shortcut takes it" take_banner || return 1
+    need "  and a newer banner is sent" send second-taken ',"actions":["default","Open"]' || return 1
+    second_taken=$SENT_ID
+    sleep 1.5
+    need "the shortcut takes the newer one" take_banner || return 1
+    granted=$(log_lines)
+    need "the application replaces the newer one under its id" replace second-replaced "$second_taken" ',"actions":["default","Open"]' || return 1
+    need "a replacement of the newer banner still asks for KWrite" triage 'focus-restore-requested' "$granted" || return 1
+    sleep .6
+    need "  which is active again" active pf-notif-app.txt after-hand-over || return 1
+    need "  and the application closes the newer one" close_notification "$second_taken" || return 1
+    need "  and the older one" close_notification "$first_taken" || return 1
 
     # The banner is the active window already, with the pointer on it: the keyboard focus arrives
     # at once.

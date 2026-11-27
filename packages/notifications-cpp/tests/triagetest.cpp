@@ -66,6 +66,7 @@ private Q_SLOTS:
     {
         QTest::addColumn<QString>("state");
         QTest::addColumn<QString>("event");
+        QTest::addColumn<bool>("replyStarted");
         QTest::addColumn<QString>("expectedState");
         QTest::addColumn<bool>("expectedRestore");
 
@@ -73,38 +74,77 @@ private Q_SLOTS:
         const QString requested = QStringLiteral("requested");
         const QString active = QStringLiteral("active");
 
-        QTest::newRow("a request starts the interaction") << idle << QStringLiteral("request") << requested << false;
-        QTest::newRow("focus granted") << requested << QStringLiteral("granted") << active << false;
-        QTest::newRow("the shortcut again while focused changes nothing") << active << QStringLiteral("request") << active << false;
-        QTest::newRow("the shortcut again while pending changes nothing") << requested << QStringLiteral("request") << requested << false;
-        QTest::newRow("focus without a request changes nothing") << idle << QStringLiteral("granted") << idle << false;
+        QTest::newRow("a request starts the interaction") << idle << QStringLiteral("request") << false << requested << false;
+        QTest::newRow("focus granted") << requested << QStringLiteral("granted") << false << active << false;
+        QTest::newRow("the shortcut again while focused changes nothing") << active << QStringLiteral("request") << false << active << false;
+        QTest::newRow("the shortcut again while pending changes nothing") << requested << QStringLiteral("request") << false << requested << false;
+        QTest::newRow("focus without a request changes nothing") << idle << QStringLiteral("granted") << false << idle << false;
 
-        QTest::newRow("focus lost while pending") << requested << QStringLiteral("lost") << idle << false;
-        QTest::newRow("banner gone while pending") << requested << QStringLiteral("hidden") << idle << false;
-        QTest::newRow("focus never granted") << requested << QStringLiteral("not-granted") << idle << false;
-        QTest::newRow("focus lost while focused") << active << QStringLiteral("lost") << idle << false;
-        QTest::newRow("banner gone while focused") << active << QStringLiteral("hidden") << idle << false;
+        QTest::newRow("focus lost while pending") << requested << QStringLiteral("lost") << false << idle << false;
+        QTest::newRow("banner gone while pending") << requested << QStringLiteral("hidden") << false << idle << false;
+        QTest::newRow("focus never granted") << requested << QStringLiteral("not-granted") << false << idle << false;
+        QTest::newRow("focus lost while focused") << active << QStringLiteral("lost") << false << idle << false;
+        QTest::newRow("banner gone while focused") << active << QStringLiteral("hidden") << false << idle << false;
+        QTest::newRow("focus lost while a reply is being typed") << active << QStringLiteral("lost") << true << idle << false;
 
-        QTest::newRow("replaced while focused gives focus back") << active << QStringLiteral("replaced") << idle << true;
-        QTest::newRow("replaced while pending") << requested << QStringLiteral("replaced") << idle << false;
-        QTest::newRow("replaced after the interaction ended") << idle << QStringLiteral("replaced") << idle << false;
-        QTest::newRow("an unknown event changes nothing") << active << QStringLiteral("unknown") << active << false;
+        QTest::newRow("replaced while focused gives focus back") << active << QStringLiteral("replaced") << false << idle << true;
+        QTest::newRow("replaced while a reply is being typed leaves the keyboard with the banner")
+            << active << QStringLiteral("replaced") << true << idle << false;
+        QTest::newRow("replaced while pending") << requested << QStringLiteral("replaced") << false << idle << false;
+        QTest::newRow("replaced after the interaction ended") << idle << QStringLiteral("replaced") << false << idle << false;
+        QTest::newRow("an unknown event changes nothing") << active << QStringLiteral("unknown") << false << active << false;
     }
 
     void transition()
     {
         QFETCH(QString, state);
         QFETCH(QString, event);
+        QFETCH(bool, replyStarted);
         QFETCH(QString, expectedState);
         QFETCH(bool, expectedRestore);
 
         QVariant newState;
-        QVERIFY(call(&newState, "transitionState", {state, event}));
+        QVERIFY(call(&newState, "transitionState", {state, event, replyStarted}));
         QCOMPARE(newState.toString(), expectedState);
 
         QVariant restores;
-        QVERIFY(call(&restores, "transitionRestores", {state, event}));
+        QVERIFY(call(&restores, "transitionRestores", {state, event, replyStarted}));
         QCOMPARE(restores.toBool(), expectedRestore);
+    }
+
+    // The window recorded when the shortcut is pressed. An invalid QVariant is no record at all.
+    void recordedWindow_data()
+    {
+        QTest::addColumn<bool>("takenBannerActive");
+        QTest::addColumn<QVariant>("activeTask");
+        QTest::addColumn<QVariant>("earlierRecord");
+        QTest::addColumn<QVariant>("expected");
+
+        const QVariant windowA = QStringLiteral("window A");
+        const QVariant windowB = QStringLiteral("window B");
+        QTest::newRow("the window that has the keyboard focus") << false << windowA << QVariant() << windowA;
+        QTest::newRow("nothing active, nothing recorded before") << false << QVariant() << QVariant() << QVariant();
+        QTest::newRow("a record of earlier gives way to the window that has the keyboard focus now") << false << windowB << windowA << windowB;
+        QTest::newRow("nothing active: a record of earlier gives way to nothing") << false << QVariant() << windowA << QVariant();
+        QTest::newRow("a banner taken before is the active window: the record stands") << true << QVariant() << windowA << windowA;
+        QTest::newRow("  whatever task the model marks active beside it") << true << windowB << windowA << windowA;
+        QTest::newRow("  and there was nothing to stand") << true << QVariant() << QVariant() << QVariant();
+    }
+
+    void recordedWindow()
+    {
+        QFETCH(bool, takenBannerActive);
+        QFETCH(QVariant, activeTask);
+        QFETCH(QVariant, earlierRecord);
+        QFETCH(QVariant, expected);
+
+        QVariant result;
+        QVERIFY(call(&result, "recordedWindow", {takenBannerActive, activeTask, earlierRecord}));
+        if (!expected.isValid()) {
+            QVERIFY2(result.isNull() || !result.isValid(), "nothing should be recorded");
+        } else {
+            QCOMPARE(result.toString(), expected.toString());
+        }
     }
 
     void escapeAction_data()
@@ -258,6 +298,13 @@ private:
             return QMetaObject::invokeMethod(holder, method, Q_RETURN_ARG(QVariant, *result), Q_ARG(QVariant, args.at(0)));
         case 2:
             return QMetaObject::invokeMethod(holder, method, Q_RETURN_ARG(QVariant, *result), Q_ARG(QVariant, args.at(0)), Q_ARG(QVariant, args.at(1)));
+        case 3:
+            return QMetaObject::invokeMethod(holder,
+                                             method,
+                                             Q_RETURN_ARG(QVariant, *result),
+                                             Q_ARG(QVariant, args.at(0)),
+                                             Q_ARG(QVariant, args.at(1)),
+                                             Q_ARG(QVariant, args.at(2)));
         case 4:
             return QMetaObject::invokeMethod(holder,
                                              method,

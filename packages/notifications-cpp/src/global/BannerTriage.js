@@ -78,9 +78,10 @@ function inReplyField(item, content)
 
 // How the interaction with one banner moves: idle, then requested when the shortcut is pressed,
 // then active when KWin gives the banner keyboard focus, then idle again. Only a replacement that
-// ends a focused interaction gives the previous window its focus back; everything else leaves
-// focus to KWin.
-function transition(state, event)
+// ends a focused interaction in which no reply was started gives the previous window its focus
+// back; everything else leaves focus to KWin. With a reply started, the keyboard stays with the
+// banner, as it does in stock: typing goes on in the reply field, and nothing may pull it away.
+function transition(state, event, replyStarted)
 {
     switch (event) {
     case "request":
@@ -92,10 +93,20 @@ function transition(state, event)
     case "not-granted": // KWin did not focus the banner in time
         return { state: STATE_IDLE, restoreFocus: false };
     case "replaced": // the same popup now shows another notification
-        return { state: STATE_IDLE, restoreFocus: state === STATE_ACTIVE };
+        return { state: STATE_IDLE, restoreFocus: state === STATE_ACTIVE && !replyStarted };
     default:
         return { state: state, restoreFocus: false };
     }
+}
+
+// The window to record when the shortcut is pressed: the task that has the keyboard focus, unless
+// the active window is one of the applet's own taken banners, an older banner taken before this
+// one. No task is active then, and the record of the earlier request stands, so that the window
+// from before the first press is the one asked for in the end. The record is a window, never a
+// banner: when no window has the keyboard focus there is nothing to ask for.
+function recordedWindow(takenBannerActive, activeTask, earlierRecord)
+{
+    return takenBannerActive ? earlierRecord : activeTask;
 }
 
 // "dismiss" while the interaction is active, unless the keyboard focus is in the reply field: there

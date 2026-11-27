@@ -811,7 +811,9 @@ QtObject {
     // dispatched; this takes the newest banner that may be taken and asks it for keyboard focus.
     // The window that had the keyboard focus then is recorded here: a window itself, never the
     // group it is in (the task model groups the windows of an application, and a group cannot be
-    // activated). It is used only after a replacement that ends a focused interaction.
+    // activated). When that window is one of the applet's own taken banners, an older one, the
+    // record of the earlier request stands. The record is used only after a replacement that ends
+    // a focused interaction in which no reply was started.
     property var bannerFocusPrevious: null
 
     function requestBannerFocus() {
@@ -823,8 +825,10 @@ QtObject {
             banners.push(popup ? {
                 created: popup.created.valueOf(),
                 visible: popup.visible,
+                active: popup.active,
+                taken: popup.triageState !== BannerTriage.STATE_IDLE,
                 eligible: popup.visible && popup.type !== NotificationManager.Notifications.JobType && !popup.modelInterface.replying
-            } : { created: -Infinity, visible: false, eligible: false });
+            } : { created: -Infinity, visible: false, active: false, taken: false, eligible: false });
         }
 
         const chosen = BannerTriage.newestBannerIndex(banners);
@@ -860,12 +864,12 @@ QtObject {
             });
         }
 
-        bannerFocusPrevious = null;
         const window = BannerTriage.activeTaskPath(tasks);
-        if (window) {
-            // Takes row numbers: of the task, and of a window in its group (-1 for none).
-            bannerFocusPrevious = tasksModel.makePersistentModelIndex(window[0], window.length === 2 ? window[1] : -1);
-        }
+        // The record of the window that had the keyboard focus stands when the active window is
+        // one of the applet's own taken banners: no task is active then.
+        bannerFocusPrevious = BannerTriage.recordedWindow(banners.some(banner => banner.active && banner.taken),
+                                                           window ? tasksModel.makePersistentModelIndex(window[0], window.length === 2 ? window[1] : -1) : null,
+                                                           bannerFocusPrevious);
 
         shortcuts.reportTriage("focus-requested " + popup.notificationId);
         popup.requestBannerFocus();

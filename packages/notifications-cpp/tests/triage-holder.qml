@@ -18,11 +18,14 @@ Item {
     function newestBannerIndex(banners) {
         return Triage.newestBannerIndex(banners);
     }
-    function transitionState(state, event) {
-        return Triage.transition(state, event).state;
+    function transitionState(state, event, replyStarted) {
+        return Triage.transition(state, event, replyStarted).state;
     }
-    function transitionRestores(state, event) {
-        return Triage.transition(state, event).restoreFocus;
+    function transitionRestores(state, event, replyStarted) {
+        return Triage.transition(state, event, replyStarted).restoreFocus;
+    }
+    function recordedWindow(takenBannerActive, activeTask, earlierRecord) {
+        return Triage.recordedWindow(takenBannerActive, activeTask, earlierRecord);
     }
     function escapeAction(interactionActive, replyFieldFocused, dismissed, autoRepeat) {
         return Triage.escapeAction(interactionActive, replyFieldFocused, dismissed, autoRepeat);
