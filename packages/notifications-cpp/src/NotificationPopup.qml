@@ -58,12 +58,17 @@ NotificationsApplet.NotificationWindow {
 
     // On wayland we need focus to copy to the clipboard, we change on mouse interaction until the cursor leaves
     // Plasma Fusion: and the banner keyboard triage asks for the window's focus the same way.
-    takeFocus: notificationItem.modelInterface.replying || focusListener.wantsFocus || triageState !== BannerTriage.STATE_IDLE
+    takeFocus: !triageFocusReleased
+                && (notificationItem.modelInterface.replying || focusListener.wantsFocus || triageState !== BannerTriage.STATE_IDLE)
 
     // Plasma Fusion: banner keyboard triage (SPEC-notification-triage.md; the rules are in
     // BannerTriage.js). The interaction with this banner is idle, requested (the shortcut was
     // pressed) or active (KWin gave the banner keyboard focus).
     property string triageState: BannerTriage.STATE_IDLE
+    // True for one turn of the event loop while a request makes the window accept keyboard focus
+    // a second time (requestBannerFocus). It holds the whole flag down: the pointer resting on a
+    // banner it has clicked keeps the flag on by itself.
+    property bool triageFocusReleased: false
     // Reset by each request; true once Escape dismissed the banner, so that a held key does not
     // dismiss it again while it is on its way out.
     property bool triageDismissed: false
@@ -93,12 +98,23 @@ NotificationsApplet.NotificationWindow {
 
     // Plasma Fusion: Globals asks the banner for keyboard focus (requestBannerFocus).
     function requestBannerFocus() {
+        const accepting = notificationPopup.takeFocus;
         triageDismissed = false;
         triageState = BannerTriage.transition(triageState, "request").state;
         // The banner may be the active window already, with the pointer on it, and will not
         // become active a second time: the focus is granted here then.
         if (active) {
             triageState = BannerTriage.transition(triageState, "granted").state;
+            return;
+        }
+        // KWin makes a Plasma window active when it changes to accepting keyboard focus, and only
+        // then. The banner accepts it already while the pointer rests on one it has clicked, so
+        // for this request that change is made a second time: the window stops accepting focus
+        // until the next turn of the event loop. Without it the request timed out as never
+        // granted. (The route a reply takes, forceActivateWindow, does nothing on Wayland.)
+        if (accepting) {
+            triageFocusReleased = true;
+            Qt.callLater(function() { triageFocusReleased = false; });
         }
     }
 

@@ -767,7 +767,7 @@ mode_timer() {
 
 mode_eligible() {
     local critical resident replying older newer again first_taken second_taken granted leaving pointed late before
-        plain critical_plain closed_focused orphan
+        plain critical_plain closed_focused orphan hovered
     # Critical and resident banners are taken, and dismissed by Escape.
     need "a critical banner is sent" send critical ',"actions":["default","Open"],"entry":"","hints":{"urgency":2}' || return 1
     critical=$SENT_ID
@@ -945,6 +945,25 @@ mode_eligible() {
     need "  and Escape dismisses it" triage "dismissed-by-escape $pointed\"" "$from" || return 1
     sleep .6
     need "  with KWrite active again" active pf-notif-app.txt after-pointed || return 1
+
+    # The pointer has clicked a banner and stays on it, so the banner already accepts keyboard
+    # focus, and another window is active: the shortcut still gives it keyboard focus.
+    need "a banner is sent" send hovered ',"actions":["open","Open"],"entry":"","timeout":60000' || return 1
+    hovered=$SENT_ID
+    sleep 1.5
+    need "KWrite is active" active pf-notif-app.txt before-hovered || return 1
+    pfinput 'move 200 125' 'click 200 125'
+    sleep .6
+    need "the click makes the banner the active window" active "$banner_window" hovered-clicked || return 1
+    pfinput 'key alt+tab'
+    sleep .8
+    need "Alt+Tab makes KWrite the active window again, the pointer still on the banner" active pf-notif-app.txt hovered-other-window || return 1
+    need "the shortcut gives the banner keyboard focus all the same" take_banner || return 1
+    expect "  and at once, not after a wait" "$(triage_since "$from" 'ended not-granted')" no
+    pfinput 'key escape'
+    need "  and Escape dismisses it" triage "dismissed-by-escape $hovered\"" "$from" || return 1
+    sleep .6
+    need "  with KWrite active again" active pf-notif-app.txt after-hovered || return 1
 
     # The pointer leaves the corner where the banners appear, and KWrite is active.
     pfinput 'move 600 400' 'click 600 400'
