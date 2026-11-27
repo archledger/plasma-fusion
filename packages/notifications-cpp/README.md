@@ -40,18 +40,18 @@ Plasma Fusion changes (each marked "Plasma Fusion" in the file):
   banner triage rules among the QML sources.
 - `src/global/BannerTriage.js`: new. The rules of the banner keyboard triage
   (`SPEC-notification-triage.md`) as functions of plain values, each with its rows in the Qt
-  Test: which banner the shortcut takes, which window is recorded to return to, how one banner's
-  interaction moves between its states, what makes a banner the same notification, and what
-  Escape and Enter do on it.
+  Test: which banner the shortcut takes, which window is recorded to return to and where it is
+  when it is asked for, how one banner's interaction moves between its states, what makes a
+  banner the same notification, and what Escape and Enter do on it.
 - `src/bannertriageversion.h`: new. The version rule as code.
 - `src/globalshortcuts.h`, `src/globalshortcuts.cpp`: the "Focus notification banner" shortcut
   action, which exists only while the running Plasma is the one this copy was built from, and
   `reportTriage`, through which the applet's QML reports the steps of the triage to the applet's
   debug category.
 - `src/global/Globals.qml`: taking the newest banner that may be taken when the shortcut is
-  pressed, and recording the window to return to: the task model's own active task, kept as a
-  persistent index. The record of an earlier request stands when the shortcut takes a newer
-  banner while an older one is still taken.
+  pressed, and recording the window to return to: the task model's own active task, by the ids
+  the task model knows it by, looked up when it is asked for. The record of an earlier request
+  stands when the shortcut takes a newer banner while an older one is still taken.
 - `src/NotificationPopup.qml`: the interaction with one banner: keyboard focus, the focus ring
   (drawn around the banner, in the window's padding) and a report of where it is, the report of
   where the keyboard focus is inside it, the timer pause, Escape and Enter (Enter only from the
