@@ -49,6 +49,10 @@ ADDED=(
   .config/systemd/user/graphical-session.target.wants/plasma-fusion-powerfx.service
   .config/systemd/user/plasma-fusion-pen-garage.service
   .config/systemd/user/graphical-session.target.wants/plasma-fusion-pen-garage.service
+  .config/systemd/user/plasma-plasmashell.service.d/20-plasma-fusion-notifications.conf
+  .config/systemd/user/plasma-fusion-notifications-notify.service
+  .config/systemd/user/plasma-fusion-notifications-watch@.service
+  .config/systemd/user/xdg-desktop-autostart.target.wants/plasma-fusion-notifications-notify.service
 )
 
 run() { if [ "$DRY" = --dry-run ]; then echo "would: $*"; else "$@"; fi; }
@@ -84,6 +88,15 @@ done
 # files are gone).
 if [ "$DRY" != --dry-run ] && ! grep -q '^\.config/systemd/user/plasma-fusion-powerfx\.service$' "$WORK/paths.txt"; then
   systemctl --user stop plasma-fusion-powerfx.service plasma-fusion-pen-garage.service 2>/dev/null || true
+fi
+notifications_state=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion/notifications
+if [ -e "$notifications_state" ] || [ -L "$notifications_state" ]; then
+  if [ "$DRY" != --dry-run ] && [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] &&
+      [ "$(systemctl --user show-environment 2>/dev/null | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p')" = "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    systemctl --user stop plasma-fusion-notifications-notify.service \
+      'plasma-fusion-notifications-watch@*.service' 2>/dev/null || true
+  fi
+  run rm -rf -- "$notifications_state"
 fi
 for p in "${ADDED[@]}"; do
   if ! grep -qx -- "$p" "$WORK/paths.txt" && ! grep -q -- "^$p/" "$WORK/paths.txt" && { [ -e "$p" ] || [ -L "$p" ]; }; then

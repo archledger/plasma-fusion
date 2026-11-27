@@ -97,5 +97,31 @@ check "b: the dynamic workspaces package is removed" grep -qx 'would: rm -rf -- 
 check "b: a snapshot without them holds nothing" bash -c '! grep -q "plasmafusion-workspacesEnabled" "$1"' _ "$BASE/restore-b.txt"
 check "b: the dry run changed nothing" test -s "$B/.config/plasmafusion-placementrc"
 
+# ---- c: carry the unit configuration, not the last runtime verdict
+C=$BASE/home-c
+cfg=.config/systemd/user
+dropin=$cfg/plasma-plasmashell.service.d/20-plasma-fusion-notifications.conf
+notify=$cfg/plasma-fusion-notifications-notify.service
+watch=$cfg/plasma-fusion-notifications-watch@.service
+wants=$cfg/xdg-desktop-autostart.target.wants/plasma-fusion-notifications-notify.service
+state=$C/.local/state/plasma-fusion/notifications
+mkdir -p "$C/${dropin%/*}" "$C/${wants%/*}" "$state"
+for f in "$dropin" "$notify" "$watch"; do printf '[Service]\n' >"$C/$f"; done
+ln -s ../plasma-fusion-notifications-notify.service "$C/$wants"
+printf 'past verdict\n' >"$state/qml-failed"
+snap_c=$(in_home "$C" bash "$BACKUP" "$BASE/snap-c" 2>"$BASE/backup-c.err")
+tar -tzf "$snap_c" >"$BASE/members-c.txt"
+for f in "$dropin" "$notify" "$watch" "$wants"; do
+  check "c: snapshot carries $f" grep -Fxq "$f" "$BASE/members-c.txt"
+done
+check "c: snapshot does not copy the runtime verdict" \
+  bash -c '! grep -Fq /notifications/qml-failed "$1"' _ "$BASE/members-c.txt"
+in_home "$C" bash "$RESTORE" "$snap_b" --dry-run >"$BASE/restore-c.txt" 2>&1
+check "c: older snapshot removes the managed launch override" \
+  grep -Fxq "would: rm -rf -- $dropin" "$BASE/restore-c.txt"
+check "c: older snapshot clears the live verdict" \
+  grep -Fxq "would: rm -rf -- $state" "$BASE/restore-c.txt"
+check "c: dry run leaves the runtime verdict alone" test -f "$state/qml-failed"
+
 echo "== $passed passed, $failed failed"
 [ "$failed" = 0 ]

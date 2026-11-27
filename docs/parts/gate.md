@@ -272,6 +272,11 @@ The notifier waits for the desktop notification service and removes the record o
 successful reply. A missing package or different theme is silent. The login check's queue is
 independent.
 
+Device and profile backups keep the managed unit configuration, including the notifier's
+relative wants link, but not the running shell's admission or recovery verdict. Restoring an
+older backup removes the managed units and resets the selector's own state before starting the
+shell. Unrelated unit files and shortcut bindings are left alone.
+
 The post-start watcher checks that the selected process mapped the private applet and waits
 up to twelve seconds for its notification service. An absent applet or another service owner
 does not trigger recovery. When the mapped copy leaves the name unowned, the watcher records

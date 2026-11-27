@@ -593,7 +593,7 @@ make_backup() {
   mkdir -p "$BACKUP/config"
   : >"$BACKUP/manifest"
   for f in "${BACKUP_FILES[@]}" "${BACKUP_DIRS[@]}"; do
-    if [ -e "$CONFIG/$f" ]; then
+    if [ -e "$CONFIG/$f" ] || [ -L "$CONFIG/$f" ]; then
       mkdir -p "$BACKUP/config/$(dirname "$f")"
       cp -a "$CONFIG/$f" "$BACKUP/config/$f"
       echo "present $f" >>"$BACKUP/manifest"

@@ -32,6 +32,8 @@ CONFIG_FILES=(
   plasmafusionrc plasmafusion-placementrc gtkrc gtkrc-2.0 Trolltech.conf xsettingsd
   systemd/user/plasma-fusion-gate-notify.service systemd/user/plasma-fusion-powerfx.service
   systemd/user/plasma-fusion-pen-garage.service
+  systemd/user/plasma-plasmashell.service.d/20-plasma-fusion-notifications.conf
+  systemd/user/plasma-fusion-notifications-notify.service systemd/user/plasma-fusion-notifications-watch@.service
 )
 CONFIG_DIRS=(
   kdedefaults gtk-3.0 gtk-4.0 fontconfig libwacom systemd/user/plasma-kwin_wayland.service.d
