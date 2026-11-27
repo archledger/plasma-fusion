@@ -35,6 +35,7 @@ exists, nothing puts the copy in front of the stock plugin.
 - A `built-against` record naming the Plasma version of the source (`6.8.3`), the Plasma version
   the build found and the Qt version, beside the records of the other compiled parts.
 - The banner keyboard triage of `SPEC-notification-triage.md`, added to the stock applet in
+  marked changes (below). Nothing else about the applet changes.
 
 ## Version rule
 
@@ -63,34 +64,60 @@ The copy carries the banner keyboard triage of `SPEC-notification-triage.md`:
   is.
 - **The newest visible banner that may be taken** gets keyboard focus when the shortcut is
   pressed: never a job popup, never a banner that is handling a reply. Arrival still moves no
-  focus. A focus ring in the theme's focus colour shows while the banner holds keyboard focus, and
-  the banner's timeout is paused for that time, as it is while the pointer rests on it.
+  focus. A focus ring in the theme's focus colour is drawn around the banner, on the frame of its
+  window, while the banner holds keyboard focus, and the banner's timeout is paused for that
+  time, as it is while the pointer rests on it.
 - **Escape** on that banner dismisses it through its own expiry, so the notification stays in the
   history, and the window that was active before the shortcut is active again. **Enter** does what
   a click does: the default action if there is one, otherwise nothing, once per press, and only
   while the banner's content itself has the keyboard focus. With a button or the reply field
   focused, the keys are theirs: a button is pressed with Space, as in stock, and in the reply
-  field Escape keeps the text and Return sends it. From every other control of the banner, the
-  close button included, Escape dismisses. The keyboard focus reaching the reply field starts the
+  field Escape keeps the text and Return sends it. From the banner's other controls, the close
+  button included, Escape dismisses; on the Send button of the reply it keeps its stock
+  behaviour, as it does in the field. The keyboard focus reaching the reply field starts the
   reply, as a click on it does.
 - **The interaction ends by itself** when the banner is replaced, is closed or loses focus, or
-  when the screen locks. Nothing is dismissed then and no other banner is taken; only a
-  replacement that ends a focused interaction asks for the previous window back. A replacement is
-  seen by the update time, which KDE resets on every replacement, and by the text and the
-  actions; the window asked for is a window itself, also when it is one of several windows of an
-  application (a group of windows cannot be activated).
+  when the screen locks. Nothing is dismissed then and no other banner is taken. Only a
+  replacement that ends a focused interaction in which no reply was started asks for the previous
+  window back; with a reply started, the keyboard stays with the banner. A replacement is seen by
+  the update time, which KDE resets on every replacement, and by the text, not by the actions:
+  KDE clears those when the application leaves the bus, and that is no replacement. The window
+  asked for is the window that had the keyboard focus at the request, a window itself, also when
+  it is one of several windows of an application (a group of windows cannot be activated). When
+  the shortcut takes a newer banner while an older one is still taken, the window from before the
+  first press stays the one recorded. When there is nothing to ask for, because that window is
+  gone or never was one, the banner stays the active window and takes no key: the widget does not
+  guess a window.
 
-The decisions are in one file, `src/global/BannerTriage.js`, as pure functions; the stock QML
-(`src/global/Globals.qml`, `src/NotificationPopup.qml`) only applies them, and the reply field
-(`src/components/NotificationReplyField.qml`) carries one property that marks it. The applet
-reports each step through its debug category (`org.kde.plasma.notifications.debug`) as
-`banner triage "<step>"`: `triage-available`, `shortcut-ignored-no-banner`, `focus-requested`,
-`focus-granted`, `focus-within inside=... <item>` (each move of the keyboard focus inside the
-banner), `dismissed-by-escape`, `activated-by-enter`, `focus-restore-requested` (the applet asked
-KWin to activate the window recorded at the request; KWin decides), `focus-restore-skipped`,
+The decisions are in one file, `src/global/BannerTriage.js`, as functions of plain values: which
+banner may be taken, which window is recorded, how the interaction moves between its states, what
+makes a banner the same notification, and what Escape and Enter do. The stock QML
+(`src/global/Globals.qml`, `src/NotificationPopup.qml`) only applies them. The window that had
+the keyboard focus is the task model's own `activeTask`, kept as a persistent index, as stock
+keeps the window of a default action. The reply field (`src/components/NotificationReplyField.qml`)
+carries one property that marks it and the handler that starts the reply when the keyboard focus
+reaches the field. The applet reports each step through its debug category
+(`org.kde.plasma.notifications.debug`) as `banner triage "<step>"`: `triage-available`,
+`shortcut-ignored-no-banner`, `focus-requested`, `focus-granted`, `focus-within inside=... <item>`
+(each move of the keyboard focus inside the banner), `dismissed-by-escape`, `activated-by-enter`,
+`ring-geometry <x> <y> <width> <height> <padding ...> <colour>` (where the banner's window is
+drawn, in the pixels of the screen, when the ring appears), `focus-restore-requested` (the applet
+asked KWin to activate the window recorded at the request; KWin decides), `focus-restore-skipped`,
 `ended lost`, `ended hidden`, `ended replaced` and `ended not-granted`. A report names a banner by
-its notification id and an item by its type; none carries a summary or a draft.
-The private-session scenarios read these lines.
+its notification id and an item by its type; none carries a summary or a draft. The
+private-session scenarios read these lines.
+
+Two of these changes are not behind the version rule. Wherever the copy is in force, at any Plasma
+version and also with the shortcut unassigned, the reply field starts the reply when the keyboard
+focus reaches it (rule 13 of the specification), and each move of the keyboard focus is reported.
+The version rule keeps the shortcut off at another version; it does not turn the copy back into
+stock.
+
+To give the shortcut a key, as a user would: in System Settings, in the Keyboard Shortcuts page,
+search for "Focus notification banner" and assign it a key combination. It ships unassigned, and
+Fusion's own bindings, Meta+N for the notification view among them, are not touched. The private
+sessions bind their test chord through the shortcut daemon's D-Bus interface, which is where
+System Settings writes a binding too.
 
 KWin owns the lock and inhibitor boundary, and the applet adds no check of its own: a locked
 screen or a shortcut inhibitor keeps the shortcut from being dispatched, as for any global
@@ -122,9 +149,9 @@ untouched. It needs no compiler and no packages. Three Qt Tests cover the code t
 
 | Test | What it runs |
 |---|---|
-| `notifications-triage-rules` | `tests/triagetest.cpp`: the rules of `BannerTriage.js` through a small QML holder, offscreen: choosing the banner (7 cases), the window that had the keyboard focus inside a group of windows (9), the transitions between idle, requested and active (14), Escape (5) and Enter (6); and on real items, whether the item that has the keyboard focus is in the reply field |
-| `notifications-triage-version` | `tests/versiontest.cpp`: the version rule, versions in and a decision out |
-| `notifications-triage-shortcut` | `tests/shortcuttest.cpp`: `GlobalShortcuts` itself; the focus action exists at the built-from version and at no other. It runs through `tests/run-shortcut-test.sh` on a private session bus: the class registers its actions with the global shortcut daemon under the shell's component name, so on the bus of a real desktop the test would reach the desktop's own shortcuts. |
+| `notifications-triage-rules` | `tests/triagetest.cpp`: the rules of `BannerTriage.js` through a small QML holder, offscreen, 57 cases: choosing the banner (7), the window to record when the shortcut is pressed, also while a taken banner is the active window (7), the transitions between idle, requested and active (16), what makes a banner the same notification (7), the coordinates of the active window as the model's persistent index takes them (5), which banners may be taken (4), Escape (5) and Enter (6); and on real items, whether the item that has the keyboard focus is in the reply field |
+| `notifications-triage-version` | `tests/versiontest.cpp`: the version rule, 13 versions in and a decision out, among them a longer number that begins with the built version, a fourth part, a distribution's release and a leading `v`; the rows are built from the version of the build |
+| `notifications-triage-shortcut` | `tests/shortcuttest.cpp`: `GlobalShortcuts` itself; the focus action exists at the built-from version, with no key, and at no other, and the two stock actions in both cases. It runs only through `tests/run-shortcut-test.sh`, on the private session bus that driver makes, and refuses any other: the class registers its actions with the global shortcut daemon under the shell's component name, so on the bus of a real desktop the test would reach the desktop's own shortcuts. |
 
 The tests are configured with the package (`BUILD_TESTING=ON`); the packages are built
 with them off. `notifications-triage-shortcut` needs `dbus-run-session` and is left out without
@@ -149,37 +176,50 @@ triage. The control runs Plasma's installed applet and the built copy through th
 stock behaviour, so a difference between them is the copy's doing. The applet plasmashell mapped
 is recorded in every mode: the installed one in `stock`, the staged plugin by SHA-256 otherwise.
 
-Run on 2026-11-26 on the stock VM and on the ThinkPad, and in the Fedora 44 test container on
-the build host, each mode with `scenario rc=0`, `session rc=0` and `left: none`, and every check
-a `PASS`. The numbers are the checks each mode passed, the same on all three:
+Run on 2026-11-27 in the Fedora 44 test container on the build host and on the stock VM, at
+`611a8f2`, the last commit of this change that touches code, with one kit: each mode with
+`scenario rc=0`, `session rc=0` and `left: none`, and every check a `PASS`. The numbers are the
+checks each mode passed, the same in both places:
 
 | Mode | Checks | What it showed |
 |---|---|---|
-| `stock` | 19 | The installed applet has no "Focus notification banner" action; the test chord moves no focus; a banner without actions that times out and a closed notification tell the application, a click runs a default action once. |
-| `copy` | 21 | The copy lists the action, unassigned; the chord moves no focus; the same stock behaviour as `stock`. |
-| `full` | 52 | With no banner the shortcut is ignored. Arrival moves no focus. The shortcut gives a banner keyboard focus; Escape dismisses it, KWrite is active again and the application is told nothing. A replacement while focused ends the interaction, asks for the previous window and is not taken: also when it keeps the summary and the text, and also when the previous window is one of two windows of one application. A click into KWrite ends the interaction; a later Escape in KWrite dismisses nothing and the banner can still be closed by the application. |
-| `lock-idle` | 12 | Locked with no banner focused: the shortcut is not dispatched, and a later Escape dismisses nothing. |
-| `lock-focused` | 11 | Locked while a banner is focused: the interaction ends, and a later Escape dismisses nothing. |
-| `activate` | 53 | Enter gives the application the same two receipts as a click for a banner with a default action; for one without, and for one without but with the application's window open, both leave it told nothing and the banner where it is. A held Return activates once. A resident banner stays after Enter and keeps the keyboard focus: a held Return acts once while it stays, a second, separate Enter acts again, and Escape still dismisses it. |
-| `buttons` | 34 | Tab lands inside the banner and invokes nothing; Escape from a control dismisses; Space on the action's button invokes exactly that action and is not taken as Enter on the banner; with the reply open, Escape from the banner's close button dismisses; in the reply field Escape keeps the draft and Return sends it. |
-| `timer` | 15 | A three-second banner is still focused four seconds after the shortcut took it; the shortcut again asks for nothing; after a click ends the interaction the timeout resumes and the banner expires, the application told nothing. |
-| `eligible` | 55 | Critical and resident banners are taken and dismissed by Escape. A job popup and a banner whose reply is open are not taken, and KWrite stays active. Of two banners the newer one is named by its id. The shortcut again asks for no second focus, and a replacement still gives KWrite its focus back. With the pointer on the banner the keyboard focus arrives at once. A banner closed right after the request restores nothing. |
+| `stock` | 20 | The installed applet has no "Focus notification banner" action; the test chord moves no focus; a banner without actions that times out and a closed notification tell the application, a click runs a default action once. |
+| `copy` | 22 | The copy lists the action, and it ships unassigned, as the daemon's empty reply shows; the chord moves no focus; the same stock behaviour as `stock`. |
+| `full` | 54 | With no banner the shortcut is ignored. Arrival moves no focus. The shortcut gives a banner keyboard focus, and the focus ring is on the frame of the banner's window and on none of its content; Escape dismisses it, KWrite is active again and the application is told nothing. A replacement while focused ends the interaction, asks for the previous window and is not taken: also when it keeps the summary and the text, and also when the previous window is one of two windows of one application. A click into KWrite ends the interaction; a later Escape in KWrite dismisses nothing and the banner can still be closed by the application. |
+| `lock-idle` | 15 | Before the lock the chord reaches the applet, which ignores it with no banner. Locked with no banner focused: the shortcut is not dispatched, and a later Escape dismisses nothing. |
+| `lock-focused` | 12 | Locked while a banner is focused: the interaction ends, and a later Escape dismisses nothing. |
+| `activate` | 55 | Enter gives the application the same two receipts as a click for a banner with a default action; for one without, and for one without but with the application's window open, both leave it told nothing and the banner where it is. A held Return activates once. A resident banner stays after Enter and keeps the keyboard focus: a held Return acts once while it stays, a second, separate Return acts again, the keypad's Enter acts as well, and Escape still dismisses it. |
+| `buttons` | 57 | Tab moves the keyboard focus from the content to a control inside the banner and invokes nothing; Escape from a control dismisses; Space on the action's button invokes exactly that action. Return on a focused action button of a banner that also has a default action invokes nothing and is not taken as Enter on the banner; in the reply field of such a banner Return sends the reply and is not taken as Enter either. With the reply open, Escape from the banner's close button dismisses; in the reply field Escape keeps the draft and Return sends it. A replacement while a reply is being typed ends the interaction without asking for the previous window, and what is typed next arrives in the reply. |
+| `timer` | 16 | A three-second banner is still focused four seconds after the shortcut took it; the shortcut again asks for nothing; after a click ends the interaction the timeout resumes and the banner expires, the application told nothing. |
+| `eligible` | 104 | Escape on a banner without actions, normal and critical, tells the application "expired" once. Critical and resident banners are taken and dismissed by Escape. A job popup and a banner whose reply is open are not taken, and KWrite stays active. Of two banners the newer one is named by its id. The shortcut again asks for no second focus, and a replacement still gives KWrite its focus back. An application that leaves the bus is no replacement: its banner stays taken and Escape still dismisses it. When the shortcut takes a newer banner while an older one is still taken, the window from before the first press is the one returned to; when that window is gone, nothing is asked for, the banner stays the active window and takes no key. With the pointer on the banner the keyboard focus arrives at once. A banner closed while focused, and one closed right after the request, restore nothing. |
 
-No shell log held a script error in any mode.
+Every mode ends with one check that the shell log holds no script error.
 
 | Machine | KWin | Plasma Workspace | The applet plasmashell mapped in the copy's modes |
 |---|---|---|---|
 | Stock VM (a throwaway overlay of the provisioned image) | `6.8.3-1.fc44` | `6.8.3-1.fc44` | the staged plugin, by SHA-256 |
-| ThinkPad | `6.8.3-1.fc44.pf1` | `6.8.3-1.fc44` | the staged plugin, by SHA-256 |
 | Fedora 44 test container on the build host | `6.8.3-1.fc44` | `6.8.3-1.fc44` | the staged plugin, by SHA-256 |
+| ThinkPad (KWin `6.8.3-1.fc44.pf1`, Plasma Workspace `6.8.3-1.fc44`) | | | not run at this head: see below |
 
-The runs on the VM and on the ThinkPad are recorded in the shared ledger under
-`2026-11-26-notification-triage-spec/evidence/part-b-review-fixes/`, each with the kit's
-checksums; the earlier runs, before the review fixes, are under `evidence/part-b/`. The
-container's runs are kept as the table of one sweep of all nine modes. `activate` ran again on
-all three after its held-Return case was added (`held-return/`), on a rebuild of the same
-sources: the two builds of the plugin differ in their build id and in four bytes of `.rodata`,
-not in an instruction.
+**The ThinkPad has not run this head.** When this was written its lease could not be claimed,
+because the lock the ledger takes on the shared drive could not be made; the device was not
+touched. The runs it made of earlier heads are under the directories named below, and until it
+has run this head, its results for the banner keyboard triage are those of those heads.
+
+The runs are recorded in the shared ledger under
+`2026-11-26-notification-triage-spec/evidence/part-b-after-review-20261127/`, each with the kit's
+checksums, with the sanitizer job on the same commit and with twelve mutants, each caught by the
+check meant for it. The runs before the review fixes are under `evidence/part-b/` and
+`evidence/part-b-review-fixes/`.
+
+While this change was being made, two cases of the `eligible` mode failed once each, in the first
+runs of their kind and on builds since shown to be the committed code: after the shortcut took a
+newer banner while an older one was still taken, a replacement of the newer one did not ask for
+the recorded window; and an application's leaving the bus was taken for a replacement. Neither
+recurred: the first case passed in 36 later runs of the mode, the second in 24, and each in 45
+repetitions of its steps in a stress scenario. Among the later runs were six made with the host
+under heavy load, fresh builds running beside the sessions, and others with diagnostic reports in
+the applet. The outputs of the two failing runs were not kept, and the cause was not found.
 
 ## What is not covered
 
@@ -194,5 +234,24 @@ not in an instruction.
   check of its own.
 - That a dismissed notification is in the history is not read: the history is in the applet's
   memory. The scenarios check what it implies and keep screenshots.
+- A real active window in every respect: no case runs with Dim Inactive enabled, with a full-screen
+  application in front of the window that had the keyboard focus, or with another keyboard layout
+  in that window.
+- A request that KWin does not grant within 1.5 seconds, and a replacement that arrives while the
+  request is still pending. The case of a banner closed right after the request closes it before
+  or after the grant as the run goes, and asserts what holds either way.
+- The window that had the keyboard focus when it is not a task (a window that skips the taskbar,
+  the desktop): nothing is recorded then, and after a replacement the banner stays the active
+  window. A single window that became a group keeps a valid record, but the model drops the
+  request to activate it while the applet reports `focus-restore-requested`.
+- What the user finds after unlocking: the harness never unlocks a session.
+- Whether Return presses a control under a desktop's own platform theme; the private sessions
+  have the style of the test image. On the installed applet, Return was not pressed on a focused
+  control.
+- The name of the shortcut in any language but English: the package has no catalogue step.
+- The Plasma Fusion lines of the three upstream QML files that carry them (`Globals.qml`,
+  `NotificationPopup.qml`, `NotificationReplyField.qml`) are outside the four QML checks, which
+  skip every file listed in `UPSTREAM-FILES`. With the three unlisted, on 2026-11-27, the checks
+  found one line, KDE's own.
 - The private sessions used injected input and a synthetic sender. The physical keyboard, the
   live desktop and real applications were not exercised.

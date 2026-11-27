@@ -22,8 +22,11 @@ Every file keeps its original copyright lines and licence. Most files are
 and in the repository's root.
 
 `Messages.sh`, KDE's translation-extraction script, is not copied: this repository has no
-translation catalogue step. `UPSTREAM-FILES` lists the QML files the linters skip because they
-are upstream code.
+translation catalogue step, so the name of the new shortcut is not translated.
+`UPSTREAM-FILES` lists the QML files the QML checks skip because they are upstream code. Three of
+them carry Plasma Fusion changes and stay listed, so those lines are outside the checks; with the
+three unlisted, on 2026-11-27, the checks found one line, KDE's own (the `TapHandler` of
+`src/NotificationPopup.qml`).
 
 Plasma Fusion changes (each marked "Plasma Fusion" in the file):
 
@@ -36,22 +39,30 @@ Plasma Fusion changes (each marked "Plasma Fusion" in the file):
 - `src/CMakeLists.txt`: a licence header above the stock build file, which has none, and the
   banner triage rules among the QML sources.
 - `src/global/BannerTriage.js`: new. The rules of the banner keyboard triage
-  (`SPEC-notification-triage.md`): which banner the shortcut takes, how one banner's interaction
-  moves between its states, and what Escape and Enter do on it.
+  (`SPEC-notification-triage.md`) as functions of plain values, each with its rows in the Qt
+  Test: which banner the shortcut takes, which window is recorded to return to, how one banner's
+  interaction moves between its states, what makes a banner the same notification, and what
+  Escape and Enter do on it.
 - `src/bannertriageversion.h`: new. The version rule as code.
 - `src/globalshortcuts.h`, `src/globalshortcuts.cpp`: the "Focus notification banner" shortcut
   action, which exists only while the running Plasma is the one this copy was built from, and
   `reportTriage`, through which the applet's QML reports the steps of the triage to the applet's
   debug category.
 - `src/global/Globals.qml`: taking the newest banner that may be taken when the shortcut is
-  pressed, and recording the window to return to.
-- `src/NotificationPopup.qml`: the interaction with one banner: keyboard focus, the focus ring,
-  the report of where the keyboard focus is inside it, the timer pause, Escape and Enter (Enter
-  only from the banner's content itself).
+  pressed, and recording the window to return to: the task model's own active task, kept as a
+  persistent index. The record of an earlier request stands when the shortcut takes a newer
+  banner while an older one is still taken.
+- `src/NotificationPopup.qml`: the interaction with one banner: keyboard focus, the focus ring
+  (drawn around the banner, in the window's padding) and a report of where it is, the report of
+  where the keyboard focus is inside it, the timer pause, Escape and Enter (Enter only from the
+  banner's content itself).
 - `src/components/NotificationReplyField.qml`: in a banner, the keyboard focus reaching the
-  reply field starts the reply, as a click on it does.
+  reply field starts the reply, as a click on it does. This and the report of the keyboard focus
+  are in force whenever the copy is in force, at any Plasma version and also with the shortcut
+  unassigned (`SPEC-notification-triage.md`, rule 13); the version rule covers the shortcut alone.
 - `tests/`: the plugin test, the directory guard's test, the Qt Tests of the rules, the version
-  rule and the shortcut; the private-session scenarios.
+  rule and the shortcut (which runs only on the private session bus its driver makes); the
+  private-session scenarios, with `ring.py`.
 
 ## Version rule
 
