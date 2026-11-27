@@ -344,7 +344,8 @@ provided by this applet, a copy that fails to load leaves the session without an
 widget until plasmashell starts again; so the plan must show that such a copy is not selected in
 the first place (it is tried before plasmashell picks its plugins) or that the stock widget is
 back within the same session. Proposing the change to KDE upstream is worth doing in parallel;
-it is the owner's own action and not the delivery path.
+it is the owner's own action and not the delivery path. The second plan is specified in
+[SPEC-notification-gate.md](SPEC-notification-gate.md), proposed on 2026-11-27.
 
 ## Proposed on 2026-11-27, to be accepted with the implementation
 
