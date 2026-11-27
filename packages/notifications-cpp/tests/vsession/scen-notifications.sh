@@ -1000,9 +1000,11 @@ mode_eligible() {
 }
 
 run_mode() { # NAME FUNCTION: a mode stops at its first failed step; a stop that recorded none is a failure
-    local before=$FAILED
+    # Not `before`: modes keep a count of their own under that name, and an assignment in a mode
+    # reaches the local of its caller first.
+    local failed_at_start=$FAILED
     "$2" || {
-        [ "$FAILED" -gt "$before" ] && return 0
+        [ "$FAILED" -gt "$failed_at_start" ] && return 0
         echo "FAIL the $1 mode stopped without recording a failure" >>"$OUT/checks.txt"
         FAILED=$((FAILED + 1))
     }
