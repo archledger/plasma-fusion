@@ -12,7 +12,7 @@ before implementation. This map does not declare an implementation complete.
 |---|---|---|---|
 | workspace-layout-control | Show and explicitly change the current view's Fusion tiling mode. | Placement script and the full profile's native tiler. | [Accepted](SPEC-workspace-layout-control.md) |
 | captive-portal-sign-in | Show cached possible network sign-in as a passive network-wide note. Browser launch remains unimplemented. | Fusion network service and the platform's cached connectivity state. | [Status-note contract](SPEC-captive-portal-status.md) |
-| notification-triage | A configurable shortcut that focuses the newest eligible notification banner; on that banner, Escape dismisses it into the history and Enter acts as a click. | Plasma's notification applet at the exact Workspace version, and the existing shortcut infrastructure. | [Accepted](SPEC-notification-triage.md) |
+| notification-triage | A configurable shortcut that focuses the newest eligible notification banner; on that banner, Escape dismisses it into the history and Enter acts as a click. | Plasma's notification applet at the exact Workspace version, and the existing shortcut infrastructure. | [Accepted](SPEC-notification-triage.md); its gate [proposed](SPEC-notification-gate.md) |
 
 Build order: `workspace-layout-control` → `captive-portal-sign-in` → `notification-triage`.
 The modules do not depend on one another and should arrive as separate changes.
