@@ -264,7 +264,8 @@ When the optional selector is installed and the Fedora vendor unit is supported,
 vendor file alone. It runs the selector within five seconds and prepends the private path only
 for an admitted shell launch, never for the user manager or for a direct launch. If the on-disk
 unit changes, admission stops; run setup again to remove or reconcile the override. Package
-delivery and restore are qualified separately.
+delivery and restore are qualified separately. If the recovery or notice unit cannot be
+written, setup leaves the drop-in out, and removes an installed one, so the shell starts stock.
 
 Setup checks both the session manager's loaded unit and the files in its unit search path.
 Without a matching manager, it leaves the notification override alone rather than guessing
@@ -278,9 +279,10 @@ or different theme is silent. The login check's queue is independent.
 
 Device and profile backups keep the managed unit configuration, including the notifier's
 relative wants link, but not the running shell's admission or recovery verdict. Profile archives
-store those files at the same member names when `XDG_CONFIG_HOME` is customized. Restoring an
-older backup removes the managed units and resets the selector's own state before starting the
-shell. Unrelated unit files and shortcut bindings are left alone.
+store those files at the same member names when `XDG_CONFIG_HOME` is customized; a directory
+of the default tree that such an archive restores keeps that tree's own notification entries
+as they were. Restoring an older backup removes the managed units and resets the selector's own
+state before starting the shell. Unrelated unit files and shortcut bindings are left alone.
 
 The post-start watcher checks that the selected process mapped the private applet and waits
 up to twelve seconds for its notification service. An absent applet or another service owner
@@ -290,6 +292,13 @@ The watcher signals only the original managed
 process via a pidfd and relies on the vendor unit's restart-on-failure policy. This is an
 early, abnormal exit of the broken shell, not a normal logout. The selector tries the copy
 again after the RPM database or payload changes.
+
+An admitted shell can also end on its own before its notification service appears, possibly
+before the watcher starts. The unit's stop step (`ExecStopPost`, the watcher's `--stopped`
+mode) then records the same verdict whenever systemd reports anything but a clean end in
+`SERVICE_RESULT`, so the automatic restart starts stock. The watcher records a start as
+settled once the service has an owner or the layout has no mapped applet; a crash after that,
+or a normal stop, records nothing.
 
 ```
 ~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh status   # record, switched-off parts, last runs

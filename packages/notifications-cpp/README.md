@@ -73,8 +73,10 @@ Plasma Fusion changes (each marked "Plasma Fusion" in the file):
 
 The copy may stand in for the stock plugin only while the installed `plasma-workspace` version is
 exactly the one it was built from, `6.8.3`. The wrapper build names that version in its
-`built-against` record, beside the Plasma version the build found and Qt's. Nothing in this
-package enforces the rule or enables the copy on a machine.
+`built-against` record, beside the Plasma version the build found and Qt's. The installed
+selector, `plasma-fusion-notifications-select`, applies the rule at each managed plasmashell
+start once `plasma-fusion setup` has enabled the gate; installing the package alone puts
+nothing in front of the stock applet.
 
 ## Updating the copy
 

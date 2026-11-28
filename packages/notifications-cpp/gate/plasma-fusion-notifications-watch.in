@@ -2,7 +2,11 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-"""Recover only the managed plasmashell invocation that loaded the broken copy."""
+"""Recover only the managed plasmashell invocation that loaded the broken copy.
+
+With --stopped, run by the unit after its process ended, keep the copy aside when a start it was
+admitted to ended abnormally before its notification service appeared.
+"""
 
 import fcntl
 import os
@@ -67,6 +71,62 @@ def package_key():
     )
 
 
+def publish(state, name, text):
+    """Replace STATE/NAME with TEXT in one step."""
+    fd, temp = tempfile.mkstemp(prefix=f".{name}.", dir=state)
+    try:
+        with os.fdopen(fd, "w", encoding="ascii") as file:
+            file.write(text)
+        os.replace(temp, state / name)
+    finally:
+        Path(temp).unlink(missing_ok=True)
+
+
+def settle(state, invocation):
+    """Record that this start no longer depends on the copy coming up: an abnormal end after this
+    point is not the copy's startup failure."""
+    try:
+        publish(state, "settled", f"{invocation}\n")
+    except OSError as error:
+        print(f"Could not record the settled start: {error}", file=sys.stderr)
+
+
+def stopped(state, invocation, result):
+    """Keep the copy aside after an admitted start that ended abnormally before it settled."""
+    if result == "success":
+        return
+    admitted = (state / "admitted").read_text().splitlines()
+    if len(admitted) != 3 or admitted[0] != invocation or not re.fullmatch(r"[a-f0-9]{64}", admitted[1]):
+        return
+    try:
+        if (state / "settled").read_text().splitlines() == [invocation]:
+            return
+    except FileNotFoundError:
+        pass
+    verdict = state / "qml-failed"
+    with (state / "recovery.lock").open("a") as lock:
+        # The selector and the watcher hold this lock only briefly.
+        deadline = time.monotonic() + 2
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.05)
+        if verdict.is_dir():
+            return
+        try:
+            if verdict.read_text().splitlines()[:1] == [admitted[1]]:
+                return
+        except FileNotFoundError:
+            pass
+        publish(state, "qml-failed", f"{admitted[1]}\n{invocation}\n")
+    print(f"The managed shell ended ({result}) before its notification service appeared; "
+          "the stock applet stays in front until the package changes", file=sys.stderr)
+
+
 def restart_with_verdict(state, admitted, pid, pidfd):
     invocation, key, _ = admitted
     verdict = state / "qml-failed"
@@ -119,8 +179,11 @@ def recover(state, invocation):
         while True:
             owner_exists = dbus("NameHasOwner", NOTIFICATIONS)
             if owner_exists != "b false":
-                if owner_exists == "b true" and dbus("GetConnectionUnixProcessID", NOTIFICATIONS) != f"u {pid}":
-                    print("Notification service has a different owner; no recovery attempted", file=sys.stderr)
+                if owner_exists == "b true":
+                    # The service is up, from this shell or from another owner (inconclusive).
+                    settle(state, invocation)
+                    if dbus("GetConnectionUnixProcessID", NOTIFICATIONS) != f"u {pid}":
+                        print("Notification service has a different owner; no recovery attempted", file=sys.stderr)
                 return
             if time.monotonic() >= deadline:
                 break
@@ -128,6 +191,8 @@ def recover(state, invocation):
 
         mapped = (proc / "maps").read_text().splitlines()
         if not any(line.split(None, 5)[-1] == plugin for line in mapped):
+            # A layout without the applet: nothing of the copy runs in this shell.
+            settle(state, invocation)
             return
         if (
             not can_terminate(proc)
@@ -143,11 +208,19 @@ def recover(state, invocation):
 
 
 def main():
-    if len(sys.argv) != 2 or not re.fullmatch(r"[a-f0-9]{32}", sys.argv[1]):
+    state = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "plasma-fusion/notifications"
+    if sys.argv[1:] == ["--stopped"]:
+        invocation = os.environ.get("INVOCATION_ID", "")
+        result = os.environ.get("SERVICE_RESULT", "")
+        if not re.fullmatch(r"[a-f0-9]{32}", invocation) or not re.fullmatch(r"[a-z-]+", result):
+            return 2
+        action, args = stopped, (state, invocation, result)
+    elif len(sys.argv) == 2 and re.fullmatch(r"[a-f0-9]{32}", sys.argv[1]):
+        action, args = recover, (state, sys.argv[1])
+    else:
         return 2
-    state_home = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
     try:
-        recover(state_home / "plasma-fusion/notifications", sys.argv[1])
+        action(*args)
     except FileNotFoundError:
         pass
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:

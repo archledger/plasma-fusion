@@ -82,9 +82,13 @@ cat >"$NOTIFICATIONS_SHELL" <<'EOF'
 #!/bin/bash
 printf '%s\n%s\n' "$*" "${QT_PLUGIN_PATH-<unset>}" >"$RECORD_PID"
 EOF
-chmod +x "$NOTIFICATIONS_SELECTOR" "$NOTIFICATIONS_SHELL"
+cat >"$NOTIFICATIONS_WATCH" <<'EOF'
+#!/bin/bash
+printf '%s|%s|%s\n' "$*" "${SERVICE_RESULT-<unset>}" "${INVOCATION_ID-<unset>}" >>"$WATCH_LOG"
+EOF
+chmod +x "$NOTIFICATIONS_SELECTOR" "$NOTIFICATIONS_SHELL" "$NOTIFICATIONS_WATCH"
 ln -s /usr/bin/true "$NOTIFICATIONS_NOTIFY"
-ln -s /usr/bin/true "$NOTIFICATIONS_WATCH"
+export WATCH_LOG=$base/watch.log
 
 : >"$base/manager.log"
 DRY=1
@@ -133,6 +137,22 @@ mv -- "$NOTIFICATIONS_SELECTOR" "$base/selector.missing"
 launch "$QT_PLUGIN_PATH"
 mv -- "$base/selector.missing" "$NOTIFICATIONS_SELECTOR"
 
+# After the shell's process ends, the unit hands its result to the watcher, whose failure must
+# not fail the unit.
+env SERVICE_RESULT=core-dump INVOCATION_ID=0123456789abcdef0123456789abcdef python3 - "$dropin" <<'PY'
+import os
+import shlex
+import sys
+from pathlib import Path
+
+line, = (line for line in Path(sys.argv[1]).read_text().splitlines() if line.startswith("ExecStopPost="))
+command = line.removeprefix("ExecStopPost=")
+assert command.startswith("-"), line
+cmd = shlex.split(command.removeprefix("-").replace("%%", "%"))
+os.execv(cmd[0], cmd)
+PY
+test "$(cat "$WATCH_LOG")" = '--stopped|core-dump|0123456789abcdef0123456789abcdef'
+
 mkdir -p "$DATA/plasma-fusion/notifications/plugins/plasma/applets"
 legacy=$DATA/plasma-fusion/notifications/plugins/plasma/applets
 ln -s -- "$NOTIFICATIONS_SHELL" "$legacy/org.kde.plasma.notifications.so"
@@ -165,4 +185,22 @@ notifications_setup
 test ! -e "$dropin"
 test "$(wc -l <"$base/manager.log")" = 2
 test ! -e "$CONFIG/plasma-workspace/env/plasma-fusion-notifications.sh"
-printf 'PASS per-launch environment, fallback, foreign unit, dry-run, and manager fencing\n'
+
+# Without its recovery unit the copy must not be admitted: a unit that cannot be written keeps
+# the launch on stock, even where the drop-in itself could be written.
+manager_bus=$DBUS_SESSION_BUS_ADDRESS
+watch_unit=$CONFIG/$NOTIFICATIONS_WATCH_REL
+rm -f -- "$watch_unit"
+mkdir -- "$watch_unit.tmp"
+notifications_setup
+test ! -e "$dropin"
+rmdir -- "$watch_unit.tmp"
+notifications_setup
+test -f "$dropin"
+test -f "$watch_unit"
+printf '# edited\n' >>"$watch_unit"
+mkdir -- "$watch_unit.tmp"
+notifications_setup
+test ! -e "$dropin"
+rmdir -- "$watch_unit.tmp"
+printf 'PASS per-launch environment, stop step, fallback, foreign unit, dry-run, manager fencing and unit write failures\n'

@@ -260,7 +260,9 @@ desktop file without its own binary (System Settings runs the module).
 ### Install, upgrade, remove (root)
 
 ```
-dnf install ./plasma-fusion*-0.2.0*.rpm                    # also upgrades an older build
+dnf install $(ls ./plasma-fusion*-0.2.0*.rpm | grep -v -- -notifications-)
+                                                            # also upgrades an older build
+dnf install ./plasma-fusion-notifications-0.2.0*.rpm        # optional (Fedora 44 and later)
 rpm -V plasma-fusion                                        # verify (no output = clean)
 dnf remove plasma-fusion                                    # rollback (run greeter-restore.sh first
                                                             # when the greeter uses Plasma Fusion)

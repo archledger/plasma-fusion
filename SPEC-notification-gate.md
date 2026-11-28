@@ -223,7 +223,9 @@ tests, and on the ThinkPad where noted.
 6. **A missing, slow or killed selector in the user manager.** Stock is in front and plasmashell
    starts, even if the failed helper produced plausible output.
 7. **A stop or crash of the unit's plasmashell.** No plugin path is left in the manager's
-   environment. The next managed start checks again.
+   environment. After a stop, or a crash once the notification service is up, the next managed
+   start checks again. An admitted shell that ends before the service appears restarts once
+   with stock and stays there.
 8. **The device scripts.** After setup the matching user manager knows the drop-in. Restore
    reinstates the backed-up configuration or removes it, and clears pending gate work and state.
 9. **The times.** With nothing changed in the packages the selector finishes in a small fraction
@@ -304,6 +306,12 @@ commands in front of it. No claim extends beyond the tested versions.
     signaled the original process. If the watcher abandons recovery, it does not publish a block.
     The selector keeps stock in front until that identity changes. Do not restart if the
     invocation has ended, has been replaced, is stopping, or the verdict cannot be saved.
+    An admitted start can also end on its own before its notification service appears: a crash,
+    a kill or a start timeout, possibly before the watcher runs. The unit's stop step, which
+    runs after every end of the process, records the same verdict for such a start, so the
+    automatic restart and later starts keep stock in front until that identity changes. A
+    normal stop, an end after the service appeared, and an end in a layout without the applet
+    record nothing. Taken on the owner's word after the implementation's review (2026-11-28).
 
 ## Size
 

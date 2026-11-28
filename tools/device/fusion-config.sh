@@ -1589,7 +1589,8 @@ PY
   done < <(find "$src" -type f -print0 | sort -z)
 }
 
-# Write a small text file when its content differs. Returns 0 when it was (or would be) written.
+# Write a small text file when its content differs. Returns 0 when it was (or would be) written,
+# 1 when it is already so, 2 when the write failed.
 install_text() { # $1 path, $2 content, $3 mode (default 0644)
   local mode=${3:-0644}
   if [ -f "$1" ] && [ "$(cat "$1")" = "$2" ]; then
@@ -1606,7 +1607,7 @@ install_text() { # $1 path, $2 content, $3 mode (default 0644)
   CHANGES=$((CHANGES + 1))
   [ "$DRY" = 1 ] && return 0
   mkdir -p "$(dirname "$1")"
-  printf '%s\n' "$2" >"$1.tmp" && chmod "$mode" "$1.tmp" && mv -f "$1.tmp" "$1"
+  printf '%s\n' "$2" >"$1.tmp" && chmod "$mode" "$1.tmp" && mv -f "$1.tmp" "$1" || return 2
 }
 
 # True when the systemd user manager on the other end of `systemctl --user` belongs to this
@@ -3061,6 +3062,9 @@ notifications_shell_dropin() {
   post+='exec /usr/bin/timeout -k .1 .5 /usr/bin/systemctl --user start --no-block '
   post+='"plasma-fusion-notifications-watch@${INVOCATION_ID}.service"'
   printf 'ExecStartPost=-:/bin/bash -c %s\n' "$(notifications_unit_arg "$post")"
+  # Runs after every end of the process, also one that came before ExecStartPost: an admitted
+  # start that ended abnormally before its notification service appeared keeps the copy aside.
+  printf 'ExecStopPost=-%s --stopped\n' "$(notifications_unit_arg "$NOTIFICATIONS_WATCH")"
 }
 
 notifications_vendor_supported() {
@@ -3135,7 +3139,7 @@ EOF
 }
 
 notifications_setup() {
-  local dest=$CONFIG/$NOTIFICATIONS_DROPIN_REL digest changed=0 file rel
+  local dest=$CONFIG/$NOTIFICATIONS_DROPIN_REL digest changed=0 file rel unit units=ok
   local wants=$CONFIG/$NOTIFICATIONS_WANTS_REL
   # Do not install or remove an override in a session whose effective unit we cannot verify.
   session_manager || return 0
@@ -3143,17 +3147,36 @@ notifications_setup() {
       notifications_vendor_supported &&
       read -r digest _ < <(/usr/bin/sha256sum -- "$NOTIFICATIONS_VENDOR") &&
       [[ $digest =~ ^[0-9a-f]{64}$ ]]; then
-    install_text "$CONFIG/$NOTIFICATIONS_NOTIFY_REL" "$(notifications_service_unit notify)" && changed=1
-    install_text "$CONFIG/$NOTIFICATIONS_WATCH_REL" "$(notifications_service_unit watch)" && changed=1
-    if [[ ! -L $wants || $(readlink -- "$wants") != "../$NOTIFICATIONS_NOTIFY_NAME" ]]; then
-      note "enable $NOTIFICATIONS_NOTIFY_NAME ($wants)"
-      CHANGES=$((CHANGES + 1))
-      if [[ $DRY == 0 ]] && mkdir -p -- "${wants%/*}" &&
-          ln -sfnT -- "../$NOTIFICATIONS_NOTIFY_NAME" "$wants"; then
+    for unit in notify watch; do
+      rel=$NOTIFICATIONS_NOTIFY_REL
+      [[ $unit == notify ]] || rel=$NOTIFICATIONS_WATCH_REL
+      if install_text "$CONFIG/$rel" "$(notifications_service_unit "$unit")"; then
         changed=1
+      elif (($? == 2)); then
+        units=failed
+      fi
+    done
+    if [[ $units == ok ]]; then
+      if [[ ! -L $wants || $(readlink -- "$wants") != "../$NOTIFICATIONS_NOTIFY_NAME" ]]; then
+        note "enable $NOTIFICATIONS_NOTIFY_NAME ($wants)"
+        CHANGES=$((CHANGES + 1))
+        if [[ $DRY == 0 ]] && mkdir -p -- "${wants%/*}" &&
+            ln -sfnT -- "../$NOTIFICATIONS_NOTIFY_NAME" "$wants"; then
+          changed=1
+        fi
+      fi
+      install_text "$dest" "$(notifications_shell_dropin "$digest")" && changed=1
+    else
+      # Without its recovery and notice units the copy must not be admitted: keep stock.
+      note "warning: the notification units could not be written; the stock applet stays in front"
+      if [[ -e $dest || -L $dest ]]; then
+        note "remove $dest"
+        CHANGES=$((CHANGES + 1))
+        if [[ $DRY == 0 ]]; then
+          if rm -f -- "$dest"; then changed=1; else note "warning: could not remove $dest"; fi
+        fi
       fi
     fi
-    install_text "$dest" "$(notifications_shell_dropin "$digest")" && changed=1
   else
     for rel in "${NOTIFICATIONS_FILES[@]}"; do
       file=$CONFIG/$rel

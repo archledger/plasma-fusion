@@ -4,6 +4,7 @@
 
 """Exercise the watcher with real pidfds and private stand-ins for systemd and D-Bus."""
 
+import contextlib
 import os
 import signal
 import subprocess
@@ -11,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 GATE = Path(sys.argv.pop(1)).resolve()
 INVOCATION = "03b0232a571d44a97434beaf35728d52"
@@ -24,7 +26,75 @@ class WatcherTest(unittest.TestCase):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
                 self.check_case(case, Path(tmp))
 
-    def check_case(self, case, base):
+    def test_admitted_start_that_ends_before_its_service_keeps_the_copy_aside(self):
+        # The ended start's SERVICE_RESULT, what the watcher saw of it first (None: it never ran),
+        # the invocation that ended, and whether the next starts keep the copy aside.
+        cases = {
+            "crash": ("signal", None, INVOCATION, True),
+            "core-dump": ("core-dump", None, INVOCATION, True),
+            "exit-code": ("exit-code", None, INVOCATION, True),
+            "start-timeout": ("timeout", None, INVOCATION, True),
+            "stopped": ("success", None, INVOCATION, False),
+            "other-start": ("signal", None, "b" * 32, False),
+            "after-service": ("signal", "healthy", INVOCATION, False),
+            "foreign-service": ("signal", "foreign", INVOCATION, False),
+            "no-applet": ("signal", "no-applet", INVOCATION, False),
+        }
+        for case, (result, watched, ended, blocked) in cases.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                self.check_stop(Path(tmp), result, watched, ended, blocked)
+
+    def check_stop(self, base, result, watched, ended, blocked):
+        fx = self.fixture(base)
+        with self.fake_shell(fx, fx.db if watched == "no-applet" else fx.payload) as shell:
+            admitted = subprocess.run(fx.launch, env=fx.env, capture_output=True, text=True, timeout=5)
+            self.assertEqual(admitted.returncode, 0, admitted.stderr)
+            if watched:
+                watcher_env = dict(fx.env, CASE=watched, FIXTURE_PID=str(shell.pid),
+                                   UNIT_INVOCATION=INVOCATION, UNIT_JOB="0",
+                                   NOTIFY_OWNED="true" if watched != "no-applet" else "false",
+                                   NOTIFY_PID=str(shell.pid if watched == "healthy" else os.getpid()))
+                watch = subprocess.run([fx.watcher, INVOCATION], env=watcher_env, capture_output=True,
+                                       text=True, timeout=5)
+                self.assertEqual(watch.returncode, 0, watch.stderr)
+                self.assertIsNone(shell.poll(), "the watcher stopped a shell it should leave alone")
+        stop = subprocess.run([fx.watcher, "--stopped"],
+                              env=dict(fx.env, INVOCATION_ID=ended, SERVICE_RESULT=result),
+                              capture_output=True, text=True, timeout=5)
+        self.assertEqual(stop.returncode, 0, stop.stderr)
+        verdict = fx.internal / "qml-failed"
+        after = subprocess.run(fx.launch, env=fx.env, capture_output=True, text=True, timeout=5)
+        if not blocked:
+            self.assertFalse(verdict.exists())
+            self.assertEqual(after.returncode, 0, after.stderr)
+            return
+        self.assertEqual(verdict.read_text().splitlines()[1:], [INVOCATION])
+        self.assertNotEqual(after.returncode, 0)
+        self.assertEqual(after.stdout, "")
+        fx.db.write_text("different transaction")
+        again = subprocess.run(fx.launch, env=fx.env, capture_output=True, text=True, timeout=5)
+        self.assertEqual(again.returncode, 0, again.stderr)
+
+    @contextlib.contextmanager
+    def fake_shell(self, fx, mapped):
+        """A process that maps MAPPED, standing in for the shell the unit started."""
+        with subprocess.Popen(
+            [sys.executable, "-c",
+             "import mmap, sys; "
+             "f = open(sys.argv[1], 'rb'); m = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ); "
+             "print('ready', flush=True); sys.stdin.buffer.read()",
+             str(mapped)],
+            env=fx.env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+        ) as shell:
+            try:
+                self.assertEqual(shell.stdout.readline(), "ready\n")
+                yield shell
+            finally:
+                if shell.poll() is None:
+                    shell.terminate()
+                    shell.wait(timeout=3)
+
+    def fixture(self, base):
         bin_dir = base / "bin"
         bin_dir.mkdir()
         conf = base / "home/.config"
@@ -82,32 +152,30 @@ class WatcherTest(unittest.TestCase):
             "PF_NOTIFICATIONS_WATCH_SECONDS": ".2",
             "INVOCATION_ID": INVOCATION,
         }
-        launch = [GATE / "plasma-fusion-notifications-select"]
-        watcher = GATE / "plasma-fusion-notifications-watch"
-        internal = base / "state/plasma-fusion/notifications"
-        with subprocess.Popen(
-            [sys.executable, "-c",
-             "import mmap, sys; "
-             "f = open(sys.argv[1], 'rb'); m = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ); "
-             "print('ready', flush=True); sys.stdin.buffer.read()",
-             str(payload if case != "no-applet" else db)],
-            env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
-        ) as shell:
+        return SimpleNamespace(
+            env=env, db=db, payload=payload,
+            launch=[GATE / "plasma-fusion-notifications-select"],
+            watcher=GATE / "plasma-fusion-notifications-watch",
+            internal=base / "state/plasma-fusion/notifications",
+        )
+
+    def check_case(self, case, base):
+        fx = self.fixture(base)
+        env, db, launch, watcher, internal = fx.env, fx.db, fx.launch, fx.watcher, fx.internal
+        with self.fake_shell(fx, fx.payload if case != "no-applet" else db) as shell:
+            admitted = subprocess.run(launch, env=env, capture_output=True, text=True, timeout=5)
+            self.assertEqual(admitted.returncode, 0, admitted.stderr)
+            if case == "unwritable":
+                (internal / "qml-failed").mkdir()
+            watcher_env = dict(env, CASE=case, FIXTURE_PID=str(shell.pid),
+                               UNIT_INVOCATION=INVOCATION if case != "replaced" else "a" * 32,
+                               UNIT_JOB="44" if case == "stopping" else "0",
+                               NOTIFY_OWNED="true" if case in ("healthy", "foreign") else "false",
+                               NOTIFY_PID=str(shell.pid if case == "healthy" else os.getpid()))
             try:
-                self.assertEqual(shell.stdout.readline(), "ready\n")
-                admitted = subprocess.run(launch, env=env, capture_output=True, text=True, timeout=5)
-                self.assertEqual(admitted.returncode, 0, admitted.stderr)
-                if case == "unwritable":
-                    (internal / "qml-failed").mkdir()
-                watcher_env = dict(env, CASE=case, FIXTURE_PID=str(shell.pid),
-                                   UNIT_INVOCATION=INVOCATION if case != "replaced" else "a" * 32,
-                                   UNIT_JOB="44" if case == "stopping" else "0",
-                                   NOTIFY_OWNED="true" if case in ("healthy", "foreign") else "false",
-                                   NOTIFY_PID=str(shell.pid if case == "healthy" else os.getpid()))
-                try:
-                    cmd = [watcher, INVOCATION]
-                    if case == "signal-error":
-                        cmd = [sys.executable, "-c", """
+                cmd = [watcher, INVOCATION]
+                if case == "signal-error":
+                    cmd = [sys.executable, "-c", """
 import runpy, signal, sys
 def fail(*args):
     raise PermissionError("intentional pidfd failure")
@@ -115,29 +183,25 @@ signal.pidfd_send_signal = fail
 sys.argv.pop(0)
 runpy.run_path(sys.argv[0], run_name="__main__")
 """, *cmd]
-                    result = subprocess.run(cmd, env=watcher_env, capture_output=True, text=True,
-                                            timeout=5)
-                except FileNotFoundError:
-                    self.fail("missing watcher executable")
-                self.assertEqual(result.returncode, 0, result.stderr)
-                if case != "broken":
-                    self.assertIsNone(shell.poll(), f"{case}: watcher stopped the shell")
-                    self.assertFalse((internal / "qml-failed").is_file())
-                    self.assertEqual(list(internal.glob(".qml-failed.*")), [])
-                    return
+                result = subprocess.run(cmd, env=watcher_env, capture_output=True, text=True,
+                                        timeout=5)
+            except FileNotFoundError:
+                self.fail("missing watcher executable")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            if case != "broken":
+                self.assertIsNone(shell.poll(), f"{case}: watcher stopped the shell")
+                self.assertFalse((internal / "qml-failed").is_file())
+                self.assertEqual(list(internal.glob(".qml-failed.*")), [])
+                return
 
-                self.assertEqual(shell.wait(timeout=3), -signal.SIGUSR2)
-                self.assertTrue((internal / "qml-failed").is_file())
-                blocked = subprocess.run(launch, env=env, capture_output=True, text=True, timeout=5)
-                self.assertNotEqual(blocked.returncode, 0)
-                self.assertEqual(blocked.stdout, "")
-                db.write_text("different transaction")
-                restored = subprocess.run(launch, env=env, capture_output=True, text=True, timeout=5)
-                self.assertEqual(restored.returncode, 0, restored.stderr)
-            finally:
-                if shell.poll() is None:
-                    shell.terminate()
-                    shell.wait(timeout=3)
+            self.assertEqual(shell.wait(timeout=3), -signal.SIGUSR2)
+            self.assertTrue((internal / "qml-failed").is_file())
+            blocked = subprocess.run(launch, env=env, capture_output=True, text=True, timeout=5)
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertEqual(blocked.stdout, "")
+            db.write_text("different transaction")
+            restored = subprocess.run(launch, env=env, capture_output=True, text=True, timeout=5)
+            self.assertEqual(restored.returncode, 0, restored.stderr)
 
 
 if __name__ == "__main__":
