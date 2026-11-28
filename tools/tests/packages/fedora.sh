@@ -10,9 +10,30 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 spec=$ROOT/packaging/fedora/plasma-fusion.spec
 if [[ ${1:-} == --spec-only ]]; then
-  names=$(rpmspec -q --rpms --qf '%{NAME}\n' "$spec")
-  if [[ $(grep -Fxc plasma-fusion-notifications <<<"$names") != 1 ]]; then
-    echo 'FAIL: expected one optional plasma-fusion-notifications RPM in the compiled spec' >&2
+  # The notification applet copy needs the build floors of the Plasma source it was taken from,
+  # Qt 6.11 and Plasma 6.8 (packages/notifications-cpp/CMakeLists.txt). Fedora 44 and later meet
+  # them; Fedora 43, on Qt 6.10 and Plasma 6.7, must still build every other part.
+  for release in 44 45; do
+    names=$(rpmspec --define "fedora $release" -q --rpms --qf '%{NAME}\n' "$spec")
+    if [[ $(grep -Fxc plasma-fusion-notifications <<<"$names") != 1 ]]; then
+      echo "FAIL: expected one optional plasma-fusion-notifications RPM on Fedora $release" >&2
+      exit 1
+    fi
+  done
+  names=$(rpmspec --define 'fedora 43' -q --rpms --qf '%{NAME}\n' "$spec")
+  for part in decoration settings navigation quicklook copytext; do
+    if ! grep -Fxq "plasma-fusion-$part" <<<"$names"; then
+      echo "FAIL: the Fedora 43 build lost plasma-fusion-$part" >&2
+      exit 1
+    fi
+  done
+  # The parsed spec without comments: a step left behind would configure the copy and fail.
+  steps=$(rpmspec --define 'fedora 43' -P "$spec" | grep -v '^[[:space:]]*#')
+  copy='notifications-cpp|_build/notifications|built-against/notifications'
+  copy+='|plasma-fusion-notifications|org\.kde\.plasma\.notifications'
+  copy+='|^for part in .*[[:space:]]notifications([;[:space:]]|$)'
+  if grep -Fxq plasma-fusion-notifications <<<"$names" || grep -Eq "$copy" <<<"$steps"; then
+    echo 'FAIL: the Fedora 43 build declares, builds or checks the notification applet copy' >&2
     exit 1
   fi
   shared_names=$(rpmspec --without compiled -q --rpms --qf '%{NAME}\n' "$spec")

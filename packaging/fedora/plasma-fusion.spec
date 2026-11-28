@@ -17,6 +17,10 @@
 %if %{without compiled}
 %global debug_package %{nil}
 %endif
+# The notification applet copy is Plasma 6.8.3's applet, and its build needs that source's floors,
+# Qt 6.11 and Plasma 6.8 (packages/notifications-cpp/CMakeLists.txt): Fedora 44 and later have
+# them. Fedora 43 (Qt 6.10, Plasma 6.7) builds every other part without the optional package.
+%bcond notifications %[0%{?fedora} >= 44]
 
 # The full profile (ADR 0001, docs/adr/0001, docs/full-profile.md). The metapackage builds only
 # in the full profile's own Copr project - which passes "--with full" - for the Fedora release
@@ -324,6 +328,7 @@ as the drag ends, its text is on the clipboard. The session bus starts the
 overlay the first time it is used; it then waits for the next capture.
 Without this package copy text uses Spectacle's selection.
 
+%if %{with notifications}
 %package notifications
 Summary:        Plasma Fusion keyboard shortcuts for notification banners
 # Every applet source offering KDE-Accepted-GPL as an alternative also offers GPL-3.0-only.
@@ -339,6 +344,7 @@ notification banner shortcut. It ships unassigned. Plasma Fusion setup
 enables the startup check; the normal Plasma applet is used when the
 version or load check fails. This package does not replace the stock
 plugin or pin Plasma Workspace.
+%endif
 %endif
 
 %prep
@@ -364,6 +370,7 @@ for part in decoration navigation; do
   %cmake -S packages/$part-cpp -B _build/$part -G Ninja -DBUILD_TESTING=OFF -DKDE_INSTALL_USE_QT_SYS_PATHS=ON
   %__cmake --build _build/$part %{?_smp_mflags} --verbose
 done
+%if %{with notifications}
 # The copied applet embeds its QML. Scope the resource time stamp to its source contents so a
 # same-day snapshot does not reuse an older QML disk-cache entry.
 (
@@ -375,6 +382,7 @@ done
     -DPF_NOTIFICATIONS_PLUGIN_DIR=%{_libdir}/libexec/plasma-fusion/qt6/plugins
   %__cmake --build ../../_build/notifications %{?_smp_mflags} --verbose
 )
+%endif
 # Quick Look's QML is compiled into its program, as the settings page's (below): a stamp derived
 # from its sources too.
 (
@@ -422,9 +430,12 @@ printf 'kwin=%%s\ntag=v%%s-%%s\n' "$pin" "${pin%%%%-*}" "${pin##*.}" \
   >%{buildroot}%{_datadir}/plasma-fusion/full-profile
 %endif
 %if %{with compiled}
-for part in decoration settings navigation quicklook copytext notifications; do
+for part in decoration settings navigation quicklook copytext; do
   DESTDIR=%{buildroot} %__cmake --install _build/$part
 done
+%if %{with notifications}
+DESTDIR=%{buildroot} %__cmake --install _build/notifications
+%endif
 %endif
 # Qt's QML disk cache (~/.cache/kwin/qmlcache, ~/.cache/plasmashell/qmlcache, ...) reuses a compiled
 # file while the source's time stamp is unchanged, and rpm clamps every time stamp to the
@@ -510,13 +521,16 @@ find %{buildroot} -type f \( -name '*.qml' -o -name '*.js' -o -name '*.mjs' -o -
     fi
   done
 %if %{with compiled}
-for part in decoration settings navigation quicklook copytext notifications; do
+for part in decoration settings navigation quicklook copytext; do
   test -s %{buildroot}%{_datadir}/plasma-fusion/built-against/$part
 done
+%if %{with notifications}
+test -s %{buildroot}%{_datadir}/plasma-fusion/built-against/notifications
 notif_plugin=plasma/applets/org.kde.plasma.notifications.so
 test ! -e "%{buildroot}%{_qt6_plugindir}/$notif_plugin"
 %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-notifications-check \
   "%{buildroot}%{_libdir}/libexec/plasma-fusion/qt6/plugins/$notif_plugin"
+%endif
 %if %{build_full}
 # The navigation effect is built against the pinned KWin (its BuildRequires): built against
 # another, it would stay idle on every full-profile machine.
@@ -660,6 +674,7 @@ grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
 %{_datadir}/dbus-1/services/org.plasmafusion.CopyTextOverlay.service
 %{_datadir}/plasma-fusion/built-against/copytext
 
+%if %{with notifications}
 %files notifications
 %license packages/notifications-cpp/LICENSES/GPL-2.0-or-later.txt packages/notifications-cpp/LICENSES/GPL-3.0-only.txt
 %license packages/notifications-cpp/LICENSES/LGPL-2.0-or-later.txt packages/notifications-cpp/LICENSES/LGPL-2.1-or-later.txt
@@ -674,6 +689,7 @@ grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
 %{_libexecdir}/plasma-fusion/plasma-fusion-notifications-notify
 %{_libexecdir}/plasma-fusion/plasma-fusion-notifications-watch
 %{_libexecdir}/plasma-fusion/plasma-fusion-notifications-common.sh
+%endif
 
 # A metapackage: the license and the profile's record; the exact-EVR requires are its content.
 %if %{build_full}

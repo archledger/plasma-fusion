@@ -20,6 +20,11 @@ The RPM does not pin Plasma Workspace. It still has Fedora's generated library d
 if a Qt upgrade cannot satisfy the applet's private Qt ABI, rebuild the optional RPM or remove
 it so the update can proceed. The startup gate does not affect package resolution.
 
+The spec builds the RPM from Fedora 44 on (its `notifications` build option). The copy needs the
+build floors of its Plasma 6.8.3 source, Qt 6.11 and Plasma 6.8; a Fedora 43 build, on Qt 6.10 and
+Plasma 6.7, leaves it out and builds every other part. `tools/tests/packages/fedora.sh --spec-only`
+checks the parsed spec for Fedora 43, 44 and 45.
+
 ## What it is
 
 - The plugin `org.kde.plasma.notifications`, with the stock metadata. Plasma takes an applet's id

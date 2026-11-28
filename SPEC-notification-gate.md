@@ -156,6 +156,9 @@ service. These establish the detection rule, not packaged recovery.
 - A subpackage, `plasma-fusion-notifications`, builds the copy from the source the repository
   carries, against the installed Plasma's build requirements. It ships the plugin under the
   directory above, the built-against record, the check and the selector.
+- It is built from Fedora 44 on (the spec's `notifications` build option): the copy needs the
+  build floors of its Plasma 6.8.3 source, Qt 6.11 and Plasma 6.8. Fedora 43, on Qt 6.10 and
+  Plasma 6.7, builds the other parts without it.
 - It requires `plasma-fusion` of its own version and release. It declares no exact Plasma
   Workspace dependency; the selector keeps an incompatible installed copy out of the shell.
   Fedora still generates ELF library dependencies. In particular, a Qt upgrade that removes the
