@@ -10,6 +10,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -75,8 +76,65 @@ class WatcherTest(unittest.TestCase):
         again = subprocess.run(fx.launch, env=fx.env, capture_output=True, text=True, timeout=5)
         self.assertEqual(again.returncode, 0, again.stderr)
 
+    def test_an_earlier_start_cannot_take_a_later_start_s_settlement(self):
+        # Start A's watcher is still polling when A has ended, B was admitted and B's watcher
+        # recorded B as settled; A's watcher then sees an owner and records A. B's later crash
+        # must still find B settled.
+        later = "b" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = self.fixture(Path(tmp))
+            owned = Path(tmp) / "owned"
+            owned.write_text("false")
+            with self.fake_shell(fx, fx.payload) as shell_a, \
+                    self.fake_shell(fx, fx.payload, later) as shell_b:
+                self.assertEqual(subprocess.run(fx.launch, env=fx.env, capture_output=True, timeout=5).returncode, 0)
+                watcher_a = subprocess.Popen(
+                    [fx.watcher, INVOCATION],
+                    env=dict(fx.env, CASE="earlier", FIXTURE_PID=str(shell_a.pid), UNIT_INVOCATION=INVOCATION,
+                             UNIT_JOB="0", NOTIFY_OWNED="false", NOTIFY_OWNED_FILE=str(owned),
+                             NOTIFY_PID=str(shell_b.pid), PF_NOTIFICATIONS_WATCH_SECONDS="8"),
+                    stderr=subprocess.PIPE, text=True)
+                try:
+                    polled = Path(f"{owned}.polled")
+                    deadline = time.monotonic() + 5
+                    while not polled.exists() and watcher_a.poll() is None and time.monotonic() < deadline:
+                        time.sleep(0.05)
+                    self.assertTrue(polled.exists(), "start A's watcher never reached its wait for the service")
+                    later_env = dict(fx.env, INVOCATION_ID=later)
+                    self.assertEqual(subprocess.run(fx.launch, env=later_env, capture_output=True, timeout=5).returncode, 0)
+                    watch_b = subprocess.run(
+                        [fx.watcher, later],
+                        env=dict(later_env, CASE="later", FIXTURE_PID=str(shell_b.pid), UNIT_INVOCATION=later,
+                                 UNIT_JOB="0", NOTIFY_OWNED="true", NOTIFY_PID=str(shell_b.pid)),
+                        capture_output=True, text=True, timeout=5)
+                    self.assertEqual(watch_b.returncode, 0, watch_b.stderr)
+                    owned.write_text("true")
+                    self.assertEqual(watcher_a.wait(timeout=10), 0)
+                finally:
+                    if watcher_a.poll() is None:
+                        watcher_a.kill()
+                    _, errors_a = watcher_a.communicate()
+                self.assertIn("different owner", errors_a)
+            stop = subprocess.run([fx.watcher, "--stopped"],
+                                  env=dict(fx.env, INVOCATION_ID=later, SERVICE_RESULT="signal"),
+                                  capture_output=True, text=True, timeout=5)
+            self.assertEqual(stop.returncode, 0, stop.stderr)
+            self.assertFalse((fx.internal / "qml-failed").exists())
+            self.assertEqual(subprocess.run(fx.launch, env=fx.env, capture_output=True, timeout=5).returncode, 0)
+
+    def test_no_copy_without_a_recorded_admission(self):
+        # Neither the watcher nor the stop step can act for a start whose admission was not
+        # recorded, so such a start stays on stock.
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = self.fixture(Path(tmp))
+            (fx.internal / "admitted").mkdir(parents=True)
+            (fx.internal / "admitted/occupied").write_text("")
+            refused = subprocess.run(fx.launch, env=fx.env, capture_output=True, text=True, timeout=5)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertEqual(refused.stdout, "")
+
     @contextlib.contextmanager
-    def fake_shell(self, fx, mapped):
+    def fake_shell(self, fx, mapped, invocation=INVOCATION):
         """A process that maps MAPPED, standing in for the shell the unit started."""
         with subprocess.Popen(
             [sys.executable, "-c",
@@ -84,7 +142,7 @@ class WatcherTest(unittest.TestCase):
              "f = open(sys.argv[1], 'rb'); m = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ); "
              "print('ready', flush=True); sys.stdin.buffer.read()",
              str(mapped)],
-            env=fx.env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+            env=dict(fx.env, INVOCATION_ID=invocation), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
         ) as shell:
             try:
                 self.assertEqual(shell.stdout.readline(), "ready\n")
@@ -129,7 +187,12 @@ class WatcherTest(unittest.TestCase):
             "case \"$*\" in\n"
             "  *'GetConnectionUnixProcessID s org.kde.plasmashell') echo \"u $FIXTURE_PID\" ;;\n"
             "  *'GetConnectionUnixProcessID s org.freedesktop.Notifications') echo \"u $NOTIFY_PID\" ;;\n"
-            "  *'NameHasOwner s org.freedesktop.Notifications') echo \"b $NOTIFY_OWNED\" ;;\n"
+            "  *'NameHasOwner s org.freedesktop.Notifications')\n"
+            "    if [[ -n ${NOTIFY_OWNED_FILE:-} ]]; then\n"
+            "      : >\"$NOTIFY_OWNED_FILE.polled\"\n"
+            "      NOTIFY_OWNED=$(<\"$NOTIFY_OWNED_FILE\")\n"
+            "    fi\n"
+            "    echo \"b $NOTIFY_OWNED\" ;;\n"
             "  *) exit 9 ;;\n"
             "esac\n"
         )

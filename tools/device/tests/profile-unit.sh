@@ -172,6 +172,22 @@ restore_custom "$snap_b" >"$BASE/restore-d-live-old.txt" 2>&1
 check "d: older restore actually removes the custom-XDG override" test ! -e "$xdg/${dropin#.config/}"
 check "d: older restore also removes a dangling custom link" test ! -L "$xdg/${wants#.config/}"
 check "d: the unrelated default config override is untouched" grep -Fxq 'not the live override' "$D/$dropin"
+# A failed copy of the default tree's own notification link must not cost that link: the restore
+# then leaves its directory as it was.
+mkdir "$BASE/profile-test-bin-cpfail"
+cat >"$BASE/profile-test-bin-cpfail/cp" <<'EOF'
+#!/bin/bash
+if [[ $1 == -a && $2 == --remove-destination && $3 == -- && $4 == .config/*/plasma-fusion-notifications-notify.service ]]; then
+  exit 1
+fi
+exec /usr/bin/cp "$@"
+EOF
+chmod +x "$BASE/profile-test-bin-cpfail/cp"
+in_home "$D" env PATH="$BASE/profile-test-bin-cpfail:$BASE/profile-test-bin:$PATH" XDG_CONFIG_HOME="$xdg" \
+  bash "$RESTORE" "$snap_d" >"$BASE/restore-d-keep-failed.txt" 2>&1
+check "d: a restore that cannot keep that link leaves its directory as it was" bash -c \
+  '[[ $(readlink "$1") == ../plasma-fusion-notifications-notify.service && $(readlink "$2") == ../other.service ]]' \
+  _ "$D/$wants" "$D/${wants%/*}/other.service"
 
 echo "== $passed passed, $failed failed"
 [ "$failed" = 0 ]

@@ -86,23 +86,31 @@ def settle(state, invocation):
     """Record that this start no longer depends on the copy coming up: an abnormal end after this
     point is not the copy's startup failure."""
     try:
-        publish(state, "settled", f"{invocation}\n")
+        # One record per start: a watcher that outlives its start must not replace a later one's.
+        publish(state, f"settled.{invocation}", f"{invocation}\n")
     except OSError as error:
         print(f"Could not record the settled start: {error}", file=sys.stderr)
 
 
 def stopped(state, invocation, result):
     """Keep the copy aside after an admitted start that ended abnormally before it settled."""
-    if result == "success":
-        return
+    settled = (state / f"settled.{invocation}").is_file()
+    try:
+        if result != "success" and not settled:
+            keep_aside(state, invocation, result)
+    finally:
+        # One shell of the unit runs at a time, so every record left belongs to a start that ended.
+        for record in state.glob("settled.*"):
+            try:
+                record.unlink()
+            except OSError:
+                pass
+
+
+def keep_aside(state, invocation, result):
     admitted = (state / "admitted").read_text().splitlines()
     if len(admitted) != 3 or admitted[0] != invocation or not re.fullmatch(r"[a-f0-9]{64}", admitted[1]):
         return
-    try:
-        if (state / "settled").read_text().splitlines() == [invocation]:
-            return
-    except FileNotFoundError:
-        pass
     verdict = state / "qml-failed"
     with (state / "recovery.lock").open("a") as lock:
         # The selector and the watcher hold this lock only briefly.

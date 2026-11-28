@@ -172,7 +172,11 @@ if [[ $decision == checked-pass && -n $db && ! -v PF_GATE_FAKE_VERSIONS ]]; then
 fi
 
 if [[ -n $db && ! -v PF_GATE_FAKE_VERSIONS && ${INVOCATION_ID:-} =~ ^[a-f0-9]{32}$ ]]; then
-  write_state "$state/admitted" "$INVOCATION_ID" "$package" "$plugin" || :
+  # The watcher and the unit's stop step act only for a start whose admission is recorded.
+  if ! write_state "$state/admitted" "$INVOCATION_ID" "$package" "$plugin"; then
+    decision='state-unavailable'
+    exit 1
+  fi
 fi
 
 printf '%s\n' "$plugin_root"

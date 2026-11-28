@@ -224,8 +224,9 @@ tests, and on the ThinkPad where noted.
    starts, even if the failed helper produced plausible output.
 7. **A stop or crash of the unit's plasmashell.** No plugin path is left in the manager's
    environment. After a stop, or a crash once the notification service is up, the next managed
-   start checks again. An admitted shell that ends before the service appears restarts once
-   with stock and stays there.
+   start checks again. An admitted shell that crashes, is killed or times out before the service
+   appears restarts once with stock and stays there; a stop before then does not restart it,
+   and a layout without the applet is not a failure.
 8. **The device scripts.** After setup the matching user manager knows the drop-in. Restore
    reinstates the backed-up configuration or removes it, and clears pending gate work and state.
 9. **The times.** With nothing changed in the packages the selector finishes in a small fraction

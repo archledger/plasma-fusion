@@ -257,7 +257,8 @@ The notification applet has a separate startup selector. It calls this engine's 
 login check's package cache. The selector checks the installed Plasma version against both
 versions in the applet's build record and verifies a load before returning the private plugin
 path. Its own cached pass is tied to the RPM database, including its WAL if present, and the
-payload. An unsuccessful check returns no path and is not cached.
+payload. An unsuccessful check returns no path and is not cached. A managed start whose
+admission cannot be recorded gets no path either: recovery acts only on a recorded admission.
 
 When the optional selector is installed and the Fedora vendor unit is supported, setup writes
 `20-plasma-fusion-notifications.conf` for `plasma-plasmashell.service`. The drop-in leaves the
@@ -265,7 +266,8 @@ vendor file alone. It runs the selector within five seconds and prepends the pri
 for an admitted shell launch, never for the user manager or for a direct launch. If the on-disk
 unit changes, admission stops; run setup again to remove or reconcile the override. Package
 delivery and restore are qualified separately. If the recovery or notice unit cannot be
-written, setup leaves the drop-in out, and removes an installed one, so the shell starts stock.
+written or enabled, or the drop-in itself cannot be rewritten, setup leaves the drop-in out, and
+removes an installed one, so the shell starts stock.
 
 Setup checks both the session manager's loaded unit and the files in its unit search path.
 Without a matching manager, it leaves the notification override alone rather than guessing
@@ -281,8 +283,9 @@ Device and profile backups keep the managed unit configuration, including the no
 relative wants link, but not the running shell's admission or recovery verdict. Profile archives
 store those files at the same member names when `XDG_CONFIG_HOME` is customized; a directory
 of the default tree that such an archive restores keeps that tree's own notification entries
-as they were. Restoring an older backup removes the managed units and resets the selector's own
-state before starting the shell. Unrelated unit files and shortcut bindings are left alone.
+as they were, or is left as it is when they cannot be kept. Restoring an older backup removes
+the managed units and resets the selector's own state before starting the shell. Unrelated unit
+files and shortcut bindings are left alone.
 
 The post-start watcher checks that the selected process mapped the private applet and waits
 up to twelve seconds for its notification service. An absent applet or another service owner

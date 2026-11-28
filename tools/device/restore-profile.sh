@@ -126,14 +126,18 @@ while IFS= read -r p; do
   if [[ $config != "$HOME/.config" && " ${NOTIFICATIONS_FILES[*]} " == *" $p "* ]]; then continue; fi
   if [ -d "$WORK/$p" ]; then
     # With another config home the archive holds that home's notification files, not this tree's:
-    # carry this tree's own through the directory restore unchanged.
+    # carry this tree's own through the directory restore unchanged, or leave the directory alone.
+    kept=1
     if [[ $config != "$HOME/.config" ]]; then
       for n in "${NOTIFICATIONS_FILES[@]}"; do
         if [[ $n == "$p"/* ]] && { [ -e "$n" ] || [ -L "$n" ]; }; then
-          mkdir -p -- "$WORK/${n%/*}" && cp -a --remove-destination -- "$n" "$WORK/$n" ||
-            echo "warning: could not keep $n" >&2
+          mkdir -p -- "$WORK/${n%/*}" && cp -a --remove-destination -- "$n" "$WORK/$n" || kept=0
         fi
       done
+    fi
+    if [ "$kept" = 0 ]; then
+      echo "warning: could not keep the notification entries of $p; left as it is" >&2
+      continue
     fi
     run rm -rf -- "$p"; run mkdir -p "$(dirname "$p")"; run cp -a "$WORK/$p" "$p"
   else

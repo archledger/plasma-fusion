@@ -203,4 +203,25 @@ mkdir -- "$watch_unit.tmp"
 notifications_setup
 test ! -e "$dropin"
 rmdir -- "$watch_unit.tmp"
+notifications_setup
+test -f "$dropin"
+
+# Nor without its notice service enabled: a file where the wants directory belongs.
+wants_dir=$CONFIG/${NOTIFICATIONS_WANTS_REL%/*}
+rm -f -- "$CONFIG/$NOTIFICATIONS_WANTS_REL"
+rmdir -- "$wants_dir"
+: >"$wants_dir"
+notifications_setup
+test ! -e "$dropin"
+rm -f -- "$wants_dir"
+notifications_setup
+test -f "$dropin"
+test -L "$CONFIG/$NOTIFICATIONS_WANTS_REL"
+
+# A drop-in that cannot be rewritten is removed rather than left to admit the copy as before.
+printf '# an older drop-in\n' >>"$dropin"
+mkdir -- "$dropin.tmp"
+notifications_setup
+test ! -e "$dropin"
+rmdir -- "$dropin.tmp"
 printf 'PASS per-launch environment, stop step, fallback, foreign unit, dry-run, manager fencing and unit write failures\n'

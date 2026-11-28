@@ -3156,19 +3156,29 @@ notifications_setup() {
         units=failed
       fi
     done
-    if [[ $units == ok ]]; then
-      if [[ ! -L $wants || $(readlink -- "$wants") != "../$NOTIFICATIONS_NOTIFY_NAME" ]]; then
-        note "enable $NOTIFICATIONS_NOTIFY_NAME ($wants)"
-        CHANGES=$((CHANGES + 1))
-        if [[ $DRY == 0 ]] && mkdir -p -- "${wants%/*}" &&
-            ln -sfnT -- "../$NOTIFICATIONS_NOTIFY_NAME" "$wants"; then
+    if [[ $units == ok ]] &&
+        [[ ! -L $wants || $(readlink -- "$wants") != "../$NOTIFICATIONS_NOTIFY_NAME" ]]; then
+      note "enable $NOTIFICATIONS_NOTIFY_NAME ($wants)"
+      CHANGES=$((CHANGES + 1))
+      if [[ $DRY == 0 ]]; then
+        if mkdir -p -- "${wants%/*}" && ln -sfnT -- "../$NOTIFICATIONS_NOTIFY_NAME" "$wants"; then
           changed=1
+        else
+          units=failed
         fi
       fi
-      install_text "$dest" "$(notifications_shell_dropin "$digest")" && changed=1
-    else
-      # Without its recovery and notice units the copy must not be admitted: keep stock.
-      note "warning: the notification units could not be written; the stock applet stays in front"
+    fi
+    if [[ $units == ok ]]; then
+      if install_text "$dest" "$(notifications_shell_dropin "$digest")"; then
+        changed=1
+      elif (($? == 2)); then
+        units=failed
+      fi
+    fi
+    if [[ $units != ok ]]; then
+      # Without its recovery and notice units, or with an override older than them, the copy
+      # must not be admitted: keep stock.
+      note "warning: the notification gate could not be set up; the stock applet stays in front"
       if [[ -e $dest || -L $dest ]]; then
         note "remove $dest"
         CHANGES=$((CHANGES + 1))
