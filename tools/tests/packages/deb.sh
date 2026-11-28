@@ -12,6 +12,18 @@ TARGET=$1 TARBALL=$(realpath "$2") OUT=$(mkdir -p "$3" && realpath "$3")
 UPSTREAM=${4:-}
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
+# Bring the PySide6 and Shiboken6 packages the image already has to the archive's version before the
+# build requirements go in. An image can lag its archive, and the PySide6 modules depend on each
+# other without a version: on KDE neon's image after neon's 6.12 update, apt kept the image's QtCore
+# 6.11 next to the new modules, while the 6.12 transitional libpyside6-py3-6.11 took away the 6.11
+# library that QtCore links (#228). An image without them is left as it is.
+mapfile -t pyside < <(
+  dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' '*pyside6*' '*shiboken6*' 2>/dev/null |
+    awk '$1 == "ii" {print $2}')
+if [ "${#pyside[@]}" -gt 0 ]; then
+  echo "== the image's PySide6 and Shiboken6 to the archive's version: ${pyside[*]}"
+  apt-get install -y -qq --no-install-recommends --only-upgrade "${pyside[@]}" >/dev/null
+fi
 apt-get install -y -qq --no-install-recommends dpkg-dev debhelper devscripts equivs lintian ca-certificates qt6-declarative-dev-tools >/dev/null
 bd=$(mktemp -d)
 tar -xzf "$TARBALL" -C "$bd" --wildcards '*/packaging/debian/control' --strip-components=2
