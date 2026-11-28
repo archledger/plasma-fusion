@@ -264,7 +264,9 @@ recovery acts only on a recorded admission.
 When the optional selector is installed and the Fedora vendor unit is supported, setup writes
 `20-plasma-fusion-notifications.conf` for `plasma-plasmashell.service`. The drop-in leaves the
 vendor file alone. It runs the selector within five seconds and prepends the private path only
-for an admitted shell launch, never for the user manager or for a direct launch. If the on-disk
+for an admitted shell launch, never for the user manager or for a direct launch. The selector
+must succeed and print exactly the path and one newline; any other output, including a blank
+line after the path, a missing newline or a NUL byte, starts the shell stock. If the on-disk
 unit changes, admission stops; run setup again to remove or reconcile the override. Package
 delivery and restore are qualified separately. If the recovery or notice unit cannot be
 written or enabled, or the drop-in itself cannot be rewritten, setup leaves the drop-in out, and

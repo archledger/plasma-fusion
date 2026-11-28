@@ -74,6 +74,9 @@ case "$SELECT_MODE" in
   match) printf '%s\n' "$STANDIN_ROOT" ;;
   fail) printf '%s\n' "$STANDIN_ROOT"; exit 1 ;;
   bad) printf '%s\nunexpected extra output\n' "$STANDIN_ROOT" ;;
+  blank-line) printf '%s\n\n' "$STANDIN_ROOT" ;;
+  nul) printf '%s\0\n' "$STANDIN_ROOT" ;;
+  no-newline) printf '%s' "$STANDIN_ROOT" ;;
   hang) trap '' TERM; sleep 30 ;;
   *) exit 1 ;;
 esac
@@ -129,6 +132,14 @@ launch "$NOTIFICATIONS_ROOT:$QT_PLUGIN_PATH" \
   "QT_PLUGIN_PATH=$NOTIFICATIONS_ROOT:$QT_PLUGIN_PATH:$NOTIFICATIONS_ROOT"
 launch "$QT_PLUGIN_PATH" SELECT_MODE=fail
 launch "$QT_PLUGIN_PATH" SELECT_MODE=bad
+# Only the selector's exact line admits the copy: output that a command substitution would
+# forgive (a blank line after it, a NUL byte, no newline at its end) starts the shell stock.
+for mode in blank-line nul no-newline; do
+  if ! launch "$QT_PLUGIN_PATH" SELECT_MODE="$mode"; then
+    printf 'FAIL the launch admitted the copy for the selector output %s\n' "$mode" >&2
+    exit 1
+  fi
+done
 start=${EPOCHREALTIME/.}
 launch "$QT_PLUGIN_PATH" SELECT_MODE=hang
 end=${EPOCHREALTIME/.}
@@ -224,4 +235,4 @@ mkdir -- "$dropin.tmp"
 notifications_setup
 test ! -e "$dropin"
 rmdir -- "$dropin.tmp"
-printf 'PASS per-launch environment, stop step, fallback, foreign unit, dry-run, manager fencing and unit write failures\n'
+printf 'PASS per-launch environment, exact selector output, stop step, fallback, foreign unit, dry-run, manager fencing and unit write failures\n'
