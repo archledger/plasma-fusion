@@ -11,7 +11,7 @@ config=/usr/share/plasma-fusion/tools/device/fusion-config.sh
 # The fixture neither uses the host manager nor copies the plugin into HOME. Take the launch
 # command and its paths from the installed renderer, not a second implementation.
 # shellcheck source=/dev/null
-source <(sed -n -E '/^NOTIFICATIONS_(VENDOR|SELECTOR|ROOT|SHELL)=/p;
+source <(sed -n -E '/^NOTIFICATIONS_(VENDOR|SELECTOR|ROOT|SHELL|WATCH)=/p;
   /^notifications_unit_arg\(\) \{/,/^}/p;
   /^notifications_shell_dropin\(\) \{/,/^}/p' "$config")
 read -r digest _ < <(sha256sum "$NOTIFICATIONS_VENDOR")
