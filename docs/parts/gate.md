@@ -258,7 +258,8 @@ login check's package cache. The selector checks the installed Plasma version ag
 versions in the applet's build record and verifies a load before returning the private plugin
 path. Its own cached pass is tied to the RPM database, including its WAL if present, and the
 payload. An unsuccessful check returns no path and is not cached. A managed start whose
-admission cannot be recorded gets no path either: recovery acts only on a recorded admission.
+admission cannot be recorded, or recorded against the RPM database's stamp, gets no path either:
+recovery acts only on a recorded admission.
 
 When the optional selector is installed and the Fedora vendor unit is supported, setup writes
 `20-plasma-fusion-notifications.conf` for `plasma-plasmashell.service`. The drop-in leaves the
@@ -301,7 +302,9 @@ before the watcher starts. The unit's stop step (`ExecStopPost`, the watcher's `
 mode) then records the same verdict whenever systemd reports anything but a clean end in
 `SERVICE_RESULT`, so the automatic restart starts stock. The watcher records a start as
 settled once the service has an owner or the layout has no mapped applet; a crash after that,
-or a normal stop, records nothing.
+or a normal stop, records nothing. It looks for the service four times a second, so a crash
+in the first quarter second after the service appears can still count as early and keep the
+copy aside.
 
 ```
 ~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh status   # record, switched-off parts, last runs

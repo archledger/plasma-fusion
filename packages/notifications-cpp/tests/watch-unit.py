@@ -133,6 +133,16 @@ class WatcherTest(unittest.TestCase):
             self.assertNotEqual(refused.returncode, 0)
             self.assertEqual(refused.stdout, "")
 
+    def test_no_copy_for_a_managed_start_without_a_package_identity(self):
+        # Without the RPM database's stamp the selector neither checks a verdict nor records the
+        # admission, so recovery could not act for that start.
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = self.fixture(Path(tmp))
+            fx.db.unlink()
+            refused = subprocess.run(fx.launch, env=fx.env, capture_output=True, text=True, timeout=5)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertEqual(refused.stdout, "")
+
     @contextlib.contextmanager
     def fake_shell(self, fx, mapped, invocation=INVOCATION):
         """A process that maps MAPPED, standing in for the shell the unit started."""

@@ -171,9 +171,10 @@ if [[ $decision == checked-pass && -n $db && ! -v PF_GATE_FAKE_VERSIONS ]]; then
   fi
 fi
 
-if [[ -n $db && ! -v PF_GATE_FAKE_VERSIONS && ${INVOCATION_ID:-} =~ ^[a-f0-9]{32}$ ]]; then
-  # The watcher and the unit's stop step act only for a start whose admission is recorded.
-  if ! write_state "$state/admitted" "$INVOCATION_ID" "$package" "$plugin"; then
+if [[ ! -v PF_GATE_FAKE_VERSIONS && ${INVOCATION_ID:-} =~ ^[a-f0-9]{32}$ ]]; then
+  # The watcher and the unit's stop step act only for a start whose admission is recorded
+  # against the package identity, which needs the RPM database's stamp.
+  if [[ -z $db ]] || ! write_state "$state/admitted" "$INVOCATION_ID" "$package" "$plugin"; then
     decision='state-unavailable'
     exit 1
   fi
