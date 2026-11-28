@@ -39,6 +39,12 @@ CLIPBOARD_COMPONENT=org.plasmafusion.clipboard.desktop
 HERE=$(cd "$(dirname "$0")" && pwd)
 GATE_FILES=("$GATE_STUB_REL" systemd/user/plasma-fusion-gate-notify.service
   systemd/user/xdg-desktop-autostart.target.wants/plasma-fusion-gate-notify.service)
+NOTIFICATIONS_FILES=(
+  systemd/user/plasma-plasmashell.service.d/20-plasma-fusion-notifications.conf
+  systemd/user/plasma-fusion-notifications-notify.service
+  systemd/user/plasma-fusion-notifications-watch@.service
+  systemd/user/xdg-desktop-autostart.target.wants/plasma-fusion-notifications-notify.service
+)
 DRY=0 PICK=first-foreign BACKUP=
 while [ $# -gt 0 ]; do
   case $1 in
@@ -383,8 +389,37 @@ if ! grep -qx "present $GATE_STUB_REL" "$BACKUP/manifest"; then
   fi
 fi
 
+# 3c. The notification gate is scoped to the managed files. Old backups have no manifest rows
+# for them. The records describe a previous shell and package set, not settings to restore.
+NOTIFICATIONS_RELOAD=0
+if [ -e "$STATE/notifications" ] || [ -L "$STATE/notifications" ]; then NOTIFICATIONS_RELOAD=1; fi
+for path in "${NOTIFICATIONS_FILES[@]}"; do
+  if grep -xqF "present $path" "$BACKUP/manifest" || grep -xqF "absent $path" "$BACKUP/manifest" ||
+      [ -e "$CONFIG/$path" ] || [ -L "$CONFIG/$path" ]; then
+    NOTIFICATIONS_RELOAD=1
+  fi
+done
+if [ "$NOTIFICATIONS_RELOAD" = 1 ]; then
+  if [ "$DRY" = 0 ] && session_manager; then
+    systemctl --user stop plasma-fusion-notifications-notify.service \
+      'plasma-fusion-notifications-watch@*.service' 2>/dev/null || true
+  fi
+  for path in "${NOTIFICATIONS_FILES[@]}"; do
+    grep -xqF "present $path" "$BACKUP/manifest" && continue
+    if [ -e "$CONFIG/$path" ] || [ -L "$CONFIG/$path" ]; then
+      run rm -f -- "$CONFIG/$path"
+    fi
+  done
+  if [ -e "$STATE/notifications" ] || [ -L "$STATE/notifications" ]; then
+    run rm -rf -- "$STATE/notifications"
+  fi
+fi
+
 # 4. Reload.
 if [ "$DRY" = 0 ]; then
+  if [ "$NOTIFICATIONS_RELOAD" = 1 ] && session_manager; then
+    systemctl --user daemon-reload 2>/dev/null || true
+  fi
   if [ "$GATE_REMOVED" = 1 ] || grep -q "plasma-fusion-gate-notify.service" "$BACKUP/manifest"; then
     systemctl --user daemon-reload 2>/dev/null || true
   fi

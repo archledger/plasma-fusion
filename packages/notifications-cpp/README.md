@@ -5,9 +5,10 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 # Plasma Fusion notification applet
 
-A Fusion-built copy of Plasma's own notification applet. It is built and tested here. Whether a
-machine uses it in place of the stock plugin will be decided by a version gate that is not written
-yet (the version rule below); this package alone enables nothing.
+A Fusion-built copy of Plasma's own notification applet. The optional Fedora
+`plasma-fusion-notifications` package installs it outside Qt's ordinary plugin path. The startup
+gate decides whether a managed plasmashell launch uses it in place of stock. Installing the
+package alone does not change a user's desktop; apply it with `plasma-fusion setup`.
 
 ## Origin
 
@@ -19,7 +20,11 @@ Every file keeps its original copyright lines and licence. Most files are
 `GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL`; `fileinfo.*`, `filemenu.*`, `jobaggregator.*` and
 `thumbnailer.*` are `LGPL-2.1-or-later`; `components/DraggableFileArea.qml` and
 `components/ThumbnailStrip.qml` are `LGPL-2.0-or-later`. The licence texts are in `LICENSES/` here
-and in the repository's root.
+and in the repository's root. The Fedora RPM includes the current publisher copies of
+[GPL 2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt),
+[LGPL 2.0](https://www.gnu.org/licenses/old-licenses/lgpl-2.0.txt) and
+[LGPL 2.1](https://github.com/gpg/libgcrypt/blob/master/COPYING.LIB), without the historical
+postal address. The source notices and license expressions are unchanged.
 
 `Messages.sh`, KDE's translation-extraction script, is not copied: this repository has no
 translation catalogue step, so the name of the new shortcut is not translated.
@@ -68,8 +73,10 @@ Plasma Fusion changes (each marked "Plasma Fusion" in the file):
 
 The copy may stand in for the stock plugin only while the installed `plasma-workspace` version is
 exactly the one it was built from, `6.8.3`. The wrapper build names that version in its
-`built-against` record, beside the Plasma version the build found and Qt's. Nothing in this
-package enforces the rule or enables the copy on a machine.
+`built-against` record, beside the Plasma version the build found and Qt's. The installed
+selector, `plasma-fusion-notifications-select`, applies the rule at each managed plasmashell
+start once `plasma-fusion setup` has enabled the gate; installing the package alone puts
+nothing in front of the stock applet.
 
 ## Updating the copy
 

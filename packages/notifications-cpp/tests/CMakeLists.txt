@@ -14,6 +14,14 @@ target_link_libraries(notificationsplugintest PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME notifications-plugin COMMAND notificationsplugintest)
 set_tests_properties(notifications-plugin PROPERTIES TIMEOUT 30)
 
+add_test(NAME notifications-plugin-check-cli
+    COMMAND "${CMAKE_COMMAND}"
+        "-DCHECKER=$<TARGET_FILE:plasma-fusion-notifications-check>"
+        "-DPLUGIN=$<TARGET_FILE:org.kde.plasma.notifications>"
+        "-DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/check-cli"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/checkcli.cmake")
+set_tests_properties(notifications-plugin-check-cli PROPERTIES TIMEOUT 30)
+
 # The directory guard as a unit test of its CMake functions (../cmake/PluginDirGuard.cmake), on a
 # tree of directories and symbolic links and behind the wrapper's own lines, which it configures
 # fifteen times in a small project without a compiler: it needs no compiler and no packages.

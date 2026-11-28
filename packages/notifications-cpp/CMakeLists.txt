@@ -48,6 +48,10 @@ find_package(LibNotificationManager 6.8 REQUIRED CONFIG)
 find_package(PlasmaWaylandProtocols 1.23 REQUIRED)
 find_package(Wayland REQUIRED COMPONENTS Client)
 
+add_executable(plasma-fusion-notifications-check src/checkmain.cpp src/plugincheck.cpp)
+target_link_libraries(plasma-fusion-notifications-check PRIVATE Qt6::Core)
+install(TARGETS plasma-fusion-notifications-check DESTINATION "${KDE_INSTALL_LIBEXECDIR}/plasma-fusion")
+
 # plasma_add_applet installs into ${KDE_INSTALL_PLUGINDIR}/plasma/applets. The copy must never land
 # on the stock plugin's path there: it goes under a directory Plasma Fusion owns, and the build
 # stops unless that directory is an absolute path that, symbolic links resolved, is neither Qt's
@@ -62,6 +66,19 @@ include(cmake/PluginDirGuard.cmake)
 pf_check_plugin_dir("${PF_NOTIFICATIONS_PLUGIN_DIR}" "${PF_QT_PLUGIN_DIR}" _pf_plugin_dir
                     "${KDE_INSTALL_FULL_PLUGINDIR}")
 set(KDE_INSTALL_PLUGINDIR "${_pf_plugin_dir}")
+
+set(_gate_dir "${CMAKE_CURRENT_BINARY_DIR}/notifications-gate")
+configure_file(gate/common.sh.in "${_gate_dir}/plasma-fusion-notifications-common.sh" @ONLY)
+configure_file(gate/plasma-fusion-notifications-select.in "${_gate_dir}/plasma-fusion-notifications-select"
+    @ONLY FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+configure_file(gate/plasma-fusion-notifications-notify.in "${_gate_dir}/plasma-fusion-notifications-notify"
+    @ONLY FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+configure_file(gate/plasma-fusion-notifications-watch.in "${_gate_dir}/plasma-fusion-notifications-watch"
+    @ONLY FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+install(FILES "${_gate_dir}/plasma-fusion-notifications-common.sh" DESTINATION "${KDE_INSTALL_LIBEXECDIR}/plasma-fusion")
+install(PROGRAMS "${_gate_dir}/plasma-fusion-notifications-select" "${_gate_dir}/plasma-fusion-notifications-notify"
+    "${_gate_dir}/plasma-fusion-notifications-watch"
+    DESTINATION "${KDE_INSTALL_LIBEXECDIR}/plasma-fusion")
 
 add_subdirectory(src)
 

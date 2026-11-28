@@ -1,0 +1,240 @@
+#!/usr/bin/python3
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+"""Recover only the managed plasmashell invocation that loaded the broken copy.
+
+With --stopped, run by the unit after its process ended, keep the copy aside when a start it was
+admitted to ended abnormally before its notification service appeared.
+"""
+
+import fcntl
+import os
+import re
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+UNIT = "plasma-plasmashell.service"
+NOTIFICATIONS = "org.freedesktop.Notifications"
+
+
+def output(*argv):
+    return subprocess.check_output(argv, timeout=1, encoding="utf-8", stderr=subprocess.DEVNULL).strip()
+
+
+def current_shell(invocation):
+    fields = dict(
+        line.split("=", 1)
+        for line in output(
+            "systemctl", "--user", "show", "--all",
+            "-p", "InvocationID", "-p", "MainPID", "-p", "ActiveState",
+            "-p", "SubState", "-p", "Job", "-p", "Restart", UNIT,
+        ).splitlines()
+    )
+    if (
+        fields["InvocationID"] != invocation
+        or fields["ActiveState"] != "active"
+        or fields["SubState"] != "running"
+        or fields["Job"] not in ("", "0")
+        or fields["Restart"] != "on-failure"
+    ):
+        return None
+    pid = int(fields["MainPID"])
+    if pid > 1 and dbus("GetConnectionUnixProcessID", "org.kde.plasmashell") == f"u {pid}":
+        return pid
+    return None
+
+
+def dbus(method, name):
+    return output(
+        "busctl", "--user", "--timeout=1s", "call",
+        "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", method, "s", name,
+    )
+
+
+def can_terminate(proc):
+    fields = dict(line.split(":", 1) for line in (proc / "status").read_text().splitlines())
+    bit = 1 << (signal.SIGUSR2 - 1)
+    return not any(int(fields[name], 16) & bit for name in ("SigIgn", "SigCgt", "SigBlk"))
+
+
+def package_key():
+    common = Path(__file__).with_name("plasma-fusion-notifications-common.sh")
+    return output(
+        "/bin/bash", "-c",
+        'source "$1"; db=$(rpm_stamp) && payload=$(payload_stamp) && package_key "$db" "$payload"',
+        "notifications-watch", str(common),
+    )
+
+
+def publish(state, name, text):
+    """Replace STATE/NAME with TEXT in one step."""
+    fd, temp = tempfile.mkstemp(prefix=f".{name}.", dir=state)
+    try:
+        with os.fdopen(fd, "w", encoding="ascii") as file:
+            file.write(text)
+        os.replace(temp, state / name)
+    finally:
+        Path(temp).unlink(missing_ok=True)
+
+
+def settle(state, invocation):
+    """Record that this start no longer depends on the copy coming up: an abnormal end after this
+    point is not the copy's startup failure."""
+    try:
+        # One record per start: a watcher that outlives its start must not replace a later one's.
+        publish(state, f"settled.{invocation}", f"{invocation}\n")
+    except OSError as error:
+        print(f"Could not record the settled start: {error}", file=sys.stderr)
+
+
+def stopped(state, invocation, result):
+    """Keep the copy aside after an admitted start that ended abnormally before it settled."""
+    settled = (state / f"settled.{invocation}").is_file()
+    try:
+        if result != "success" and not settled:
+            keep_aside(state, invocation, result)
+    finally:
+        # One shell of the unit runs at a time, so every record left belongs to a start that ended.
+        for record in state.glob("settled.*"):
+            try:
+                record.unlink()
+            except OSError:
+                pass
+
+
+def keep_aside(state, invocation, result):
+    admitted = (state / "admitted").read_text().splitlines()
+    if len(admitted) != 3 or admitted[0] != invocation or not re.fullmatch(r"[a-f0-9]{64}", admitted[1]):
+        return
+    verdict = state / "qml-failed"
+    with (state / "recovery.lock").open("a") as lock:
+        # The selector and the watcher hold this lock only briefly.
+        deadline = time.monotonic() + 2
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.05)
+        if verdict.is_dir():
+            return
+        try:
+            if verdict.read_text().splitlines()[:1] == [admitted[1]]:
+                return
+        except FileNotFoundError:
+            pass
+        publish(state, "qml-failed", f"{admitted[1]}\n{invocation}\n")
+    print(f"The managed shell ended ({result}) before its notification service appeared; "
+          "the stock applet stays in front until the package changes", file=sys.stderr)
+
+
+def restart_with_verdict(state, admitted, pid, pidfd):
+    invocation, key, _ = admitted
+    verdict = state / "qml-failed"
+    with (state / "recovery.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if verdict.is_dir():
+            return
+        fd, name = tempfile.mkstemp(prefix=".qml-failed.", dir=state)
+        try:
+            with os.fdopen(fd, "w", encoding="ascii") as file:
+                file.write(f"{key}\n{invocation}\n")
+            if (
+                (state / "admitted").read_text().splitlines() != admitted
+                or current_shell(invocation) != pid
+                or dbus("NameHasOwner", NOTIFICATIONS) != "b false"
+            ):
+                return
+            # Commit only a signal that was sent. The selector shares this lock, so a restart
+            # cannot read the verdict between signaling the old process and publishing the record.
+            signal.pidfd_send_signal(pidfd, signal.SIGUSR2)
+            os.replace(name, verdict)
+            print("Restarting the managed shell with stock notifications", file=sys.stderr)
+        finally:
+            Path(name).unlink(missing_ok=True)
+
+
+def recover(state, invocation):
+    admitted_file = state / "admitted"
+    admitted = admitted_file.read_text().splitlines()
+    if len(admitted) != 3 or admitted[0] != invocation:
+        return
+    _, key, plugin = admitted
+    if not re.fullmatch(r"[a-f0-9]{64}", key) or not Path(plugin).is_absolute():
+        return
+    pid = current_shell(invocation)
+    if pid is None:
+        return
+    proc = Path(f"/proc/{pid}")
+    fd = os.pidfd_open(pid)
+    try:
+        if proc.stat().st_uid != os.geteuid() or f"INVOCATION_ID={invocation}".encode() not in (
+            proc / "environ"
+        ).read_bytes().split(b"\0"):
+            return
+
+        seconds = 12.0
+        if os.environ.get("PF_GATE_ROOT") and "PF_NOTIFICATIONS_WATCH_SECONDS" in os.environ:
+            seconds = max(0.1, min(seconds, float(os.environ["PF_NOTIFICATIONS_WATCH_SECONDS"])))
+        deadline = time.monotonic() + seconds
+        while True:
+            owner_exists = dbus("NameHasOwner", NOTIFICATIONS)
+            if owner_exists != "b false":
+                if owner_exists == "b true":
+                    # The service is up, from this shell or from another owner (inconclusive).
+                    settle(state, invocation)
+                    if dbus("GetConnectionUnixProcessID", NOTIFICATIONS) != f"u {pid}":
+                        print("Notification service has a different owner; no recovery attempted", file=sys.stderr)
+                return
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(min(0.25, max(0, deadline - time.monotonic())))
+
+        mapped = (proc / "maps").read_text().splitlines()
+        if not any(line.split(None, 5)[-1] == plugin for line in mapped):
+            # A layout without the applet: nothing of the copy runs in this shell.
+            settle(state, invocation)
+            return
+        if (
+            not can_terminate(proc)
+            or package_key() != key
+            or admitted_file.read_text().splitlines() != admitted
+            or current_shell(invocation) != pid
+            or dbus("NameHasOwner", NOTIFICATIONS) != "b false"
+        ):
+            return
+        restart_with_verdict(state, admitted, pid, fd)
+    finally:
+        os.close(fd)
+
+
+def main():
+    state = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "plasma-fusion/notifications"
+    if sys.argv[1:] == ["--stopped"]:
+        invocation = os.environ.get("INVOCATION_ID", "")
+        result = os.environ.get("SERVICE_RESULT", "")
+        if not re.fullmatch(r"[a-f0-9]{32}", invocation) or not re.fullmatch(r"[a-z-]+", result):
+            return 2
+        action, args = stopped, (state, invocation, result)
+    elif len(sys.argv) == 2 and re.fullmatch(r"[a-f0-9]{32}", sys.argv[1]):
+        action, args = recover, (state, sys.argv[1])
+    else:
+        return 2
+    try:
+        action(*args)
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
+        print(f"Notification recovery skipped: {error}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

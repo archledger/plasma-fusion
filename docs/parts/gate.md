@@ -252,6 +252,60 @@ not saved as a scheme, workspaces and shortcuts. `fusion-restore.sh` is the full
 
 ## Commands
 
+The notification applet has a separate startup selector. It calls this engine's read-only
+`theme` mode to share the existing effective-theme rule; it neither runs `deploy` nor uses the
+login check's package cache. The selector checks the installed Plasma version against both
+versions in the applet's build record and verifies a load before returning the private plugin
+path. Its own cached pass is tied to the RPM database, including its WAL if present, and the
+payload. An unsuccessful check returns no path and is not cached. A managed start whose
+admission cannot be recorded, or recorded against the RPM database's stamp, gets no path either:
+recovery acts only on a recorded admission.
+
+When the optional selector is installed and the Fedora vendor unit is supported, setup writes
+`20-plasma-fusion-notifications.conf` for `plasma-plasmashell.service`. The drop-in leaves the
+vendor file alone. It runs the selector within five seconds and prepends the private path only
+for an admitted shell launch, never for the user manager or for a direct launch. If the on-disk
+unit changes, admission stops; run setup again to remove or reconcile the override. Package
+delivery and restore are qualified separately. If the recovery or notice unit cannot be
+written or enabled, or the drop-in itself cannot be rewritten, setup leaves the drop-in out, and
+removes an installed one, so the shell starts stock.
+
+Setup checks both the session manager's loaded unit and the files in its unit search path.
+Without a matching manager, it leaves the notification override alone rather than guessing
+which launch command to replace.
+
+The selector keeps a separate `notifications/notify` queue under the Plasma Fusion state
+directory. It queues one notice when an admitted copy is followed by a version or load failure.
+The notifier waits for the desktop notification service and removes the record only after a
+successful reply, without clearing a newer notice queued during delivery. A missing package
+or different theme is silent. The login check's queue is independent.
+
+Device and profile backups keep the managed unit configuration, including the notifier's
+relative wants link, but not the running shell's admission or recovery verdict. Profile archives
+store those files at the same member names when `XDG_CONFIG_HOME` is customized; a directory
+of the default tree that such an archive restores keeps that tree's own notification entries
+as they were, or is left as it is when they cannot be kept. Restoring an older backup removes
+the managed units and resets the selector's own state before starting the shell. Unrelated unit
+files and shortcut bindings are left alone.
+
+The post-start watcher checks that the selected process mapped the private applet and waits
+up to twelve seconds for its notification service. An absent applet or another service owner
+does not trigger recovery. When the mapped copy leaves the name unowned, the watcher records
+the failed payload after signaling the original shell and selects stock on the next start.
+The watcher signals only the original managed
+process via a pidfd and relies on the vendor unit's restart-on-failure policy. This is an
+early, abnormal exit of the broken shell, not a normal logout. The selector tries the copy
+again after the RPM database or payload changes.
+
+An admitted shell can also end on its own before its notification service appears, possibly
+before the watcher starts. The unit's stop step (`ExecStopPost`, the watcher's `--stopped`
+mode) then records the same verdict whenever systemd reports anything but a clean end in
+`SERVICE_RESULT`, so the automatic restart starts stock. The watcher records a start as
+settled once the service has an owner or the layout has no mapped applet; a crash after that,
+or a normal stop, records nothing. It looks for the service four times a second, so a crash
+in the first quarter second after the service appears can still count as early and keep the
+copy aside.
+
 ```
 ~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh status   # record, switched-off parts, last runs
 ~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh check    # what the next login would do

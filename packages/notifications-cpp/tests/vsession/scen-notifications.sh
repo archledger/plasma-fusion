@@ -278,7 +278,10 @@ wait_for_name org.freedesktop.Notifications
 pid=$(qdbus org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.GetConnectionUnixProcessID org.kde.plasmashell)
 expect "the notification server is plasmashell's" \
     "$(qdbus org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.GetConnectionUnixProcessID org.freedesktop.Notifications)" "$pid"
-applet_maps=$(awk '$NF ~ /\/org\.kde\.plasma\.notifications\.so$/ {print $NF}' "/proc/$pid/maps" | sort -u)
+applet_maps=$(awk '/\/org\.kde\.plasma\.notifications\.so( \(deleted\))?$/ {
+    sub(/^([^[:space:]]+[[:space:]]+){5}/, "")
+    print
+}' "/proc/$pid/maps" | sort -u)
 # Exactly one applet is mapped, and it is the installed one: a file under /usr that belongs to a
 # package of plasma-workspace (on Fedora 44, plasma-workspace-libs), not the staged copy nor a
 # copy put anywhere else. (An empty map is one blank line, which a count of the lines that are
@@ -296,7 +299,25 @@ stock_applet_mapped() {
     done <<<"$applet_maps"
     [ "$count" = 1 ]
 }
-if [[ "$mode" == stock ]]; then
+if [[ -f "$HOME/pf-notif/rpm" ]]; then
+    libdir=$(rpm --eval '%{_libdir}')
+    if [[ "$mode" == stock ]]; then
+        owner=plasma-workspace-libs
+        want=$libdir/qt6/plugins/plasma/applets/org.kde.plasma.notifications.so
+    else
+        owner=plasma-fusion-notifications
+        want=$libdir/libexec/plasma-fusion/qt6/plugins/plasma/applets/org.kde.plasma.notifications.so
+    fi
+    expect "only the expected RPM applet is mapped" "$applet_maps" "$want"
+    expect "the mapped applet belongs to the expected package" \
+        "$(rpm -qf --qf '%{NAME}' "$want" 2>/dev/null || true)" "$owner"
+    algorithm=$(rpm -q --qf '%{FILEDIGESTALGO}' "$owner" 2>/dev/null || true)
+    digest=$(rpm -q --qf '[%{FILENAMES}\t%{FILEDIGESTS}\n]' "$owner" 2>/dev/null |
+        awk -F '\t' -v path="$want" '$1 == path {print $2}')
+    actual=$(sha256sum "$want" | cut -c1-64)
+    expect "the RPM recorded SHA-256 digests" "$algorithm" 8
+    expect "the installed applet matches the RPM digest" "$actual" "$digest"
+elif [[ "$mode" == stock ]]; then
     expect "the installed applet is mapped, not a copy" "$(stock_applet_mapped && echo yes || echo no)" yes
 else
     expect "the copy is mapped" "$applet_maps" "$HOME/pf-plugins/plasma/applets/org.kde.plasma.notifications.so"

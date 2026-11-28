@@ -94,6 +94,13 @@ jobs:
       - name: Login check unit tests
         run: tools/device/tests/gate-unit.sh build/gate
 
+      - name: Optional notification gate setup and restore
+        run: |
+          set -euo pipefail
+          bash tools/tests/packages/fedora.sh --spec-only
+          bash tools/device/tests/notifications-setup-unit.sh build/notifications-setup
+          bash tools/device/tests/notifications-restore-unit.sh build/notifications-restore
+
       - name: SDDM login screen apply and restore (a system tree in a temporary directory)
         run: tools/system/tests/greeter-sddm-unit.sh build/greeter-sddm
 

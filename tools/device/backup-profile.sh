@@ -32,6 +32,8 @@ CONFIG_FILES=(
   plasmafusionrc plasmafusion-placementrc gtkrc gtkrc-2.0 Trolltech.conf xsettingsd
   systemd/user/plasma-fusion-gate-notify.service systemd/user/plasma-fusion-powerfx.service
   systemd/user/plasma-fusion-pen-garage.service
+  systemd/user/plasma-plasmashell.service.d/20-plasma-fusion-notifications.conf
+  systemd/user/plasma-fusion-notifications-notify.service systemd/user/plasma-fusion-notifications-watch@.service
 )
 CONFIG_DIRS=(
   kdedefaults gtk-3.0 gtk-4.0 fontconfig libwacom systemd/user/plasma-kwin_wayland.service.d
@@ -43,6 +45,12 @@ DATA_DIRS=(
   kwin kxmlgui5 kglobalaccel plasma-fusion
 )
 HOME_DIRS=(.local/libexec/plasma-fusion)
+NOTIFICATIONS_FILES=(
+  systemd/user/plasma-plasmashell.service.d/20-plasma-fusion-notifications.conf
+  systemd/user/plasma-fusion-notifications-notify.service
+  systemd/user/plasma-fusion-notifications-watch@.service
+  systemd/user/xdg-desktop-autostart.target.wants/plasma-fusion-notifications-notify.service
+)
 
 # The session's display, from the plasmashell on this user's session bus (as fusion-config.sh
 # does), so kscreen-doctor can ask the compositor. Never over a display that is not there.
@@ -70,18 +78,41 @@ display_reachable() {
 }
 
 cd "$HOME"
-list=()
-for f in "${CONFIG_FILES[@]}"; do [ -e ".config/$f" ] && list+=(".config/$f"); done
+config=${XDG_CONFIG_HOME:-$HOME/.config}
+list=() custom=() exclude=()
+for f in "${CONFIG_FILES[@]}"; do
+  if [[ $config != "$HOME/.config" && " ${NOTIFICATIONS_FILES[*]} " == *" $f "* ]]; then continue; fi
+  [ -e ".config/$f" ] && list+=(".config/$f")
+done
 for d in "${CONFIG_DIRS[@]}"; do [ -e ".config/$d" ] && list+=(".config/$d"); done
 for d in "${DATA_DIRS[@]}"; do [ -e ".local/share/$d" ] && list+=(".local/share/$d"); done
 for d in "${HOME_DIRS[@]}"; do [ -e "$d" ] && list+=("$d"); done
 [ -e .gtkrc-2.0 ] && list+=(.gtkrc-2.0)
+if [[ $config != "$HOME/.config" ]]; then
+  for f in "${NOTIFICATIONS_FILES[@]}"; do
+    exclude+=("--exclude=.config/$f")
+    [[ -e $config/$f || -L $config/$f ]] || continue
+    mkdir -p -- "$WORK/xdg/.config/${f%/*}"
+    cp -a -- "$config/$f" "$WORK/xdg/.config/$f"
+    custom+=(".config/$f")
+  done
+fi
 
-printf '%s\n' "${list[@]}" >"$WORK/paths.txt"
+printf '%s\n' "${list[@]}" "${custom[@]}" >"$WORK/paths.txt"
 if [ ${#list[@]} -gt 0 ]; then
-  find "${list[@]}" -type f -print0 | sort -z | xargs -0 -r sha256sum >"$WORK/sha256sums.txt"
+  find "${list[@]}" -type f -print0 | sort -z |
+    while IFS= read -r -d '' f; do
+      if [[ $config != "$HOME/.config" && " ${NOTIFICATIONS_FILES[*]} " == *" ${f#.config/} "* ]]; then continue; fi
+      printf '%s\0' "$f"
+    done | xargs -0 -r sha256sum >"$WORK/sha256sums.txt"
 fi
 [ -e "$WORK/sha256sums.txt" ] || : >"$WORK/sha256sums.txt"
+if ((${#custom[@]})); then
+  (
+    cd "$WORK/xdg"
+    find "${custom[@]}" -type f -print0 | sort -z | xargs -0 -r sha256sum
+  ) >>"$WORK/sha256sums.txt"
+fi
 
 if session_display && display_reachable && command -v kscreen-doctor >/dev/null; then
   if ! timeout 15 kscreen-doctor -j >"$WORK/kscreen.json" 2>"$WORK/kscreen.err" || [ ! -s "$WORK/kscreen.json" ]; then
@@ -115,5 +146,12 @@ esac
   echo "plasma=$plasma"
 } >"$WORK/info.txt"
 
-tar -czf "$DEST/profile-$STAMP.tar.gz" -C "$HOME" "${list[@]}" -C "$WORK" paths.txt sha256sums.txt kscreen.json info.txt
+if ((${#custom[@]})); then
+  # Exclusions for the default tree must not apply to the canonicalized custom members.
+  tar -czf "$DEST/profile-$STAMP.tar.gz" -C "$WORK/xdg" "${custom[@]}" \
+    -C "$HOME" "${exclude[@]}" "${list[@]}" -C "$WORK" paths.txt sha256sums.txt kscreen.json info.txt
+else
+  tar -czf "$DEST/profile-$STAMP.tar.gz" "${exclude[@]}" -C "$HOME" "${list[@]}" \
+    -C "$WORK" paths.txt sha256sums.txt kscreen.json info.txt
+fi
 echo "$DEST/profile-$STAMP.tar.gz"

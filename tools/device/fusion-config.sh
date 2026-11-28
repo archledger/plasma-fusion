@@ -222,6 +222,19 @@ GATE_UNIT_NAME=plasma-fusion-gate-notify.service
 GATE_STUB_REL=plasma-workspace/env/plasma-fusion-gate.sh
 GATE_UNIT_REL=systemd/user/$GATE_UNIT_NAME
 GATE_WANTS_REL=systemd/user/xdg-desktop-autostart.target.wants/$GATE_UNIT_NAME
+NOTIFICATIONS_VENDOR=/usr/lib/systemd/user/plasma-plasmashell.service
+NOTIFICATIONS_SHELL=/usr/bin/plasmashell
+NOTIFICATIONS_SELECTOR=/usr/libexec/plasma-fusion/plasma-fusion-notifications-select
+NOTIFICATIONS_NOTIFY=/usr/libexec/plasma-fusion/plasma-fusion-notifications-notify
+NOTIFICATIONS_WATCH=/usr/libexec/plasma-fusion/plasma-fusion-notifications-watch
+NOTIFICATIONS_ROOT=/usr/lib64/libexec/plasma-fusion/qt6/plugins
+NOTIFICATIONS_DROPIN_REL=systemd/user/plasma-plasmashell.service.d/20-plasma-fusion-notifications.conf
+NOTIFICATIONS_NOTIFY_NAME=plasma-fusion-notifications-notify.service
+NOTIFICATIONS_NOTIFY_REL=systemd/user/$NOTIFICATIONS_NOTIFY_NAME
+NOTIFICATIONS_WATCH_REL=systemd/user/plasma-fusion-notifications-watch@.service
+NOTIFICATIONS_WANTS_REL=systemd/user/xdg-desktop-autostart.target.wants/$NOTIFICATIONS_NOTIFY_NAME
+NOTIFICATIONS_FILES=("$NOTIFICATIONS_DROPIN_REL" "$NOTIFICATIONS_NOTIFY_REL" "$NOTIFICATIONS_WATCH_REL"
+  "$NOTIFICATIONS_WANTS_REL")
 SESSION_WANTS_REL=systemd/user/graphical-session.target.wants
 SESSION_ENV_REL=plasma-workspace/env/plasma-fusion-session.sh
 
@@ -551,7 +564,7 @@ BACKUP_FILES=(
   gtk-3.0/settings.ini gtk-4.0/settings.ini xsettingsd/xsettingsd.conf Trolltech.conf
   gtk-3.0/gtk.css gtk-4.0/gtk.css gtk-3.0/plasma-fusion.css gtk-4.0/plasma-fusion.css
   systemd/user/plasma-kwin_wayland.service.d/plasma-fusion-lockscreen.conf
-  "$GATE_STUB_REL" "$GATE_UNIT_REL" "$GATE_WANTS_REL"
+  "$GATE_STUB_REL" "$GATE_UNIT_REL" "$GATE_WANTS_REL" "${NOTIFICATIONS_FILES[@]}"
   fontconfig/fonts.conf "$SESSION_ENV_REL"
   systemd/user/plasma-fusion-powerfx.service "$SESSION_WANTS_REL/plasma-fusion-powerfx.service"
   systemd/user/plasma-fusion-pen-garage.service "$SESSION_WANTS_REL/plasma-fusion-pen-garage.service"
@@ -580,7 +593,7 @@ make_backup() {
   mkdir -p "$BACKUP/config"
   : >"$BACKUP/manifest"
   for f in "${BACKUP_FILES[@]}" "${BACKUP_DIRS[@]}"; do
-    if [ -e "$CONFIG/$f" ]; then
+    if [ -e "$CONFIG/$f" ] || [ -L "$CONFIG/$f" ]; then
       mkdir -p "$BACKUP/config/$(dirname "$f")"
       cp -a "$CONFIG/$f" "$BACKUP/config/$f"
       echo "present $f" >>"$BACKUP/manifest"
@@ -1576,7 +1589,8 @@ PY
   done < <(find "$src" -type f -print0 | sort -z)
 }
 
-# Write a small text file when its content differs. Returns 0 when it was (or would be) written.
+# Write a small text file when its content differs. Returns 0 when it was (or would be) written,
+# 1 when it is already so, 2 when the write failed.
 install_text() { # $1 path, $2 content, $3 mode (default 0644)
   local mode=${3:-0644}
   if [ -f "$1" ] && [ "$(cat "$1")" = "$2" ]; then
@@ -1593,7 +1607,7 @@ install_text() { # $1 path, $2 content, $3 mode (default 0644)
   CHANGES=$((CHANGES + 1))
   [ "$DRY" = 1 ] && return 0
   mkdir -p "$(dirname "$1")"
-  printf '%s\n' "$2" >"$1.tmp" && chmod "$mode" "$1.tmp" && mv -f "$1.tmp" "$1"
+  printf '%s\n' "$2" >"$1.tmp" && chmod "$mode" "$1.tmp" && mv -f "$1.tmp" "$1" || return 2
 }
 
 # True when the systemd user manager on the other end of `systemctl --user` belongs to this
@@ -3016,6 +3030,180 @@ else
     note "warning: the login check could not record the installed versions; the next login uses the safe fallback"
   fi
 fi
+
+notifications_unit_arg() {
+  local value=$1
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//%/%%}
+  printf '"%s"' "$value"
+}
+
+notifications_shell_dropin() {
+  local digest=$1 command post
+  command='vendor=$1; expected=$2; selector=$3; root=$4; shell=$5; '
+  # Do not leak a stale exact entry if the manager has it from an earlier session setting.
+  command+='if [[ -v QT_PLUGIN_PATH ]]; then paths=:$QT_PLUGIN_PATH:; '
+  command+='while [[ $paths == *":$root:"* ]]; do paths=${paths/":$root:"/:}; done; '
+  command+='paths=${paths#:}; export QT_PLUGIN_PATH=${paths%:}; fi; '
+  command+='if read -r actual _ < <(/usr/bin/sha256sum -- "$vendor") && [[ $actual == "$expected" ]] '
+  command+='&& selected=$({ /usr/bin/timeout -k .2 4.8 "$selector"; } 2>/dev/null) '
+  command+='&& [[ $selected == "$root" ]]; then export QT_PLUGIN_PATH=$root${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}; fi; '
+  command+='exec "$shell" --no-respawn'
+
+  printf '[Service]\nExecStart=\nExecStart=:/bin/bash -c %s -- %s %s %s %s %s\n' \
+    "$(notifications_unit_arg "$command")" "$(notifications_unit_arg "$NOTIFICATIONS_VENDOR")" \
+    "$(notifications_unit_arg "$digest")" "$(notifications_unit_arg "$NOTIFICATIONS_SELECTOR")" \
+    "$(notifications_unit_arg "$NOTIFICATIONS_ROOT")" "$(notifications_unit_arg "$NOTIFICATIONS_SHELL")"
+
+  post='[[ ${INVOCATION_ID:-} =~ ^[a-f0-9]{32}$ ]] || exit 0; '
+  post+='state=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion/notifications; '
+  post+='read -r admitted <"$state/admitted" && [[ $admitted == "$INVOCATION_ID" ]] || exit 0; '
+  post+='exec /usr/bin/timeout -k .1 .5 /usr/bin/systemctl --user start --no-block '
+  post+='"plasma-fusion-notifications-watch@${INVOCATION_ID}.service"'
+  printf 'ExecStartPost=-:/bin/bash -c %s\n' "$(notifications_unit_arg "$post")"
+  # Runs after every end of the process, also one that came before ExecStartPost: an admitted
+  # start that ended abnormally before its notification service appeared keeps the copy aside.
+  printf 'ExecStopPost=-%s --stopped\n' "$(notifications_unit_arg "$NOTIFICATIONS_WATCH")"
+}
+
+notifications_vendor_supported() {
+  local effective dropins unit_paths dir entry kind
+  local stock_dropin=/usr/lib/systemd/user/service.d/10-timeout-abort.conf
+  local managed=$CONFIG/$NOTIFICATIONS_DROPIN_REL
+  [[ -f $NOTIFICATIONS_VENDOR ]] || return 1
+  [[ $(grep '^ExecStart=' "$NOTIFICATIONS_VENDOR") == 'ExecStart=/usr/bin/plasmashell --no-respawn' &&
+     $(grep '^Type=' "$NOTIFICATIONS_VENDOR") == Type=dbus &&
+     $(grep '^BusName=' "$NOTIFICATIONS_VENDOR") == BusName=org.kde.plasmashell &&
+     $(grep '^Restart=' "$NOTIFICATIONS_VENDOR") == Restart=on-failure &&
+     $(grep '^TimeoutSec=' "$NOTIFICATIONS_VENDOR") == TimeoutSec=40sec ]] || return 1
+  effective=$(systemctl --user show -p FragmentPath --value plasma-plasmashell.service) || return 1
+  [[ $effective == "$NOTIFICATIONS_VENDOR" ]] || return 1
+  dropins=$(systemctl --user show -p DropInPaths --value plasma-plasmashell.service) || return 1
+  case $dropins in
+    '' | "$stock_dropin" | "$managed" | "$stock_dropin $managed" | "$managed $stock_dropin") ;;
+    *) return 1 ;;
+  esac
+
+  # The manager's loaded FragmentPath/DropInPaths can lag the files until a reload. Check its
+  # actual search paths too, including dash-prefix and type-wide drop-ins.
+  unit_paths=$(busctl --user --timeout=1s --json=short get-property org.freedesktop.systemd1 \
+    /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager UnitPath |
+    python3 -c 'import json,sys
+paths = json.load(sys.stdin)["data"]
+assert paths and all(isinstance(p,str) and p.startswith("/") and "\n" not in p for p in paths)
+print(*paths, sep="\n")') || return 1
+  while IFS= read -r dir; do
+    entry=$dir/plasma-plasmashell.service
+    if [[ $entry != "$NOTIFICATIONS_VENDOR" && ( -e $entry || -L $entry ) ]]; then return 1; fi
+    for kind in service.d plasma-.service.d plasma-plasmashell.service.d; do
+      for entry in "$dir/$kind/"*.conf; do
+        [[ -e $entry || -L $entry ]] || continue
+        [[ $entry == "$stock_dropin" || $entry == "$managed" ]] || return 1
+      done
+    done
+  done <<<"$unit_paths"
+}
+
+notifications_service_unit() {
+  case $1 in
+    notify)
+      cat <<'EOF'
+[Unit]
+Description=Plasma Fusion notification applet fallback notice
+After=graphical-session.target plasma-workspace.target
+PartOf=graphical-session.target
+
+[Service]
+Type=exec
+RuntimeMaxSec=90s
+NoNewPrivileges=yes
+EOF
+      printf 'ExecStart=%s\n' "$(notifications_unit_arg "$NOTIFICATIONS_NOTIFY")"
+      ;;
+    watch)
+      cat <<'EOF'
+[Unit]
+Description=Plasma Fusion notification applet recovery
+After=plasma-plasmashell.service
+PartOf=graphical-session.target
+
+[Service]
+Type=exec
+RuntimeMaxSec=20s
+NoNewPrivileges=yes
+EOF
+      printf 'ExecStart=%s %%i\n' "$(notifications_unit_arg "$NOTIFICATIONS_WATCH")"
+      ;;
+  esac
+}
+
+notifications_setup() {
+  local dest=$CONFIG/$NOTIFICATIONS_DROPIN_REL digest changed=0 file rel unit units=ok
+  local wants=$CONFIG/$NOTIFICATIONS_WANTS_REL
+  # Do not install or remove an override in a session whose effective unit we cannot verify.
+  session_manager || return 0
+  if [[ -x $NOTIFICATIONS_SELECTOR && -x $NOTIFICATIONS_NOTIFY && -x $NOTIFICATIONS_WATCH ]] &&
+      notifications_vendor_supported &&
+      read -r digest _ < <(/usr/bin/sha256sum -- "$NOTIFICATIONS_VENDOR") &&
+      [[ $digest =~ ^[0-9a-f]{64}$ ]]; then
+    for unit in notify watch; do
+      rel=$NOTIFICATIONS_NOTIFY_REL
+      [[ $unit == notify ]] || rel=$NOTIFICATIONS_WATCH_REL
+      if install_text "$CONFIG/$rel" "$(notifications_service_unit "$unit")"; then
+        changed=1
+      elif (($? == 2)); then
+        units=failed
+      fi
+    done
+    if [[ $units == ok ]] &&
+        [[ ! -L $wants || $(readlink -- "$wants") != "../$NOTIFICATIONS_NOTIFY_NAME" ]]; then
+      note "enable $NOTIFICATIONS_NOTIFY_NAME ($wants)"
+      CHANGES=$((CHANGES + 1))
+      if [[ $DRY == 0 ]]; then
+        if mkdir -p -- "${wants%/*}" && ln -sfnT -- "../$NOTIFICATIONS_NOTIFY_NAME" "$wants"; then
+          changed=1
+        else
+          units=failed
+        fi
+      fi
+    fi
+    if [[ $units == ok ]]; then
+      if install_text "$dest" "$(notifications_shell_dropin "$digest")"; then
+        changed=1
+      elif (($? == 2)); then
+        units=failed
+      fi
+    fi
+    if [[ $units != ok ]]; then
+      # Without its recovery and notice units, or with an override older than them, the copy
+      # must not be admitted: keep stock.
+      note "warning: the notification gate could not be set up; the stock applet stays in front"
+      if [[ -e $dest || -L $dest ]]; then
+        note "remove $dest"
+        CHANGES=$((CHANGES + 1))
+        if [[ $DRY == 0 ]]; then
+          if rm -f -- "$dest"; then changed=1; else note "warning: could not remove $dest"; fi
+        fi
+      fi
+    fi
+  else
+    for rel in "${NOTIFICATIONS_FILES[@]}"; do
+      file=$CONFIG/$rel
+      [[ -e $file || -L $file ]] || continue
+      note "remove $file (notification package missing or unsupported plasmashell unit)"
+      CHANGES=$((CHANGES + 1))
+      if [[ $DRY == 0 ]]; then
+        if rm -f -- "$file"; then changed=1; else note "warning: could not remove $file"; fi
+      fi
+    done
+  fi
+  if [[ $DRY == 0 && $changed == 1 ]] && session_manager; then
+    systemctl --user daemon-reload 2>/dev/null || note "note: the notification override is read at the next login"
+  fi
+}
+
+notifications_setup
 
 # ---------- 9. configuration version ----------
 

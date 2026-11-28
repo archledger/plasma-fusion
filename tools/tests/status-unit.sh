@@ -531,5 +531,13 @@ mkdir -p "$ROOTFS/var/lib/pacman/local/kdecoration-6.9.0-1"
 run fork 6.8.2
 has "25 a pacman database with a package answers instead" "the installed KDecoration is 6.9.0"
 
+run absent 6.8.3
+hasnot "26 without the optional RPM there is no notification part" "notifications: installed"
+built notifications source-plasma-workspace=6.8.3 plasma-workspace=6.8.3 qt=6.11.2
+run absent 6.8.3
+has "26 the optional notification build record is reported" \
+  "notifications: installed, built against source-plasma-workspace=6.8.3 plasma-workspace=6.8.3 qt=6.11.2"
+hasnot "26 the build record is not a claim that the copy is active" "notifications: active"
+
 echo "status-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

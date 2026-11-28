@@ -128,7 +128,9 @@ packaging/build-rpm.sh [--topdir DIR] [--compiled] [--no-lint]   # default DIR: 
   `0.2.0~281.gitcde5bb0-1.fc44`. A snapshot gets its own changelog entry.
 * Without `--compiled` it builds the shared part only (`rpmbuild --without compiled`; the build
   workflow does this); with it all six packages (KWin, KDecoration and KDE Frameworks development
-  packages needed: `dnf builddep packaging/fedora/plasma-fusion.spec`).
+  packages needed: `dnf builddep packaging/fedora/plasma-fusion.spec`), and from Fedora 44 on the
+  optional `plasma-fusion-notifications`, which neither profile pulls in (the `notifications`
+  build option, off on Fedora 43: [notifications-cpp.md](notifications-cpp.md)).
 * A seventh package, the full profile's `plasma-fusion-full` metapackage, is built only by the
   full profile's own Copr project, never by the stock repository: it needs `--with full` and
   `%global kwin_full_pin <the fork tag's exact EVR>` (for example `6.8.2-3.fc44.pf2`; the pin's
@@ -258,7 +260,9 @@ desktop file without its own binary (System Settings runs the module).
 ### Install, upgrade, remove (root)
 
 ```
-dnf install ./plasma-fusion*-0.2.0*.rpm                    # also upgrades an older build
+dnf install $(ls ./plasma-fusion*-0.2.0*.rpm | grep -v -- -notifications-)
+                                                            # also upgrades an older build
+dnf install ./plasma-fusion-notifications-0.2.0*.rpm        # optional (Fedora 44 and later)
 rpm -V plasma-fusion                                        # verify (no output = clean)
 dnf remove plasma-fusion                                    # rollback (run greeter-restore.sh first
                                                             # when the greeter uses Plasma Fusion)

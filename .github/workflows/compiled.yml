@@ -23,6 +23,7 @@ on:
       - "packages/notifications-cpp/**"
       - "packages/color-schemes/*.colors"
       - "tools/tests/ctest-required.sh"
+      - "tools/device/gate/plasma-fusion-gate.sh"
       - "packaging/fedora/plasma-fusion.spec"
       - ".github/workflows/compiled.yml"
   push:
@@ -36,6 +37,7 @@ on:
       - "packages/notifications-cpp/**"
       - "packages/color-schemes/*.colors"
       - "tools/tests/ctest-required.sh"
+      - "tools/device/gate/plasma-fusion-gate.sh"
       - "packaging/fedora/plasma-fusion.spec"
       - ".github/workflows/compiled.yml"
   # Weekly, so that a Plasma update in Fedora 44 is noticed without a change here.
@@ -93,8 +95,23 @@ jobs:
           CXXFLAGS: -Werror -Wno-error=deprecated-declarations
         run: |
           set -euo pipefail
+          extra=()
+          if [ "$PACKAGE" = notifications-cpp ]; then
+            extra+=(-DPF_NOTIFICATIONS_PLUGIN_DIR=/usr/lib64/libexec/plasma-fusion/qt6/plugins)
+          fi
           cmake -S "packages/$PACKAGE" -B "$RUNNER_TEMP/build" -G Ninja \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON "${extra[@]}"
           cmake --build "$RUNNER_TEMP/build"
           tools/tests/ctest-required.sh "packages/$PACKAGE" "$RUNNER_TEMP/build"
           ctest --test-dir "$RUNNER_TEMP/build" --output-on-failure
+
+      - name: Notification applet selector, delivery and recovery fixtures
+        if: matrix.package == 'notifications-cpp'
+        run: |
+          set -euo pipefail
+          gate="$RUNNER_TEMP/build/notifications-gate"
+          plugin_root=/usr/lib64/libexec/plasma-fusion/qt6/plugins
+          bash packages/notifications-cpp/tests/gate-unit.sh "$RUNNER_TEMP/selector" \
+            "$gate/plasma-fusion-notifications-select" "$plugin_root"
+          bash packages/notifications-cpp/tests/gate-runtime-unit.sh "$RUNNER_TEMP/notice" "$gate"
+          python3 packages/notifications-cpp/tests/watch-unit.py "$gate"

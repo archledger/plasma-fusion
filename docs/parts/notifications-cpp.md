@@ -10,9 +10,20 @@ upstream source of one Plasma version. Its origin is recorded in
 `packages/notifications-cpp/README.md`. The behaviour it is meant to add, the banner keyboard
 triage, is specified in `SPEC-notification-triage.md`.
 
-Status: **built and tested, not packaged and not enabled on any machine.** Standing in for the
-stock plugin needs a version gate that runs before plasmashell picks its plugins. Until that
-exists, nothing puts the copy in front of the stock plugin.
+The Fedora build produces a separate `plasma-fusion-notifications` RPM. Neither profile pulls it
+in. On Fedora, install it at the same version and release as `plasma-fusion`, then run
+`plasma-fusion setup` in your session. The next systemd-managed start checks whether the copy can
+be used. In **System Settings → Keyboard → Shortcuts**, search for **Focus notification banner**
+and assign a key. It has no default binding. Arch, Debian and Nix do not ship the copy.
+
+The RPM does not pin Plasma Workspace. It still has Fedora's generated library dependencies;
+if a Qt upgrade cannot satisfy the applet's private Qt ABI, rebuild the optional RPM or remove
+it so the update can proceed. The startup gate does not affect package resolution.
+
+The spec builds the RPM from Fedora 44 on (its `notifications` build option). The copy needs the
+build floors of its Plasma 6.8.3 source, Qt 6.11 and Plasma 6.8; a Fedora 43 build, on Qt 6.10 and
+Plasma 6.7, leaves it out and builds every other part. `tools/tests/packages/fedora.sh --spec-only`
+checks the parsed spec for Fedora 43, 44 and 45.
 
 ## What it is
 
@@ -43,9 +54,10 @@ The copy may stand in for the stock plugin only while the installed `plasma-work
 exactly the one it was built from. `PF_NOTIFICATIONS_PLASMA_SOURCE_VERSION` in the package's
 `CMakeLists.txt` names that version; it is written into the plugin, and the record names it
 beside the Plasma version the build found: a copy of one version's source compiled against
-another version's libraries is not to be used either. Whether the copy is used is decided
-before plasmashell loads its plugins, at every start; this package
-does not provide that gate. It carries one rule of its own: the focus shortcut exists only while
+another version's libraries is not to be used either. The startup gate checks both versions,
+the effective Fusion theme, and the applet's ability to load before an individual managed
+plasmashell launch. See [the gate](gate.md#commands). The plugin also has its own rule: the
+focus shortcut exists only while
 the running Plasma is the version the copy was built from (`src/bannertriageversion.h`). That
 rule keeps the feature off at another version. On its own it would leave the copy in use with the
 feature off, so it does not replace the gate. The build's minimum versions are floors, not exact
@@ -126,6 +138,10 @@ Fusion's own bindings, Meta+N for the notification view among them, are not touc
 sessions bind their test chord through the shortcut daemon's D-Bus interface, which is where
 System Settings writes a binding too.
 
+If the gate falls back to stock, KDE may still show the saved shortcut in System Settings.
+Pressing it under stock does not focus or dismiss a banner. Fusion leaves the saved binding
+alone, and it works again once the copy is loaded.
+
 KWin owns the lock and inhibitor boundary, and the applet adds no check of its own: a locked
 screen or a shortcut inhibitor keeps the shortcut from being dispatched, as for any global
 shortcut.
@@ -146,8 +162,14 @@ ctest --test-dir build/notifications --output-on-failure
 
 `notifications-plugin` loads the built plugin and checks that it is the stock applet under its own
 name: it loads, it provides `org.kde.plasma.notifications`, its file name is the stock plugin's,
-and its QML is in its resources. `notifications-plugin-dir-guard` is the directory guard's unit
-test, 53 cases: 38 on a tree of directories and symbolic links, among them a system with a merged
+and its QML is in its resources. The standalone `plasma-fusion-notifications-check ABSOLUTE_PLUGIN`
+performs the load, identity and resource checks without creating the applet or instantiating its
+QML. `notifications-plugin-check-cli` tests its exit status with the built applet, missing and
+unloadable files, a renamed real applet, and invalid arguments. The checker is staged with the
+component and installed by the optional Fedora RPM.
+
+`notifications-plugin-dir-guard` is the directory guard's unit test, 53 cases: 38 on a tree of
+directories and symbolic links, among them a system with a merged
 `/usr`, links to links and the spellings `install()` would take differently; and 15 through the
 wrapper's own lines, which it reads from `CMakeLists.txt` and configures in a small project
 without a compiler, typed in the ways a cache variable can be, to read the destination from the
@@ -235,8 +257,8 @@ the applet. The outputs of the two failing runs were not kept, and the cause was
 
 ## What is not covered
 
-- No package installs the copy, and no setup step enables it.
-- The enforcement point of the version rule is not written.
+- The optional Fedora package does not install or configure the copy on other distributions.
+- A direct plasmashell start does not use the startup gate.
 - The `compiled` and `sanitizers` workflows build and test the part without installing it.
 - The runs on the stock VM were made on the same hardware as the container ones (both on the build
   host, under KVM), with stock KWin; the ThinkPad with the fork KWin is the one run on other
