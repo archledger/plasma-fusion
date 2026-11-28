@@ -86,9 +86,10 @@ EOF
 cat >"$NOTIFICATIONS_SHELL" <<'EOF'
 #!/bin/bash
 # The children this process has when it starts were left by the launch that exec'd it; read with
-# a builtin, so that the shell adds none of its own.
-children=
-read -r children <"/proc/$$/task/$$/children" || :
+# a builtin, so that the shell adds none of its own. A list that cannot be opened is recorded as
+# such, so that the checks fail instead of passing without looking.
+children=unreadable
+{ children=; read -r children || :; } <"/proc/$$/task/$$/children"
 printf '%s\n' "$children" >"$RECORD_PID.children"
 printf '%s\n%s\n' "$*" "${QT_PLUGIN_PATH-<unset>}" >"$RECORD_PID"
 EOF
@@ -138,7 +139,10 @@ PY
 no_children() {
   local left
   left=$(<"$RECORD_PID.children")
-  if [[ -n $left ]]; then
+  if [[ $left == unreadable ]]; then
+    printf 'FAIL the launch %s: the shell could not open its list of children\n' "$1" >&2
+    exit 1
+  elif [[ -n $left ]]; then
     printf 'FAIL the launch %s left children to the shell: %s\n' "$1" "$left" >&2
     exit 1
   fi
