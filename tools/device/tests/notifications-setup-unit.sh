@@ -85,6 +85,11 @@ esac
 EOF
 cat >"$NOTIFICATIONS_SHELL" <<'EOF'
 #!/bin/bash
+# The children this process has when it starts were left by the launch that exec'd it; read with
+# a builtin, so that the shell adds none of its own.
+children=
+read -r children <"/proc/$$/task/$$/children" || :
+printf '%s\n' "$children" >"$RECORD_PID.children"
 printf '%s\n%s\n' "$*" "${QT_PLUGIN_PATH-<unset>}" >"$RECORD_PID"
 EOF
 cat >"$NOTIFICATIONS_WATCH" <<'EOF'
@@ -114,7 +119,7 @@ launch() {
   local want=$1
   shift
   # Each case checks its own launch, also where a caller's condition turns errexit off.
-  rm -f -- "$RECORD_PID"
+  rm -f -- "$RECORD_PID" "$RECORD_PID.children"
   env "$@" python3 - "$dropin" <<'PY' || return 1
 import os
 import shlex
@@ -129,9 +134,19 @@ os.execv(cmd[0], cmd)
 PY
   test "$(cat "$RECORD_PID")" = "$(printf '%s\n%s\n' --no-respawn "$want")"
 }
+# The launch leaves none of its own processes, running or unreaped, to the shell it execs (#231).
+no_children() {
+  local left
+  left=$(<"$RECORD_PID.children")
+  if [[ -n $left ]]; then
+    printf 'FAIL the launch %s left children to the shell: %s\n' "$1" "$left" >&2
+    exit 1
+  fi
+}
 
 export QT_PLUGIN_PATH=/some/other/plugins:/second
 launch "$NOTIFICATIONS_ROOT:$QT_PLUGIN_PATH"
+no_children 'that admits the copy'
 launch "$NOTIFICATIONS_ROOT:$QT_PLUGIN_PATH" \
   "QT_PLUGIN_PATH=$NOTIFICATIONS_ROOT:$QT_PLUGIN_PATH:$NOTIFICATIONS_ROOT"
 launch "$QT_PLUGIN_PATH" SELECT_MODE=fail
@@ -181,6 +196,7 @@ chmod u+w "$legacy"
 
 printf 'ExecStart=/usr/bin/plasmashell --different-argv\n' >>"$NOTIFICATIONS_VENDOR"
 launch "$QT_PLUGIN_PATH"
+no_children 'for a vendor unit changed since setup'
 notifications_setup
 for rel in "${NOTIFICATIONS_FILES[@]}"; do test ! -e "$CONFIG/$rel" && test ! -L "$CONFIG/$rel"; done
 test "$(wc -l <"$base/manager.log")" = 2
