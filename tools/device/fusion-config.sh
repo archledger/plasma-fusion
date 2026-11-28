@@ -3046,9 +3046,16 @@ notifications_shell_dropin() {
   command+='if [[ -v QT_PLUGIN_PATH ]]; then paths=:$QT_PLUGIN_PATH:; '
   command+='while [[ $paths == *":$root:"* ]]; do paths=${paths/":$root:"/:}; done; '
   command+='paths=${paths#:}; export QT_PLUGIN_PATH=${paths%:}; fi; '
+  # Admit only the selector's exact output, the path and one newline, from a run that succeeded
+  # in time. A command substitution would forgive extra newlines at the end and drop NUL bytes,
+  # so the output is read in this shell (lastpipe, which also waits for the selector): read keeps
+  # every newline and stops early at a NUL, and pipefail rejects a failed or stopped selector
+  # whatever it printed.
+  command+='shopt -s lastpipe; set -o pipefail; printf -v exact "%s\n" "$root"; '
   command+='if read -r actual _ < <(/usr/bin/sha256sum -- "$vendor") && [[ $actual == "$expected" ]] '
-  command+='&& selected=$({ /usr/bin/timeout -k .2 4.8 "$selector"; } 2>/dev/null) '
-  command+='&& [[ $selected == "$root" ]]; then export QT_PLUGIN_PATH=$root${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}; fi; '
+  command+='&& { /usr/bin/timeout -k .2 4.8 "$selector"; } 2>/dev/null '
+  command+='| { IFS= read -r -d "" selected; (( $? == 1 )); } && [[ $selected == "$exact" ]]; '
+  command+='then export QT_PLUGIN_PATH=$root${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}; fi; '
   command+='exec "$shell" --no-respawn'
 
   printf '[Service]\nExecStart=\nExecStart=:/bin/bash -c %s -- %s %s %s %s %s\n' \
