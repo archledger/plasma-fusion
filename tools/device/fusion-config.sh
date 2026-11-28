@@ -3052,7 +3052,10 @@ notifications_shell_dropin() {
   # every newline and stops early at a NUL, and pipefail rejects a failed or stopped selector
   # whatever it printed.
   command+='shopt -s lastpipe; set -o pipefail; printf -v exact "%s\n" "$root"; '
-  command+='if read -r actual _ < <(/usr/bin/sha256sum -- "$vendor") && [[ $actual == "$expected" ]] '
+  # The vendor unit's digest comes through a command substitution, which waits for sha256sum.
+  # From a process substitution it would be left unreaped for plasmashell when the digest differs
+  # and the shell execs at once (#231).
+  command+='if actual=$(/usr/bin/sha256sum -- "$vendor") && [[ ${actual%% *} == "$expected" ]] '
   command+='&& { /usr/bin/timeout -k .2 4.8 "$selector"; } 2>/dev/null '
   command+='| { IFS= read -r -d "" selected; (( $? == 1 )); } && [[ $selected == "$exact" ]]; '
   command+='then export QT_PLUGIN_PATH=$root${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}; fi; '

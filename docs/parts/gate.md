@@ -266,8 +266,10 @@ When the optional selector is installed and the Fedora vendor unit is supported,
 vendor file alone. It runs the selector within five seconds and prepends the private path only
 for an admitted shell launch, never for the user manager or for a direct launch. The selector
 must succeed and print exactly the path and one newline; any other output, including a blank
-line after the path, a missing newline or a NUL byte, starts the shell stock. If the on-disk
-unit changes, admission stops; run setup again to remove or reconcile the override. Package
+line after the path, a missing newline or a NUL byte, starts the shell stock. The launch waits
+for the processes of its checks, the unit file's digest and the selector, before it starts the
+shell, so plasmashell inherits none of them. If the on-disk unit changes, admission stops; run
+setup again to remove or reconcile the override. Package
 delivery and restore are qualified separately. If the recovery or notice unit cannot be
 written or enabled, or the drop-in itself cannot be rewritten, setup leaves the drop-in out, and
 removes an installed one, so the shell starts stock.
