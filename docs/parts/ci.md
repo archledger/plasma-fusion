@@ -536,6 +536,13 @@ Checked on 2026-10-02 in Fedora 44 containers.
   backport. A core dump fails the run (`coredumps.json` lists them).
 - **`compiled` fails on a warning**: fix the warning; a deprecation from a Fedora update stays a
   warning and does not fail the build.
+- **A `.debs` job of `packages` fails at `from PySide6 import`** with a `libpyside6` or
+  `libshiboken6` library missing: the image's PySide6 is older than its archive, and the modules
+  the build requirements add accept the image's older QtCore, whose library the new transitional
+  package removed (KDE neon after neon's PySide6 6.12, #228). `tools/tests/packages/deb.sh` brings
+  the PySide6 and Shiboken6 packages an image has to the archive's version before the build
+  requirements; the log names them. A plain `apt-get full-upgrade` of the image is no substitute:
+  on neon it wants pin downgrades, which apt refuses with `-y`.
 - **A code scanning or Scorecard alert**: Security tab; fix or dismiss with a reason.
 - **A ClusterFuzzLite failure** (`cflite-pr` or `cflite-batch`): the run's artifacts hold the
   input; replay it with the fuzzer locally (above), fix the tool with a test
