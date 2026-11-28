@@ -77,6 +77,8 @@ case "$SELECT_MODE" in
   blank-line) printf '%s\n\n' "$STANDIN_ROOT" ;;
   nul) printf '%s\0\n' "$STANDIN_ROOT" ;;
   no-newline) printf '%s' "$STANDIN_ROOT" ;;
+  dot-then-fail) printf '%s\n.' "$STANDIN_ROOT"; exit 1 ;;
+  line-then-hang) printf '%s\n' "$STANDIN_ROOT"; trap '' TERM; sleep 30 ;;
   hang) trap '' TERM; sleep 30 ;;
   *) exit 1 ;;
 esac
@@ -111,7 +113,9 @@ test "$CHANGES" = 4
 launch() {
   local want=$1
   shift
-  env "$@" python3 - "$dropin" <<'PY'
+  # Each case checks its own launch, also where a caller's condition turns errexit off.
+  rm -f -- "$RECORD_PID"
+  env "$@" python3 - "$dropin" <<'PY' || return 1
 import os
 import shlex
 import sys
@@ -133,8 +137,9 @@ launch "$NOTIFICATIONS_ROOT:$QT_PLUGIN_PATH" \
 launch "$QT_PLUGIN_PATH" SELECT_MODE=fail
 launch "$QT_PLUGIN_PATH" SELECT_MODE=bad
 # Only the selector's exact line admits the copy: output that a command substitution would
-# forgive (a blank line after it, a NUL byte, no newline at its end) starts the shell stock.
-for mode in blank-line nul no-newline; do
+# forgive (a blank line after it, a NUL byte, no newline at its end) starts the shell stock, and
+# so does a selector that fails or is stopped after it has written its output.
+for mode in blank-line nul no-newline dot-then-fail line-then-hang; do
   if ! launch "$QT_PLUGIN_PATH" SELECT_MODE="$mode"; then
     printf 'FAIL the launch admitted the copy for the selector output %s\n' "$mode" >&2
     exit 1

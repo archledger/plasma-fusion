@@ -3049,10 +3049,11 @@ notifications_shell_dropin() {
   # Admit only the selector's exact output, the path and one newline, from a run that succeeded
   # in time. A command substitution would forgive extra newlines at the end and drop NUL bytes,
   # so the output is read in this shell (lastpipe, which also waits for the selector): read keeps
-  # every newline and stops early at a NUL, and the dot is written only after a successful run.
-  command+='shopt -s lastpipe; printf -v exact "%s\n." "$root"; '
+  # every newline and stops early at a NUL, and pipefail rejects a failed or stopped selector
+  # whatever it printed.
+  command+='shopt -s lastpipe; set -o pipefail; printf -v exact "%s\n" "$root"; '
   command+='if read -r actual _ < <(/usr/bin/sha256sum -- "$vendor") && [[ $actual == "$expected" ]] '
-  command+='&& { /usr/bin/timeout -k .2 4.8 "$selector" && printf .; } 2>/dev/null '
+  command+='&& { /usr/bin/timeout -k .2 4.8 "$selector"; } 2>/dev/null '
   command+='| { IFS= read -r -d "" selected; (( $? == 1 )); } && [[ $selected == "$exact" ]]; '
   command+='then export QT_PLUGIN_PATH=$root${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}; fi; '
   command+='exec "$shell" --no-respawn'
